@@ -16,6 +16,13 @@
 ############################################################################
 
 ############################################################################
+### CONFIGURATION: Paths to data
+############################################################################
+
+EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData"
+LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData"
+
+############################################################################
 ### CONFIGURATION: Select which steps to run
 ############################################################################
 
@@ -36,11 +43,18 @@ should_run_step <- function(step_num) {
 }
 
 ############################################################################
-### EC2 AUTO-DETECTION
+### EC2/LOCAL AUTO-DETECTION
 ############################################################################
 
+# Default to local settings
+DATA_PATH <- LOCAL_DATA_PATH
+BATCH_MODE <- FALSE
+EC2_MODE <- FALSE
+SKIP_COMPLETED <- TRUE
+STEPS_TO_RUN <- NULL
+
 # Detect if running on EC2
-IS_EC2 <- Sys.info()["nodename"] != "Damianos-Mac-Studio.local"
+IS_EC2 <- grepl("ec2", Sys.info()["nodename"], ignore.case = TRUE)
 
 if (IS_EC2) {
   cat("====================================================================\n")
@@ -50,6 +64,7 @@ if (IS_EC2) {
   EC2_MODE <- TRUE
   SKIP_COMPLETED <- FALSE
   STEPS_TO_RUN <- NULL
+  DATA_PATH <- EC2_DATA_PATH
   cat("  Batch mode: TRUE (no pauses)\n")
   cat("  All steps: 1-4\n")
   cat("  Cores:", parallel::detectCores(), "\n")
@@ -59,11 +74,6 @@ if (IS_EC2) {
 ############################################################################
 ### EXECUTION CONFIGURATION
 ############################################################################
-
-# Execution mode
-BATCH_MODE <- FALSE        # TRUE = no pauses, FALSE = interactive with reviews
-EC2_MODE <- FALSE          # TRUE = enable parallel processing where possible
-SKIP_COMPLETED <- TRUE     # Skip steps that already have results
 
 # Computational settings
 if (EC2_MODE) {
@@ -114,9 +124,8 @@ cat("  Log file:", LOG_FILE, "\n\n")
 ############################################################################
 
 # Load data using flexible loader
-source("data/load_data.R")
 if (!exists("Colorado_Data_LONG")) {
-  Colorado_Data_LONG <- load_colorado_data()
+  Colorado_Data_LONG <- load(DATA_PATH)
 }
 
 ################################################################################
