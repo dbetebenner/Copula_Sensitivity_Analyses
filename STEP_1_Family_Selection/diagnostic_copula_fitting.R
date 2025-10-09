@@ -14,9 +14,9 @@ if (!exists("Colorado_Data_LONG")) {
 }
 
 # Source functions
-source("../functions/longitudinal_pairs.R")
-source("../functions/ispline_ecdf.R")
-source("../functions/copula_bootstrap.R")
+source("functions/longitudinal_pairs.R")
+source("functions/ispline_ecdf.R")
+source("functions/copula_bootstrap.R")
 
 cat("====================================================================\n")
 cat("DIAGNOSTIC: COPULA FITTING VERIFICATION\n")
