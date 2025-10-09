@@ -34,7 +34,7 @@ LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Arc
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- NULL  # Default: run all steps
+STEPS_TO_RUN <- 1  # Run Step 1 only
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -51,7 +51,6 @@ DATA_PATH <- LOCAL_DATA_PATH
 BATCH_MODE <- FALSE
 EC2_MODE <- FALSE
 SKIP_COMPLETED <- TRUE
-STEPS_TO_RUN <- NULL
 
 # Detect if running on EC2
 IS_EC2 <- grepl("ec2", Sys.info()["nodename"], ignore.case = TRUE)
@@ -63,7 +62,6 @@ if (IS_EC2) {
   BATCH_MODE <- TRUE
   EC2_MODE <- TRUE
   SKIP_COMPLETED <- FALSE
-  STEPS_TO_RUN <- NULL
   DATA_PATH <- EC2_DATA_PATH
   cat("  Batch mode: TRUE (no pauses)\n")
   cat("  All steps: 1-4\n")
