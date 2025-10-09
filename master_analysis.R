@@ -19,8 +19,8 @@
 ### CONFIGURATION: Paths to data
 ############################################################################
 
-EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData"
-LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData"
+EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.RData"
+LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.RData"
 
 ############################################################################
 ### CONFIGURATION: Select which steps to run
