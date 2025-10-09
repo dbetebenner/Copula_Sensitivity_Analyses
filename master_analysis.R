@@ -118,6 +118,43 @@ cat("Project root:", PROJECT_ROOT, "\n")
 cat("Functions directory:", FUNCTIONS_DIR, "\n")
 cat("Working directory:", getwd(), "\n\n")
 
+############################################################################
+### HELPER FUNCTIONS (DEFINED EARLY)
+############################################################################
+
+# Helper function to source files with proper path handling
+source_with_path <- function(file_path, description = NULL) {
+  if (is.null(description)) {
+    description <- basename(file_path)
+  }
+  
+  # Check if file exists
+  if (!file.exists(file_path)) {
+    stop("ERROR: File not found: ", file_path, "\n",
+         "Description: ", description, "\n",
+         "Current working directory: ", getwd())
+  }
+  
+  cat("Sourcing:", description, "\n")
+  source(file_path, local = FALSE)
+}
+
+# Helper function to source all function files
+source_all_functions <- function() {
+  function_files <- c(
+    "longitudinal_pairs.R",
+    "ispline_ecdf.R", 
+    "copula_bootstrap.R",
+    "copula_diagnostics.R",
+    "transformation_diagnostics.R"
+  )
+  
+  for (func_file in function_files) {
+    func_path <- file.path(FUNCTIONS_DIR, func_file)
+    source_with_path(func_path, paste("function:", func_file))
+  }
+}
+
 # Load all function files
 cat("Loading function files...\n")
 source_all_functions()
@@ -168,41 +205,8 @@ if (!exists("Colorado_Data_LONG")) {
 }
 
 ################################################################################
-### HELPER FUNCTIONS
+### HELPER FUNCTIONS (CONTINUED)
 ################################################################################
-
-# Helper function to source files with proper path handling
-source_with_path <- function(file_path, description = NULL) {
-  if (is.null(description)) {
-    description <- basename(file_path)
-  }
-  
-  # Check if file exists
-  if (!file.exists(file_path)) {
-    stop("ERROR: File not found: ", file_path, "\n",
-         "Description: ", description, "\n",
-         "Current working directory: ", getwd())
-  }
-  
-  cat("Sourcing:", description, "\n")
-  source(file_path, local = FALSE)
-}
-
-# Helper function to source all function files
-source_all_functions <- function() {
-  function_files <- c(
-    "longitudinal_pairs.R",
-    "ispline_ecdf.R", 
-    "copula_bootstrap.R",
-    "copula_diagnostics.R",
-    "transformation_diagnostics.R"
-  )
-  
-  for (func_file in function_files) {
-    func_path <- file.path(FUNCTIONS_DIR, func_file)
-    source_with_path(func_path, paste("function:", func_file))
-  }
-}
 
 pause_for_review <- function(message, phase_name) {
   if (!BATCH_MODE) {
