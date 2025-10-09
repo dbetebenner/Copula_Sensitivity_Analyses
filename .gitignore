@@ -33,3 +33,6 @@ prototypes/experimental/
 
 # cursor related files
 .cursor/
+
+# ai_context related files
+.ai_content
