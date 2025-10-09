@@ -36,3 +36,7 @@ prototypes/experimental/
 
 # ai_context related files
 .ai_content
+
+# setup scripts
+setup_ec2.sh
+sync_to_paper.sh
