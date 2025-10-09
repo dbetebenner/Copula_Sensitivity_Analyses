@@ -30,3 +30,6 @@ nohup.out
 # Development scratch
 development/scratch/
 prototypes/experimental/
+
+# cursor related files
+.cursor/
