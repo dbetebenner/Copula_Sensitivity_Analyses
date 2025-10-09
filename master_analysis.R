@@ -16,11 +16,27 @@
 ############################################################################
 
 ############################################################################
-### CONFIGURATION: Paths to data
+### CONFIGURATION: State Data and Generic Object Names
 ############################################################################
 
-EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
-LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
+# Check if external state configuration exists
+if (file.exists("state_config.R")) {
+  cat("Loading external state configuration from state_config.R\n")
+  source("state_config.R")
+} else {
+  cat("Using default Colorado configuration\n")
+  cat("To use a different state, create state_config.R from state_config_template.R\n\n")
+  
+  # DEFAULT STATE CONFIGURATION - Colorado
+  STATE_NAME <- "Colorado"
+  STATE_ABBREV <- "CO"
+  DATA_OBJECT_NAME <- "STATE_DATA_LONG"  # Generic name for the loaded data
+  DATA_VARIABLE_NAME <- "Colorado_SGP_LONG_Data"  # Variable name inside the .RData file
+  
+  # Data paths (state-specific)
+  EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
+  LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
+}
 
 ############################################################################
 ### CONFIGURATION: Select which steps to run
@@ -155,6 +171,14 @@ source_all_functions <- function() {
   }
 }
 
+# Helper function to get the state data (cleaner than get("STATE_DATA_LONG"))
+get_state_data <- function() {
+  if (!exists(DATA_OBJECT_NAME)) {
+    stop("ERROR: State data not loaded. Run master_analysis.R first.")
+  }
+  return(get(DATA_OBJECT_NAME))
+}
+
 # Load all function files
 cat("Loading function files...\n")
 source_all_functions()
@@ -191,17 +215,27 @@ cat("  Log file:", LOG_FILE, "\n\n")
 ### DATA LOADING
 ############################################################################
 
-# Load data using flexible loader
-if (!exists("Colorado_Data_LONG")) {
-  cat("Loading Colorado data from:", DATA_PATH, "\n")
+# Load state data using flexible loader
+if (!exists(DATA_OBJECT_NAME)) {
+  cat("Loading", STATE_NAME, "data from:", DATA_PATH, "\n")
   load(DATA_PATH)
   
-  # Ensure it's a data.table
-  if (!inherits(Colorado_Data_LONG, "data.table")) {
-    Colorado_Data_LONG <- as.data.table(Colorado_Data_LONG)
+  # Get the data from the loaded variable and assign to generic name
+  if (exists(DATA_VARIABLE_NAME)) {
+    assign(DATA_OBJECT_NAME, get(DATA_VARIABLE_NAME))
+  } else {
+    stop("ERROR: Variable '", DATA_VARIABLE_NAME, "' not found in data file.\n",
+         "Expected variable name:", DATA_VARIABLE_NAME, "\n",
+         "Available variables:", ls())
   }
   
-  cat("Loaded", nrow(Colorado_Data_LONG), "rows\n\n")
+  # Ensure it's a data.table
+  if (!inherits(get(DATA_OBJECT_NAME), "data.table")) {
+    assign(DATA_OBJECT_NAME, as.data.table(get(DATA_OBJECT_NAME)))
+  }
+  
+  cat("Loaded", nrow(get(DATA_OBJECT_NAME)), "rows for", STATE_NAME, "\n")
+  cat("Data object name:", DATA_OBJECT_NAME, "\n\n")
 }
 
 ################################################################################

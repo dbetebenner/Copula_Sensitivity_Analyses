@@ -14,7 +14,7 @@ require(splines2)
 require(copula)
 
 # Data is loaded centrally by master_analysis.R
-# Colorado_Data_LONG should already be available
+# STATE_DATA_LONG should already be available (generic name for state data)
 
 # Functions are loaded centrally by master_analysis.R
 # No need to source them individually
@@ -102,7 +102,7 @@ for (i in seq_along(CONDITIONS)) {
   # Create longitudinal pairs
   pairs_full <- tryCatch({
     create_longitudinal_pairs(
-      data = Colorado_Data_LONG,
+      data = get_state_data(),
       grade_prior = cond$grade_prior,
       grade_current = cond$grade_current,
       year_prior = cond$year_prior,

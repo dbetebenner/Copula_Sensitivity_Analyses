@@ -8,10 +8,8 @@ require(data.table)
 require(splines2)
 require(copula)
 
-# Load Colorado data
-if (!exists("Colorado_Data_LONG")) {
-  load("/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData")
-}
+# Data is loaded centrally by master_analysis.R
+# STATE_DATA_LONG should already be available (generic name for state data)
 
 # Source functions
 source("../functions/longitudinal_pairs.R")
@@ -82,7 +80,7 @@ for (span_config in GRADE_SPANS) {
   # Create longitudinal pairs
   pairs_full <- tryCatch({
     create_longitudinal_pairs(
-      data = Colorado_Data_LONG,
+      data = get_state_data(),
       grade_prior = span_config$grade_prior,
       grade_current = span_config$grade_current,
       year_prior = span_config$year_prior,
