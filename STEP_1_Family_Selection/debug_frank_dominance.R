@@ -35,8 +35,8 @@ if (!exists("Colorado_Data_LONG")) {
 }
 
 # Source functions
-source("functions/longitudinal_pairs.R")
-source("functions/ispline_ecdf.R")
+source("../functions/longitudinal_pairs.R")
+source("../functions/ispline_ecdf.R")
 
 cat("====================================================================\n")
 cat("DEBUG: FRANK COPULA DOMINANCE INVESTIGATION\n")
