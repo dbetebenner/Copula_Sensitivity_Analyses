@@ -1,0 +1,50 @@
+project:
+  name: Copula Sensitivity Analyses
+  type: research_analysis
+  github: https://github.com/YOUR_USERNAME/Copula_Sensitivity_Analyses
+  status: active
+  
+purpose: |
+  Comprehensive validation of copula-based pseudo-growth simulation framework.
+  Tests copula family selection, marginal transformation methods, and sensitivity
+  to grade span, sample size, content area, and cohort effects.
+
+downstream:
+  - name: Sklar Theoretic Extension of TAMP
+    type: manuscript
+    path: ~/Research/Papers/Betebenner_Braun/Paper_1/
+    relationship: "Provides empirical validation, figures, and tables"
+    sync_script: ./sync_to_paper.sh
+    materials:
+      - STEP_1_Family_Selection/results/*.pdf -> Paper_1/Figures/from_analysis/
+      - STEP_2_Transformation_Validation/results/figures/*.pdf -> Paper_1/Figures/from_analysis/
+      - STEP_3_Sensitivity_Analyses/results/*/*.pdf -> Paper_1/Figures/from_analysis/
+      - STEP_4_Deep_Dive_Reporting/results/tables/*.tex -> Paper_1/Tables/
+    
+  - name: sgpFlow R Package
+    type: software
+    github: https://github.com/centerforassessment/sgpFlow
+    relationship: "Will provide production implementation (future)"
+    materials:
+      - functions/copula_bootstrap.R -> sgpFlow/R/copula_growth.R (planned)
+      - functions/transformation_diagnostics.R -> sgpFlow/R/ (planned)
+
+upstream:
+  - name: Colorado Longitudinal Data
+    source: "SGP Dropbox/Colorado/Data/Archive/February_2016/"
+    file: "Colorado_Data_LONG.RData"
+    access: |
+      Local: Dropbox path (automatic)
+      EC2: scp Colorado_Data_LONG.RData ec2-user@INSTANCE:~/data/
+
+execution:
+  local:
+    runtime: "2-4 hours per step"
+    command: "Rscript -e \"STEPS_TO_RUN <- 1; source('master_analysis.R')\""
+  
+  ec2:
+    runtime: "8-14 hours (all steps)"
+    instance: "c6i.4xlarge (16 vCPU, 32 GB)"
+    cost: "~$8 on-demand, ~$2.40 spot"
+    setup: "./setup_ec2.sh"
+    command: "nohup Rscript -e \"source('master_analysis.R')\" > output.log 2>&1 &"
