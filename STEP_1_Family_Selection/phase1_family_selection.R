@@ -13,16 +13,11 @@ require(data.table)
 require(splines2)
 require(copula)
 
-# Load Colorado longitudinal data
-if (!exists("Colorado_Data_LONG")) {
-  load("/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData")
-  Colorado_Data_LONG <- as.data.table(Colorado_Data_LONG)
-}
+# Data is loaded centrally by master_analysis.R
+# Colorado_Data_LONG should already be available
 
-# Source all function files
-source("../functions/longitudinal_pairs.R")
-source("../functions/ispline_ecdf.R")
-source("../functions/copula_bootstrap.R")
+# Functions are loaded centrally by master_analysis.R
+# No need to source them individually
 
 cat("====================================================================\n")
 cat("PHASE 1: COPULA FAMILY SELECTION STUDY\n")

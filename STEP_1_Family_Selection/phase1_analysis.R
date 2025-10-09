@@ -11,7 +11,7 @@ cat("PHASE 1: FAMILY SELECTION ANALYSIS\n")
 cat("====================================================================\n\n")
 
 # Load Phase 1 results
-results_file <- "results/phase1_copula_family_comparison.csv"
+results_file <- "STEP_1_Family_Selection/results/phase1_copula_family_comparison.csv"
 
 if (!file.exists(results_file)) {
   stop("Phase 1 results not found! Run phase1_family_selection.R first.")

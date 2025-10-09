@@ -91,6 +91,39 @@ LOG_FILE <- paste0("master_analysis_log_", RUN_TIMESTAMP, ".txt")
 sink(LOG_FILE, split = TRUE)
 
 ############################################################################
+### PATH MANAGEMENT AND WORKING DIRECTORY SETUP
+############################################################################
+
+# Set working directory to project root (where master_analysis.R is located)
+PROJECT_ROOT <- dirname(normalizePath(sys.frame(1)$ofile))
+if (is.null(PROJECT_ROOT) || PROJECT_ROOT == "") {
+  # Fallback: assume we're in the project root
+  PROJECT_ROOT <- getwd()
+}
+
+# Set working directory to project root
+setwd(PROJECT_ROOT)
+
+# Define key directories relative to project root
+FUNCTIONS_DIR <- "functions"
+DATA_DIR <- "Data"
+RESULTS_DIR <- "results"
+
+# Validate that we're in the correct directory
+if (!dir.exists(FUNCTIONS_DIR)) {
+  stop("ERROR: functions/ directory not found. Are you running from the project root?")
+}
+
+cat("Project root:", PROJECT_ROOT, "\n")
+cat("Functions directory:", FUNCTIONS_DIR, "\n")
+cat("Working directory:", getwd(), "\n\n")
+
+# Load all function files
+cat("Loading function files...\n")
+source_all_functions()
+cat("All functions loaded successfully.\n\n")
+
+############################################################################
 ### INITIALIZATION
 ############################################################################
 
@@ -123,12 +156,53 @@ cat("  Log file:", LOG_FILE, "\n\n")
 
 # Load data using flexible loader
 if (!exists("Colorado_Data_LONG")) {
-  Colorado_Data_LONG <- load(DATA_PATH)
+  cat("Loading Colorado data from:", DATA_PATH, "\n")
+  load(DATA_PATH)
+  
+  # Ensure it's a data.table
+  if (!inherits(Colorado_Data_LONG, "data.table")) {
+    Colorado_Data_LONG <- as.data.table(Colorado_Data_LONG)
+  }
+  
+  cat("Loaded", nrow(Colorado_Data_LONG), "rows\n\n")
 }
 
 ################################################################################
 ### HELPER FUNCTIONS
 ################################################################################
+
+# Helper function to source files with proper path handling
+source_with_path <- function(file_path, description = NULL) {
+  if (is.null(description)) {
+    description <- basename(file_path)
+  }
+  
+  # Check if file exists
+  if (!file.exists(file_path)) {
+    stop("ERROR: File not found: ", file_path, "\n",
+         "Description: ", description, "\n",
+         "Current working directory: ", getwd())
+  }
+  
+  cat("Sourcing:", description, "\n")
+  source(file_path, local = FALSE)
+}
+
+# Helper function to source all function files
+source_all_functions <- function() {
+  function_files <- c(
+    "longitudinal_pairs.R",
+    "ispline_ecdf.R", 
+    "copula_bootstrap.R",
+    "copula_diagnostics.R",
+    "transformation_diagnostics.R"
+  )
+  
+  for (func_file in function_files) {
+    func_path <- file.path(FUNCTIONS_DIR, func_file)
+    source_with_path(func_path, paste("function:", func_file))
+  }
+}
 
 pause_for_review <- function(message, phase_name) {
   if (!BATCH_MODE) {
@@ -206,7 +280,7 @@ if (should_run_step(1)) {
     cat("Skipping Step 1.1 (already completed)\n\n")
   } else {
     result_1_1 <- time_phase("Step 1.1: Family Selection", {
-      source("STEP_1_Family_Selection/phase1_family_selection.R")
+      source_with_path("STEP_1_Family_Selection/phase1_family_selection.R", "Step 1.1: Family Selection")
     })
     
     if (!result_1_1$success) {
@@ -221,7 +295,7 @@ if (should_run_step(1)) {
     cat("Skipping Step 1.2 (already completed)\n\n")
   } else {
     result_1_2 <- time_phase("Step 1.2: Analysis and Decision", {
-      source("STEP_1_Family_Selection/phase1_analysis.R")
+      source_with_path("STEP_1_Family_Selection/phase1_analysis.R", "Step 1.2: Analysis and Decision")
     })
     
     if (!result_1_2$success) {
