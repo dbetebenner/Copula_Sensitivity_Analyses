@@ -7,9 +7,9 @@ The copula sensitivity analysis framework has been refactored to support data fr
 ## How It Works
 
 ### 1. Generic Data Object
-- **Generic Name**: `STATE_DATA_LONG` (used throughout all step files)
+- **Workspace Object Name**: `STATE_DATA_LONG` (used throughout all step files)
 - **Access Function**: `get_state_data()` (cleaner than direct access)
-- **State-Specific Variable**: Defined in configuration (e.g., `Colorado_SGP_LONG_Data`)
+- **State-Specific .Rdata Object**: Defined in configuration (e.g., `Copula_Sensitivity_Test_Data_CO`)
 
 ### 2. Configuration System
 - **Default**: Colorado configuration built into `master_analysis.R`
@@ -34,7 +34,7 @@ source("master_analysis.R")
    ```r
    STATE_NAME <- "Massachusetts"
    STATE_ABBREV <- "MA"
-   DATA_VARIABLE_NAME <- "Massachusetts_Data_LONG"
+   RDATA_OBJECT_NAME <- "Massachusetts_Data_LONG"
    EC2_DATA_PATH <- "/path/to/MA_data.Rdata"
    LOCAL_DATA_PATH <- "/path/to/MA_data.Rdata"
    ```
@@ -59,8 +59,8 @@ Your state data must be a data.table with these columns:
 |----------|-------------|---------|
 | `STATE_NAME` | Full state name | "Massachusetts" |
 | `STATE_ABBREV` | State abbreviation | "MA" |
-| `DATA_OBJECT_NAME` | Generic object name (keep as "STATE_DATA_LONG") | "STATE_DATA_LONG" |
-| `DATA_VARIABLE_NAME` | Variable name inside .RData file | "Massachusetts_Data_LONG" |
+| `WORKSPACE_OBJECT_NAME` | Generic object name in workspace (keep as "STATE_DATA_LONG") | "STATE_DATA_LONG" |
+| `RDATA_OBJECT_NAME` | Data table object name inside .RData file | "Massachusetts_Data_LONG" |
 | `EC2_DATA_PATH` | Path to data file on EC2 | "/home/ec2-user/data/MA_data.Rdata" |
 | `LOCAL_DATA_PATH` | Path to data file locally | "/Users/username/data/MA_data.Rdata" |
 
@@ -110,7 +110,7 @@ The system includes built-in validation:
 ```r
 STATE_NAME <- "Massachusetts"
 STATE_ABBREV <- "MA"
-DATA_VARIABLE_NAME <- "Massachusetts_Data_LONG"
+RDATA_OBJECT_NAME <- "Massachusetts_Data_LONG"
 EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Massachusetts/Data/Massachusetts_Data_LONG.Rdata"
 LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Massachusetts/Data/Massachusetts_Data_LONG.Rdata"
 ```
@@ -119,7 +119,7 @@ LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Massachusetts/Dat
 ```r
 STATE_NAME <- "New York"
 STATE_ABBREV <- "NY"
-DATA_VARIABLE_NAME <- "NewYork_Data_LONG"
+RDATA_OBJECT_NAME <- "NewYork_Data_LONG"
 EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/NewYork/Data/NewYork_Data_LONG.Rdata"
 LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/NewYork/Data/NewYork_Data_LONG.Rdata"
 ```

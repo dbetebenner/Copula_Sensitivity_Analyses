@@ -30,8 +30,8 @@ if (file.exists("state_config.R")) {
   # DEFAULT STATE CONFIGURATION - Colorado
   STATE_NAME <- "Colorado"
   STATE_ABBREV <- "CO"
-  DATA_OBJECT_NAME <- "STATE_DATA_LONG"  # Generic name for the loaded data (backward compatible)
-  DATA_VARIABLE_NAME <- "Copula_Sensitivity_Test_Data_CO"  # Variable name inside the .RData file
+  WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG"  # Generic name for the loaded data table in workspace
+  RDATA_OBJECT_NAME <- "Copula_Sensitivity_Test_Data_CO"  # Name of data table object inside the .RData file
   
   # Data paths (trimmed dataset for copula sensitivity analysis)
   EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/TEMP/Copula_Sensitivity_Analyses/Data/Copula_Sensitivity_Test_Data_CO.Rdata"
@@ -173,10 +173,10 @@ source_all_functions <- function() {
 
 # Helper function to get the state data (cleaner than get("STATE_DATA_LONG"))
 get_state_data <- function() {
-  if (!exists(DATA_OBJECT_NAME)) {
+  if (!exists(WORKSPACE_OBJECT_NAME)) {
     stop("ERROR: State data not loaded. Run master_analysis.R first.")
   }
-  return(get(DATA_OBJECT_NAME))
+  return(get(WORKSPACE_OBJECT_NAME))
 }
 
 # Load all function files
@@ -216,26 +216,26 @@ cat("  Log file:", LOG_FILE, "\n\n")
 ############################################################################
 
 # Load state data using flexible loader
-if (!exists(DATA_OBJECT_NAME)) {
+if (!exists(WORKSPACE_OBJECT_NAME)) {
   cat("Loading", STATE_NAME, "data from:", DATA_PATH, "\n")
   load(DATA_PATH)
   
-  # Get the data from the loaded variable and assign to generic name
-  if (exists(DATA_VARIABLE_NAME)) {
-    assign(DATA_OBJECT_NAME, get(DATA_VARIABLE_NAME))
+  # Get the data table object from .Rdata file and assign to generic workspace name
+  if (exists(RDATA_OBJECT_NAME)) {
+    assign(WORKSPACE_OBJECT_NAME, get(RDATA_OBJECT_NAME))
   } else {
-    stop("ERROR: Variable '", DATA_VARIABLE_NAME, "' not found in data file.\n",
-         "Expected variable name:", DATA_VARIABLE_NAME, "\n",
-         "Available variables:", ls())
+    stop("ERROR: Data table object '", RDATA_OBJECT_NAME, "' not found in .Rdata file.\n",
+         "Expected object name:", RDATA_OBJECT_NAME, "\n",
+         "Available objects:", ls())
   }
   
   # Ensure it's a data.table
-  if (!inherits(get(DATA_OBJECT_NAME), "data.table")) {
-    assign(DATA_OBJECT_NAME, as.data.table(get(DATA_OBJECT_NAME)))
+  if (!inherits(get(WORKSPACE_OBJECT_NAME), "data.table")) {
+    assign(WORKSPACE_OBJECT_NAME, as.data.table(get(WORKSPACE_OBJECT_NAME)))
   }
   
-  cat("Loaded", nrow(get(DATA_OBJECT_NAME)), "rows for", STATE_NAME, "\n")
-  cat("Data object name:", DATA_OBJECT_NAME, "\n\n")
+  cat("Loaded", nrow(get(WORKSPACE_OBJECT_NAME)), "rows for", STATE_NAME, "\n")
+  cat("Workspace object name:", WORKSPACE_OBJECT_NAME, "\n\n")
 }
 
 ################################################################################
