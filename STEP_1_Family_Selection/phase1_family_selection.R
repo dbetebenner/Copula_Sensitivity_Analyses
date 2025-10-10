@@ -239,8 +239,8 @@ results_dt[, delta_bic_vs_best := bic - min(bic), by = condition_id]
 setorder(results_dt, condition_id, aic)
 
 # Save full results
-output_file <- "results/phase1_copula_family_comparison.csv"
-dir.create("results", showWarnings = FALSE, recursive = TRUE)
+output_file <- "STEP_1_Family_Selection/results/phase1_copula_family_comparison.csv"
+dir.create("STEP_1_Family_Selection/results", showWarnings = FALSE, recursive = TRUE)
 fwrite(results_dt, output_file)
 
 cat("Results saved to:", output_file, "\n")

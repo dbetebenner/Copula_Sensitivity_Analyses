@@ -17,13 +17,13 @@ cat("====================================================================\n\n")
 cat("Loading Phase 1 results...\n")
 
 # Phase 1 decision and results
-if (!file.exists("results/phase1_decision.RData")) {
+if (!file.exists("STEP_1_Family_Selection/results/phase1_decision.RData")) {
   stop("Phase 1 decision not found! Run Phase 1 first.")
 }
-load("results/phase1_decision.RData")
+load("STEP_1_Family_Selection/results/phase1_decision.RData")
 
-phase1_results <- fread("results/phase1_copula_family_comparison.csv")
-phase1_selection <- fread("results/phase1_selection_table.csv")
+phase1_results <- fread("STEP_1_Family_Selection/results/phase1_copula_family_comparison.csv")
+phase1_selection <- fread("STEP_1_Family_Selection/results/phase1_selection_table.csv")
 
 cat("  Phase 1 conditions tested:", uniqueN(phase1_results$condition_id), "\n")
 cat("  Winner:", phase2_families[1], "\n\n")
@@ -61,9 +61,9 @@ report$phase1 <- list(
 report$phase2 <- list()
 
 # Check for t-copula deep dive results
-if (file.exists("results/phase2_t_copula_deep_dive.RData")) {
+if (file.exists("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData")) {
   cat("Loading t-copula deep dive results...\n")
-  load("results/phase2_t_copula_deep_dive.RData")
+  load("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData")
   
   report$phase2$t_copula <- list(
     df_results = df_results,
@@ -79,12 +79,12 @@ if (file.exists("results/phase2_t_copula_deep_dive.RData")) {
 }
 
 # Check for experiment results (look for any CSV files matching experiment pattern)
-exp_files <- list.files("results", pattern = "exp_.*_summary\\.csv$", full.names = TRUE)
+exp_files <- list.files("STEP_3_Sensitivity_Analyses/results", pattern = "exp_.*_summary\\.csv$", full.names = TRUE, recursive = TRUE)
 
 if (length(exp_files) > 0) {
   cat("Loading experiment summaries...\n")
   for (exp_file in exp_files) {
-    exp_name <- gsub("results/|_summary\\.csv", "", exp_file)
+    exp_name <- gsub(".*/|_summary\\.csv", "", exp_file)
     report$phase2[[exp_name]] <- fread(exp_file)
     cat("  -", exp_name, "\n")
   }
@@ -98,7 +98,7 @@ cat("\n")
 
 cat("Generating comprehensive text report...\n")
 
-sink("results/FINAL_COMPREHENSIVE_REPORT.txt")
+sink("STEP_4_Deep_Dive_Reporting/results/FINAL_COMPREHENSIVE_REPORT.txt")
 
 cat("====================================================================\n")
 cat("COMPREHENSIVE COPULA SENSITIVITY ANALYSIS REPORT\n")
@@ -324,19 +324,20 @@ cat("Report saved to: results/FINAL_COMPREHENSIVE_REPORT.txt\n\n")
 cat("Generating summary tables...\n")
 
 # Table 1: Phase 1 Selection Summary
+dir.create("STEP_4_Deep_Dive_Reporting/results", showWarnings = FALSE, recursive = TRUE)
 table1 <- phase1_selection
-fwrite(table1, "results/TABLE1_phase1_selection.csv")
+fwrite(table1, "STEP_4_Deep_Dive_Reporting/results/TABLE1_phase1_selection.csv")
 cat("  TABLE1_phase1_selection.csv\n")
 
 # Table 2: Parameters by Grade Span
 table2 <- params_by_span
-fwrite(table2, "results/TABLE2_parameters_by_span.csv")
+fwrite(table2, "STEP_4_Deep_Dive_Reporting/results/TABLE2_parameters_by_span.csv")
 cat("  TABLE2_parameters_by_span.csv\n")
 
 # Table 3: Parameter Stability (if available)
 if (!is.null(report$phase2$t_copula)) {
-  table3 <- fread("results/phase2_t_copula_summary.csv")
-  fwrite(table3, "results/TABLE3_parameter_stability.csv")
+  table3 <- fread("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_summary.csv")
+  fwrite(table3, "STEP_4_Deep_Dive_Reporting/results/TABLE3_parameter_stability.csv")
   cat("  TABLE3_parameter_stability.csv\n")
 }
 
@@ -346,20 +347,20 @@ if (!is.null(report$phase2$t_copula)) {
 
 cat("\nOrganizing figures...\n")
 
-if (!dir.exists("results/FINAL_FIGURES")) {
-  dir.create("results/FINAL_FIGURES")
+if (!dir.exists("STEP_4_Deep_Dive_Reporting/results/FINAL_FIGURES")) {
+  dir.create("STEP_4_Deep_Dive_Reporting/results/FINAL_FIGURES", recursive = TRUE)
 }
 
 # Copy key figures to FINAL_FIGURES
-figure_files <- list.files("results", pattern = "\\.pdf$", full.names = TRUE)
+figure_files <- list.files("STEP_4_Deep_Dive_Reporting/results", pattern = "\\.pdf$", full.names = TRUE)
 
 if (length(figure_files) > 0) {
   for (fig_file in figure_files) {
     file.copy(fig_file, 
-              file.path("results/FINAL_FIGURES", basename(fig_file)),
+              file.path("STEP_4_Deep_Dive_Reporting/results/FINAL_FIGURES", basename(fig_file)),
               overwrite = TRUE)
   }
-  cat("  Copied", length(figure_files), "figures to results/FINAL_FIGURES/\n")
+  cat("  Copied", length(figure_files), "figures to STEP_4_Deep_Dive_Reporting/results/FINAL_FIGURES/\n")
 }
 
 ################################################################################

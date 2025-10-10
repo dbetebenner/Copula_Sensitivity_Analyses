@@ -511,9 +511,9 @@ setorder(summary_table, class_order, -ks_pvalue)
 summary_table[, class_order := NULL]
 
 # Save results
-fwrite(summary_table, "results/exp5_transformation_validation_summary.csv")
+fwrite(summary_table, "STEP_2_Transformation_Validation/results/exp5_transformation_validation_summary.csv")
 
-cat("Summary table saved to: results/exp5_transformation_validation_summary.csv\n\n")
+cat("Summary table saved to: STEP_2_Transformation_Validation/results/exp5_transformation_validation_summary.csv\n\n")
 
 # Print summary
 cat("METHOD CLASSIFICATION SUMMARY:\n")
@@ -550,9 +550,10 @@ cat("EXPERIMENT 5 COMPLETE\n")
 cat("====================================================================\n\n")
 
 # Save full results
+dir.create("STEP_2_Transformation_Validation/results", showWarnings = FALSE, recursive = TRUE)
 save(all_results, summary_table, empirical_baseline, 
-     file = "results/exp5_transformation_validation_full.RData")
+     file = "STEP_2_Transformation_Validation/results/exp5_transformation_validation_full.RData")
 
-cat("Full results saved to: results/exp5_transformation_validation_full.RData\n")
+cat("Full results saved to: STEP_2_Transformation_Validation/results/exp5_transformation_validation_full.RData\n")
 cat("\nNext: Review results and generate publication-quality figures.\n\n")
 

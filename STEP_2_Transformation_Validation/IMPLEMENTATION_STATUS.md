@@ -237,14 +237,14 @@ source("experiments/exp_5_visualizations.R")
 
 ### Results
 ```
-results/
+STEP_2_Transformation_Validation/results/
 ├── exp5_transformation_validation_summary.csv   (Quick reference)
 └── exp5_transformation_validation_full.RData    (Complete results)
 ```
 
 ### Figures
 ```
-figures/exp5_transformation_validation/
+STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/
 ├── uniformity_forest_plot.pdf
 ├── tail_concentration_comparison.pdf
 ├── copula_selection_results.pdf

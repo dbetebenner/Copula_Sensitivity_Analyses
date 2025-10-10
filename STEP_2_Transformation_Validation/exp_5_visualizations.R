@@ -8,7 +8,7 @@ require(grid)
 
 # Load results from exp_5_transformation_validation.R
 if (!exists("all_results")) {
-  load("results/exp5_transformation_validation_full.RData")
+  load("STEP_2_Transformation_Validation/results/exp5_transformation_validation_full.RData")
 }
 
 cat("====================================================================\n")
@@ -16,7 +16,7 @@ cat("EXPERIMENT 5: GENERATING VISUALIZATIONS\n")
 cat("====================================================================\n\n")
 
 # Create output directory
-dir.create("figures/exp5_transformation_validation", 
+dir.create("STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation", 
            showWarnings = FALSE, recursive = TRUE)
 
 ################################################################################
@@ -28,7 +28,7 @@ create_method_dashboard <- function(method_name, results, empirical_U, empirical
   U <- results$U
   V <- results$V
   
-  pdf(paste0("figures/exp5_transformation_validation/", method_name, "_dashboard.pdf"),
+  pdf(paste0("STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/", method_name, "_dashboard.pdf"),
       width = 10, height = 10)
   
   par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
@@ -106,7 +106,7 @@ cat("\n")
 
 cat("Generating uniformity test forest plot...\n")
 
-pdf("figures/exp5_transformation_validation/uniformity_forest_plot.pdf",
+pdf("STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/uniformity_forest_plot.pdf",
     width = 10, height = 8)
 
 par(mar = c(5, 12, 4, 2))
@@ -151,7 +151,7 @@ cat("  Uniformity forest plot saved\n\n")
 
 cat("Generating tail concentration comparison...\n")
 
-pdf("figures/exp5_transformation_validation/tail_concentration_comparison.pdf",
+pdf("STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/tail_concentration_comparison.pdf",
     width = 12, height = 6)
 
 par(mfrow = c(1, 2), mar = c(10, 4, 3, 1))
@@ -191,7 +191,7 @@ cat("  Tail concentration comparison saved\n\n")
 
 cat("Generating copula selection results...\n")
 
-pdf("figures/exp5_transformation_validation/copula_selection_results.pdf",
+pdf("STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/copula_selection_results.pdf",
     width = 10, height = 8)
 
 par(mar = c(10, 4, 3, 1))
@@ -240,7 +240,7 @@ cat("  Copula selection results saved\n\n")
 
 cat("Generating trade-off space plot...\n")
 
-pdf("figures/exp5_transformation_validation/tradeoff_space.pdf",
+pdf("STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/tradeoff_space.pdf",
     width = 10, height = 8)
 
 par(mar = c(5, 5, 4, 2))
@@ -310,7 +310,7 @@ if (!all(key_methods %in% names(all_results))) {
   key_methods <- key_methods[key_methods %in% names(all_results)]
 }
 
-pdf("figures/exp5_transformation_validation/key_methods_comparison.pdf",
+pdf("STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/key_methods_comparison.pdf",
     width = 14, height = 10)
 
 par(mfrow = c(2, 3), mar = c(5, 4, 3, 1))

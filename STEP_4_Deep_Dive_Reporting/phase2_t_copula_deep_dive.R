@@ -282,7 +282,8 @@ cat("GENERATING VISUALIZATIONS\n")
 cat("====================================================================\n\n")
 
 # Plot 1: Degrees of freedom by sample size
-pdf("results/phase2_t_copula_df_stability.pdf", width = 10, height = 6)
+dir.create("STEP_4_Deep_Dive_Reporting/results", showWarnings = FALSE, recursive = TRUE)
+pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_stability.pdf", width = 10, height = 6)
 par(mar = c(5, 5, 4, 2))
 
 df_means <- sapply(df_results, function(x) x$df_mean)
@@ -303,10 +304,10 @@ legend("topright",
        lty = c(2, 1, 1), lwd = 2, pch = c(NA, 16, NA))
 grid()
 dev.off()
-cat("Created: results/phase2_t_copula_df_stability.pdf\n")
+cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_stability.pdf\n")
 
 # Plot 2: Tail dependence by sample size
-pdf("results/phase2_t_copula_tail_dependence.pdf", width = 10, height = 6)
+pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_tail_dependence.pdf", width = 10, height = 6)
 par(mar = c(5, 5, 4, 2))
 
 tail_means <- sapply(tail_dep_results, function(x) x$mean)
@@ -327,10 +328,10 @@ legend("topright",
        lty = c(2, 1, 1), lwd = 2, pch = c(NA, 16, NA))
 grid()
 dev.off()
-cat("Created: results/phase2_t_copula_tail_dependence.pdf\n")
+cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_tail_dependence.pdf\n")
 
 # Plot 3: Degrees of freedom distribution for selected sample sizes
-pdf("results/phase2_t_copula_df_distributions.pdf", width = 12, height = 8)
+pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_distributions.pdf", width = 12, height = 8)
 par(mfrow = c(2, 3), mar = c(4, 4, 3, 1))
 
 for (n_sample in SAMPLE_SIZES) {
@@ -347,11 +348,11 @@ for (n_sample in SAMPLE_SIZES) {
 }
 
 dev.off()
-cat("Created: results/phase2_t_copula_df_distributions.pdf\n")
+cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_distributions.pdf\n")
 
 # Plot 4: T vs Gaussian AIC comparison
 if (length(comparison_results) > 0) {
-  pdf("results/phase2_t_vs_gaussian_comparison.pdf", width = 10, height = 6)
+  pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_vs_gaussian_comparison.pdf", width = 10, height = 6)
   par(mar = c(5, 5, 4, 2))
   
   sample_sizes_comp <- as.numeric(names(comparison_results))
@@ -374,7 +375,7 @@ if (length(comparison_results) > 0) {
   
   grid()
   dev.off()
-  cat("Created: results/phase2_t_vs_gaussian_comparison.pdf\n")
+  cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_vs_gaussian_comparison.pdf\n")
 }
 
 ################################################################################
@@ -388,8 +389,8 @@ cat("====================================================================\n\n")
 # Save workspace
 save(df_results, tail_dep_results, comparison_results,
      true_t, true_gaussian, tail_dep_true,
-     file = "results/phase2_t_copula_deep_dive.RData")
-cat("Saved: results/phase2_t_copula_deep_dive.RData\n")
+     file = "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData")
+cat("Saved: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData\n")
 
 # Create summary table
 summary_dt <- data.table(
@@ -403,8 +404,8 @@ summary_dt <- data.table(
   tau_mean = sapply(df_results, function(x) x$tau_mean)
 )
 
-fwrite(summary_dt, "results/phase2_t_copula_summary.csv")
-cat("Saved: results/phase2_t_copula_summary.csv\n\n")
+fwrite(summary_dt, "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_summary.csv")
+cat("Saved: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_summary.csv\n\n")
 
 cat("====================================================================\n")
 cat("PHASE 2 T-COPULA DEEP DIVE COMPLETE!\n")

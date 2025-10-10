@@ -26,8 +26,8 @@ cat("====================================================================\n\n")
 ################################################################################
 
 # Check if Phase 1 decision exists
-if (file.exists("results/phase1_decision.RData")) {
-  load("results/phase1_decision.RData")
+if (file.exists("STEP_1_Family_Selection/results/phase1_decision.RData")) {
+  load("STEP_1_Family_Selection/results/phase1_decision.RData")
   cat("====================================================================\n")
   cat("PHASE 2: Using families selected in Phase 1\n")
   cat("Families:", paste(phase2_families, collapse = ", "), "\n")
@@ -160,7 +160,7 @@ for (span_config in GRADE_SPANS) {
   )
   
   # Save individual span results
-  output_dir <- file.path("results", "exp_1_grade_span", span_name)
+  output_dir <- file.path("STEP_3_Sensitivity_Analyses/results", "exp_1_grade_span", span_name)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   
   # Create reports
@@ -231,7 +231,7 @@ for (span_name in names(all_results)) {
 comparison_table <- rbindlist(comparison_data)
 
 # Save comparison table
-output_dir <- "results/exp_1_grade_span"
+output_dir <- "STEP_3_Sensitivity_Analyses/results/exp_1_grade_span"
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 fwrite(comparison_table,
@@ -292,7 +292,7 @@ cat("====================================================================\n\n")
 cat("Key Findings:\n")
 cat("- Longer grade spans generally show weaker correlation (lower tau)\n")
 cat("- Estimation precision (CI width) varies by grade span\n")
-cat("- Results saved to: results/exp_1_grade_span/\n\n")
+cat("- Results saved to: STEP_3_Sensitivity_Analyses/results/exp_1_grade_span/\n\n")
 
 # Save complete workspace
 save(all_results, comparison_table,

@@ -26,8 +26,8 @@ cat("====================================================================\n\n")
 ################################################################################
 
 # Check if Phase 1 decision exists
-if (file.exists("results/phase1_decision.RData")) {
-  load("results/phase1_decision.RData")
+if (file.exists("STEP_1_Family_Selection/results/phase1_decision.RData")) {
+  load("STEP_1_Family_Selection/results/phase1_decision.RData")
   cat("====================================================================\n")
   cat("PHASE 2: Using families selected in Phase 1\n")
   cat("Families:", paste(phase2_families, collapse = ", "), "\n")
@@ -210,7 +210,7 @@ for (config in TEST_CONFIGS) {
   )
   
   # Save individual content results
-  output_dir <- file.path("results", "exp_3_content_area", config$name)
+  output_dir <- file.path("STEP_3_Sensitivity_Analyses/results", "exp_3_content_area", config$name)
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   
   # Create reports for each sample size
@@ -283,7 +283,7 @@ for (config_name in names(all_results)) {
 comparison_table <- rbindlist(comparison_data)
 
 # Save comparison table
-output_dir <- "results/exp_3_content_area"
+output_dir <- "STEP_3_Sensitivity_Analyses/results/exp_3_content_area"
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 fwrite(comparison_table,

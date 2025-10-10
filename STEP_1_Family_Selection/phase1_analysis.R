@@ -174,7 +174,7 @@ cat("GENERATING VISUALIZATIONS\n")
 cat("====================================================================\n\n")
 
 # Plot 1: Family selection frequency
-pdf("results/phase1_selection_frequency.pdf", width = 8, height = 6)
+pdf("STEP_1_Family_Selection/results/phase1_selection_frequency.pdf", width = 8, height = 6)
 par(mar = c(5, 5, 4, 2))
 barplot(selection_freq_aic$N,
         names.arg = selection_freq_aic$family,
@@ -188,10 +188,10 @@ text(x = barplot(selection_freq_aic$N, plot = FALSE),
      labels = paste0(selection_freq_aic$pct, "%"),
      pos = 3, cex = 1.2, font = 2)
 dev.off()
-cat("Created: results/phase1_selection_frequency.pdf\n")
+cat("Created: STEP_1_Family_Selection/results/phase1_selection_frequency.pdf\n")
 
 # Plot 2: AIC advantage by grade span
-pdf("results/phase1_aic_by_span.pdf", width = 10, height = 6)
+pdf("STEP_1_Family_Selection/results/phase1_aic_by_span.pdf", width = 10, height = 6)
 par(mar = c(5, 5, 4, 8), xpd = TRUE)
 
 families <- unique(results$family)
@@ -223,10 +223,10 @@ legend("topright", inset = c(-0.25, 0),
        lwd = 2, pch = 16,
        title = "Copula Family")
 dev.off()
-cat("Created: results/phase1_aic_by_span.pdf\n")
+cat("Created: STEP_1_Family_Selection/results/phase1_aic_by_span.pdf\n")
 
 # Plot 3: Box plots of delta AIC
-pdf("results/phase1_delta_aic_distributions.pdf", width = 10, height = 6)
+pdf("STEP_1_Family_Selection/results/phase1_delta_aic_distributions.pdf", width = 10, height = 6)
 par(mar = c(5, 5, 4, 2))
 boxplot(delta_aic_vs_best ~ family, data = results,
         main = expression("Distribution of" ~ Delta * "AIC vs Best Family"),
@@ -238,11 +238,11 @@ abline(h = 0, col = "red", lwd = 2, lty = 2)
 abline(h = 10, col = "orange", lwd = 1, lty = 2)
 text(x = 1, y = 10, labels = expression(Delta ~ "= 10"), pos = 3, col = "orange")
 dev.off()
-cat("Created: results/phase1_delta_aic_distributions.pdf\n")
+cat("Created: STEP_1_Family_Selection/results/phase1_delta_aic_distributions.pdf\n")
 
 # Plot 4: Tail dependence by grade span
 if (nrow(tail_analysis) > 0) {
-  pdf("results/phase1_tail_dependence.pdf", width = 10, height = 6)
+  pdf("STEP_1_Family_Selection/results/phase1_tail_dependence.pdf", width = 10, height = 6)
   par(mar = c(5, 5, 4, 8), xpd = TRUE)
   
   # Only plot families with tail dependence
@@ -286,13 +286,13 @@ if (nrow(tail_analysis) > 0) {
          lty = c(1, 2, 1),
          title = "Copula Family")
   dev.off()
-  cat("Created: results/phase1_tail_dependence.pdf\n")
+  cat("Created: STEP_1_Family_Selection/results/phase1_tail_dependence.pdf\n")
 } else {
-  cat("Skipped: results/phase1_tail_dependence.pdf (no tail analysis data)\n")
+  cat("Skipped: STEP_1_Family_Selection/results/phase1_tail_dependence.pdf (no tail analysis data)\n")
 }
 
 # Plot 5: Heatmap of best family by span and content
-pdf("results/phase1_heatmap.pdf", width = 10, height = 6)
+pdf("STEP_1_Family_Selection/results/phase1_heatmap.pdf", width = 10, height = 6)
 
 # Create matrix for heatmap
 best_by_span_content <- results[, .SD[which.min(aic)], by = .(condition_id, grade_span, content_area)][
@@ -327,7 +327,7 @@ for (i in 1:nrow(text_matrix)) {
 }
 
 dev.off()
-cat("Created: results/phase1_heatmap.pdf\n\n")
+cat("Created: STEP_1_Family_Selection/results/phase1_heatmap.pdf\n\n")
 
 ################################################################################
 ### DECISION CRITERIA FOR PHASE 2
@@ -421,15 +421,15 @@ cat("====================================================================\n\n")
 
 # Save decision for Phase 2
 save(phase2_families, decision, rationale, decision_summary,
-     file = "results/phase1_decision.RData")
-cat("Saved: results/phase1_decision.RData\n")
+     file = "STEP_1_Family_Selection/results/phase1_decision.RData")
+cat("Saved: STEP_1_Family_Selection/results/phase1_decision.RData\n")
 
 # Save selection table
-fwrite(selection_freq_aic, "results/phase1_selection_table.csv")
-cat("Saved: results/phase1_selection_table.csv\n")
+fwrite(selection_freq_aic, "STEP_1_Family_Selection/results/phase1_selection_table.csv")
+cat("Saved: STEP_1_Family_Selection/results/phase1_selection_table.csv\n")
 
 # Write text summary
-summary_file <- "results/phase1_summary.txt"
+summary_file <- "STEP_1_Family_Selection/results/phase1_summary.txt"
 sink(summary_file)
 
 cat("====================================================================\n")
@@ -488,27 +488,27 @@ cat("NEXT STEPS\n")
 cat("====================================================================\n\n")
 
 if (decision == "SINGLE_WINNER") {
-  cat("1. Review selection plots in results/phase1_*.pdf\n")
+  cat("1. Review selection plots in STEP_1_Family_Selection/results/phase1_*.pdf\n")
   cat("2. If approved, run Phase 2 experiments with", phase2_families, "copula\n")
   cat("3. Consider creating phase2_", phase2_families, "_deep_dive.R\n")
   cat("4. Run phase2_comprehensive_report.R after experiments complete\n")
 } else {
-  cat("1. Review selection plots in results/phase1_*.pdf\n")
+  cat("1. Review selection plots in STEP_1_Family_Selection/results/phase1_*.pdf\n")
   cat("2. If approved, run Phase 2 experiments with selected families\n")
   cat("3. Run phase2_comprehensive_report.R after experiments complete\n")
 }
 
 sink()
 
-cat("Saved: results/phase1_summary.txt\n\n")
+cat("Saved: STEP_1_Family_Selection/results/phase1_summary.txt\n\n")
 
 cat("====================================================================\n")
 cat("PHASE 1 ANALYSIS COMPLETE!\n")
 cat("====================================================================\n\n")
 
 cat("Review the following files:\n")
-cat("  - results/phase1_summary.txt\n")
-cat("  - results/phase1_*.pdf\n\n")
+cat("  - STEP_1_Family_Selection/results/phase1_summary.txt\n")
+cat("  - STEP_1_Family_Selection/results/phase1_*.pdf\n\n")
 
 cat("If results look good, proceed to Phase 2:\n")
 cat("  1. Update experiment scripts (or they'll auto-load decision)\n")
