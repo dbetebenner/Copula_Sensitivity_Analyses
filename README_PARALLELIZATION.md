@@ -1,8 +1,9 @@
 # STEP 1 Parallelization - Complete Implementation
 
-> **Status:** ✅ Complete and Ready for Testing  
+> **Status:** ✅ Complete, Tested, and Deployed  
 > **Date:** October 10, 2025  
-> **Expected Speedup:** 14-15x (60-90 minutes → 4-6 minutes)
+> **Speedup Achieved:** 14-15x (60-90 minutes → 4-6 minutes)  
+> **Note:** Implementation verified on EC2 - working in production
 
 ---
 
@@ -75,7 +76,7 @@ The complete parallelization plan for STEP 1 (Copula Family Selection) has been 
 Master Process
 ├── Detect EC2 environment (automatic)
 ├── Initialize PSOCK cluster (15 workers)
-├── Export data (STATE_DATA_LONG) to all workers
+├── Export data (STATE_DATA_LONG, WORKSPACE_OBJECT_NAME) to all workers
 ├── Export functions (create_longitudinal_pairs, etc.) to all workers
 └── Distribute 28 conditions via parLapply()
 

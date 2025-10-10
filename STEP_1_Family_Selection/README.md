@@ -156,7 +156,8 @@ After running, verify:
 
 **Data:**
 - Colorado longitudinal assessment data (2003-2013, Grades 3-10)
-- Located: `/Users/conet/SGP Dropbox/.../Colorado_Data_LONG.RData`
+- Trimmed dataset: `Data/Copula_Sensitivity_Test_Data_CO.Rdata`
+- Auto-loaded by `master_analysis.R` as `STATE_DATA_LONG`
 
 **Functions:**
 - `../functions/longitudinal_pairs.R` - Extract paired scores
@@ -186,10 +187,12 @@ copula_fits <- fit_copula_from_pairs(
 ### Issue: Error loading Colorado data
 **Cause:** Data file path incorrect
 
-**Fix:** Update path in line ~18:
-```r
-load("/Users/conet/SGP Dropbox/.../Colorado_Data_LONG.RData")
+**Fix:** Ensure data file exists:
+```bash
+ls Data/Copula_Sensitivity_Test_Data_CO.Rdata
 ```
+
+Data is auto-loaded by `master_analysis.R` - no manual loading needed.
 
 ### Issue: Very slow execution
 **Cause:** 30+ conditions × 5 families = 150+ copula fits

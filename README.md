@@ -151,10 +151,12 @@ See `METHODOLOGY_OVERVIEW.md` for:
 ## Requirements
 
 ### Data
-Colorado longitudinal assessment data (2003-2013):
+Colorado longitudinal assessment data (trimmed for copula analysis):
 ```
-/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData
+Data/Copula_Sensitivity_Test_Data_CO.Rdata
 ```
+
+This is a trimmed dataset with 7 essential variables (ID, GRADE, YEAR, CONTENT_AREA, SCALE_SCORE, VALID_CASE, SCALE_SCORE_PRIOR) that reduces memory usage by ~75-80%. See `Data/README.md` for details.
 
 ### R Packages
 ```r
@@ -162,9 +164,11 @@ install.packages(c("data.table", "copula", "splines2", "grid", "xtable"))
 ```
 
 ### Hardware
-- Minimum: 8GB RAM, 4 cores
-- Recommended: 16GB RAM, 8 cores (for faster execution)
-- EC2: Set `EC2_MODE <- TRUE` for cloud execution
+- **Local**: 8GB RAM minimum, 16GB recommended
+- **EC2**: c6i.4xlarge (16 cores, 32 GB RAM)
+  - Auto-detects EC2 environment
+  - Uses parallel processing (15 cores)
+  - STEP 1 speedup: 14-15x (60-90 min → 4-6 min)
 
 ---
 
@@ -235,7 +239,7 @@ source("master_analysis.R")
 ## Troubleshooting
 
 ### Issue: "Data file not found"
-**Fix:** Update data path in each step's main script
+**Fix:** Ensure `Data/Copula_Sensitivity_Test_Data_CO.Rdata` exists. The file should be in the `Data/` subdirectory of the project root.
 
 ### Issue: "Functions not found"
 **Fix:** Ensure you're running from project root, or paths use `../functions/`

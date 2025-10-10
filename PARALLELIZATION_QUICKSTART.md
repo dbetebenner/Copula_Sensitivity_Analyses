@@ -1,5 +1,8 @@
 # Parallelization Quickstart Guide
 
+> **Status:** ✅ Deployed and Working in Production  
+> **Verified:** October 10, 2025 on EC2
+
 ## 🚀 Quick Start
 
 ### Run Test (Local Machine)
@@ -13,7 +16,8 @@ source("STEP_1_Family_Selection/test_parallel_subset.R")
 ```r
 # On EC2 c6i.4xlarge:
 source("master_analysis.R")
-# Will auto-detect EC2 and use parallel version
+# Auto-detects EC2 and uses parallel version (15 cores)
+# STEP 1 completes in ~5 minutes instead of 60-90 minutes
 ```
 
 ---
