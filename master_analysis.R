@@ -50,7 +50,7 @@ if (file.exists("state_config.R")) {
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- c(1, 2)  # Run Steps 1 & 2 only
+STEPS_TO_RUN <- 2  # Run Step 2 only
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -515,7 +515,7 @@ if (should_run_step(2)) {
     cat("Key Findings:\n")
     cat("-------------\n")
     empirical_row <- exp5_summary[type == "empirical"][1]
-    ispline_4_row <- exp5_summary[name == "ispline_4knots"]
+    ispline_4_row <- exp5_summary[method == "ispline_4knots"]
     
     if (nrow(empirical_row) > 0) {
       cat(sprintf("  Empirical ranks: %s (K-S p=%.3f, copula=%s)\n",

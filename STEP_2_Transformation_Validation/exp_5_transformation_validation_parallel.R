@@ -222,26 +222,24 @@ clusterExport(cl, c(
   "COPULA_FAMILIES", "CONFIG"
 ), envir = environment())
 
-# Export functions (from functions/ directory)
-clusterExport(cl, c(
-  "create_ispline_framework",
-  "create_ispline_framework_enhanced",
-  "compute_uniformity_diagnostics",
-  "compute_dependence_diagnostics",
-  "compute_tail_diagnostics",
-  "fit_copula_from_pairs",
-  "classify_transformation_method",
-  "fit_qspline"  # Helper function for Q-spline
-), envir = .GlobalEnv)
-
-# Load packages on each worker
+# Load packages and source functions on each worker
+cat("Loading packages and functions on each worker...\n")
 clusterEvalQ(cl, {
   require(data.table)
   require(splines2)
   require(copula)
+  
+  # Source all required function files (from project root)
+  # Note: master_analysis.R sets working directory to project root
+  source("functions/longitudinal_pairs.R")
+  source("functions/ispline_ecdf.R")
+  source("functions/copula_bootstrap.R")
+  source("functions/transformation_diagnostics.R")
 })
 
-cat("Workers prepared successfully.\n\n")
+cat("Workers prepared successfully.\n")
+cat("  ✓ Packages loaded on all workers\n")
+cat("  ✓ Functions sourced on all workers\n\n")
 
 ################################################################################
 ### DEFINE WORKER FUNCTION
@@ -452,27 +450,36 @@ process_transformation_method <- function(method) {
     ### STEP 4: CLASSIFY METHOD
     ##########################################################################
     
+    # Build copula_results object in expected format for classification
+    copula_summary <- list(
+      best_family = best_copula_family,
+      results = copula_results,
+      aic_delta_from_empirical = aic_values[best_copula_family] - 
+        empirical_baseline$copula_fits$results[[empirical_baseline$best_family]]$aic
+    )
+    
     classification_result <- classify_transformation_method(
       uniformity = uniformity,
       dependence = dependence,
       tail = tail,
-      copula_results = copula_results,
-      empirical_baseline = empirical_baseline
+      copula_results = copula_summary,
+      empirical_best_family = empirical_baseline$best_family
     )
     
     ##########################################################################
     ### RETURN COMPLETE RESULTS
     ##########################################################################
     
+    # Return structure matching sequential version for visualization compatibility
     return(list(
       method = method,
       uniformity = uniformity,
       dependence = dependence,
       tail = tail,
-      copula_results = copula_results,
-      best_copula = best_copula_family,
-      classification = classification_result$classification,
-      use_in_phase2 = classification_result$use_in_phase2,
+      copula_results = copula_summary,  # Use copula_summary (with best_family) not raw results
+      classification = classification_result,  # Full classification object
+      U = U,  # Include pseudo-observations for visualization
+      V = V,
       success = TRUE
     ))
     
@@ -557,8 +564,8 @@ summary_table <- rbindlist(lapply(names(all_results), function(method_name) {
     method = res$method$name,
     label = res$method$label,
     type = res$method$type,
-    classification = res$classification,
-    use_in_phase2 = res$use_in_phase2,
+    classification = res$classification$classification,
+    use_in_phase2 = res$classification$use_in_phase2,
     ks_pvalue = min(res$uniformity$ks_U_pval, res$uniformity$ks_V_pval),
     cvm_U = res$uniformity$cvm_U,
     cvm_V = res$uniformity$cvm_V,
@@ -566,17 +573,16 @@ summary_table <- rbindlist(lapply(names(all_results), function(method_name) {
     tau_bias = res$dependence$tau_bias,
     lower_10 = res$tail$lower_10,
     upper_90 = res$tail$upper_90,
-    tail_dist_lower = res$tail$tail_dist_lower,
-    tail_dist_upper = res$tail$tail_dist_upper,
-    best_copula = res$best_copula,
-    copula_correct = (res$best_copula == empirical_baseline$best_family),
-    aic_delta = res$copula_results[[res$best_copula]]$aic - 
-                empirical_baseline$copula_fits$results[[empirical_baseline$best_family]]$aic
+    tail_dist_lower = res$tail$tail_distortion_lower,
+    tail_dist_upper = res$tail$tail_distortion_upper,
+    best_copula = res$copula_results$best_family,
+    copula_correct = (res$copula_results$best_family == empirical_baseline$best_family),
+    aic_delta = res$copula_results$aic_delta_from_empirical
   )
 }))
 
-# Save summary table
-results_dir <- "results"
+# Save summary table (use full path from project root)
+results_dir <- "STEP_2_Transformation_Validation/results"
 if (!dir.exists(results_dir)) dir.create(results_dir, recursive = TRUE)
 
 fwrite(summary_table, file.path(results_dir, "exp5_transformation_validation_summary.csv"))

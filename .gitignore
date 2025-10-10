@@ -1,4 +1,9 @@
 # Results (Generated, not versioned)
+results/*.RData
+results/*.csv
+results/*.pdf
+results/*.txt
+results/figures/
 */results/*.RData
 */results/*.csv
 */results/*.pdf
