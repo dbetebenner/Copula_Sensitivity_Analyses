@@ -26,8 +26,8 @@ cl <- makeCluster(n_cores_test, type = "PSOCK")
 
 cat("Exporting data and functions to cluster workers...\n")
 
-# Export data to all workers
-clusterExport(cl, c("STATE_DATA_LONG", "get_state_data"), envir = .GlobalEnv)
+# Export data and configuration to all workers
+clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data"), envir = .GlobalEnv)
 
 # Load packages on each worker
 clusterEvalQ(cl, {

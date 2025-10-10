@@ -41,7 +41,7 @@
 ```
 Master Process
 ├── Initialize PSOCK cluster (15 workers)
-├── Export data: STATE_DATA_LONG, get_state_data()
+├── Export data: STATE_DATA_LONG, WORKSPACE_OBJECT_NAME, get_state_data()
 ├── Export functions: create_longitudinal_pairs(), etc.
 └── Distribute 28 conditions across workers
     ├── Worker 1: Conditions 1, 16, ...
@@ -292,11 +292,13 @@ clusterEvalQ(cl, {
 ### "Object STATE_DATA_LONG not found"
 
 **Cause:** Data not exported to workers  
-**Fix:** Verify `clusterExport()` includes data
+**Fix:** Verify `clusterExport()` includes data and configuration variables
 
 ```r
-clusterExport(cl, c("STATE_DATA_LONG", "get_state_data"), envir = .GlobalEnv)
+clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data"), envir = .GlobalEnv)
 ```
+
+Note: `WORKSPACE_OBJECT_NAME` must be exported because `get_state_data()` references it internally.
 
 ### Cluster initialization hangs
 
