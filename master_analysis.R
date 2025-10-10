@@ -30,12 +30,12 @@ if (file.exists("state_config.R")) {
   # DEFAULT STATE CONFIGURATION - Colorado
   STATE_NAME <- "Colorado"
   STATE_ABBREV <- "CO"
-  DATA_OBJECT_NAME <- "STATE_DATA_LONG"  # Generic name for the loaded data
-  DATA_VARIABLE_NAME <- "Colorado_SGP_LONG_Data"  # Variable name inside the .RData file
+  DATA_OBJECT_NAME <- "STATE_DATA_LONG"  # Generic name for the loaded data (backward compatible)
+  DATA_VARIABLE_NAME <- "Copula_Sensitivity_Test_Data_CO"  # Variable name inside the .RData file
   
-  # Data paths (state-specific)
-  EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
-  LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
+  # Data paths (trimmed dataset for copula sensitivity analysis)
+  EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/TEMP/Copula_Sensitivity_Analyses/Data/Copula_Sensitivity_Test_Data_CO.Rdata"
+  LOCAL_DATA_PATH <- "Data/Copula_Sensitivity_Test_Data_CO.Rdata"
 }
 
 ############################################################################

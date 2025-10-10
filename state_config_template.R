@@ -17,12 +17,15 @@ LOCAL_DATA_PATH <- "/path/to/your/state/data.Rdata"
 
 # Example configurations for different states:
 
-# Colorado (current)
+# Colorado (default - trimmed dataset for copula sensitivity analysis)
 # STATE_NAME <- "Colorado"
 # STATE_ABBREV <- "CO"
-# DATA_VARIABLE_NAME <- "Colorado_SGP_LONG_Data"
-# EC2_DATA_PATH <- "/home/ec2-user/SGP/Dropbox/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
-# LOCAL_DATA_PATH <- "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_SGP_LONG_Data.Rdata"
+# DATA_VARIABLE_NAME <- "Copula_Sensitivity_Test_Data_CO"
+# EC2_DATA_PATH <- "Data/Copula_Sensitivity_Test_Data_CO.Rdata"
+# LOCAL_DATA_PATH <- "Data/Copula_Sensitivity_Test_Data_CO.Rdata"
+#
+# Note: This uses a trimmed dataset (7 essential variables only) to reduce
+# memory usage by ~75-80%. See Data/README.md for details.
 
 # Massachusetts (example)
 # STATE_NAME <- "Massachusetts"
