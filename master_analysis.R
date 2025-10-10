@@ -318,7 +318,14 @@ if (should_run_step(1)) {
     cat("Skipping Step 1.1 (already completed)\n\n")
   } else {
     result_1_1 <- time_phase("Step 1.1: Family Selection", {
-      source_with_path("STEP_1_Family_Selection/phase1_family_selection.R", "Step 1.1: Family Selection")
+      # Use parallel version on EC2, sequential version locally
+      if (IS_EC2) {
+        cat("Using parallel implementation (", n_cores_use <- min(parallel::detectCores() - 1, 15), " cores)\n", sep = "")
+        source_with_path("STEP_1_Family_Selection/phase1_family_selection_parallel.R", "Step 1.1: Family Selection (Parallel)")
+      } else {
+        cat("Using sequential implementation (local mode)\n")
+        source_with_path("STEP_1_Family_Selection/phase1_family_selection.R", "Step 1.1: Family Selection")
+      }
     })
     
     if (!result_1_1$success) {
