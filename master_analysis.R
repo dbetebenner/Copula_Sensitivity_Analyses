@@ -50,7 +50,7 @@ if (file.exists("state_config.R")) {
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- 1  # Run Step 1 only
+STEPS_TO_RUN <- c(1, 2)  # Run Steps 1 & 2 only
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
