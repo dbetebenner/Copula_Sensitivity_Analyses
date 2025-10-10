@@ -566,7 +566,11 @@ if (should_run_step(3)) {
   
   cat("Paper Section: Application → Sensitivity Analyses\n")
   cat("Objective: Test copula parameter stability across conditions\n")
-  cat("Estimated time: 3-6 hours\n\n")
+  if (USE_PARALLEL) {
+    cat("Estimated time: 30-60 minutes (parallel)\n\n")
+  } else {
+    cat("Estimated time: 3-6 hours (sequential)\n\n")
+  }
   
   # Define which experiments to run
   EXPERIMENTS_TO_RUN <- list(
@@ -580,7 +584,23 @@ if (should_run_step(3)) {
   
   for (exp in EXPERIMENTS_TO_RUN) {
     
-    exp_file <- file.path("STEP_3_Sensitivity_Analyses", paste0(exp$name, ".R"))
+    # Select parallel vs sequential script
+    if (USE_PARALLEL && exp$name != "exp_2_sample_size") {
+      # Use parallel version (except Exp 2 which has limited parallelization benefit)
+      exp_file <- file.path("STEP_3_Sensitivity_Analyses", 
+                           paste0(exp$name, "_parallel.R"))
+      
+      # Fall back to sequential if parallel doesn't exist
+      if (!file.exists(exp_file)) {
+        exp_file <- file.path("STEP_3_Sensitivity_Analyses", 
+                             paste0(exp$name, ".R"))
+        cat("Note: Parallel version not found, using sequential version\n")
+      }
+    } else {
+      exp_file <- file.path("STEP_3_Sensitivity_Analyses", 
+                           paste0(exp$name, ".R"))
+    }
+    
     exp_results_marker <- file.path("STEP_3_Sensitivity_Analyses/results", exp$name)
     
     if (!file.exists(exp_file)) {

@@ -12,10 +12,10 @@ require(copula)
 # STATE_DATA_LONG should already be available (generic name for state data)
 
 # Source functions
-source("../functions/longitudinal_pairs.R")
-source("../functions/ispline_ecdf.R")
-source("../functions/copula_bootstrap.R")
-source("../functions/copula_diagnostics.R")
+source("functions/longitudinal_pairs.R")
+source("functions/ispline_ecdf.R")
+source("functions/copula_bootstrap.R")
+source("functions/copula_diagnostics.R")
 
 cat("====================================================================\n")
 cat("EXPERIMENT 2: SAMPLE SIZE SENSITIVITY\n")
@@ -88,7 +88,7 @@ for (config in TEST_CONFIGS) {
   
   # Create longitudinal pairs
   pairs_full <- create_longitudinal_pairs(
-    data = get_state_data(),
+    data = STATE_DATA_LONG,
     grade_prior = config$grade_prior,
     grade_current = config$grade_current,
     year_prior = config$year_prior,
