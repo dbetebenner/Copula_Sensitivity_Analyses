@@ -1,14 +1,7 @@
 # Results (Generated, not versioned)
-results/*.RData
-results/*.csv
-results/*.pdf
-results/*.txt
+results/
 results/figures/
-*/results/*.RData
-*/results/*.csv
-*/results/*.pdf
-*/results/*.txt
-*/results/figures/
+*/results/
 master_analysis_log_*.txt
 
 # Data (Too large for Git)
