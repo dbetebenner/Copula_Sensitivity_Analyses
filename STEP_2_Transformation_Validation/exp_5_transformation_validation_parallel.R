@@ -8,7 +8,14 @@
 ###   - Uses parallel package (base R, no extra dependencies)
 ###   - Each transformation method processed independently on separate cores
 ###   - Expected speedup: 8-10x on high-performance machines
-###   - Target runtime: 4-6 minutes (vs 40-60 minutes sequential)
+###   - Target runtime: 6-10 minutes (vs 40-60 minutes sequential)
+###
+### ENHANCEMENTS (Phase 2):
+###   - Added Bernstein CDF smoother (16 methods total, was 15)
+###   - Added tail calibration check (L1 distance metric)
+###   - Added bootstrap parameter stability (CV of τ and ν)
+###   - Reduced bootstrap reps to 50 (from 100) for parallel efficiency
+###   - All enhancements run in parallel per method
 ############################################################################
 
 # Load libraries
@@ -31,7 +38,9 @@ n_cores_use <- if (exists("N_CORES")) {
 }
 
 cat("Using", n_cores_use, "of", n_cores_available, "cores\n")
-cat("Expected runtime: 4-6 minutes (vs 40-60 min sequential)\n\n")
+cat("Expected runtime: 6-10 minutes with enhancements (vs 40-60 min sequential)\n")
+cat("Testing 16 methods (includes new Bernstein CDF)\n")
+cat("Enhanced diagnostics: tail calibration + parameter stability\n\n")
 
 # Initialize cluster (PSOCK works on all platforms)
 cl <- makeCluster(n_cores_use, type = "PSOCK")
@@ -113,6 +122,11 @@ TRANSFORMATION_METHODS <- list(
        type = "hyman",
        params = list()),
   
+  list(name = "bernstein",
+       label = "Bernstein CDF (Empirical-Beta)",
+       type = "bernstein",
+       params = list(degree = NULL, tune_by_cv = TRUE)),
+  
   # GROUP D: NON-PARAMETRIC METHODS
   list(name = "kernel_gaussian", 
        label = "Kernel (Gaussian, rule-of-thumb)", 
@@ -133,8 +147,9 @@ TRANSFORMATION_METHODS <- list(
 
 COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank")
 
-cat("Testing", length(TRANSFORMATION_METHODS), "transformation methods\n")
-cat("Copula families:", paste(COPULA_FAMILIES, collapse = ", "), "\n\n")
+cat("Testing", length(TRANSFORMATION_METHODS), "transformation methods (includes Bernstein)\n")
+cat("Copula families:", paste(COPULA_FAMILIES, collapse = ", "), "\n")
+cat("Enhanced diagnostics: tail calibration, parameter stability\n\n")
 
 ################################################################################
 ### LOAD DATA AND FIT EMPIRICAL BASELINE (SEQUENTIAL - FAST)
@@ -235,6 +250,19 @@ clusterEvalQ(cl, {
   source("functions/ispline_ecdf.R")
   source("functions/copula_bootstrap.R")
   source("functions/transformation_diagnostics.R")
+  
+  # Source new enhancement methods
+  if (file.exists("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")) {
+    source("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")
+  } else {
+    source("methods/bernstein_cdf.R")
+  }
+  
+  if (file.exists("STEP_2_Transformation_Validation/methods/csem_aware_smoother.R")) {
+    source("STEP_2_Transformation_Validation/methods/csem_aware_smoother.R")
+  } else {
+    source("methods/csem_aware_smoother.R")
+  }
 })
 
 cat("Workers prepared successfully.\n")
@@ -342,6 +370,25 @@ process_transformation_method <- function(method) {
       V <- pmax(1e-6, pmin(1 - 1e-6, V))
       framework <- list(method = "hyman")
       
+    } else if (method$type == "bernstein") {
+      # Bernstein CDF smoother
+      bernstein_prior <- fit_bernstein_cdf(
+        pairs_full$SCALE_SCORE_PRIOR,
+        degree = method$params$degree,
+        tune_by_cv = method$params$tune_by_cv
+      )
+      bernstein_current <- fit_bernstein_cdf(
+        pairs_full$SCALE_SCORE_CURRENT,
+        degree = method$params$degree,
+        tune_by_cv = method$params$tune_by_cv
+      )
+      
+      U <- bernstein_prior$F(pairs_full$SCALE_SCORE_PRIOR)
+      V <- bernstein_current$F(pairs_full$SCALE_SCORE_CURRENT)
+      U <- pmax(1e-6, pmin(1 - 1e-6, U))
+      V <- pmax(1e-6, pmin(1 - 1e-6, V))
+      framework <- bernstein_prior
+      
     } else if (method$type == "kernel") {
       # Kernel smoothing
       kernel_cdf <- function(x, data, bw) {
@@ -394,6 +441,24 @@ process_transformation_method <- function(method) {
     uniformity <- compute_uniformity_diagnostics(U, V)
     dependence <- compute_dependence_diagnostics(U, V, empirical_baseline$dependence)
     tail <- compute_tail_diagnostics(U, V, empirical_baseline$tail)
+    
+    # NEW: Enhanced copula-aware diagnostics
+    # Get empirical U for tail calibration (use rank-based)
+    U_empirical_local <- rank(pairs_full$SCALE_SCORE_PRIOR) / (n_pairs + 1)
+    
+    tail_calibration <- tail_calibration_check(
+      U_empirical = U_empirical_local,
+      U_smoothed = U
+    )
+    
+    # Bootstrap parameter stability (reduced reps for parallel speed)
+    param_stability <- bootstrap_parameter_stability(
+      U_prior = U,
+      U_current = V,
+      copula_family = "t",
+      n_bootstrap = 50,  # Reduced from 100 for parallel efficiency
+      parallel = FALSE   # No nested parallelization
+    )
     
     ##########################################################################
     ### STEP 3: FIT COPULAS
@@ -476,6 +541,8 @@ process_transformation_method <- function(method) {
       uniformity = uniformity,
       dependence = dependence,
       tail = tail,
+      tail_calibration = tail_calibration,  # NEW
+      param_stability = param_stability,     # NEW
       copula_results = copula_summary,  # Use copula_summary (with best_family) not raw results
       classification = classification_result,  # Full classification object
       U = U,  # Include pseudo-observations for visualization
@@ -575,6 +642,13 @@ summary_table <- rbindlist(lapply(names(all_results), function(method_name) {
     upper_90 = res$tail$upper_90,
     tail_dist_lower = res$tail$tail_distortion_lower,
     tail_dist_upper = res$tail$tail_distortion_upper,
+    
+    # NEW: Enhanced diagnostics
+    tail_calib_error = res$tail_calibration$tail_error_total,
+    tail_calib_grade = res$tail_calibration$grade,
+    param_stability_cv = if(res$param_stability$success) res$param_stability$tau_cv else NA,
+    param_stability_grade = if(res$param_stability$success) res$param_stability$grade else "FAIL",
+    
     best_copula = res$copula_results$best_family,
     copula_correct = (res$copula_results$best_family == empirical_baseline$best_family),
     aic_delta = res$copula_results$aic_delta_from_empirical
