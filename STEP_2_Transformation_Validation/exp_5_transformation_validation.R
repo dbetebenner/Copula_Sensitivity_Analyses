@@ -15,11 +15,24 @@ require(grid)
 # Data is loaded centrally by master_analysis.R
 # STATE_DATA_LONG should already be available (generic name for state data)
 
-# Source functions
-source("../functions/longitudinal_pairs.R")
-source("../functions/ispline_ecdf.R")
-source("../functions/copula_bootstrap.R")
-source("../functions/transformation_diagnostics.R")
+# Source functions (works from workspace root or STEP_2 directory)
+if (file.exists("functions/longitudinal_pairs.R")) {
+  # Running from workspace root
+  source("functions/longitudinal_pairs.R")
+  source("functions/ispline_ecdf.R")
+  source("functions/copula_bootstrap.R")
+  source("functions/transformation_diagnostics.R")
+  source("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")
+  source("STEP_2_Transformation_Validation/methods/csem_aware_smoother.R")
+} else {
+  # Running from STEP_2_Transformation_Validation directory
+  source("../functions/longitudinal_pairs.R")
+  source("../functions/ispline_ecdf.R")
+  source("../functions/copula_bootstrap.R")
+  source("../functions/transformation_diagnostics.R")
+  source("methods/bernstein_cdf.R")
+  source("methods/csem_aware_smoother.R")
+}
 
 cat("====================================================================\n")
 cat("EXPERIMENT 5: TRANSFORMATION METHOD VALIDATION\n")
@@ -100,6 +113,11 @@ TRANSFORMATION_METHODS <- list(
        label = "Hyman Monotone Cubic", 
        type = "hyman",
        params = list()),
+  
+  list(name = "bernstein",
+       label = "Bernstein CDF (Empirical-Beta)",
+       type = "bernstein",
+       params = list(degree = NULL, tune_by_cv = TRUE)),
   
   # GROUP D: NON-PARAMETRIC METHODS
   list(name = "kernel_gaussian", 
@@ -302,6 +320,25 @@ for (i in seq_along(TRANSFORMATION_METHODS)) {
       V <- pmax(1e-6, pmin(1 - 1e-6, V))
       list(U = U, V = V, framework = list(method = "hyman"))
       
+    } else if (method$type == "bernstein") {
+      # Bernstein CDF smoother
+      bernstein_prior <- fit_bernstein_cdf(
+        pairs_full$SCALE_SCORE_PRIOR,
+        degree = method$params$degree,
+        tune_by_cv = method$params$tune_by_cv
+      )
+      bernstein_current <- fit_bernstein_cdf(
+        pairs_full$SCALE_SCORE_CURRENT,
+        degree = method$params$degree,
+        tune_by_cv = method$params$tune_by_cv
+      )
+      
+      U <- bernstein_prior$F(pairs_full$SCALE_SCORE_PRIOR)
+      V <- bernstein_current$F(pairs_full$SCALE_SCORE_CURRENT)
+      U <- pmax(1e-6, pmin(1 - 1e-6, U))
+      V <- pmax(1e-6, pmin(1 - 1e-6, V))
+      list(U = U, V = V, framework = bernstein_prior)
+      
     } else if (method$type == "kernel") {
       # Kernel smoothing (simple implementation)
       kernel_cdf <- function(x, data, bw) {
@@ -368,6 +405,22 @@ for (i in seq_along(TRANSFORMATION_METHODS)) {
   uniformity <- compute_uniformity_diagnostics(U, V)
   dependence <- compute_dependence_diagnostics(U, V, empirical_baseline$dependence)
   tail <- compute_tail_diagnostics(U, V, empirical_baseline$tail)
+  
+  # NEW: Enhanced copula-aware diagnostics
+  cat("Computing enhanced diagnostics...\n")
+  tail_calibration <- tail_calibration_check(
+    U_empirical = empirical_U,
+    U_smoothed = U
+  )
+  
+  # Bootstrap parameter stability (reduced reps for speed)
+  param_stability <- bootstrap_parameter_stability(
+    U_prior = U,
+    U_current = V,
+    copula_family = "t",
+    n_bootstrap = 100,  # Reduced from 200 for speed
+    parallel = FALSE
+  )
   
   # Fit copulas
   cat("Fitting copulas...\n")
@@ -442,6 +495,8 @@ for (i in seq_along(TRANSFORMATION_METHODS)) {
     uniformity = uniformity,
     dependence = dependence,
     tail = tail,
+    tail_calibration = tail_calibration,  # NEW
+    param_stability = param_stability,     # NEW
     copula_results = copula_summary,
     classification = classification,
     U = U,
@@ -458,7 +513,16 @@ for (i in seq_along(TRANSFORMATION_METHODS)) {
              "(CORRECT)", "(WRONG)"), "\n")
   cat("  Tau bias:", sprintf("%.4f", dependence$tau_bias), "\n")
   cat("  Tail distortion (lower):", sprintf("%.4f", tail$tail_distortion_lower), "\n")
-  cat("  Tail distortion (upper):", sprintf("%.4f", tail$tail_distortion_upper), "\n\n")
+  cat("  Tail distortion (upper):", sprintf("%.4f", tail$tail_distortion_upper), "\n")
+  cat("  Tail calibration error:", sprintf("%.4f", tail_calibration$tail_error_total), 
+      sprintf("(%s)", tail_calibration$grade), "\n")
+  if (param_stability$success) {
+    cat("  Parameter stability (τ CV):", sprintf("%.2f%%", param_stability$tau_cv),
+        sprintf("(%s)", param_stability$grade), "\n")
+  } else {
+    cat("  Parameter stability: FAILED\n")
+  }
+  cat("\n")
 }
 
 ################################################################################
@@ -495,6 +559,12 @@ summary_table <- rbindlist(lapply(names(all_results), function(method_name) {
     upper_90 = res$tail$upper_90,
     tail_dist_lower = res$tail$tail_distortion_lower,
     tail_dist_upper = res$tail$tail_distortion_upper,
+    
+    # NEW: Enhanced diagnostics
+    tail_calib_error = res$tail_calibration$tail_error_total,
+    tail_calib_grade = res$tail_calibration$grade,
+    param_stability_cv = if(res$param_stability$success) res$param_stability$tau_cv else NA,
+    param_stability_grade = if(res$param_stability$success) res$param_stability$grade else "FAIL",
     
     # Copula
     best_copula = res$copula_results$best_family,

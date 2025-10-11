@@ -481,3 +481,410 @@ generate_method_report <- function(method_name, all_diagnostics, output_file = N
   return(report)
 }
 
+
+################################################################################
+### ENHANCED COPULA-AWARE DIAGNOSTICS
+### Phase 2 additions: Tail calibration and parameter stability
+################################################################################
+
+#' Tail Rank-Weight Calibration
+#' 
+#' Compares empirical vs smoothed PIT tail mass using conditional exceedance curves.
+#' This is CRITICAL for copulas with tail dependence (t, Clayton, Gumbel).
+#' 
+#' @param U_empirical Empirical PIT values (from ECDF)
+#' @param U_smoothed Smoothed PIT values (from candidate method)
+#' @param tail_quantiles Quantiles to check (default: c(0.01, 0.05, 0.10))
+#' 
+#' @return List with calibration metrics and plotting data
+tail_calibration_check <- function(U_empirical, 
+                                   U_smoothed,
+                                   tail_quantiles = c(0.01, 0.05, 0.10)) {
+  
+  # Lower tail calibration at key quantiles
+  lower_tail_emp <- sapply(tail_quantiles, function(q) mean(U_empirical <= q))
+  lower_tail_smooth <- sapply(tail_quantiles, function(q) mean(U_smoothed <= q))
+  
+  # Upper tail calibration at key quantiles
+  upper_tail_emp <- sapply(tail_quantiles, function(q) mean(U_empirical >= (1 - q)))
+  upper_tail_smooth <- sapply(tail_quantiles, function(q) mean(U_smoothed >= (1 - q)))
+  
+  # Conditional exceedance curves (fine grid)
+  q_grid <- seq(0.001, 0.20, by = 0.001)
+  lower_curve_emp <- sapply(q_grid, function(q) mean(U_empirical <= q))
+  lower_curve_smooth <- sapply(q_grid, function(q) mean(U_smoothed <= q))
+  
+  upper_curve_emp <- sapply(q_grid, function(q) mean(U_empirical >= (1 - q)))
+  upper_curve_smooth <- sapply(q_grid, function(q) mean(U_smoothed >= (1 - q)))
+  
+  # Compute tail calibration error (L1 distance)
+  tail_error_lower <- mean(abs(lower_curve_smooth - lower_curve_emp))
+  tail_error_upper <- mean(abs(upper_curve_smooth - upper_curve_emp))
+  tail_error_total <- (tail_error_lower + tail_error_upper) / 2
+  
+  # Max error (L-infinity)
+  tail_max_error_lower <- max(abs(lower_curve_smooth - lower_curve_emp))
+  tail_max_error_upper <- max(abs(upper_curve_smooth - upper_curve_emp))
+  tail_max_error <- max(tail_max_error_lower, tail_max_error_upper)
+  
+  # Pass/fail criteria
+  # Tier 1: tail_error < 0.02 (2% average deviation)
+  # Tier 2: tail_error < 0.05 (5% average deviation)
+  passes_tier1 <- tail_error_total < 0.02
+  passes_tier2 <- tail_error_total < 0.05
+  
+  return(list(
+    # Summary metrics
+    tail_error_lower = tail_error_lower,
+    tail_error_upper = tail_error_upper,
+    tail_error_total = tail_error_total,
+    tail_max_error = tail_max_error,
+    
+    # Key quantiles
+    quantiles = tail_quantiles,
+    lower_tail_emp = lower_tail_emp,
+    lower_tail_smooth = lower_tail_smooth,
+    upper_tail_emp = upper_tail_emp,
+    upper_tail_smooth = upper_tail_smooth,
+    
+    # Full curves for plotting
+    curves = list(
+      q_grid = q_grid,
+      lower_emp = lower_curve_emp,
+      lower_smooth = lower_curve_smooth,
+      upper_emp = upper_curve_emp,
+      upper_smooth = upper_curve_smooth
+    ),
+    
+    # Pass/fail
+    passes_tier1 = passes_tier1,
+    passes_tier2 = passes_tier2,
+    grade = ifelse(passes_tier1, "PASS", 
+                   ifelse(passes_tier2, "MARGINAL", "FAIL"))
+  ))
+}
+
+
+#' Plot tail calibration curves
+#' 
+#' @param tail_cal Result from tail_calibration_check()
+#' @param method_name Name of method for plot title
+#' @param add_to_existing If TRUE, add to existing plot (default: FALSE)
+plot_tail_calibration <- function(tail_cal, method_name, add_to_existing = FALSE) {
+  
+  if (!add_to_existing) {
+    par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+  }
+  
+  # Lower tail
+  plot(tail_cal$curves$q_grid, tail_cal$curves$lower_emp,
+       type = "l", lwd = 2, col = "black",
+       xlab = "Quantile q", ylab = "P(U ≤ q)",
+       main = paste(method_name, "- Lower Tail"),
+       ylim = c(0, max(tail_cal$curves$q_grid) * 1.1))
+  lines(tail_cal$curves$q_grid, tail_cal$curves$lower_smooth,
+        lwd = 2, col = "red", lty = 2)
+  abline(0, 1, col = "gray", lty = 3)  # Perfect calibration
+  legend("topleft", 
+         legend = c("Empirical", "Smoothed", "Perfect"),
+         col = c("black", "red", "gray"), 
+         lwd = 2, lty = c(1, 2, 3),
+         cex = 0.8)
+  
+  # Add error annotation
+  text(max(tail_cal$curves$q_grid) * 0.7, 
+       max(tail_cal$curves$q_grid) * 0.3,
+       sprintf("L1 error: %.4f\nGrade: %s", 
+               tail_cal$tail_error_lower,
+               tail_cal$grade),
+       cex = 0.8, col = ifelse(tail_cal$passes_tier1, "darkgreen", "darkred"))
+  
+  grid()
+  
+  # Upper tail
+  plot(tail_cal$curves$q_grid, tail_cal$curves$upper_emp,
+       type = "l", lwd = 2, col = "black",
+       xlab = "Quantile q", ylab = "P(U ≥ 1-q)",
+       main = paste(method_name, "- Upper Tail"),
+       ylim = c(0, max(tail_cal$curves$q_grid) * 1.1))
+  lines(tail_cal$curves$q_grid, tail_cal$curves$upper_smooth,
+        lwd = 2, col = "red", lty = 2)
+  abline(0, 1, col = "gray", lty = 3)
+  legend("topleft", 
+         legend = c("Empirical", "Smoothed", "Perfect"),
+         col = c("black", "red", "gray"), 
+         lwd = 2, lty = c(1, 2, 3),
+         cex = 0.8)
+  
+  text(max(tail_cal$curves$q_grid) * 0.7, 
+       max(tail_cal$curves$q_grid) * 0.3,
+       sprintf("L1 error: %.4f\nGrade: %s", 
+               tail_cal$tail_error_upper,
+               tail_cal$grade),
+       cex = 0.8, col = ifelse(tail_cal$passes_tier1, "darkgreen", "darkred"))
+  
+  grid()
+}
+
+
+#' Bootstrap Copula Parameter Stability
+#' 
+#' Re-estimates copula on resampled (U,V) pairs to measure parameter dispersion.
+#' Stable parameters indicate the transformation preserves copula structure.
+#' 
+#' @param U_prior PIT values for prior grade
+#' @param U_current PIT values for current grade
+#' @param copula_family Copula family to test ("t", "gaussian", "clayton", etc.)
+#' @param n_bootstrap Number of bootstrap replications (default: 200)
+#' @param parallel If TRUE, use parallel processing (default: FALSE)
+#' 
+#' @return List with stability metrics
+bootstrap_parameter_stability <- function(U_prior,
+                                          U_current,
+                                          copula_family = "t",
+                                          n_bootstrap = 200,
+                                          parallel = FALSE) {
+  
+  require(copula)
+  
+  n <- length(U_prior)
+  
+  # Fit copula on original data
+  true_fit <- tryCatch({
+    fit_copula_from_uniform(U_prior, U_current, copula_family)
+  }, error = function(e) {
+    return(NULL)
+  })
+  
+  if (is.null(true_fit)) {
+    return(list(
+      success = FALSE,
+      message = "Failed to fit copula on original data"
+    ))
+  }
+  
+  true_tau <- true_fit$kendall_tau
+  true_nu <- if (copula_family == "t" && !is.null(true_fit$df)) true_fit$df else NA
+  
+  # Bootstrap function
+  bootstrap_once <- function(i) {
+    # Resample with replacement
+    boot_idx <- sample(1:n, size = n, replace = TRUE)
+    U_prior_boot <- U_prior[boot_idx]
+    U_current_boot <- U_current[boot_idx]
+    
+    # Refit copula
+    tryCatch({
+      boot_fit <- fit_copula_from_uniform(U_prior_boot, U_current_boot, copula_family)
+      list(
+        tau = boot_fit$kendall_tau,
+        nu = if (copula_family == "t" && !is.null(boot_fit$df)) boot_fit$df else NA,
+        success = TRUE
+      )
+    }, error = function(e) {
+      list(tau = NA, nu = NA, success = FALSE)
+    })
+  }
+  
+  # Run bootstrap
+  if (parallel && require(parallel)) {
+    boot_results <- mclapply(1:n_bootstrap, bootstrap_once, mc.cores = 4)
+  } else {
+    boot_results <- lapply(1:n_bootstrap, bootstrap_once)
+  }
+  
+  # Extract results
+  boot_tau <- sapply(boot_results, function(x) x$tau)
+  boot_nu <- sapply(boot_results, function(x) x$nu)
+  successes <- sapply(boot_results, function(x) x$success)
+  
+  # Remove failures
+  boot_tau <- boot_tau[!is.na(boot_tau)]
+  boot_nu <- boot_nu[!is.na(boot_nu)]
+  
+  if (length(boot_tau) < 10) {
+    return(list(
+      success = FALSE,
+      message = "Too many bootstrap failures (< 10 successes)"
+    ))
+  }
+  
+  # Stability metrics
+  tau_sd <- sd(boot_tau)
+  tau_iqr <- IQR(boot_tau)
+  tau_cv <- (tau_sd / abs(true_tau)) * 100  # Coefficient of variation (%)
+  
+  nu_sd <- if (copula_family == "t" && length(boot_nu) > 0) sd(boot_nu) else NA
+  nu_iqr <- if (copula_family == "t" && length(boot_nu) > 0) IQR(boot_nu) else NA
+  nu_cv <- if (copula_family == "t" && !is.na(true_nu) && true_nu > 0) {
+    (nu_sd / true_nu) * 100
+  } else {
+    NA
+  }
+  
+  # Pass/fail criteria
+  # Tier 1: CV < 5% (very stable)
+  # Tier 2: CV < 10% (stable)
+  passes_tier1 <- tau_cv < 5
+  passes_tier2 <- tau_cv < 10
+  
+  return(list(
+    success = TRUE,
+    copula_family = copula_family,
+    
+    # True parameters
+    true_tau = true_tau,
+    true_nu = true_nu,
+    
+    # Bootstrap distributions
+    boot_tau = boot_tau,
+    boot_nu = boot_nu,
+    
+    # Tau stability
+    tau_sd = tau_sd,
+    tau_iqr = tau_iqr,
+    tau_cv = tau_cv,
+    tau_ci = quantile(boot_tau, probs = c(0.025, 0.975)),
+    
+    # Nu stability (if t-copula)
+    nu_sd = nu_sd,
+    nu_iqr = nu_iqr,
+    nu_cv = nu_cv,
+    nu_ci = if (length(boot_nu) > 0) quantile(boot_nu, probs = c(0.025, 0.975)) else c(NA, NA),
+    
+    # Summary
+    n_successes = length(boot_tau),
+    n_failures = n_bootstrap - length(boot_tau),
+    success_rate = length(boot_tau) / n_bootstrap,
+    
+    # Pass/fail
+    passes_tier1 = passes_tier1,
+    passes_tier2 = passes_tier2,
+    grade = ifelse(passes_tier1, "PASS",
+                   ifelse(passes_tier2, "MARGINAL", "FAIL"))
+  ))
+}
+
+
+#' Helper function to fit copula from uniform margins
+#' (Assumes copula package with fitCopula available)
+fit_copula_from_uniform <- function(U, V, family = "t") {
+  
+  require(copula)
+  
+  # Create pseudo-observations matrix
+  pseudo_obs <- cbind(U, V)
+  
+  # Remove any boundary values that might cause issues
+  valid_idx <- (U > 1e-6 & U < 1 - 1e-6) & (V > 1e-6 & V < 1 - 1e-6)
+  pseudo_obs <- pseudo_obs[valid_idx, ]
+  
+  if (nrow(pseudo_obs) < 50) {
+    stop("Too few valid observations after boundary removal")
+  }
+  
+  # Select copula family
+  if (family == "t") {
+    cop <- tCopula(dim = 2)
+  } else if (family == "gaussian" || family == "normal") {
+    cop <- normalCopula(dim = 2)
+  } else if (family == "clayton") {
+    cop <- claytonCopula(dim = 2)
+  } else if (family == "gumbel") {
+    cop <- gumbelCopula(dim = 2)
+  } else if (family == "frank") {
+    cop <- frankCopula(dim = 2)
+  } else {
+    stop(paste("Unsupported copula family:", family))
+  }
+  
+  # Fit copula
+  fit <- fitCopula(cop, pseudo_obs, method = "mpl")
+  
+  # Extract parameters
+  result <- list(
+    family = family,
+    parameters = coef(fit),
+    kendall_tau = cor(U, V, method = "kendall"),
+    loglik = logLik(fit),
+    AIC = AIC(fit)
+  )
+  
+  # Add df for t-copula
+  if (family == "t") {
+    result$df <- coef(fit)[2]  # Second parameter is df
+  }
+  
+  return(result)
+}
+
+
+#' Plot bootstrap stability distributions
+#' 
+#' @param stability Result from bootstrap_parameter_stability()
+#' @param method_name Name of method for plot title
+plot_stability_fan <- function(stability, method_name) {
+  
+  if (!stability$success) {
+    plot.new()
+    text(0.5, 0.5, "Bootstrap stability analysis failed", cex = 1.5)
+    return(invisible(NULL))
+  }
+  
+  # Determine layout based on copula family
+  if (stability$copula_family == "t" && !is.na(stability$true_nu)) {
+    par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+  } else {
+    par(mfrow = c(1, 1), mar = c(4, 4, 3, 1))
+  }
+  
+  # Tau stability histogram
+  hist(stability$boot_tau, 
+       breaks = 30,
+       col = "lightblue", 
+       border = "black",
+       main = paste(method_name, "- τ Stability"),
+       xlab = "Kendall's τ (bootstrap)",
+       freq = FALSE)
+  
+  # Add true value line
+  abline(v = stability$true_tau, col = "red", lwd = 2, lty = 2)
+  
+  # Add confidence interval
+  abline(v = stability$tau_ci, col = "darkgreen", lwd = 1, lty = 3)
+  
+  # Add legend
+  legend("topright", 
+         legend = c(
+           paste("True τ =", round(stability$true_tau, 4)),
+           paste("SD =", round(stability$tau_sd, 4)),
+           paste("CV =", round(stability$tau_cv, 2), "%"),
+           paste("Grade:", stability$grade)
+         ),
+         bg = "white",
+         cex = 0.8)
+  
+  # Nu stability histogram (if t-copula)
+  if (stability$copula_family == "t" && !is.na(stability$true_nu)) {
+    hist(stability$boot_nu, 
+         breaks = 30,
+         col = "lightcoral", 
+         border = "black",
+         main = paste(method_name, "- ν (df) Stability"),
+         xlab = "Degrees of freedom (bootstrap)",
+         freq = FALSE)
+    
+    abline(v = stability$true_nu, col = "red", lwd = 2, lty = 2)
+    abline(v = stability$nu_ci, col = "darkgreen", lwd = 1, lty = 3)
+    
+    legend("topright",
+           legend = c(
+             paste("True ν =", round(stability$true_nu, 2)),
+             paste("SD =", round(stability$nu_sd, 2)),
+             paste("CV =", round(stability$nu_cv, 2), "%")
+           ),
+           bg = "white",
+           cex = 0.8)
+  }
+}
+

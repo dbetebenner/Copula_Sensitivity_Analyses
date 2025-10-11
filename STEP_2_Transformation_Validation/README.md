@@ -55,6 +55,7 @@ Experiment 5 systematically tests **15+ transformation methods** across three cr
 ### Group C: Alternative Spline Methods
 - **Q-spline (Quantile Function)** - Direct inverse mapping
 - **Hyman Monotone Cubic** - Classic approach
+- **Bernstein CDF (Empirical-Beta)** - Shape-safe smoothing with excellent boundary behavior
 
 ### Group D: Non-Parametric Methods
 - **Kernel (Gaussian)** - Rule-of-thumb bandwidth
@@ -67,13 +68,29 @@ Experiment 5 systematically tests **15+ transformation methods** across three cr
 
 ### Quick Start
 
+**From workspace root** (recommended):
 ```r
 # Run validation (estimates 30-45 minutes)
-source("experiments/exp_5_transformation_validation.R")
+source("STEP_2_Transformation_Validation/exp_5_transformation_validation.R")
 
 # Generate visualizations (5-10 minutes)
-source("experiments/exp_5_visualizations.R")
+source("STEP_2_Transformation_Validation/exp_5_visualizations.R")
+
+# Test new enhancements
+source("STEP_2_Transformation_Validation/test_enhancements.R")
+
+# Run operational fitness testing
+source("STEP_2_Transformation_Validation/exp_6_operational_fitness.R")
 ```
+
+**OR from STEP_2_Transformation_Validation directory**:
+```r
+setwd("STEP_2_Transformation_Validation")
+source("exp_5_transformation_validation.R")
+source("test_enhancements.R")
+```
+
+All scripts automatically detect the working directory and adjust paths accordingly.
 
 ### What to Expect
 
@@ -273,6 +290,59 @@ After completing Experiment 5:
 - **Results review**: 30-60 minutes
 - **Total**: ~2 hours for complete Experiment 5
 
+## Enhanced Copula-Aware Diagnostics (NEW)
+
+### Phase 2 Enhancements
+
+The validation framework now includes advanced diagnostics specifically designed for copula applications:
+
+#### 1. Tail Rank-Weight Calibration
+
+Compares empirical vs. smoothed PIT tail mass using conditional exceedance curves. This is **CRITICAL** for copulas with tail dependence (t, Clayton, Gumbel).
+
+**Metric**: L1 distance between P(U ≤ q) curves for q ∈ [0.001, 0.20]  
+**Thresholds**:
+- Tier 1 (PASS): tail_error < 0.02 (2% average deviation)
+- Tier 2 (MARGINAL): tail_error < 0.05 (5% average deviation)
+- FAIL: tail_error ≥ 0.05
+
+**Why it matters**: Standard uniformity tests (K-S, CvM) may miss localized tail distortions that dramatically affect copula parameter estimates.
+
+#### 2. Bootstrap Parameter Stability
+
+Re-estimates copula on 100-200 bootstrap resamples to measure parameter dispersion.
+
+**Metrics**: CV(τ) and CV(ν) - coefficient of variation for Kendall's τ and degrees of freedom  
+**Thresholds**:
+- Tier 1 (PASS): CV < 5% (very stable)
+- Tier 2 (MARGINAL): CV < 10% (stable)
+- FAIL: CV ≥ 10%
+
+#### 3. Operational Fitness Testing (Step 2.5)
+
+Computational performance testing:
+- **Forward speed**: > 10k evaluations/sec
+- **Inverse speed**: > 1k evaluations/sec
+- **Inversion accuracy**: MAE < 0.01 × score_range
+- **Memory**: < 100 MB
+
+Run separately: `source("exp_6_operational_fitness.R")`
+
+### New Methods
+
+#### Bernstein CDF
+Shape-safe smoothing using Bernstein polynomials with:
+- Monotonicity guaranteed by construction
+- Excellent boundary behavior
+- Auto-tuned degree parameter
+
+#### CSEM-Aware Smoothing
+For discrete/heaped scores, treats observations as intervals [x ± CSEM]:
+```r
+source("methods/csem_aware_smoother.R")
+diagnosis <- needs_csem_smoothing(your_scores)
+```
+
 ## Questions?
 
 If results don't match expectations:
@@ -280,4 +350,5 @@ If results don't match expectations:
 2. Review `debug_frank_dominance.R` output (Checkpoint 7)
 3. Verify Colorado data loaded correctly
 4. Check for package version issues (copula, splines2)
+5. If new diagnostics fail, check for extreme discretization
 
