@@ -13,7 +13,7 @@ require(data.table)
 #' @param scores_current Vector of current scale scores
 #' @param framework_prior I-spline framework for prior scores (can be NULL if use_empirical_ranks=TRUE)
 #' @param framework_current I-spline framework for current scores (can be NULL if use_empirical_ranks=TRUE)
-#' @param copula_families Vector of copula families to fit ("gaussian", "t", "clayton", "gumbel", "frank")
+#' @param copula_families Vector of copula families to fit ("gaussian", "t", "t_df5", "t_df10", "t_df15", "clayton", "gumbel", "frank", "comonotonic")
 #' @param return_best If TRUE, return only best-fitting copula; if FALSE, return all
 #' @param use_empirical_ranks If TRUE, use empirical ranks for pseudo-observations (Phase 1).
 #'                            If FALSE, use framework transformations (Phase 2+, requires invertibility)
@@ -139,13 +139,9 @@ fit_copula_from_pairs <- function(scores_prior,
         rho <- fit@estimate[1]  # correlation parameter
         df <- fit@estimate[2]   # degrees of freedom
         
-        # Calculate tail dependence
-        tail_dep <- tryCatch({
-          lambda_vals <- lambda(fit@copula)
-          c(lower = lambda_vals["lower"], upper = lambda_vals["upper"])
-        }, error = function(e) {
-          c(lower = NA, upper = NA)
-        })
+        # Calculate tail dependence manually (consistent with fixed df variants)
+        # For t-copula: λ = 2 * t_{df+1}(-√((df+1)(1-ρ)/(1+ρ)))
+        tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
         
         results[[family]] <- list(
           copula = fit@copula,
@@ -155,9 +151,116 @@ fit_copula_from_pairs <- function(scores_prior,
           aic = -2 * fit@loglik + 2 * length(fit@estimate),
           bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * length(fit@estimate),
           kendall_tau = tau(fit@copula),
-          tail_dependence_lower = tail_dep["lower"],
-          tail_dependence_upper = tail_dep["upper"],
+          tail_dependence_lower = tail_dep_val,  # Now calculated manually
+          tail_dependence_upper = tail_dep_val,  # Symmetric for t-copula
           family = "t"
+        )
+        
+      } else if (family == "t_df5") {
+        # Student's t copula with df fixed at 5 (strong tail dependence)
+        cop <- tCopula(dim = 2, dispstr = "un", df = 5, df.fixed = TRUE)
+        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        
+        rho <- fit@estimate[1]  # Only correlation is estimated
+        df <- 5  # Fixed
+        
+        # Calculate tail dependence manually
+        tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
+        
+        results[[family]] <- list(
+          copula = fit@copula,
+          parameter = rho,
+          df = df,
+          loglik = fit@loglik,
+          aic = -2 * fit@loglik + 2 * 1,  # Only 1 parameter estimated (rho)
+          bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * 1,
+          kendall_tau = tau(fit@copula),
+          tail_dependence_lower = tail_dep_val,
+          tail_dependence_upper = tail_dep_val,
+          family = "t_df5"
+        )
+        
+      } else if (family == "t_df10") {
+        # Student's t copula with df fixed at 10 (moderate-strong tail dependence)
+        cop <- tCopula(dim = 2, dispstr = "un", df = 10, df.fixed = TRUE)
+        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        
+        rho <- fit@estimate[1]
+        df <- 10
+        
+        tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
+        
+        results[[family]] <- list(
+          copula = fit@copula,
+          parameter = rho,
+          df = df,
+          loglik = fit@loglik,
+          aic = -2 * fit@loglik + 2 * 1,
+          bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * 1,
+          kendall_tau = tau(fit@copula),
+          tail_dependence_lower = tail_dep_val,
+          tail_dependence_upper = tail_dep_val,
+          family = "t_df10"
+        )
+        
+      } else if (family == "t_df15") {
+        # Student's t copula with df fixed at 15 (moderate-weak tail dependence)
+        cop <- tCopula(dim = 2, dispstr = "un", df = 15, df.fixed = TRUE)
+        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        
+        rho <- fit@estimate[1]
+        df <- 15
+        
+        tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
+        
+        results[[family]] <- list(
+          copula = fit@copula,
+          parameter = rho,
+          df = df,
+          loglik = fit@loglik,
+          aic = -2 * fit@loglik + 2 * 1,
+          bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * 1,
+          kendall_tau = tau(fit@copula),
+          tail_dependence_lower = tail_dep_val,
+          tail_dependence_upper = tail_dep_val,
+          family = "t_df15"
+        )
+        
+      } else if (family == "comonotonic") {
+        # Comonotonic copula (Fréchet-Hoeffding upper bound)
+        # C(u,v) = min(u,v), represents perfect positive dependence
+        # This is what TAMP implicitly assumes
+        
+        # Kendall's tau = 1.0 by definition
+        kendall_tau <- 1.0
+        
+        # Calculate pseudo-log-likelihood based on deviation from perfect dependence
+        # For comonotonic copula, we expect U ≈ V
+        # Larger deviation = worse fit = more negative log-likelihood
+        deviations <- abs(U - V)
+        mean_abs_deviation <- mean(deviations)
+        mean_squared_deviation <- mean(deviations^2)
+        
+        # Pseudo-log-likelihood: penalize deviations from perfect dependence
+        # Use negative of scaled squared deviations (worse fit = more negative)
+        # Scale by sample size for consistency with ML-based copulas
+        pseudo_loglik <- -nrow(pseudo_obs) * mean_squared_deviation * 1000
+        
+        # No parameters to estimate (it's a fixed copula), so k=0
+        n_params <- 0
+        
+        results[[family]] <- list(
+          copula = NULL,  # Not a fitted copula object
+          parameter = NA,  # No parameters (fixed copula)
+          loglik = pseudo_loglik,
+          aic = -2 * pseudo_loglik + 2 * n_params,
+          bic = -2 * pseudo_loglik + log(nrow(pseudo_obs)) * n_params,
+          kendall_tau = kendall_tau,
+          tail_dependence_lower = 1,  # Perfect lower tail dependence (U = V everywhere)
+          tail_dependence_upper = 1,  # Perfect upper tail dependence (U = V everywhere)
+          mean_abs_deviation = mean_abs_deviation,  # Diagnostic
+          mean_squared_deviation = mean_squared_deviation,  # Diagnostic
+          family = "comonotonic"
         )
       }
       
@@ -206,7 +309,7 @@ fit_copula_from_pairs <- function(scores_prior,
 #' @param framework_prior I-spline framework for prior (can be NULL if use_empirical_ranks=TRUE)
 #' @param framework_current I-spline framework for current (can be NULL if use_empirical_ranks=TRUE)
 #' @param sampling_method "independent" or "paired"
-#' @param copula_families Copula families to fit
+#' @param copula_families Copula families to fit ("gaussian", "t", "t_df5", "t_df10", "t_df15", "clayton", "gumbel", "frank", "comonotonic")
 #' @param with_replacement TRUE for standard bootstrap
 #' @param use_empirical_ranks Use empirical ranks for transformation (default FALSE for Phase 2)
 #' 
