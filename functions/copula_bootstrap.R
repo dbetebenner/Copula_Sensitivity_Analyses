@@ -5,6 +5,68 @@
 require(copula)
 require(data.table)
 
+#' Perform Goodness-of-Fit Test for Copula
+#' 
+#' Test whether a fitted copula adequately describes the data
+#' 
+#' @param fitted_copula Fitted copula object from fitCopula()
+#' @param pseudo_obs Matrix of pseudo-observations (n x 2)
+#' @param n_bootstrap Number of bootstrap samples (0 = asymptotic, >0 = parametric bootstrap)
+#' @param family Family name (for special handling of comonotonic)
+#' 
+#' @return List with gof_statistic, gof_pvalue, gof_method
+perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 0, family = NULL) {
+  
+  # Special handling for comonotonic copula (no fitted object)
+  if (!is.null(family) && family == "comonotonic") {
+    # Calculate CvM statistic manually against perfect dependence
+    # Comonotonic means U = V (perfect positive dependence)
+    perfect_dep <- cbind(pseudo_obs[,1], pseudo_obs[,1])
+    cvm_stat <- mean((pseudo_obs[,1] - perfect_dep[,1])^2 + 
+                     (pseudo_obs[,2] - perfect_dep[,2])^2)
+    
+    return(list(
+      gof_statistic = cvm_stat,
+      gof_pvalue = 0,  # Will always fail (by construction)
+      gof_method = "manual_comonotonic"
+    ))
+  }
+  
+  # For parametric copulas, use copula package's gofCopula
+  tryCatch({
+    if (n_bootstrap == 0) {
+      # Asymptotic test (fast)
+      gof_result <- gofCopula(fitted_copula, 
+                              x = pseudo_obs,
+                              method = "Sn",  # Cramér-von Mises
+                              N = 0,  # Asymptotic approximation
+                              verbose = FALSE)
+    } else {
+      # Parametric bootstrap (slow but accurate)
+      gof_result <- gofCopula(fitted_copula, 
+                              x = pseudo_obs,
+                              method = "Sn",  # Cramér-von Mises
+                              simulation = "pb",  # Parametric bootstrap
+                              N = n_bootstrap,
+                              verbose = FALSE)
+    }
+    
+    return(list(
+      gof_statistic = gof_result$statistic,
+      gof_pvalue = gof_result$p.value,
+      gof_method = if (n_bootstrap == 0) "asymptotic" else paste0("bootstrap_N=", n_bootstrap)
+    ))
+    
+  }, error = function(e) {
+    # If GoF fails, record NA but don't stop entire analysis
+    return(list(
+      gof_statistic = NA_real_,
+      gof_pvalue = NA_real_,
+      gof_method = paste0("failed: ", e$message)
+    ))
+  })
+}
+
 #' Fit Copula to Longitudinal Pairs
 #' 
 #' Estimate copula from prior-current score pairs
@@ -36,7 +98,8 @@ fit_copula_from_pairs <- function(scores_prior,
                                   framework_current,
                                   copula_families = c("gaussian", "t", "clayton", "gumbel", "frank"),
                                   return_best = TRUE,
-                                  use_empirical_ranks = FALSE) {
+                                  use_empirical_ranks = FALSE,
+                                  n_bootstrap_gof = 0) {
   
   # Transform to pseudo-observations
   if (use_empirical_ranks) {
@@ -268,6 +331,30 @@ fit_copula_from_pairs <- function(scores_prior,
       warning(paste("Failed to fit", family, "copula:", e$message))
       results[[family]] <<- NULL
     })
+  }
+  
+  # Add Goodness-of-Fit testing if requested (n_bootstrap_gof > 0 or n_bootstrap_gof == 0 for asymptotic)
+  if (!is.null(n_bootstrap_gof)) {
+    for (family in names(results)) {
+      if (family == "comonotonic") {
+        # Special handling for comonotonic
+        gof_test <- perform_gof_test(fitted_copula = NULL, 
+                                     pseudo_obs = pseudo_obs,
+                                     n_bootstrap = n_bootstrap_gof,
+                                     family = "comonotonic")
+      } else {
+        # Standard parametric copulas
+        gof_test <- perform_gof_test(fitted_copula = results[[family]]$copula,
+                                     pseudo_obs = pseudo_obs,
+                                     n_bootstrap = n_bootstrap_gof,
+                                     family = family)
+      }
+      
+      # Add GoF results to this family's results
+      results[[family]]$gof_statistic <- gof_test$gof_statistic
+      results[[family]]$gof_pvalue <- gof_test$gof_pvalue
+      results[[family]]$gof_method <- gof_test$gof_method
+    }
   }
   
   # Add empirical Kendall's tau

@@ -56,6 +56,30 @@ should_run_step <- function(step_num) {
 }
 
 ############################################################################
+### CONFIGURATION: Goodness-of-Fit Testing
+############################################################################
+
+# Number of bootstrap samples for GoF testing
+# Options:
+#   N_BOOTSTRAP_GOF <- NULL  # Skip GoF testing (faster)
+#   N_BOOTSTRAP_GOF <- 0     # Use asymptotic approximation (very fast, adequate for large n)
+#   N_BOOTSTRAP_GOF <- 100   # Parametric bootstrap with 100 samples (moderate speed, good for testing)
+#   N_BOOTSTRAP_GOF <- 1000  # Parametric bootstrap with 1000 samples (slow, high precision)
+
+if (!exists("N_BOOTSTRAP_GOF")) N_BOOTSTRAP_GOF <- 100  # Default: 100 bootstraps for testing
+
+if (!is.null(N_BOOTSTRAP_GOF)) {
+  cat("Goodness-of-Fit Testing: ENABLED\n")
+  if (N_BOOTSTRAP_GOF == 0) {
+    cat("  Method: Asymptotic approximation (fast)\n")
+  } else {
+    cat("  Method: Parametric bootstrap\n")
+    cat("  Bootstrap samples:", N_BOOTSTRAP_GOF, "\n")
+  }
+  cat("\n")
+}
+
+############################################################################
 ### EC2/LOCAL AUTO-DETECTION
 ############################################################################
 
@@ -65,12 +89,26 @@ if (!exists("EC2_MODE")) EC2_MODE <- FALSE
 if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- TRUE
 if (!exists("USE_PARALLEL")) USE_PARALLEL <- FALSE
 
-# Detect if running on EC2
-IS_EC2 <- grepl("ec2", Sys.info()["nodename"], ignore.case = TRUE)
+# Enhanced EC2 detection
+IS_EC2 <- grepl("ec2", Sys.info()["nodename"], ignore.case = TRUE) ||
+          file.exists("/home/ec2-user") ||
+          file.exists("/sys/hypervisor/uuid")  # AWS hypervisor detection
 
 if (IS_EC2) {
   cat("====================================================================\n")
   cat("DETECTED EC2 ENVIRONMENT\n")
+  cat("====================================================================\n")
+  
+  # Detect instance type
+  instance_type <- tryCatch({
+    system("ec2-metadata --instance-type 2>/dev/null | cut -d ' ' -f 2", intern = TRUE)
+  }, error = function(e) "unknown")
+  
+  if (length(instance_type) > 0 && instance_type != "unknown") {
+    cat("Instance type:", instance_type, "\n")
+  }
+  
+  cat("Using EC2-optimized settings\n")
   cat("====================================================================\n")
   BATCH_MODE <- TRUE
   EC2_MODE <- TRUE

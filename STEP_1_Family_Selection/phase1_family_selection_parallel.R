@@ -27,31 +27,78 @@ cat("====================================================================\n")
 
 # Detect cores and set up cluster
 n_cores_available <- detectCores()
-n_cores_use <- min(n_cores_available - 1, 15)  # Leave 1 for system
+
+# Determine optimal core usage based on environment
+if (exists("IS_EC2", envir = .GlobalEnv) && IS_EC2) {
+  # EC2 c8g.12xlarge: Use 46 of 48 cores (leave 2 for system)
+  n_cores_use <- min(n_cores_available - 2, 46)
+} else {
+  # Local: Use n-1 cores
+  n_cores_use <- n_cores_available - 1
+}
+
+# Use FORK cluster on Unix systems (macOS, Linux)
+# FORK is faster and more memory-efficient than PSOCK
+if (.Platform$OS.type == "unix") {
+  cat("Initializing FORK cluster (Unix shared memory)...\n")
+  cl <- makeForkCluster(n_cores_use)
+  cat("  Type: FORK (copy-on-write, no data export needed)\n")
+} else {
+  cat("Initializing PSOCK cluster (Windows fallback)...\n")
+  cl <- makeCluster(n_cores_use, type = "PSOCK")
+  cat("  Type: PSOCK (socket-based, requires data export)\n")
+}
+
 cat("Available cores:", n_cores_available, "\n")
 cat("Using cores:", n_cores_use, "\n\n")
 
-# Initialize cluster (PSOCK works on all platforms)
-cl <- makeCluster(n_cores_use, type = "PSOCK")
+# Capture N_BOOTSTRAP_GOF for workers
+if (exists("N_BOOTSTRAP_GOF", envir = .GlobalEnv)) {
+  N_BOOTSTRAP_GOF_VALUE <- get("N_BOOTSTRAP_GOF", envir = .GlobalEnv)
+  cat("Goodness-of-Fit Testing: ENABLED (N =", N_BOOTSTRAP_GOF_VALUE, "bootstrap samples)\n")
+} else {
+  N_BOOTSTRAP_GOF_VALUE <- NULL
+  cat("Goodness-of-Fit Testing: DISABLED\n")
+}
+cat("\n")
 
-cat("Exporting data and functions to cluster workers...\n")
-
-# Export data and configuration to all workers
-clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data"), envir = .GlobalEnv)
-
-# Load packages on each worker
-clusterEvalQ(cl, {
-  require(data.table)
-  require(splines2)
-  require(copula)
-})
-
-# Source function files on each worker
-clusterEvalQ(cl, {
-  source("functions/longitudinal_pairs.R")
-  source("functions/ispline_ecdf.R")
-  source("functions/copula_bootstrap.R")
-})
+# Export setup differs by cluster type
+if (.Platform$OS.type == "unix") {
+  # FORK cluster: Workers inherit parent environment via copy-on-write
+  # Only need to load packages and source functions
+  cat("Setting up FORK workers (no data export needed)...\n")
+  
+  clusterEvalQ(cl, {
+    require(data.table)
+    require(splines2)
+    require(copula)
+  })
+  
+  clusterEvalQ(cl, {
+    source("functions/longitudinal_pairs.R")
+    source("functions/ispline_ecdf.R")
+    source("functions/copula_bootstrap.R")
+  })
+  
+} else {
+  # PSOCK cluster: Must explicitly export data and configuration
+  cat("Exporting data and functions to PSOCK workers...\n")
+  
+  clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data", 
+                      "N_BOOTSTRAP_GOF_VALUE"), envir = environment())
+  
+  clusterEvalQ(cl, {
+    require(data.table)
+    require(splines2)
+    require(copula)
+  })
+  
+  clusterEvalQ(cl, {
+    source("functions/longitudinal_pairs.R")
+    source("functions/ispline_ecdf.R")
+    source("functions/copula_bootstrap.R")
+  })
+}
 
 cat("Cluster initialized successfully.\n\n")
 
@@ -62,9 +109,9 @@ cat("Cluster initialized successfully.\n\n")
 # All copula families to test
 # Including comonotonic (Fréchet-Hoeffding upper bound) to show how badly
 # the implicit TAMP assumption (perfect positive dependence) misfits the data
-# Also testing t-copula with fixed df (5, 10, 15) to investigate tail dependence
-COPULA_FAMILIES <- c("gaussian", "t", "t_df5", "t_df10", "t_df15", 
-                     "clayton", "gumbel", "frank", "comonotonic")
+# Note: We focus on t-copula with data-driven df estimation (not fixed df)
+# as preliminary results showed free df consistently dominates fixed df variants
+COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 
 # Define test conditions
 # Two strategies:
@@ -130,6 +177,54 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
     list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "READING", span = 4),
     list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "WRITING", span = 4)
   )
+}
+
+################################################################################
+### ENRICH CONDITIONS WITH DATASET METADATA
+################################################################################
+
+# Add dataset-specific metadata to each condition using helper functions
+if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) {
+  cat("\n")
+  cat("====================================================================\n")
+  cat("ENRICHING CONDITIONS WITH DATASET METADATA\n")
+  cat("====================================================================\n\n")
+  
+  for (i in seq_along(CONDITIONS)) {
+    cond <- CONDITIONS[[i]]
+    
+    # Normalize naming: parallel version uses 'span', but we need 'year_span' for consistency
+    if (!is.null(cond$span) && is.null(cond$year_span)) {
+      cond$year_span <- cond$span
+    }
+    
+    # Calculate year_current from year_prior + year_span
+    year_current <- as.character(as.numeric(cond$year_prior) + cond$year_span)
+    
+    # Add dataset identifiers
+    cond$dataset_id <- current_dataset$id
+    cond$dataset_name <- current_dataset$name
+    cond$anonymized_state <- current_dataset$anonymized_state
+    
+    # Add scaling metadata using helper functions from dataset_configs.R
+    cond$year_current <- year_current
+    cond$prior_scaling_type <- get_scaling_type(current_dataset, cond$year_prior)
+    cond$current_scaling_type <- get_scaling_type(current_dataset, year_current)
+    cond$scaling_transition_type <- get_scaling_transition_type(current_dataset, cond$year_prior, year_current)
+    
+    # Add transition metadata
+    cond$has_transition <- current_dataset$has_transition
+    cond$transition_year <- if (current_dataset$has_transition) current_dataset$transition_year else NA
+    cond$includes_transition_span <- crosses_transition(current_dataset, cond$year_prior, year_current)
+    cond$transition_period <- get_transition_period(current_dataset, cond$year_prior, year_current)
+    
+    # Update the condition in the list
+    CONDITIONS[[i]] <- cond
+  }
+  
+  cat("✓ Conditions enriched with dataset metadata\n")
+  cat("  Dataset:", current_dataset$name, "\n")
+  cat("  Total conditions:", length(CONDITIONS), "\n\n")
 }
 
 ################################################################################
@@ -210,7 +305,8 @@ process_condition <- function(i, cond, copula_families) {
       framework_current = framework_current,
       copula_families = copula_families,
       return_best = FALSE,
-      use_empirical_ranks = TRUE  # Phase 1: Use ranks to avoid I-spline distortion
+      use_empirical_ranks = TRUE,  # Phase 1: Use ranks to avoid I-spline distortion
+      n_bootstrap_gof = N_BOOTSTRAP_GOF_VALUE  # Captured from .GlobalEnv and exported to workers
     )
     
     # Extract results for each family
@@ -265,14 +361,31 @@ process_condition <- function(i, cond, copula_families) {
         degrees_freedom <- if (family %in% c("t", "t_df5", "t_df10", "t_df15")) param_2 else NA_real_
         
         family_results[[family]] <- data.table(
+          # Dataset identifiers
+          dataset_id = if (!is.null(cond$dataset_id)) cond$dataset_id else NA_character_,
+          dataset_name = if (!is.null(cond$dataset_name)) cond$dataset_name else NA_character_,
+          anonymized_state = if (!is.null(cond$anonymized_state)) cond$anonymized_state else NA_character_,
+          
+          # Scaling characteristics
+          prior_scaling_type = if (!is.null(cond$prior_scaling_type)) cond$prior_scaling_type else NA_character_,
+          current_scaling_type = if (!is.null(cond$current_scaling_type)) cond$current_scaling_type else NA_character_,
+          scaling_transition_type = if (!is.null(cond$scaling_transition_type)) cond$scaling_transition_type else NA_character_,
+          has_transition = if (!is.null(cond$has_transition)) cond$has_transition else NA,
+          transition_year = if (!is.null(cond$transition_year)) cond$transition_year else NA,
+          includes_transition_span = if (!is.null(cond$includes_transition_span)) cond$includes_transition_span else NA,
+          transition_period = if (!is.null(cond$transition_period)) cond$transition_period else NA_character_,
+          
+          # Condition identifiers
           condition_id = i,
-          grade_span = cond$span,
+          year_span = if (!is.null(cond$year_span)) cond$year_span else cond$span,
           grade_prior = cond$grade_prior,
           grade_current = cond$grade_current,
+          year_prior = cond$year_prior,
+          year_current = if (!is.null(cond$year_current)) cond$year_current else as.character(as.numeric(cond$year_prior) + cond$year_span),
           content_area = cond$content,
-          cohort_year = cond$year_prior,
           n_pairs = n_pairs,
           
+          # Copula family results
           family = family,
           aic = fit$aic,
           bic = fit$bic,
@@ -288,7 +401,13 @@ process_condition <- function(i, cond, copula_families) {
           # Descriptive parameters (easier for analysis)
           correlation_rho = correlation_rho,
           degrees_freedom = degrees_freedom,
-          theta = theta
+          theta = theta,
+          
+          # Goodness-of-Fit test results
+          gof_statistic = if (!is.null(fit$gof_statistic)) fit$gof_statistic else NA_real_,
+          gof_pvalue = if (!is.null(fit$gof_pvalue)) fit$gof_pvalue else NA_real_,
+          gof_pass_0.05 = if (!is.null(fit$gof_pvalue)) (fit$gof_pvalue > 0.05) else NA,
+          gof_method = if (!is.null(fit$gof_method)) fit$gof_method else NA_character_
         )
       }
     }
@@ -322,7 +441,9 @@ cat("Progress will be shown as conditions complete.\n\n")
 start_time <- Sys.time()
 
 # Export process_condition function to cluster
-clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES"), envir = environment())
+# N_BOOTSTRAP_GOF_VALUE already exported earlier, but include here for clarity
+clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES", "N_BOOTSTRAP_GOF_VALUE"), 
+              envir = environment())
 
 # Run parallel processing
 all_condition_results <- parLapply(
@@ -393,6 +514,9 @@ if (length(all_results) == 0) {
 results_dt <- rbindlist(all_results)
 
 # Calculate best family for each condition
+# NOTE: Within a single dataset run, condition_id is unique, so we only need to group by condition_id here.
+# Multi-dataset aggregation (grouping by dataset_id + condition_id) happens later in phase1_analysis.R
+# when results from all datasets are combined.
 results_dt[, best_aic := family[which.min(aic)], by = condition_id]
 results_dt[, best_bic := family[which.min(bic)], by = condition_id]
 

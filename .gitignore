@@ -3,6 +3,8 @@ results/
 results/figures/
 */results/
 master_analysis_log_*.txt
+*/RESULT_BACKUP_102725/
+
 
 # Data (Too large for Git)
 data/*.RData

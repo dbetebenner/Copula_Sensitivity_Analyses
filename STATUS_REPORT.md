@@ -15,7 +15,7 @@
 - Combining logic to create single output files
 
 ### ✅ LONG Format Results Structure
-- 31-column comprehensive data structure
+- 34-column comprehensive data structure
 - Rich dataset metadata in every row
 - Year-level granularity for scaling types
 - Transition detection and classification

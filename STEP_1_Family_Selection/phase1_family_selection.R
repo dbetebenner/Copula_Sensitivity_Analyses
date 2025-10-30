@@ -35,9 +35,9 @@ cat("====================================================================\n\n")
 # All copula families to test
 # Including comonotonic (Fréchet-Hoeffding upper bound) to show how badly
 # the implicit TAMP assumption (perfect positive dependence) misfits the data
-# Also testing t-copula with fixed df (5, 10, 15) to investigate tail dependence
-COPULA_FAMILIES <- c("gaussian", "t", "t_df5", "t_df10", "t_df15", 
-                     "clayton", "gumbel", "frank", "comonotonic")
+# Note: We focus on t-copula with data-driven df estimation (not fixed df)
+# as preliminary results showed free df consistently dominates fixed df variants
+COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 
 # Define test conditions
 # Two strategies:
@@ -249,7 +249,8 @@ for (i in seq_along(CONDITIONS)) {
     framework_current = framework_current,
     copula_families = COPULA_FAMILIES,
     return_best = FALSE,
-    use_empirical_ranks = TRUE  # Phase 1: Use ranks to avoid I-spline distortion
+    use_empirical_ranks = TRUE,  # Phase 1: Use ranks to avoid I-spline distortion
+    n_bootstrap_gof = if (exists("N_BOOTSTRAP_GOF", envir = .GlobalEnv)) N_BOOTSTRAP_GOF else NULL
   )
   
   # Extract results for each family
@@ -348,7 +349,13 @@ for (i in seq_along(CONDITIONS)) {
         # Descriptive parameters (easier for analysis)
         correlation_rho = correlation_rho,
         degrees_freedom = degrees_freedom,
-        theta = theta
+        theta = theta,
+        
+        # Goodness-of-Fit test results
+        gof_statistic = if (!is.null(fit$gof_statistic)) fit$gof_statistic else NA_real_,
+        gof_pvalue = if (!is.null(fit$gof_pvalue)) fit$gof_pvalue else NA_real_,
+        gof_pass_0.05 = if (!is.null(fit$gof_pvalue)) (fit$gof_pvalue > 0.05) else NA,
+        gof_method = if (!is.null(fit$gof_method)) fit$gof_method else NA_character_
       )
       
       cat(sprintf("  %-10s: AIC = %8.2f, BIC = %8.2f, tau = %.4f\n",
@@ -379,6 +386,9 @@ if (length(all_results) == 0) {
 results_dt <- rbindlist(all_results)
 
 # Calculate best family for each condition
+# NOTE: Within a single dataset run, condition_id is unique, so we only need to group by condition_id here.
+# Multi-dataset aggregation (grouping by dataset_id + condition_id) happens later in phase1_analysis.R
+# when results from all datasets are combined.
 results_dt[, best_aic := family[which.min(aic)], by = condition_id]
 results_dt[, best_bic := family[which.min(bic)], by = condition_id]
 

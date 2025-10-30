@@ -5,6 +5,7 @@
 
 require(data.table)
 require(grid)
+require(wesanderson)  # For Zissou1 color palette
 
 cat("====================================================================\n")
 cat("PHASE 1: FAMILY SELECTION ANALYSIS\n")
@@ -23,6 +24,28 @@ cat("Loaded results from:", results_file, "\n")
 cat("Conditions tested:", uniqueN(results$condition_id), "\n")
 cat("Total fits:", nrow(results), "\n\n")
 
+# CRITICAL FIX: Recalculate delta_aic_vs_best with correct grouping
+# Must group by (dataset_id, condition_id) to ensure uniqueness across datasets
+# Without dataset_id, conditions with the same ID across different datasets 
+# would incorrectly share the same minimum AIC
+cat("Recalculating delta AIC with proper dataset grouping...\n")
+results[, delta_aic_vs_best := aic - min(aic), by = .(dataset_id, condition_id)]
+results[, delta_bic_vs_best := bic - min(bic), by = .(dataset_id, condition_id)]
+
+# Calculate AIC weights for interpretability
+# AIC weight = exp(-delta_i/2) / sum(exp(-delta_j/2))
+# Represents the probability that model i is the best model
+# For very large delta values (e.g., comonotonic), exp(-delta/2) ≈ 0
+cat("Calculating AIC weights...\n")
+results[, aic_weight := {
+  # Use pmax to avoid numerical underflow for very large deltas
+  exp_vals <- exp(-pmax(delta_aic_vs_best, 0) / 2)
+  exp_vals / sum(exp_vals)
+}, by = .(dataset_id, condition_id)]
+
+cat("Delta AIC range:", range(results$delta_aic_vs_best), "\n")
+cat("AIC weight range:", range(results$aic_weight), "\n\n")
+
 # Output directory for combined results
 output_dir <- "STEP_1_Family_Selection/results/dataset_all"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
@@ -35,8 +58,8 @@ cat("====================================================================\n")
 cat("ANALYSIS 1: OVERALL FAMILY SELECTION FREQUENCY\n")
 cat("====================================================================\n\n")
 
-# Count selection frequency by AIC
-selection_freq_aic <- results[, .SD[which.min(aic)], by = condition_id][, .N, by = family]
+# Count selection frequency by AIC (group by dataset_id + condition_id for uniqueness)
+selection_freq_aic <- results[, .SD[which.min(aic)], by = .(dataset_id, condition_id)][, .N, by = family]
 setorder(selection_freq_aic, -N)
 selection_freq_aic[, pct := round(100 * N / sum(N), 1)]
 
@@ -44,8 +67,8 @@ cat("Selection frequency by AIC:\n")
 print(selection_freq_aic)
 cat("\n")
 
-# Count selection frequency by BIC
-selection_freq_bic <- results[, .SD[which.min(bic)], by = condition_id][, .N, by = family]
+# Count selection frequency by BIC (group by dataset_id + condition_id for uniqueness)
+selection_freq_bic <- results[, .SD[which.min(bic)], by = .(dataset_id, condition_id)][, .N, by = family]
 setorder(selection_freq_bic, -N)
 selection_freq_bic[, pct := round(100 * N / sum(N), 1)]
 
@@ -53,15 +76,19 @@ cat("Selection frequency by BIC:\n")
 print(selection_freq_bic)
 cat("\n")
 
-# Mean AIC advantage
+# Mean AIC advantage and weights
 mean_aic_by_family <- results[, .(
   mean_aic = mean(aic),
   sd_aic = sd(aic),
-  mean_delta = mean(delta_aic_vs_best)
+  mean_delta_aic = mean(delta_aic_vs_best),
+  mean_aic_weight = mean(aic_weight),
+  median_aic_weight = median(aic_weight),
+  n_times_best = sum(delta_aic_vs_best == 0)
 ), by = family]
 setorder(mean_aic_by_family, mean_aic)
 
-cat("Mean AIC by family:\n")
+cat("Mean AIC, Delta AIC, and AIC Weights by family:\n")
+cat("(AIC weight = probability model is best; ranges 0-1)\n")
 print(mean_aic_by_family)
 cat("\n")
 
@@ -73,18 +100,18 @@ cat("====================================================================\n")
 cat("ANALYSIS 2: FAMILY SELECTION BY GRADE SPAN\n")
 cat("====================================================================\n\n")
 
-# Best family by grade span
-by_span <- results[, .SD[which.min(aic)], by = .(condition_id, grade_span)][
+# Best family by year span
+by_span <- results[, .SD[which.min(aic)], by = .(dataset_id, condition_id, year_span)][
   , .(
     winner = names(sort(table(family), decreasing = TRUE)[1]),
     t_selected = sum(family == "t"),
     gaussian_selected = sum(family == "gaussian"),
     total = .N
-  ), by = grade_span]
+  ), by = year_span]
 
 by_span[, t_pct := round(100 * t_selected / total, 1)]
 by_span[, gaussian_pct := round(100 * gaussian_selected / total, 1)]
-setorder(by_span, grade_span)
+setorder(by_span, year_span)
 
 cat("Selection patterns by grade span:\n")
 print(by_span)
@@ -92,9 +119,9 @@ cat("\n")
 
 # Mean delta AIC: t-copula vs Gaussian by grade span
 t_vs_gaussian <- merge(
-  results[family == "t", .(condition_id, grade_span, aic_t = aic)],
-  results[family == "gaussian", .(condition_id, aic_gaussian = aic)],
-  by = "condition_id"
+  results[family == "t", .(dataset_id, condition_id, year_span, aic_t = aic)],
+  results[family == "gaussian", .(dataset_id, condition_id, aic_gaussian = aic)],
+  by = c("dataset_id", "condition_id")
 )
 t_vs_gaussian[, delta_aic := aic_gaussian - aic_t]
 
@@ -103,9 +130,9 @@ span_comparison <- t_vs_gaussian[, .(
   sd_delta_aic = sd(delta_aic),
   t_better_count = sum(delta_aic > 0),
   total = .N
-), by = grade_span]
+), by = year_span]
 span_comparison[, t_better_pct := round(100 * t_better_count / total, 1)]
-setorder(span_comparison, grade_span)
+setorder(span_comparison, year_span)
 
 cat("T-copula vs Gaussian by grade span (positive = t better):\n")
 print(span_comparison)
@@ -119,7 +146,7 @@ cat("====================================================================\n")
 cat("ANALYSIS 3: FAMILY SELECTION BY CONTENT AREA\n")
 cat("====================================================================\n\n")
 
-by_content <- results[, .SD[which.min(aic)], by = .(condition_id, content_area)][
+by_content <- results[, .SD[which.min(aic)], by = .(dataset_id, condition_id, content_area)][
   , .(
     winner = names(sort(table(family), decreasing = TRUE)[1]),
     t_selected = sum(family == "t"),
@@ -143,7 +170,7 @@ cat("ANALYSIS 4: TAIL DEPENDENCE BY FAMILY AND GRADE SPAN\n")
 cat("====================================================================\n\n")
 
 # Check for required columns
-required_cols <- c("tail_dep_lower", "tail_dep_upper", "tau", "family", "grade_span")
+required_cols <- c("tail_dep_lower", "tail_dep_upper", "tau", "family", "year_span")
 missing_cols <- setdiff(required_cols, names(results))
 if (length(missing_cols) > 0) {
   cat("Warning: Missing columns in results:", paste(missing_cols, collapse = ", "), "\n")
@@ -160,11 +187,14 @@ if (length(missing_cols) > 0) {
     mean_tail_lower = mean(tail_dep_lower, na.rm = TRUE),
     mean_tail_upper = mean(tail_dep_upper, na.rm = TRUE),
     mean_tau = mean(tau, na.rm = TRUE),
+    mean_aic_weight = mean(aic_weight, na.rm = TRUE),
+    median_aic_weight = median(aic_weight, na.rm = TRUE),
     n = .N
-  ), by = .(family, grade_span)]
-  setorder(tail_analysis, grade_span, family)
+  ), by = .(family, year_span)]
+  setorder(tail_analysis, year_span, -mean_aic_weight)
   
-  cat("Tail dependence patterns:\n")
+  cat("Tail dependence patterns (sorted by mean AIC weight):\n")
+  cat("(Higher AIC weight = better fit)\n")
   print(tail_analysis)
   cat("\n")
 }
@@ -194,55 +224,271 @@ text(x = barplot(selection_freq_aic$N, plot = FALSE),
 dev.off()
 cat("Created:", file.path(output_dir, "phase1_selection_frequency.pdf"), "\n")
 
-# Plot 2: AIC advantage by grade span
+# Define family ordering and colors for consistent styling across plots
+# Order families by median delta AIC for better visualization
+results[, delta_aic_plot := delta_aic_vs_best + 1]  # Add 1 to avoid log(0)
+family_order <- results[, .(median_delta = median(delta_aic_plot)), by = family][
+  order(median_delta), family]
+
+# Create pretty family labels with proper capitalization
+# Note: Fixed-df t-copula variants removed as free t-copula consistently dominates
+pretty_names <- c(
+  "t" = "t",
+  "gaussian" = "Gaussian",
+  "frank" = "Frank",
+  "clayton" = "Clayton",
+  "gumbel" = "Gumbel",
+  "comonotonic" = "Comonotonic"
+)
+
+# Get pretty labels for ordered families
+family_labels <- sapply(family_order, function(x) pretty_names[x])
+
+# Generate Zissou1 color palette (best = warm, worst = cool)
+n_families <- length(family_order)
+zissou_colors <- wes_palette("Zissou1", n_families, type = "continuous")
+
+# Plot 2: Mean AIC by Copula Family and Year Span
 pdf(file.path(output_dir, "phase1_aic_by_span.pdf"), width = 10, height = 6)
-par(mar = c(5, 5, 4, 8), xpd = TRUE)
+par(mar = c(5, 6, 4, 8), xpd = TRUE)
 
-families <- unique(results$family)
-colors <- c("#1976D2", "#2E7D32", "#D32F2F", "#F57C00", "#7B1FA2")
-names(colors) <- c("gaussian", "t", "clayton", "gumbel", "frank")
+# Calculate mean AIC by family and span, add absolute values for log scale
+span_aic <- results[, .(mean_aic = mean(aic)), by = .(family, year_span)]
+span_aic[, mean_aic_abs := abs(mean_aic)]
 
-# Calculate mean AIC by family and span
-span_aic <- results[, .(mean_aic = mean(aic)), by = .(family, grade_span)]
+# Plot with manual axes and log scale
+plot(NULL, xlim = c(0.8, 4.2), ylim = range(span_aic$mean_aic_abs),
+     log = "y",
+     axes = FALSE,
+     xlab = "", ylab = "", main = "")
 
-# Plot lines
-plot(NULL, xlim = c(1, 4), ylim = range(span_aic$mean_aic),
-     xlab = "Grade Span (years)", ylab = "Mean AIC",
-     main = "Mean AIC by Copula Family and Grade Span",
-     xaxt = "n")
-axis(1, at = 1:4)
-grid()
+# Add x-axis
+axis(1, at = 1:4, labels = c("1", "2", "3", "4"), las = 1, cex.axis = 0.9)
 
-for (fam in families) {
+# Add y-axis with negative labels (since we're plotting absolute values)
+# Calculate appropriate tick positions based on data range
+y_range <- range(span_aic$mean_aic_abs)
+y_ticks <- c(1e3, 5e3, 1e4, 5e4, 1e5, 5e5, 1e6, 5e6, 1e7)
+y_ticks_in_range <- y_ticks[y_ticks >= y_range[1] & y_ticks <= y_range[2]]
+y_labels <- ifelse(y_ticks_in_range < 1e6,
+                   paste0("-", format(y_ticks_in_range / 1e3, big.mark = ","), "K"),
+                   paste0("-", format(y_ticks_in_range / 1e6, big.mark = ","), "M"))
+# Handle positive comonotonic value
+if (any(span_aic$mean_aic > 0)) {
+  pos_ticks <- c(1e6, 5e6)
+  pos_ticks_in_range <- pos_ticks[pos_ticks >= y_range[1] & pos_ticks <= y_range[2]]
+  if (length(pos_ticks_in_range) > 0) {
+    y_ticks_in_range <- c(y_ticks_in_range, pos_ticks_in_range)
+    y_labels <- c(y_labels, paste0("+", format(pos_ticks_in_range / 1e6, big.mark = ","), "M"))
+  }
+}
+axis(2, at = y_ticks_in_range, labels = y_labels, las = 1, cex.axis = 0.9)
+
+# Add grid lines
+abline(h = y_ticks_in_range, col = "gray90", lty = 1, lwd = 0.5)
+abline(v = 1:4, col = "gray90", lty = 1, lwd = 0.5)
+
+# Plot lines for each family in order, using Zissou1 colors
+for (i in seq_along(family_order)) {
+  fam <- family_order[i]
   fam_data <- span_aic[family == fam]
   if (nrow(fam_data) > 0) {
-    lines(fam_data$grade_span, fam_data$mean_aic, 
-          col = colors[fam], lwd = 2, type = "o", pch = 16)
+    lines(fam_data$year_span, fam_data$mean_aic_abs, 
+          col = zissou_colors[i], lwd = 2, type = "o", pch = 16)
   }
 }
 
+# Add axis labels and title using mtext
+mtext("Year Span", side = 1, line = 3.5, cex = 1.2)
+mtext("Mean AIC", side = 2, line = 4.5, cex = 1.2)
+mtext("Mean AIC by Copula Family and Year Span", side = 3, line = 1.5, cex = 1.3, font = 2)
+
+# Add legend with pretty names
 legend("topright", inset = c(-0.25, 0),
-       legend = families,
-       col = colors[families],
+       legend = family_labels,
+       col = zissou_colors,
        lwd = 2, pch = 16,
-       title = "Copula Family")
+       title = "Copula Family",
+       cex = 0.9)
 dev.off()
 cat("Created:", file.path(output_dir, "phase1_aic_by_span.pdf"), "\n")
 
-# Plot 3: Box plots of delta AIC
-pdf(file.path(output_dir, "phase1_delta_aic_distributions.pdf"), width = 10, height = 6)
-par(mar = c(5, 5, 4, 2))
-boxplot(delta_aic_vs_best ~ family, data = results,
-        main = expression("Distribution of" ~ Delta * "AIC vs Best Family"),
-        xlab = "Copula Family",
-        ylab = expression(Delta * "AIC (0 = best fit)"),
-        col = colors[unique(results$family)],
-        ylim = c(0, quantile(results$delta_aic_vs_best, 0.95)))
-abline(h = 0, col = "red", lwd = 2, lty = 2)
-abline(h = 10, col = "orange", lwd = 1, lty = 2)
-text(x = 1, y = 10, labels = expression(Delta ~ "= 10"), pos = 3, col = "orange")
+# Plot 3: Box plots of delta AIC (horizontal, log scale)
+pdf(file.path(output_dir, "phase1_delta_aic_distributions.pdf"), width = 10, height = 8)
+
+# Set margins: bottom, left, top, right
+# Increase left margin for family names, top margin for title spacing, right margin for selection counts
+par(mar = c(5, 10, 7, 6))
+
+# Create horizontal boxplot with log scale on x-axis
+# Let R determine xlim automatically based on data range
+boxplot(delta_aic_plot ~ factor(family, levels = family_order), 
+        data = results,
+        horizontal = TRUE,
+        log = "x",
+        axes = FALSE,
+        col = zissou_colors,
+        xlab = "",
+        ylab = "",
+        main = "",
+        outline = FALSE)  # Suppress outliers for cleaner look with log scale
+
+# Capture the x-axis limits for later use
+xlim_range <- par("usr")[1:2]
+
+# Add x-axis (bottom) with log-scale tick marks (extended range)
+axis(1, 
+     at = c(1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 100000, 1000000, 10000000),
+     labels = c("0", "1", "4", "9", "19", "49", "99", "199", "499", "999", "1,999", "4,999", "9,999", "99,999", "999,999", "1e7"),
+     las = 1,
+     cex.axis = 0.6)
+
+# Add top axis (side = 3) showing AIC weights (relative probability)
+# Strategic tick marks at key thresholds:
+# - Delta = 0 (best fit, weight = 1.0)
+# - Delta = 1.39 (weight = 0.5, equiprobable with best)
+# - Delta = 10 (Burnham & Anderson threshold)
+# - Delta = 100 (overwhelming evidence)
+# - Delta = 500 (current endpoint)
+delta_for_weights <- c(0, 1.386, 10, 100, 500)
+aic_weights <- exp(-delta_for_weights / 2)
+
+axis(3,
+     at = delta_for_weights + 1,  # Match the +1 offset used in plot
+     labels = c("1.0", "0.5", "0.007", "2e-22", "3e-109"),  # Simplified first two labels
+     las = 1,
+     cex.axis = 0.75,  # Slightly larger since fewer ticks
+     col.axis = "navy",
+     col.ticks = "navy")
+
+# Add y-axis (left) with pretty family names, right-justified
+axis(2, 
+     at = 1:length(family_order),
+     labels = family_labels,
+     las = 1,
+     hadj = 1,  # Right justify
+     cex.axis = 1.0,
+     tick = FALSE)
+
+# Add right y-axis (side 4) showing selection counts
+# Calculate how many times each family was selected as best
+selection_counts <- results[, .(n_best = sum(family == best_aic)), by = family]
+setkey(selection_counts, family)
+
+# Get counts in the same order as family_order
+counts_ordered <- sapply(family_order, function(fam) {
+  count <- selection_counts[family == fam, n_best]
+  if (length(count) == 0) return(0)
+  return(count)
+})
+
+axis(4,
+     at = 1:length(family_order),
+     labels = counts_ordered,
+     las = 1,
+     cex.axis = 0.9,
+     col.axis = "gray30",
+     line = 1)
+
+# Add grid lines for reference
+abline(v = c(1, 10, 100, 1000, 10000, 100000, 10000000), 
+       col = "gray80", 
+       lty = 2, 
+       lwd = 0.5)
+
+# Add reference lines for interpretation thresholds
+# Placement is correct: v = delta + 1 (to match plot's +1 offset)
+abline(v = 1, col = "black", lwd = 2, lty = 2)  # Delta = 0 (best fit)
+abline(v = 11, col = "orange", lwd = 2, lty = 2)  # Delta = 10 threshold
+abline(v = 101, col = "red", lwd = 1.5, lty = 3)  # Delta = 100 threshold
+
+# Add axis labels using mtext
+mtext(expression(Delta * "AIC + 1 (log scale)"), 
+      side = 1, 
+      line = 3.5, 
+      cex = 1.2)
+
+mtext("Copula Family", 
+      side = 2, 
+      line = 6.5, 
+      cex = 1.2)
+
+# Add right axis label for selection counts
+mtext("Times Selected", 
+      side = 4, 
+      line = 3.5, 
+      cex = 1.0,
+      col = "gray30")
+
+# Add top axis label for AIC weights
+mtext("Relative AIC Weight", 
+      side = 3, 
+      line = 2.5, 
+      cex = 1.0,
+      col = "navy")
+
+# Add title using mtext (positioned above the weight axis)
+mtext(expression("Distribution of " ~ Delta * "AIC by Copula Family"), 
+      side = 3, 
+      line = 3.8, 
+      cex = 1.3, 
+      font = 2)
+
+# Add subtle annotation for thresholds
+text(x = 11, y = length(family_order) * 0.95, 
+     labels = expression(Delta ~ "= 10"), 
+     pos = 4, 
+     col = "orange", 
+     cex = 0.9, 
+     font = 3)
+
+text(x = 101, y = length(family_order) * 0.85, 
+     labels = expression(Delta ~ "= 100"), 
+     pos = 4, 
+     col = "red", 
+     cex = 0.9, 
+     font = 3)
+
+# Add annotation about data source (bottom right corner)
+n_conditions <- results[, uniqueN(paste(dataset_id, condition_id))]  # Unique conditions across all datasets
+n_datasets <- uniqueN(results$dataset_id)
+text(x = 100000, y = 1.5,
+     labels = paste0("Based upon ", n_conditions, " conditions across"),
+     pos = 4,
+     cex = 0.7,
+     col = "gray20")
+text(x = 100000, y = 1.2,
+     labels = paste0(n_datasets, " longitudinal assessment datasets"),
+     pos = 4,
+     cex = 0.7,
+     col = "gray20")
+
 dev.off()
 cat("Created:", file.path(output_dir, "phase1_delta_aic_distributions.pdf"), "\n")
+
+# Plot 3b: AIC Weights (more intuitive than delta AIC)
+pdf(file.path(output_dir, "phase1_aic_weights.pdf"), width = 10, height = 6)
+par(mar = c(5, 5, 4, 2))
+
+# Order families by mean AIC weight (use local variable to avoid overwriting global family_order)
+family_order_aic <- mean_aic_by_family[order(-mean_aic_weight), family]
+results[, family_ordered := factor(family, levels = family_order_aic)]
+
+# Create color mapping for this plot
+aic_colors <- zissou_colors[match(family_order_aic, family_order)]
+
+boxplot(aic_weight ~ family_ordered, data = results,
+        main = "AIC Weights: Model Selection Probabilities",
+        xlab = "Copula Family",
+        ylab = "AIC Weight (probability model is best)",
+        col = aic_colors,
+        ylim = c(0, 1),
+        las = 2)
+abline(h = 0.95, col = "darkgreen", lwd = 2, lty = 2)
+text(x = 1, y = 0.95, labels = "95% confidence", pos = 3, col = "darkgreen", cex = 0.8)
+grid()
+dev.off()
+cat("Created:", file.path(output_dir, "phase1_aic_weights.pdf"), "\n")
 
 # Plot 4: Tail dependence by grade span
 if (nrow(tail_analysis) > 0) {
@@ -251,7 +497,9 @@ if (nrow(tail_analysis) > 0) {
   
   # Only plot families with tail dependence
   tail_families <- c("t", "clayton", "gumbel")
-  tail_colors <- colors[tail_families]
+  # Get colors from zissou palette based on family_order
+  tail_colors <- zissou_colors[match(tail_families, family_order)]
+  names(tail_colors) <- tail_families
   
   # Calculate y-axis limit safely
   max_tail <- max(c(0.01, tail_analysis[family %in% tail_families, 
@@ -268,16 +516,16 @@ if (nrow(tail_analysis) > 0) {
   grid()
   
   for (fam in tail_families) {
-    fam_data <- tail_analysis[family == fam & grade_span %in% 1:4]
+    fam_data <- tail_analysis[family == fam & year_span %in% 1:4]
     if (nrow(fam_data) > 0) {
       # Plot upper tail if present
       if (any(fam_data$mean_tail_upper > 0, na.rm = TRUE)) {
-        lines(fam_data$grade_span, fam_data$mean_tail_upper, 
+        lines(fam_data$year_span, fam_data$mean_tail_upper, 
               col = tail_colors[fam], lwd = 2, type = "o", pch = 16)
       }
       # Plot lower tail if present  
       if (any(fam_data$mean_tail_lower > 0, na.rm = TRUE)) {
-        lines(fam_data$grade_span, fam_data$mean_tail_lower, 
+        lines(fam_data$year_span, fam_data$mean_tail_lower, 
               col = tail_colors[fam], lwd = 2, type = "o", pch = 1, lty = 2)
       }
     }
@@ -299,18 +547,18 @@ if (nrow(tail_analysis) > 0) {
 pdf(file.path(output_dir, "phase1_heatmap.pdf"), width = 10, height = 6)
 
 # Create matrix for heatmap
-best_by_span_content <- results[, .SD[which.min(aic)], by = .(condition_id, grade_span, content_area)][
-  , .N, by = .(grade_span, content_area, family)]
+best_by_span_content <- results[, .SD[which.min(aic)], by = .(dataset_id, condition_id, year_span, content_area)][
+  , .N, by = .(year_span, content_area, family)]
 
 # Convert to wide format for visualization
 heatmap_data <- dcast(best_by_span_content, 
-                      grade_span + content_area ~ family, 
+                      year_span + content_area ~ family, 
                       value.var = "N", fill = 0)
 
 # Simple visualization
 par(mar = c(10, 10, 4, 2))
 text_matrix <- as.matrix(heatmap_data[, -c(1:2)])
-rownames(text_matrix) <- paste0("Span", heatmap_data$grade_span, "_", heatmap_data$content_area)
+rownames(text_matrix) <- paste0("Span", heatmap_data$year_span, "_", heatmap_data$content_area)
 
 image(1:ncol(text_matrix), 1:nrow(text_matrix), 
       t(text_matrix),
@@ -385,7 +633,7 @@ if (winner_pct > 75 && winner_delta < 2) {
 } else {
   # Rule 3: Check for systematic pattern by grade span
   # Check if different families dominate different spans
-  span_winners <- by_span[, .(family = winner, pct = t_pct), by = grade_span]
+  span_winners <- by_span[, .(family = winner, pct = t_pct), by = year_span]
   if (length(unique(span_winners$family)) > 1) {
     decision <- "CONTEXT_DEPENDENT"
     phase2_families <- unique(span_winners$family)
@@ -432,6 +680,13 @@ cat("Saved:", file.path(output_dir, "phase1_decision.RData"), "\n")
 fwrite(selection_freq_aic, file.path(output_dir, "phase1_selection_table.csv"))
 cat("Saved:", file.path(output_dir, "phase1_selection_table.csv"), "\n")
 
+# Save AIC weights summary by family
+aic_weights_summary <- mean_aic_by_family[, .(family, mean_delta_aic, mean_aic_weight, 
+                                                median_aic_weight, n_times_best)]
+setorder(aic_weights_summary, -mean_aic_weight)
+fwrite(aic_weights_summary, file.path(output_dir, "phase1_aic_weights_summary.csv"))
+cat("Saved:", file.path(output_dir, "phase1_aic_weights_summary.csv"), "\n")
+
 # Write text summary
 summary_file <- file.path(output_dir, "phase1_summary.txt")
 sink(summary_file)
@@ -461,6 +716,13 @@ cat("\n")
 cat("SELECTION BY CONTENT AREA\n")
 cat("-------------------------\n")
 print(by_content)
+cat("\n")
+
+cat("AIC WEIGHTS BY FAMILY\n")
+cat("---------------------\n")
+cat("AIC weights represent the probability that each model is the best.\n")
+cat("Values range from 0 (no support) to 1 (certain support).\n\n")
+print(aic_weights_summary)
 cat("\n")
 
 cat("T-COPULA VS GAUSSIAN BY GRADE SPAN\n")
@@ -512,7 +774,39 @@ cat("====================================================================\n\n")
 
 cat("Review the following files:\n")
 cat("  -", summary_file, "\n")
-cat("  -", output_dir, "/phase1_*.pdf\n\n")
+cat("  -", output_dir, "/phase1_*.pdf\n")
+cat("  -", output_dir, "/phase1_aic_weights_summary.csv\n\n")
+
+cat("====================================================================\n")
+cat("INTERPRETING AIC RESULTS WITH LARGE SAMPLES\n")
+cat("====================================================================\n\n")
+
+cat("With your large sample sizes (n ≈ 50,000-60,000), you will see:\n\n")
+
+cat("1. VERY LARGE Δ AIC VALUES\n")
+cat("   - Δ AIC > 100 or even > 1,000 is NORMAL and EXPECTED\n")
+cat("   - Poor-fitting models (e.g., comonotonic) may show Δ AIC > 1,000,000\n")
+cat("   - This reflects STRONG statistical evidence, not measurement error\n\n")
+
+cat("2. AIC WEIGHTS are more intuitive:\n")
+cat("   - Values close to 1.0 = model is almost certainly best\n")
+cat("   - Values close to 0.0 = model has essentially no support\n")
+cat("   - Sum to 1.0 across all models for each condition\n\n")
+
+cat("3. INTERPRETATION GUIDELINES:\n")
+cat("   - Δ AIC < 2:      Substantial support for both models\n")
+cat("   - Δ AIC 4-7:      Considerably less support for weaker model\n")
+cat("   - Δ AIC > 10:     Essentially no support for weaker model\n")
+cat("   - Δ AIC > 100:    Overwhelming evidence against weaker model\n\n")
+
+cat("4. THESE THRESHOLDS DO NOT DEPEND ON SAMPLE SIZE\n")
+cat("   - Δ AIC = 10 means the same thing whether n = 200 or n = 50,000\n")
+cat("   - Evidence ratio = exp(Δ AIC / 2)\n")
+cat("   - Δ AIC = 10 → 148× more likely; Δ AIC = 100 → 10²¹× more likely\n\n")
+
+cat("Your results likely show the t-copula with AIC weight ≈ 1.0 (near certainty)\n")
+cat("and other families with weights ≈ 0.0 (essentially zero probability).\n")
+cat("This is statistically valid and reflects the power of large samples!\n\n")
 
 cat("If results look good, proceed to Phase 2:\n")
 cat("  1. Update experiment scripts (or they'll auto-load decision)\n")
