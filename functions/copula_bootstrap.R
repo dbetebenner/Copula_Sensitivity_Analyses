@@ -12,9 +12,15 @@ require(data.table)
 #' @param fitted_copula Fitted copula object from fitCopula()
 #' @param pseudo_obs Matrix of pseudo-observations (n x 2)
 #' @param n_bootstrap Number of bootstrap samples (0 = asymptotic, >0 = parametric bootstrap)
-#' @param family Family name (for special handling of comonotonic)
+#' @param family Family name (for special handling of comonotonic and t-copulas)
 #' 
 #' @return List with gof_statistic, gof_pvalue, gof_method
+#' 
+#' @details
+#' Special handling:
+#' - comonotonic: Manual test against perfect dependence
+#' - t-copula: Uses gofTstat() which supports fitted (non-integer) df values
+#' - Other families: Uses gofCopula() with Cramér-von Mises statistic
 perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 0, family = NULL) {
   
   # Special handling for comonotonic copula (no fitted object)
@@ -32,7 +38,44 @@ perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 0, family 
     ))
   }
   
-  # For parametric copulas, use copula package's gofCopula
+  # Special handling for t-copula (gofCopula doesn't support fitted df)
+  # Use gofTstat() which is designed specifically for t-copulas
+  if (inherits(fitted_copula, "tCopula")) {
+    tryCatch({
+      if (n_bootstrap == 0) {
+        # Asymptotic test using Cramér-von Mises statistic
+        gof_result <- gofTstat(fitted_copula, 
+                              x = pseudo_obs,
+                              method = "Sn",  # Cramér-von Mises
+                              N = 0,  # Asymptotic approximation
+                              verbose = FALSE)
+      } else {
+        # Parametric bootstrap
+        gof_result <- gofTstat(fitted_copula, 
+                              x = pseudo_obs,
+                              method = "Sn",  # Cramér-von Mises
+                              simulation = "pb",  # Parametric bootstrap
+                              N = n_bootstrap,
+                              verbose = FALSE)
+      }
+      
+      return(list(
+        gof_statistic = gof_result$statistic,
+        gof_pvalue = gof_result$p.value,
+        gof_method = if (n_bootstrap == 0) "asymptotic_gofTstat" else paste0("bootstrap_gofTstat_N=", n_bootstrap)
+      ))
+      
+    }, error = function(e) {
+      # If GoF fails, record NA but don't stop entire analysis
+      return(list(
+        gof_statistic = NA_real_,
+        gof_pvalue = NA_real_,
+        gof_method = paste0("failed_gofTstat: ", e$message)
+      ))
+    })
+  }
+  
+  # For all other parametric copulas, use copula package's gofCopula
   tryCatch({
     if (n_bootstrap == 0) {
       # Asymptotic test (fast)

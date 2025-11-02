@@ -371,8 +371,9 @@ axis(2,
      tick = FALSE)
 
 # Add right y-axis (side 4) showing selection counts
-# Calculate how many times each family was selected as best
-selection_counts <- results[, .(n_best = sum(family == best_aic)), by = family]
+# Reuse the correctly calculated selection_freq_aic from earlier (line 62)
+# which properly groups by (dataset_id, condition_id) for accurate counts
+selection_counts <- selection_freq_aic[, .(family, n_best = N)]
 setkey(selection_counts, family)
 
 # Get counts in the same order as family_order
@@ -453,12 +454,17 @@ text(x = 101, y = length(family_order) * 0.85,
 n_conditions <- results[, uniqueN(paste(dataset_id, condition_id))]  # Unique conditions across all datasets
 n_datasets <- uniqueN(results$dataset_id)
 text(x = 100000, y = 1.5,
-     labels = paste0("Based upon ", n_conditions, " conditions across"),
+     labels = paste0("Based upon ", n_conditions, " conditions across:"),
      pos = 4,
      cex = 0.7,
      col = "gray20")
-text(x = 100000, y = 1.2,
+text(x = 110000, y = 1.3,
      labels = paste0(n_datasets, " longitudinal assessment datasets"),
+     pos = 4,
+     cex = 0.7,
+     col = "gray20")
+text(x = 110000, y = 1.1,
+     labels = paste0("3 content areas"),
      pos = 4,
      cex = 0.7,
      col = "gray20")
