@@ -25,7 +25,7 @@ source("dataset_configs.R")
   
 # Select which datasets to analyze
 # Set to NULL to run all datasets, or specify vector of dataset IDs
-DATASETS_TO_RUN <- NULL  # c("dataset_1", "dataset_2", "dataset_3") or NULL for all
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # c("dataset_1", "dataset_2", "dataset_3") or NULL for all
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -120,6 +120,7 @@ if (IS_EC2) {
 } else {
   # Local machine - check if sufficient resources for parallel processing
   n_cores_available <- parallel::detectCores()
+  if (is.na(n_cores_available)) n_cores_available <- 1  # Fallback for systems where detectCores fails
   
   if (n_cores_available >= 8) {
     cat("====================================================================\n")
@@ -148,6 +149,7 @@ if (EC2_MODE) {
 } else if (USE_PARALLEL) {
   # Local parallel mode - use most cores but leave some for system
   n_cores_available <- parallel::detectCores()
+  if (is.na(n_cores_available)) n_cores_available <- 1  # Fallback for systems where detectCores fails
   N_CORES <- max(1, n_cores_available - 2)  # Leave 2 cores for system
   N_BOOTSTRAP_PHASE2 <- 100
   cat("LOCAL PARALLEL MODE: Using", N_CORES, "of", n_cores_available, "cores\n")

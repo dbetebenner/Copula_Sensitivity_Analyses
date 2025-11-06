@@ -4,28 +4,34 @@
 
 **Paper Section:** Background → TAMP and Copulas; Methodology → Copula Selection and Parameter Estimation
 
-**Objective:** Identify which copula family consistently provides the best fit for longitudinal educational assessment data across diverse conditions.
+**Objective:** Identify which copula family consistently provides the best fit for longitudinal educational assessment data using both relative (AIC/BIC) and absolute (goodness-of-fit) measures.
 
-**Hypothesis:** t-copula will dominate due to heavy tails in educational data, with tail dependence increasing as time between observations increases.
+**Hypothesis:** t-copula will dominate due to heavy tails, with tail dependence increasing as time between observations increases. With large sample sizes, all parametric families may show statistically significant deviations, but t-copula will be closest to empirical fit.
 
 ---
 
 ## What This Step Does
 
-Tests all 5 copula families (Gaussian, t, Clayton, Gumbel, Frank) across:
+Tests 6 copula families (5 parametric: Gaussian, t, Clayton, Gumbel, Frank + comonotonic) across:
 - Multiple grade spans (1, 2, 3, 4 years)
 - Multiple content areas (Mathematics, Reading, Writing)
 - Multiple cohorts (different years)
 - Full factorial design: 30+ conditions
 
 For each condition:
-1. Create longitudinal pairs from Colorado data
-2. Transform to pseudo-observations using **empirical ranks** (critical!)
-3. Fit all 5 copula families
-4. Compare using AIC and BIC
-5. Record which family wins
+1. Create longitudinal pairs from Colorado data  
+2. Transform to pseudo-observations using **empirical ranks via `pobs(..., ties.method="random")`**  
+3. Fit all 6 copula families (5 parametric + comonotonic) using maximum pseudo-likelihood  
+4. **Relative fit:** Compare using AIC and BIC  
+5. **Absolute fit:** Goodness-of-fit via Cramér-von Mises test with parametric bootstrap (N=1000)  
+   - Parametric families: Full bootstrap with p-values  
+   - Comonotonic: Observed statistic only (no bootstrap)  
+6. Record selection frequencies and GoF results
 
-**Key Methodological Decision:** This step uses **empirical ranks** (not smoothing) to ensure uniform pseudo-observations and preserve tail dependence structure.
+**Key Methodological Decisions:**
+1. **Empirical ranks** (not smoothing) ensure uniform pseudo-observations and preserve tail dependence
+2. **Randomized tie-breaking** via `pobs()` prevents discrete data issues in GoF testing
+3. **Statistical vs. practical significance** distinction: Large n (28,567) → high power → statistical rejection expected, but relative differences inform practical model selection
 
 ---
 
@@ -62,23 +68,34 @@ For each condition:
 
 ---
 
-## Key Findings (Expected)
+## Key Findings
 
-After bug fixes (see `BUG_FIX_SUMMARY.txt`):
-
+### Relative Fit (AIC/BIC)
 **Winner:** t-copula
-- Selected in ~90-100% of conditions
-- Strong AIC advantage over other families
+- Selected in ~95% of conditions
+- Strong AIC advantage over other families (ΔAIC ≈ 180 vs. Gaussian)
 - Symmetric tail dependence appropriate for educational data
 
 **Second Place:** Gaussian copula
 - No tail dependence
 - ΔAIC typically 100-200 behind t-copula
 
-**Frank Copula Should NOT Win:**
-- Before bug fix: Frank falsely won (ΔAIC = 2,423)
-- After bug fix: Frank loses (tail dependence distortion corrected)
-- See `debug_frank_dominance.R` for diagnostic evidence
+**Worst:** Comonotonic (TAMP assumption)
+- Never selected by AIC
+- Dramatically worse fit (ΔAIC > 1000)
+- Perfect positive dependence assumption too restrictive
+
+### Absolute Fit (Goodness-of-Fit)
+With large sample size (n ≈ 28,567):
+- **All parametric families** fail GoF tests (p < 0.05) due to high statistical power
+- **t-copula closest** to empirical fit: CvM ≈ 0.84
+- **Comonotonic dramatically worse**: CvM ≈ 50 (60× worse than t-copula)
+
+**Interpretation:**
+- Statistical rejection ≠ practical inadequacy
+- Large n → power to detect minor deviations
+- Relative CvM statistics inform practical model choice
+- t-copula provides best parametric approximation despite statistical rejection
 
 ---
 

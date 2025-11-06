@@ -5,107 +5,100 @@
 require(copula)
 require(data.table)
 
-#' Perform Goodness-of-Fit Test for Copula
-#' 
-#' Test whether a fitted copula adequately describes the data
+#' Perform Goodness-of-Fit Test using copula Package
 #' 
 #' @param fitted_copula Fitted copula object from fitCopula()
 #' @param pseudo_obs Matrix of pseudo-observations (n x 2)
-#' @param n_bootstrap Number of bootstrap samples (0 = asymptotic, >0 = parametric bootstrap)
-#' @param family Family name (for special handling of comonotonic and t-copulas)
+#' @param n_bootstrap Number of bootstrap samples (N parameter in gofCopula)
+#' @param family Family name ("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 #' 
 #' @return List with gof_statistic, gof_pvalue, gof_method
 #' 
 #' @details
-#' Special handling:
-#' - comonotonic: Manual test against perfect dependence
-#' - t-copula: Uses gofTstat() which supports fitted (non-integer) df values
-#' - Other families: Uses gofCopula() with Cramér-von Mises statistic
-perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 0, family = NULL) {
+#' Uses copula::gofCopula with Cramér-von Mises test statistic (method="Sn") 
+#' and parametric bootstrap (simulation="pb"). For t-copulas, degrees of freedom 
+#' are rounded to the nearest integer for compatibility. 
+#' 
+#' Comonotonic copula: Calculates observed CvM statistic only (no bootstrap or 
+#' p-value) to quantify deviation from perfect positive dependence C(u,v) = min(u,v).
+perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 1000, family = NULL) {
   
-  # Special handling for comonotonic copula (no fitted object)
+  # COMONOTONIC: Calculate observed statistic only (no bootstrap needed)
   if (!is.null(family) && family == "comonotonic") {
-    # Calculate CvM statistic manually against perfect dependence
-    # Comonotonic means U = V (perfect positive dependence)
-    perfect_dep <- cbind(pseudo_obs[,1], pseudo_obs[,1])
-    cvm_stat <- mean((pseudo_obs[,1] - perfect_dep[,1])^2 + 
-                     (pseudo_obs[,2] - perfect_dep[,2])^2)
-    
-    return(list(
-      gof_statistic = cvm_stat,
-      gof_pvalue = 0,  # Will always fail (by construction)
-      gof_method = "manual_comonotonic"
-    ))
-  }
-  
-  # Special handling for t-copula (gofCopula doesn't support fitted df)
-  # Use gofTstat() which is designed specifically for t-copulas
-  if (inherits(fitted_copula, "tCopula")) {
     tryCatch({
-      if (n_bootstrap == 0) {
-        # Asymptotic test using Cramér-von Mises statistic
-        gof_result <- gofTstat(fitted_copula, 
-                              x = pseudo_obs,
-                              method = "Sn",  # Cramér-von Mises
-                              N = 0,  # Asymptotic approximation
-                              verbose = FALSE)
-      } else {
-        # Parametric bootstrap
-        gof_result <- gofTstat(fitted_copula, 
-                              x = pseudo_obs,
-                              method = "Sn",  # Cramér-von Mises
-                              simulation = "pb",  # Parametric bootstrap
-                              N = n_bootstrap,
-                              verbose = FALSE)
-      }
+      # Comonotonic copula: C(u,v) = min(u,v)
+      n <- nrow(pseudo_obs)
+      
+      # Calculate empirical copula
+      U <- pseudo_obs[, 1]
+      V <- pseudo_obs[, 2]
+      
+      # For each point (u,v), calculate empirical copula value
+      C_n <- sapply(1:n, function(i) {
+        sum(U <= U[i] & V <= V[i]) / n
+      })
+      
+      # Theoretical comonotonic copula values
+      C_comonotonic <- pmin(U, V)
+      
+      # Cramér-von Mises statistic: n * mean((C_n - C_theory)^2)
+      cvm_stat <- n * mean((C_n - C_comonotonic)^2)
       
       return(list(
-        gof_statistic = gof_result$statistic,
-        gof_pvalue = gof_result$p.value,
-        gof_method = if (n_bootstrap == 0) "asymptotic_gofTstat" else paste0("bootstrap_gofTstat_N=", n_bootstrap)
+        gof_statistic = cvm_stat,
+        gof_pvalue = NA_real_,  # No bootstrap, so no p-value
+        gof_method = "comonotonic_observed_only"
       ))
-      
     }, error = function(e) {
-      # If GoF fails, record NA but don't stop entire analysis
       return(list(
         gof_statistic = NA_real_,
         gof_pvalue = NA_real_,
-        gof_method = paste0("failed_gofTstat: ", e$message)
+        gof_method = paste0("comonotonic_failed: ", substr(e$message, 1, 50))
       ))
     })
   }
   
-  # For all other parametric copulas, use copula package's gofCopula
+  # Use copula::gofCopula for all parametric families
   tryCatch({
-    if (n_bootstrap == 0) {
-      # Asymptotic test (fast)
-      gof_result <- gofCopula(fitted_copula, 
-                              x = pseudo_obs,
-                              method = "Sn",  # Cramér-von Mises
-                              N = 0,  # Asymptotic approximation
-                              verbose = FALSE)
+    # For t-copula, need to round df to nearest integer for compatibility
+    if (family == "t") {
+      rho <- fitted_copula@parameters[1]
+      df <- fitted_copula@parameters[2]
+      df_rounded <- round(df)
+      
+      # Create t-copula with fixed, rounded df
+      cop_for_gof <- tCopula(param = rho, dim = 2, df = df_rounded, df.fixed = TRUE)
     } else {
-      # Parametric bootstrap (slow but accurate)
-      gof_result <- gofCopula(fitted_copula, 
-                              x = pseudo_obs,
-                              method = "Sn",  # Cramér-von Mises
-                              simulation = "pb",  # Parametric bootstrap
-                              N = n_bootstrap,
-                              verbose = FALSE)
+      # For other families, use fitted copula directly
+      cop_for_gof <- fitted_copula
     }
+    
+    # Run GoF test with parametric bootstrap
+    gof_result <- copula::gofCopula(
+      copula = cop_for_gof,
+      x = pseudo_obs,
+      N = n_bootstrap,
+      method = "Sn",           # Cramér-von Mises statistic (default)
+      estim.method = "mpl",    # Maximum pseudo-likelihood (consistent with fitting)
+      simulation = "pb",       # Parametric bootstrap
+      verbose = FALSE
+    )
     
     return(list(
       gof_statistic = gof_result$statistic,
       gof_pvalue = gof_result$p.value,
-      gof_method = if (n_bootstrap == 0) "asymptotic" else paste0("bootstrap_N=", n_bootstrap)
+      gof_method = paste0("copula_gofCopula_N=", n_bootstrap)
     ))
     
   }, error = function(e) {
-    # If GoF fails, record NA but don't stop entire analysis
+    error_msg <- e$message
+    if (nchar(error_msg) > 100) {
+      error_msg <- paste0(substr(error_msg, 1, 97), "...")
+    }
     return(list(
       gof_statistic = NA_real_,
       gof_pvalue = NA_real_,
-      gof_method = paste0("failed: ", e$message)
+      gof_method = paste0("gof_failed: ", error_msg)
     ))
   })
 }
@@ -118,7 +111,7 @@ perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 0, family 
 #' @param scores_current Vector of current scale scores
 #' @param framework_prior I-spline framework for prior scores (can be NULL if use_empirical_ranks=TRUE)
 #' @param framework_current I-spline framework for current scores (can be NULL if use_empirical_ranks=TRUE)
-#' @param copula_families Vector of copula families to fit ("gaussian", "t", "t_df5", "t_df10", "t_df15", "clayton", "gumbel", "frank", "comonotonic")
+#' @param copula_families Vector of copula families to fit ("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 #' @param return_best If TRUE, return only best-fitting copula; if FALSE, return all
 #' @param use_empirical_ranks If TRUE, use empirical ranks for pseudo-observations (Phase 1).
 #'                            If FALSE, use framework transformations (Phase 2+, requires invertibility)
@@ -127,14 +120,12 @@ perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 0, family 
 #' 
 #' @details 
 #' Two-stage transformation approach:
-#' - Phase 1 (family selection): use_empirical_ranks=TRUE ensures uniform U,V without distortion
+#' - Phase 1 (family selection): use_empirical_ranks=TRUE uses copula::pobs() for proper pseudo-observations
 #' - Phase 2+ (applications): use_empirical_ranks=FALSE provides invertible transformations
 #' 
-#' Empirical ranks are preferred for copula family selection (Genest et al., 2009) as they:
-#' - Guarantee uniform marginals
-#' - Preserve rank-based dependence measures (Kendall's tau, Spearman's rho)
-#' - Make no assumptions about marginal distributions
-#' - Avoid distortion from insufficient smoothing
+#' Phase 1 uses copula::pobs() (Genest et al., 2009) for rank-based transformation.
+#' GoF testing uses copula::gofCopula with parametric bootstrap, which provides 
+#' accurate p-values for assessing absolute model fit.
 fit_copula_from_pairs <- function(scores_prior,
                                   scores_current,
                                   framework_prior,
@@ -147,9 +138,20 @@ fit_copula_from_pairs <- function(scores_prior,
   # Transform to pseudo-observations
   if (use_empirical_ranks) {
     # Phase 1: Use empirical ranks for copula family selection
-    # This ensures uniform marginals and preserves tail dependence structure
-    U <- rank(scores_prior) / (length(scores_prior) + 1)
-    V <- rank(scores_current) / (length(scores_current) + 1)
+    # Uses copula::pobs() with randomized tie-breaking (Genest et al., 2009; 
+    # Kojadinovic and Yan, 2010) which:
+    # - Guarantees uniform marginals via rank transformation
+    # - Properly handles ties in discrete test scores via ties.method="random"
+    # - Recommended for GoF testing: more accurate p-values with large n and ties
+    # - Preserves rank-based dependence measures (Kendall's tau, Spearman's rho)
+    # - Makes no assumptions about marginal distributions
+    # - Compatible with gofCopula package's Kendall transform-based tests
+    # - Requires fixed seed for reproducibility (using 314159 = first 6 digits of π)
+    set.seed(314159)
+    pseudo_obs_matrix <- pobs(cbind(scores_prior, scores_current), 
+                              ties.method = "random")
+    U <- pseudo_obs_matrix[,1]
+    V <- pseudo_obs_matrix[,2]
     
   } else {
     # Phase 2+: Use framework transformations (I-spline, Q-spline, etc.)
@@ -177,7 +179,7 @@ fit_copula_from_pairs <- function(scores_prior,
       if (family == "gaussian") {
         # Gaussian copula
         cop <- normalCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        fit <- fitCopula(cop, pseudo_obs, method = "mpl")
         
         results[[family]] <- list(
           copula = fit@copula,
@@ -192,7 +194,7 @@ fit_copula_from_pairs <- function(scores_prior,
       } else if (family == "clayton") {
         # Clayton copula (lower tail dependence)
         cop <- claytonCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        fit <- fitCopula(cop, pseudo_obs, method = "mpl")
         
         results[[family]] <- list(
           copula = fit@copula,
@@ -207,7 +209,7 @@ fit_copula_from_pairs <- function(scores_prior,
       } else if (family == "gumbel") {
         # Gumbel copula (upper tail dependence)
         cop <- gumbelCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        fit <- fitCopula(cop, pseudo_obs, method = "mpl")
         
         results[[family]] <- list(
           copula = fit@copula,
@@ -222,7 +224,7 @@ fit_copula_from_pairs <- function(scores_prior,
       } else if (family == "frank") {
         # Frank copula (no tail dependence)
         cop <- frankCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        fit <- fitCopula(cop, pseudo_obs, method = "mpl")
         
         # Frank Kendall's tau requires numerical integration, approximate here
         theta <- fit@estimate
@@ -239,7 +241,7 @@ fit_copula_from_pairs <- function(scores_prior,
       } else if (family == "t") {
         # Student's t copula (symmetric tail dependence)
         cop <- tCopula(dim = 2, dispstr = "un")  # unconstrained correlation
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
+        fit <- fitCopula(cop, pseudo_obs, method = "mpl")
         
         # Extract parameters: correlation and degrees of freedom
         rho <- fit@estimate[1]  # correlation parameter
@@ -260,76 +262,6 @@ fit_copula_from_pairs <- function(scores_prior,
           tail_dependence_lower = tail_dep_val,  # Now calculated manually
           tail_dependence_upper = tail_dep_val,  # Symmetric for t-copula
           family = "t"
-        )
-        
-      } else if (family == "t_df5") {
-        # Student's t copula with df fixed at 5 (strong tail dependence)
-        cop <- tCopula(dim = 2, dispstr = "un", df = 5, df.fixed = TRUE)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        
-        rho <- fit@estimate[1]  # Only correlation is estimated
-        df <- 5  # Fixed
-        
-        # Calculate tail dependence manually
-        tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
-        
-        results[[family]] <- list(
-          copula = fit@copula,
-          parameter = rho,
-          df = df,
-          loglik = fit@loglik,
-          aic = -2 * fit@loglik + 2 * 1,  # Only 1 parameter estimated (rho)
-          bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * 1,
-          kendall_tau = tau(fit@copula),
-          tail_dependence_lower = tail_dep_val,
-          tail_dependence_upper = tail_dep_val,
-          family = "t_df5"
-        )
-        
-      } else if (family == "t_df10") {
-        # Student's t copula with df fixed at 10 (moderate-strong tail dependence)
-        cop <- tCopula(dim = 2, dispstr = "un", df = 10, df.fixed = TRUE)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        
-        rho <- fit@estimate[1]
-        df <- 10
-        
-        tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
-        
-        results[[family]] <- list(
-          copula = fit@copula,
-          parameter = rho,
-          df = df,
-          loglik = fit@loglik,
-          aic = -2 * fit@loglik + 2 * 1,
-          bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * 1,
-          kendall_tau = tau(fit@copula),
-          tail_dependence_lower = tail_dep_val,
-          tail_dependence_upper = tail_dep_val,
-          family = "t_df10"
-        )
-        
-      } else if (family == "t_df15") {
-        # Student's t copula with df fixed at 15 (moderate-weak tail dependence)
-        cop <- tCopula(dim = 2, dispstr = "un", df = 15, df.fixed = TRUE)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        
-        rho <- fit@estimate[1]
-        df <- 15
-        
-        tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
-        
-        results[[family]] <- list(
-          copula = fit@copula,
-          parameter = rho,
-          df = df,
-          loglik = fit@loglik,
-          aic = -2 * fit@loglik + 2 * 1,
-          bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * 1,
-          kendall_tau = tau(fit@copula),
-          tail_dependence_lower = tail_dep_val,
-          tail_dependence_upper = tail_dep_val,
-          family = "t_df15"
         )
         
       } else if (family == "comonotonic") {
@@ -439,7 +371,7 @@ fit_copula_from_pairs <- function(scores_prior,
 #' @param framework_prior I-spline framework for prior (can be NULL if use_empirical_ranks=TRUE)
 #' @param framework_current I-spline framework for current (can be NULL if use_empirical_ranks=TRUE)
 #' @param sampling_method "independent" or "paired"
-#' @param copula_families Copula families to fit ("gaussian", "t", "t_df5", "t_df10", "t_df15", "clayton", "gumbel", "frank", "comonotonic")
+#' @param copula_families Copula families to fit ("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 #' @param with_replacement TRUE for standard bootstrap
 #' @param use_empirical_ranks Use empirical ranks for transformation (default FALSE for Phase 2)
 #' 
