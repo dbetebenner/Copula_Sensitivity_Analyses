@@ -34,9 +34,25 @@ require(copula)
 N_BOOTSTRAP_GOF <- 50
 COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 
+# Detect environment (EC2 vs. local)
+is_ec2 <- file.exists("/home/ec2-user") || 
+          file.exists("/sys/hypervisor/uuid") ||
+          Sys.getenv("AWS_EXECUTION_ENV") != ""
+
+# Set data directory based on environment
+if (is_ec2) {
+  data_dir <- path.expand("~/Dropbox/Damian Betebenner/TEMP/Copula_Sensitivity_Analyses/Data")
+  env_label <- "EC2"
+} else {
+  data_dir <- "Data"
+  env_label <- "Local"
+}
+
 cat("\n====================================================================\n")
 cat("TEST CONFIGURATION\n")
 cat("====================================================================\n")
+cat("Environment:", env_label, "\n")
+cat("Data directory:", data_dir, "\n")
 cat("Dataset: Dataset 2 (smallest)\n")
 cat("Condition: MATH Grade 4->5 (1-year span)\n")
 cat("Bootstrap samples (M):", N_BOOTSTRAP_GOF, "\n")
@@ -44,7 +60,15 @@ cat("Copula families:", length(COPULA_FAMILIES), "\n\n")
 
 # Load data
 cat("Loading data...\n")
-load("Data/Copula_Sensitivity_Data_Set_2.Rdata")
+data_file <- file.path(data_dir, "Copula_Sensitivity_Data_Set_2.Rdata")
+if (!file.exists(data_file)) {
+  stop("\n\nERROR: Data file not found!\n",
+       "  Expected: ", data_file, "\n",
+       "  Environment: ", env_label, "\n",
+       "  Please verify data file location.\n\n")
+}
+load(data_file)
+cat("  Loaded from:", data_file, "✓\n")
 
 # Create test condition
 cat("Creating test condition...\n")
