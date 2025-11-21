@@ -16,7 +16,8 @@ Tests 6 copula families (5 parametric: Gaussian, t, Clayton, Gumbel, Frank + com
 - Multiple grade spans (1, 2, 3, 4 years)
 - Multiple content areas (Mathematics, Reading, Writing)
 - Multiple cohorts (different years)
-- Full factorial design: 30+ conditions
+- Grade range: G3→G10 (includes early elementary G3→G4 and middle school transition G7→G8)
+- Full factorial design: 42 conditions
 
 For each condition:
 1. Create longitudinal pairs from Colorado data  
@@ -38,16 +39,24 @@ For each condition:
 ## Scripts
 
 ### 1. `phase1_family_selection.R`
-**Runtime:** ~30-60 minutes
+**Runtime:** ~45-90 minutes
 
 **What it does:**
 - Loads Colorado longitudinal data
-- Tests all 5 copula families across 30+ conditions
+- Tests all 6 copula families across 42 conditions
 - Uses empirical ranks for transformation (validates two-stage approach)
 - Saves detailed results for each condition
+- Covers grade range G3→G10 to test copula behavior across developmental stages
 
 **Outputs:**
-- `results/phase1_copula_family_comparison.csv` - Complete results table
+- `results/{dataset_id}/phase1_copula_family_comparison.csv` - Complete results table
+- `results/{dataset_id}/contour_plots/{condition}/` - Visualization plots for each condition
+  - Bivariate density plot (original scores)
+  - Empirical copula CDF and PDF plots
+  - Parametric copula plots (CDF, PDF) for each family
+  - Comparison plots (empirical vs. parametric)
+  - Uncertainty plots with bootstrap confidence bands
+  - Summary grid combining key visualizations
 - Console summary of selection frequencies
 
 ### 2. `phase1_analysis.R`
@@ -61,10 +70,17 @@ For each condition:
 - Makes decision for Steps 2-4
 
 **Outputs:**
-- `results/phase1_decision.RData` - Decision for later steps
-- `results/phase1_summary.txt` - Text summary
-- `results/phase1_*.pdf` - Diagnostic figures
-- `results/phase1_selection_table.csv` - Summary table
+- `results/dataset_all/phase1_decision.RData` - Decision for later steps
+- `results/dataset_all/phase1_summary.txt` - Text summary
+- `results/dataset_all/phase1_*.{pdf,svg,png}` - Multi-format visualizations:
+  - **phase1_absolute_relative_fit** - Two-panel violin plot (absolute GoF + relative ΔAIC)
+  - **phase1_copula_selection_by_condition** - Proportion bars showing family selection by span/content
+  - **phase1_t_copula_phase_diagram** - Degrees of freedom vs tail dependence landscape
+  - **phase1_aic_by_span** - Mean AIC trends by year span (to be refined)
+  - **phase1_tail_dependence** - Tail dependence patterns (to be refined)
+  - **phase1_mosaic_*.{pdf,svg,png}** - Mosaic plots (to be reassessed)
+- `results/dataset_all/phase1_*.csv` - Summary tables
+- Note: Removed redundant plots (selection_frequency, delta_aic_distributions, aic_weights, heatmap)
 
 ---
 
@@ -120,9 +136,9 @@ V <- rank(scores_current) / (n + 1)
 - ✓ Correct copula selection (t-copula)
 - ✓ No smoothing artifacts
 
-**Trade-off:** No invertibility, but not needed for family selection.
+**Trade-off:** No invertibility, but not needed for family selection. By Sklar's theorem, copulas are invariant to monotone marginal transformations, so the copula dependence structure estimated here is valid regardless of which marginal transformation is later used for applications.
 
-See `TWO_STAGE_TRANSFORMATION_METHODOLOGY.md` for complete justification.
+For transformation details and implementation methods (including invertibility for score-scale reporting), see **STEP_3_Application_Implementation**. For complete two-stage approach justification, see top-level `TWO_STAGE_TRANSFORMATION_METHODOLOGY.md`.
 
 ---
 
@@ -263,5 +279,5 @@ mean_aic <- results[, .(mean_aic = mean(aic)), by = family]
 
 After Step 1 completes successfully (t-copula selected), proceed to:
 
-**STEP_2_Transformation_Validation/** - Validate marginal transformation methods for invertibility in applications.
+**STEP_2_Copula_Sensitivity_Analyses/** - Test copula robustness across diverse conditions (grade span, sample size, content area, cohort) to validate the Sklar-theoretic extension of TAMP. This is the **core contribution** of the paper.
 

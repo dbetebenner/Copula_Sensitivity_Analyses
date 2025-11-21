@@ -63,10 +63,20 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
   # Strategic subset: Representative conditions for family selection
   # Year spans: 1, 2, 3, 4 years (temporal distance)
   # Content areas: MATHEMATICS, READING, WRITING (dataset-dependent)
+  # Grade range: G3→G10 (includes early elementary and middle school transition)
   # Cohorts: Multiple starting years for robustness
   
+  # Expanded to include Grade 3 and Grade 7 priors
+  # Grade 3: Tests early elementary patterns
+  # Grade 7: Captures middle school transition (G7→G8)
+  
   CONDITIONS <- list(
-    # 1-year spans
+    # === 1-YEAR SPANS ===
+    # Grade 3 prior (early elementary)
+    list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "MATHEMATICS", year_span = 1),
+    list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "READING", year_span = 1),
+    
+    # Grade 4-6 prior (existing)
     list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", year_span = 1),
     list(grade_prior = 4, grade_current = 5, year_prior = "2011", content = "MATHEMATICS", year_span = 1),
     list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", year_span = 1),
@@ -75,7 +85,16 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
     list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "READING", year_span = 1),
     list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "WRITING", year_span = 1),
     
-    # 2-year spans
+    # Grade 7 prior (middle school transition)
+    list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", year_span = 1),
+    list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "READING", year_span = 1),
+    
+    # === 2-YEAR SPANS ===
+    # Grade 3 prior
+    list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", year_span = 2),
+    list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "READING", year_span = 2),
+    
+    # Grade 4-6 prior (existing)
     list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", year_span = 2),
     list(grade_prior = 4, grade_current = 6, year_prior = "2011", content = "MATHEMATICS", year_span = 2),
     list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", year_span = 2),
@@ -84,7 +103,16 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
     list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "READING", year_span = 2),
     list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "WRITING", year_span = 2),
     
-    # 3-year spans
+    # Grade 7 prior
+    list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "MATHEMATICS", year_span = 2),
+    list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "READING", year_span = 2),
+    
+    # === 3-YEAR SPANS ===
+    # Grade 3 prior
+    list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", year_span = 3),
+    list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "READING", year_span = 3),
+    
+    # Grade 4-6 prior (existing)
     list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", year_span = 3),
     list(grade_prior = 4, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", year_span = 3),
     list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", year_span = 3),
@@ -93,7 +121,16 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
     list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "READING", year_span = 3),
     list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "WRITING", year_span = 3),
     
-    # 4-year spans
+    # Grade 7 prior
+    list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "MATHEMATICS", year_span = 3),
+    list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "READING", year_span = 3),
+    
+    # === 4-YEAR SPANS ===
+    # Grade 3 prior
+    list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", year_span = 4),
+    list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "READING", year_span = 4),
+    
+    # Grade 4-6 prior (existing + expanded)
     list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "MATHEMATICS", year_span = 4),
     list(grade_prior = 4, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", year_span = 4),
     list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "MATHEMATICS", year_span = 4),
@@ -252,6 +289,65 @@ for (i in seq_along(CONDITIONS)) {
     use_empirical_ranks = TRUE,  # Phase 1: Use ranks to avoid I-spline distortion
     n_bootstrap_gof = if (exists("N_BOOTSTRAP_GOF", envir = .GlobalEnv)) N_BOOTSTRAP_GOF else NULL
   )
+  
+  # Generate visualization plots if requested
+  if (exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv) && 
+      get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv, inherits = FALSE) &&
+      !is.null(copula_fits$pseudo_obs)) {
+    
+    # Prepare output directory for plots
+    dataset_id <- if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown"
+    year_current <- if (!is.null(cond$year_current)) {
+      cond$year_current 
+    } else {
+      as.character(as.numeric(cond$year_prior) + cond$year_span)
+    }
+    
+    plot_output_dir <- file.path("STEP_1_Family_Selection/results", 
+                                 dataset_id,
+                                 "contour_plots",
+                                 sprintf("%s_G%d_G%d_%s", 
+                                        cond$year_prior, cond$grade_prior, 
+                                        cond$grade_current, cond$content))
+    
+    # Prepare condition info with dataset_number extraction
+    condition_info <- list(
+      dataset_id = dataset_id,
+      dataset_number = {
+        parts <- strsplit(dataset_id, "_")[[1]]
+        if (length(parts) >= 2) parts[2] else dataset_id
+      },
+      year_prior = cond$year_prior,
+      year_current = year_current,
+      grade_prior = cond$grade_prior,
+      grade_current = cond$grade_current,
+      content = cond$content
+    )
+    
+    # Generate plots (wrapped in tryCatch to prevent failures from stopping analysis)
+    tryCatch({
+      if (exists("generate_condition_plots")) {
+        generate_condition_plots(
+          pseudo_obs = copula_fits$pseudo_obs,
+          original_scores = pairs_full[, .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT)],
+          copula_results = copula_fits$results,
+          best_family = copula_fits$best_family,
+          output_dir = plot_output_dir,
+          condition_info = condition_info,
+          save_plots = TRUE,
+          grid_size = 300,  # High resolution for publication-quality plots
+          export_formats = if (exists("EXPORT_FORMATS", envir = .GlobalEnv)) EXPORT_FORMATS else c("pdf"),
+          export_dpi = if (exists("EXPORT_DPI", envir = .GlobalEnv)) EXPORT_DPI else 300,
+          export_verbose = if (exists("EXPORT_VERBOSE", envir = .GlobalEnv)) EXPORT_VERBOSE else FALSE
+        )
+        cat("  ✓ Plots generated successfully\n")
+      } else {
+        cat("  ⚠ Warning: generate_condition_plots function not found\n")
+      }
+    }, error = function(e) {
+      cat("  ⚠ Warning: Failed to generate plots:", e$message, "\n")
+    })
+  }
   
   # Extract results for each family
   for (family in COPULA_FAMILIES) {

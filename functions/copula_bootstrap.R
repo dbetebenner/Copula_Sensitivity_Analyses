@@ -115,6 +115,8 @@ perform_gof_test <- function(fitted_copula, pseudo_obs, n_bootstrap = 1000, fami
 #' @param return_best If TRUE, return only best-fitting copula; if FALSE, return all
 #' @param use_empirical_ranks If TRUE, use empirical ranks for pseudo-observations (Phase 1).
 #'                            If FALSE, use framework transformations (Phase 2+, requires invertibility)
+#' @param save_copula_data If TRUE, save additional data for visualization (default FALSE)
+#' @param output_dir Directory to save copula data files (required if save_copula_data=TRUE)
 #' 
 #' @return List containing fitted copulas, parameters, and diagnostics
 #' 
@@ -133,7 +135,9 @@ fit_copula_from_pairs <- function(scores_prior,
                                   copula_families = c("gaussian", "t", "clayton", "gumbel", "frank"),
                                   return_best = TRUE,
                                   use_empirical_ranks = FALSE,
-                                  n_bootstrap_gof = 0) {
+                                  n_bootstrap_gof = 0,
+                                  save_copula_data = FALSE,
+                                  output_dir = NULL) {
   
   # Transform to pseudo-observations
   if (use_empirical_ranks) {
@@ -246,15 +250,20 @@ fit_copula_from_pairs <- function(scores_prior,
         # Extract parameters: correlation and degrees of freedom
         rho <- fit@estimate[1]  # correlation parameter
         df <- fit@estimate[2]   # degrees of freedom
+        df_rounded <- round(df)  # Round for stability in plotting/evaluation
+        
+        # Create a new t-copula with rounded df for plotting (more stable)
+        copula_rounded <- tCopula(param = rho, dim = 2, df = df_rounded, df.fixed = TRUE)
         
         # Calculate tail dependence manually (consistent with fixed df variants)
         # For t-copula: λ = 2 * t_{df+1}(-√((df+1)(1-ρ)/(1+ρ)))
         tail_dep_val <- 2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
         
         results[[family]] <- list(
-          copula = fit@copula,
+          copula = copula_rounded,  # Use rounded version for stability
           parameter = rho,
-          df = df,
+          df = df,  # Store original df for reporting
+          df_rounded = df_rounded,  # Also store rounded version
           loglik = fit@loglik,
           aic = -2 * fit@loglik + 2 * length(fit@estimate),
           bic = -2 * fit@loglik + log(nrow(pseudo_obs)) * length(fit@estimate),
@@ -335,6 +344,51 @@ fit_copula_from_pairs <- function(scores_prior,
   # Add empirical Kendall's tau
   empirical_tau <- cor(U, V, method = "kendall")
   
+  # Save copula data for visualization if requested
+  if (save_copula_data) {
+    if (is.null(output_dir)) {
+      warning("save_copula_data=TRUE but output_dir not specified. Skipping data save.")
+    } else {
+      # Create directory if it doesn't exist
+      if (!dir.exists(output_dir)) {
+        dir.create(output_dir, recursive = TRUE)
+      }
+      
+      # Save pseudo-observations
+      saveRDS(pseudo_obs, file = file.path(output_dir, "pseudo_observations.rds"))
+      
+      # Save original scores
+      original_scores <- data.table(
+        SCALE_SCORE_PRIOR = scores_prior,
+        SCALE_SCORE_CURRENT = scores_current
+      )
+      saveRDS(original_scores, file = file.path(output_dir, "original_scores.rds"))
+      
+      # Save fitted copula results
+      saveRDS(results, file = file.path(output_dir, "copula_results.rds"))
+      
+      # Calculate and save empirical copula grid for visualization
+      if (requireNamespace("ks", quietly = TRUE)) {
+        # Use our new function if available
+        source_file <- system.file("functions", "copula_contour_plots.R", package = "copula")
+        if (file.exists(source_file)) {
+          source(source_file)
+        } else if (file.exists("functions/copula_contour_plots.R")) {
+          source("functions/copula_contour_plots.R")
+        }
+        
+        if (exists("calculate_empirical_copula_grid")) {
+          empirical_grid <- calculate_empirical_copula_grid(pseudo_obs, 
+                                                           grid_size = 300,
+                                                           method = "density")
+          saveRDS(empirical_grid, file = file.path(output_dir, "empirical_copula_grid.rds"))
+        }
+      }
+      
+      cat(sprintf("  Saved copula data to: %s\n", output_dir))
+    }
+  }
+  
   # Select best copula by AIC
   if (length(results) > 0) {
     aics <- sapply(results, function(x) x$aic)
@@ -346,7 +400,10 @@ fit_copula_from_pairs <- function(scores_prior,
       best_copula = results[[best_family]],
       empirical_tau = empirical_tau,
       pseudo_obs = pseudo_obs,
-      n_pairs = nrow(pseudo_obs)
+      n_pairs = nrow(pseudo_obs),
+      original_scores = if (save_copula_data) {
+        data.table(SCALE_SCORE_PRIOR = scores_prior, SCALE_SCORE_CURRENT = scores_current)
+      } else NULL
     )
     
     if (return_best) {
@@ -374,6 +431,8 @@ fit_copula_from_pairs <- function(scores_prior,
 #' @param copula_families Copula families to fit ("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 #' @param with_replacement TRUE for standard bootstrap
 #' @param use_empirical_ranks Use empirical ranks for transformation (default FALSE for Phase 2)
+#' @param use_parallel Use parallel processing (default FALSE, uses mclapply on Unix/Mac)
+#' @param n_cores Number of cores to use for parallel processing (default: detectCores() - 1)
 #' 
 #' @return List containing bootstrap copula results
 bootstrap_copula_estimation <- function(pairs_data,
@@ -385,28 +444,35 @@ bootstrap_copula_estimation <- function(pairs_data,
                                        sampling_method = "paired",
                                        copula_families = c("gaussian", "t", "clayton", "gumbel", "frank"),
                                        with_replacement = TRUE,
-                                       use_empirical_ranks = FALSE) {
+                                       use_empirical_ranks = FALSE,
+                                       use_parallel = FALSE,
+                                       n_cores = NULL) {
   
   require(data.table)
   
-  # Storage for bootstrap results
-  bootstrap_results <- vector("list", n_bootstrap)
-  
-  # Storage for summary statistics
-  params <- matrix(NA, nrow = n_bootstrap, ncol = length(copula_families))
-  colnames(params) <- copula_families
-  taus <- matrix(NA, nrow = n_bootstrap, ncol = length(copula_families))
-  colnames(taus) <- copula_families
-  best_families <- character(n_bootstrap)
-  
   cat("Running", n_bootstrap, "bootstrap copula estimations...\n")
   cat("  Sampling method:", sampling_method, "\n")
-  cat("  Sample sizes: n_prior =", n_sample_prior, ", n_current =", n_sample_current, "\n\n")
+  cat("  Sample sizes: n_prior =", n_sample_prior, ", n_current =", n_sample_current, "\n")
   
-  for (b in 1:n_bootstrap) {
-    
-    if (b %% 10 == 0) cat("  Bootstrap iteration", b, "/", n_bootstrap, "\n")
-    
+  # Set up parallel processing if requested
+  if (use_parallel) {
+    if (.Platform$OS.type == "unix") {
+      require(parallel)
+      if (is.null(n_cores)) {
+        n_cores <- detectCores() - 1
+      }
+      cat("  Parallel processing: ENABLED (", n_cores, "cores on Unix)\n\n")
+    } else {
+      warning("Parallel processing only supported on Unix/Mac. Running sequentially.")
+      use_parallel <- FALSE
+      cat("  Parallel processing: DISABLED (Windows not supported)\n\n")
+    }
+  } else {
+    cat("  Parallel processing: DISABLED\n\n")
+  }
+  
+  # Worker function for a single bootstrap iteration
+  bootstrap_worker <- function(b) {
     tryCatch({
       
       if (sampling_method == "paired") {
@@ -440,40 +506,100 @@ bootstrap_copula_estimation <- function(pairs_data,
         framework_current = framework_current,
         copula_families = copula_families,
         return_best = FALSE,
-        use_empirical_ranks = use_empirical_ranks  # Pass through transformation method
+        use_empirical_ranks = use_empirical_ranks,
+        n_bootstrap_gof = NULL  # Don't run GoF for bootstrap samples
       )
       
-      bootstrap_results[[b]] <- cop_fit
-      
       # Extract parameters for each family
+      params_list <- list()
+      taus_list <- list()
       for (fam in copula_families) {
         if (!is.null(cop_fit$results[[fam]])) {
-          params[b, fam] <- cop_fit$results[[fam]]$parameter
-          taus[b, fam] <- cop_fit$results[[fam]]$kendall_tau
+          params_list[[fam]] <- cop_fit$results[[fam]]$parameter
+          taus_list[[fam]] <- cop_fit$results[[fam]]$kendall_tau
+        } else {
+          params_list[[fam]] <- NA
+          taus_list[[fam]] <- NA
         }
       }
       
-      best_families[b] <- cop_fit$best_family
+      return(list(
+        iteration = b,
+        cop_fit = cop_fit,
+        params = params_list,
+        taus = taus_list,
+        best_family = cop_fit$best_family,
+        success = TRUE
+      ))
       
     }, error = function(e) {
-      warning(paste("Bootstrap iteration", b, "failed:", e$message))
+      return(list(
+        iteration = b,
+        cop_fit = NULL,
+        params = NULL,
+        taus = NULL,
+        best_family = NA,
+        success = FALSE,
+        error = e$message
+      ))
     })
   }
   
-  cat("\nBootstrap copula estimation complete!\n\n")
+  # Run bootstrap iterations (parallel or sequential)
+  if (use_parallel) {
+    # Parallel execution with progress updates
+    boot_list <- mclapply(1:n_bootstrap, bootstrap_worker, mc.cores = n_cores)
+  } else {
+    # Sequential execution with progress updates
+    boot_list <- vector("list", n_bootstrap)
+    for (b in 1:n_bootstrap) {
+      if (b %% 10 == 0 || b == 1) cat("  Bootstrap iteration", b, "/", n_bootstrap, "\n")
+      boot_list[[b]] <- bootstrap_worker(b)
+    }
+  }
+  
+  # Compile results
+  bootstrap_results <- vector("list", n_bootstrap)
+  params <- matrix(NA, nrow = n_bootstrap, ncol = length(copula_families))
+  colnames(params) <- copula_families
+  taus <- matrix(NA, nrow = n_bootstrap, ncol = length(copula_families))
+  colnames(taus) <- copula_families
+  best_families <- character(n_bootstrap)
+  
+  n_success <- 0
+  for (b in 1:n_bootstrap) {
+    if (boot_list[[b]]$success) {
+      n_success <- n_success + 1
+      bootstrap_results[[b]] <- boot_list[[b]]$cop_fit
+      best_families[b] <- boot_list[[b]]$best_family
+      
+      for (fam in copula_families) {
+        params[b, fam] <- boot_list[[b]]$params[[fam]]
+        taus[b, fam] <- boot_list[[b]]$taus[[fam]]
+      }
+    } else {
+      warning(paste("Bootstrap iteration", b, "failed:", boot_list[[b]]$error))
+    }
+  }
+  
+  cat("\nBootstrap copula estimation complete!\n")
+  cat("  Successful iterations:", n_success, "of", n_bootstrap, "\n\n")
   
   return(list(
     bootstrap_results = bootstrap_results,
     parameters = params,
     kendall_taus = taus,
     best_families = best_families,
+    n_success = n_success,
     config = list(
       n_sample_prior = n_sample_prior,
       n_sample_current = n_sample_current,
       n_bootstrap = n_bootstrap,
       sampling_method = sampling_method,
       copula_families = copula_families,
-      with_replacement = with_replacement
+      with_replacement = with_replacement,
+      use_parallel = use_parallel,
+      n_cores = if (use_parallel) n_cores else NA
     )
   ))
 }

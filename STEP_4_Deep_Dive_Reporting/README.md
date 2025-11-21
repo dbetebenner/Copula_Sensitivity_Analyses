@@ -2,34 +2,46 @@
 
 ## Overview
 
-**Paper Section:** Application → Case Studies; Conclusion
+**Paper Section:** Chapter 3, Section 3.4 (Deep Dive & SGPc Analysis); Chapter 4 (TIMSS Application)
 
-**Objective:** Conduct detailed analysis of the selected copula and generate comprehensive publication-ready report integrating results from all previous steps.
+**Objective:** Conduct detailed analysis of the selected t-copula, demonstrate SGP vs SGPc concordance, and generate comprehensive publication-ready report integrating results from all previous steps. This step also introduces **SGPc** (copula-based Student Growth Percentiles) as the operational output of the methodology.
 
 **Prerequisites:**
-- STEP_1 complete (copula family selected)
-- STEP_2 complete (transformation validated)
-- STEP_3 complete (sensitivity analyses done)
+- STEP_1 complete (t-copula selected as best family)
+- STEP_2 complete (copula sensitivity validated - CORE CONTRIBUTION)
+- STEP_3 complete (transformation methods validated for applications)
 
 ---
 
 ## What This Step Does
 
 ### Part 1: t-Copula Deep Dive
-If t-copula was selected in STEP_1 (expected), perform detailed analysis of:
-- Degrees of freedom (ν) estimation and interpretation
-- Tail dependence structure
-- Comparison with Gaussian baseline
-- Conditional distributions P(Y|X)
-- Prediction intervals
+Perform detailed analysis of the selected t-copula:
+- Degrees of freedom (ν) estimation and interpretation across conditions
+- Tail dependence structure (symmetric tail dependence coefficients)
+- Comparison with Gaussian copula baseline
+- Conditional distributions P(Y|X) → foundation for SGPc
+- Prediction intervals and uncertainty quantification
 
-### Part 2: Comprehensive Report
+### Part 2: SGP vs SGPc Analysis (NEW)
+**SGPc** = Copula-based Student Growth Percentiles
+
+Compare traditional SGP (using comonotonic assumption) with SGPc (using t-copula):
+- Concordance analysis: How closely do SGP and SGPc track?
+- Conditional percentile distributions
+- Tail behavior comparisons (where differences emerge)
+- Practical implications for growth classification
+
+This demonstrates the **operational output** of the Sklar-theoretic extension of TAMP.
+
+### Part 3: Comprehensive Report
 Synthesize all results into publication-ready materials:
-- Summary tables (LaTeX format)
-- Key figures for main text
-- Supplementary materials
+- Summary tables (LaTeX format) for all 4 steps
+- Key figures for main text (emphasizing STEP_2 copula sensitivity)
+- Supplementary materials (STEP_3 transformation details)
 - Methodology text snippets
 - Results text snippets
+- SGPc framework documentation
 
 ---
 
@@ -109,21 +121,22 @@ Synthesize all results into publication-ready materials:
 - Mean AIC by family
 - Winner: t-copula
 
-**Table 2:** Transformation validation (from STEP_2)
-- Methods tested
-- Classification results
-- Selected method: Kernel Gaussian (or best acceptable)
+**Table 2:** Copula sensitivity analyses (from STEP_2) ⭐ **CORE CONTRIBUTION**
+- Grade span effects (τ: 0.71 → 0.52 over 4 years)
+- Sample size effects (stable by n≈2,000)
+- Content area consistency (τ = 0.71 ± 0.03)
+- Cohort stability (<5% variation)
 
-**Table 3:** Sensitivity analysis summary (from STEP_3)
-- Grade span effects
-- Sample size effects
-- Content area consistency
-- Cohort stability
+**Table 3:** Application implementation (from STEP_3)
+- Transformation methods tested (brief summary)
+- Selected method: Kernel Gaussian
+- Note: Details in Appendix
 
-**Table 4:** t-Copula parameters (from STEP_4)
-- Degrees of freedom by condition
-- Tail dependence coefficients
+**Table 4:** t-Copula properties & SGPc (from STEP_4)
+- Degrees of freedom by condition (ν ≈ 7-12)
+- Tail dependence coefficients (λ ≈ 0.15-0.25)
 - Comparison with Gaussian
+- SGP vs SGPc concordance metrics
 
 #### D. Key Figures
 
@@ -135,16 +148,18 @@ Synthesize all results into publication-ready materials:
 - Bar chart of selection frequency
 - ΔAIC distributions
 
-**Figure 3:** Transformation validation (STEP_2)
-- Uniformity forest plot
-- Trade-off space scatter
-
-**Figure 4:** Sensitivity analyses (STEP_3)
+**Figure 3:** Copula sensitivity analyses (STEP_2) ⭐ **CORE CONTRIBUTION**
 - 2×2 panel: Grade span, Sample size, Content, Cohort
+- Demonstrates robustness of Sklar-theoretic extension
 
-**Figure 5:** t-Copula deep dive (STEP_4)
-- Conditional distributions
+**Figure 4:** t-Copula deep dive & SGPc (STEP_4)
+- Conditional distributions P(Y|X)
+- SGP vs SGPc comparison
 - Tail dependence illustration
+
+**Figure 5:** Application implementation (STEP_3) - Optional/Appendix
+- Transformation method comparison
+- Uniformity validation
 
 **Outputs:**
 - `results/comprehensive_report.pdf` - Full PDF report
@@ -245,9 +260,9 @@ After running, verify:
 - `../functions/copula_diagnostics.R`
 
 **From Previous Steps:**
-- `../STEP_1_Family_Selection/results/phase1_*.RData`
-- `../STEP_2_Transformation_Validation/results/exp5_*.RData`
-- `../STEP_3_Sensitivity_Analyses/results/exp_*/*.csv`
+- `../STEP_1_Family_Selection/results/phase1_*.RData` - t-copula selection
+- `../STEP_2_Copula_Sensitivity_Analyses/results/exp_*/*.csv` - Sensitivity analyses (CORE)
+- `../STEP_3_Application_Implementation/results/exp5_*.RData` - Transformation validation
 
 **Packages:**
 - `data.table`, `copula`, `grid`
@@ -296,13 +311,19 @@ This step provides the bulk of content for:
 - Grade 4→8 mathematics
 - t-Copula with ν≈8, τ≈0.71
 
-**Section 5.4: Sensitivity Analyses**
-- Pull from STEP_3 results
-- Synthesized in comprehensive report
+**Section 5.4: Copula Sensitivity Analyses** ⭐ **CORE CONTRIBUTION**
+- Pull from STEP_2 results (NOT STEP_3)
+- Demonstrates robustness of Sklar-theoretic extension
+- Validates moving beyond TAMP's comonotonic assumption
+
+**Section 5.5: SGP vs SGPc Analysis**
+- Concordance between traditional and copula-based growth percentiles
+- Practical implications for educational accountability
 
 **Section 6: Conclusion**
-- Summary of findings
-- Implications for pseudo-growth simulation
+- Summary: Sklar-theoretic extension provides stable, generalizable framework
+- SGPc as operational output
+- Chapter 4 preview: TIMSS application for international benchmarking
 - Limitations and future directions
 
 ### LaTeX Integration

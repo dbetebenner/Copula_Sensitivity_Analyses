@@ -42,27 +42,31 @@ This analysis proceeds in **4 sequential steps**:
 - **Output:** t-copula selected (τ ≈ 0.71); all parametric copulas show statistically significant deviations with large n
 - **Runtime:** 24 hours (EC2 c8g.12xlarge, N=1000 bootstrap) or 2 hours (local, N=50 bootstrap)
 - **Directory:** `STEP_1_Family_Selection/`
+- **Paper Section:** Chapter 3, Section 3.1
 
-### STEP 2: Transformation Validation
-- **Objective:** Validate marginal transformation methods
-- **Method:** Test 15+ methods on uniformity & dependence
-- **Output:** Kernel Gaussian selected (p = 0.23)
-- **Runtime:** 40-60 minutes
-- **Directory:** `STEP_2_Transformation_Validation/`
-
-### STEP 3: Sensitivity Analyses
-- **Objective:** Test copula robustness across conditions
-- **Method:** 4 experiments (grade span, sample size, content, cohort)
-- **Output:** Copula parameters stable
+### STEP 2: Copula Sensitivity Analyses ⭐ **CORE CONTRIBUTION**
+- **Objective:** Test copula robustness across conditions to validate Sklar-theoretic extension of TAMP
+- **Method:** 4 experiments (grade span, sample size, content, cohort) using selected t-copula
+- **Output:** Copula parameters stable; dependence structure generalizes across diverse conditions
 - **Runtime:** 3-6 hours
-- **Directory:** `STEP_3_Sensitivity_Analyses/`
+- **Directory:** `STEP_2_Copula_Sensitivity_Analyses/`
+- **Paper Section:** Chapter 3, Section 3.2
+
+### STEP 3: Application Implementation
+- **Objective:** Validate operational methods for copula-based SGPc implementation
+- **Method:** Test 15+ marginal transformation methods for invertibility and uniformity
+- **Output:** Kernel Gaussian selected (p = 0.23); validates two-stage transformation approach
+- **Runtime:** 40-60 minutes
+- **Directory:** `STEP_3_Application_Implementation/`
+- **Paper Section:** Chapter 3, Section 3.3 (implementation details)
 
 ### STEP 4: Deep Dive & Reporting
-- **Objective:** Detailed analysis + publication materials
-- **Method:** t-copula analysis, comprehensive report
-- **Output:** LaTeX tables, figures, text snippets
+- **Objective:** Detailed analysis + publication materials including SGP vs SGPc concordance
+- **Method:** t-copula deep dive, SGPc percentiles, comprehensive report
+- **Output:** LaTeX tables, figures, text snippets, SGP-SGPc comparison
 - **Runtime:** 1-2 hours
 - **Directory:** `STEP_4_Deep_Dive_Reporting/`
+- **Paper Section:** Chapter 3, Section 3.4
 
 ---
 
@@ -88,18 +92,18 @@ Copula_Sensitivity_Analyses/
 │   ├── phase1_analysis.R
 │   └── results/                   # Step 1 outputs
 │
-├── STEP_2_Transformation_Validation/
+├── STEP_2_Copula_Sensitivity_Analyses/  # ⭐ CORE CONTRIBUTION
 │   ├── README.md                  # Step 2 documentation
-│   ├── exp_5_transformation_validation.R
-│   ├── exp_5_visualizations.R
-│   └── results/                   # Step 2 outputs
-│
-├── STEP_3_Sensitivity_Analyses/
-│   ├── README.md                  # Step 3 documentation
 │   ├── exp_1_grade_span.R
 │   ├── exp_2_sample_size.R
 │   ├── exp_3_content_area.R
 │   ├── exp_4_cohort.R
+│   └── results/                   # Step 2 outputs
+│
+├── STEP_3_Application_Implementation/
+│   ├── README.md                  # Step 3 documentation
+│   ├── exp_5_transformation_validation.R
+│   ├── exp_5_visualizations.R
 │   └── results/                   # Step 3 outputs
 │
 ├── STEP_4_Deep_Dive_Reporting/
@@ -240,36 +244,39 @@ source("master_analysis.R")
 | Step | Results Directory | Key Files |
 |------|-------------------|-----------|
 | 1 | `STEP_1_Family_Selection/results/` | `phase1_*.csv`, `phase1_*.pdf` |
-| 2 | `STEP_2_Transformation_Validation/results/` | `exp5_*.csv`, `exp5_*.RData`, `figures/` |
-| 3 | `STEP_3_Sensitivity_Analyses/results/` | `exp_*/*.csv`, `exp_*/*.pdf` |
+| 2 | `STEP_2_Copula_Sensitivity_Analyses/results/` | `exp_*/*.csv`, `exp_*/*.pdf` |
+| 3 | `STEP_3_Application_Implementation/results/` | `exp5_*.csv`, `exp5_*.RData`, `figures/` |
 | 4 | `STEP_4_Deep_Dive_Reporting/results/` | `*.RData`, `tables/*.tex`, `figures/*.pdf` |
 
 ---
 
 ## Key Findings
 
-### Copula Family (STEP 1)
+### Copula Family Selection (STEP 1)
 ✓ **t-copula** wins across 95% of conditions (relative fit via AIC)  
 ✓ Symmetric tail dependence appropriate for educational data  
 ✓ Mean ΔAIC = 180 vs. Gaussian  
 ✓ **Absolute fit**: All parametric families fail GoF (p < 0.05) with large n (28,567), but t-copula closest (CvM ≈ 0.84)  
 ✓ **Comonotonic** (TAMP assumption) dramatically worse (CvM ≈ 50, 60× worse than t-copula)
 
-### Transformation Method (STEP 2)
-✓ **Kernel Gaussian** balances uniformity with utility  
-✓ K-S p = 0.23 (acceptable given discrete data)  
-✓ Validates two-stage approach (empirical ranks for selection, smoothing for applications)
-
-### Sensitivity (STEP 3)
+### Copula Sensitivity Analyses (STEP 2) ⭐ **CORE CONTRIBUTION**
 ✓ Kendall's τ decreases with grade span (0.71 → 0.52 over 4 years)  
 ✓ Parameters stable across sample sizes (n ≥ 2000)  
 ✓ Content areas show similar dependence (±0.03)  
-✓ Minimal cohort effects (<5% variation)
+✓ Minimal cohort effects (<5% variation)  
+✓ **Validates Sklar-theoretic extension:** t-copula generalizes across diverse conditions, demonstrating robustness beyond TAMP's comonotonic assumption
 
-### t-Copula Properties (STEP 4)
+### Application Implementation (STEP 3)
+✓ **Kernel Gaussian** balances uniformity with utility  
+✓ K-S p = 0.23 (acceptable given discrete data)  
+✓ Validates two-stage approach (empirical ranks for selection, smoothing for applications)  
+✓ Transformation is implementation detail; copula dependence modeling invariant to marginal transforms
+
+### t-Copula Properties & SGPc (STEP 4)
 ✓ Degrees of freedom: ν ≈ 7-12 (depending on grade span)  
 ✓ Tail dependence: λ ≈ 0.15-0.25 (symmetric)  
-✓ Superior to Gaussian in tails (captures extreme joint outcomes)
+✓ Superior to Gaussian in tails (captures extreme joint outcomes)  
+✓ **SGPc**: Copula-based Student Growth Percentiles track closely with traditional SGP
 
 ---
 
@@ -299,15 +306,15 @@ source("master_analysis.R")
 - **METHODOLOGY_OVERVIEW.md** - Maps to paper sections
 
 ### Step-Specific
-- **STEP_1_Family_Selection/README.md** - Copula selection
-- **STEP_2_Transformation_Validation/README.md** - Transformation validation
-- **STEP_3_Sensitivity_Analyses/README.md** - Sensitivity analyses
-- **STEP_4_Deep_Dive_Reporting/README.md** - Deep dive & reporting
+- **STEP_1_Family_Selection/README.md** - Copula family selection
+- **STEP_2_Copula_Sensitivity_Analyses/README.md** - Sensitivity analyses (CORE CONTRIBUTION)
+- **STEP_3_Application_Implementation/README.md** - Implementation details
+- **STEP_4_Deep_Dive_Reporting/README.md** - Deep dive, SGPc analysis & reporting
 
 ### Methodological
-- **STEP_1_Family_Selection/TWO_STAGE_TRANSFORMATION_METHODOLOGY.md** - Two-stage approach justification
+- **TWO_STAGE_TRANSFORMATION_METHODOLOGY.md** - Two-stage approach justification (implementation detail)
 - **STEP_1_Family_Selection/BUG_FIX_SUMMARY.txt** - Critical bug documentation
-- **STEP_2_Transformation_Validation/SPLINE_CONVERSATION_ChatGPT.md** - Smoothing discussion
+- **STEP_3_Application_Implementation/SPLINE_CONVERSATION_ChatGPT.md** - Smoothing discussion
 
 ---
 
@@ -365,6 +372,6 @@ Chestnut Hill, Massachusetts
 
 ---
 
-**Version:** 3.0 (Restructured for paper integration)  
-**Last Updated:** October 2025  
+**Version:** 4.0 (Reorganized to emphasize copula sensitivity as core contribution)  
+**Last Updated:** November 2025  
 **Status:** ✓ Production Ready

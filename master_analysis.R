@@ -19,6 +19,19 @@
 ### CONFIGURATION: Multi-Dataset System
 ############################################################################
 
+# Check for optional visualization packages
+if (!requireNamespace("ggdensity", quietly = TRUE)) {
+  cat("Note: 'ggdensity' package can provide enhanced contour visualizations.\n")
+  cat("      Install with: install.packages('ggdensity')\n")
+  cat("      Proceeding with standard ggplot2 methods.\n\n")
+}
+
+if (!requireNamespace("ks", quietly = TRUE)) {
+  cat("Note: 'ks' package enables kernel density estimation for copula visualization.\n")
+  cat("      Install with: install.packages('ks')\n")
+  cat("      Proceeding with simpler density methods.\n\n")
+}
+
 # Load dataset configurations
 cat("Loading dataset configurations from dataset_configs.R\n")
 source("dataset_configs.R")
@@ -42,8 +55,8 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 # STEPS TO RUN: Set to vector of step numbers, or NULL to run all
 # Examples:
 #   STEPS_TO_RUN <- NULL              # Run all steps (default)
-#   STEPS_TO_RUN <- c(1, 2)          # Run only STEP_1 and STEP_2
-#   STEPS_TO_RUN <- c(3)             # Run only STEP_3
+#   STEPS_TO_RUN <- c(1, 2)          # Run only STEP_1 and STEP_2 (copula sensitivity)
+#   STEPS_TO_RUN <- c(3)             # Run only STEP_3 (application implementation)
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
@@ -54,6 +67,15 @@ should_run_step <- function(step_num) {
   if (is.null(STEPS_TO_RUN)) return(TRUE)
   return(step_num %in% STEPS_TO_RUN)
 }
+
+############################################################################
+### CONFIGURATION: Multi-Format Plot Export
+############################################################################
+
+# Multi-format export configuration for copula plots
+EXPORT_FORMATS <- c("pdf", "svg", "png")  # All formats for comprehensive output
+EXPORT_DPI <- 300                          # Publication quality
+EXPORT_VERBOSE <- FALSE                    # Reduce log noise in batch mode
 
 ############################################################################
 ### CONFIGURATION: Goodness-of-Fit Testing
@@ -78,6 +100,13 @@ if (!is.null(N_BOOTSTRAP_GOF)) {
   }
   cat("\n")
 }
+
+############################################################################
+### CONFIGURATION: Contour Plot Generation
+############################################################################
+
+# Generate contour plots during Step 1 (comprehensive approach)
+GENERATE_CONTOUR_PLOTS <- TRUE
 
 ############################################################################
 ### EC2/LOCAL AUTO-DETECTION
@@ -224,6 +253,7 @@ source_all_functions <- function() {
     "longitudinal_pairs.R",
     "ispline_ecdf.R", 
     "copula_bootstrap.R",
+    "copula_contour_plots.R",
     "copula_diagnostics.R",
     "transformation_diagnostics.R"
   )
@@ -479,8 +509,8 @@ if (should_run_step(2)) {
     cat("Estimated time: 40-60 minutes (sequential)\n\n")
   }
   
-  exp5_validation_results <- "STEP_2_Transformation_Validation/results/exp5_transformation_validation_summary.csv"
-  exp5_full_results <- "STEP_2_Transformation_Validation/results/exp5_transformation_validation_full.RData"
+  exp5_validation_results <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv"
+  exp5_full_results <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData"
   
   if (SKIP_COMPLETED && check_results_exist(exp5_validation_results, "Step 2 validation")) {
     cat("Skipping Step 2 validation (already completed)\n\n")
@@ -489,10 +519,10 @@ if (should_run_step(2)) {
       # Use parallel version if enabled (EC2 or high-performance local)
       if (USE_PARALLEL) {
         cat("Using parallel implementation (", N_CORES, " cores)\n", sep = "")
-        source("STEP_2_Transformation_Validation/exp_5_transformation_validation_parallel.R")
+        source("STEP_3_Application_Implementation/exp_5_transformation_validation_parallel.R")
       } else {
         cat("Using sequential implementation\n")
-        source("STEP_2_Transformation_Validation/exp_5_transformation_validation.R")
+        source("STEP_3_Application_Implementation/exp_5_transformation_validation.R")
       }
     })
     
@@ -512,13 +542,13 @@ if (should_run_step(2)) {
   }
   
   # Generate visualizations
-  exp5_figures_dir <- "STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation"
+  exp5_figures_dir <- "STEP_3_Application_Implementation/results/figures/exp5_transformation_validation"
   
   if (SKIP_COMPLETED && dir.exists(exp5_figures_dir) && length(list.files(exp5_figures_dir)) > 0) {
     cat("✓ Skipping Step 2 visualizations (already exist)\n\n")
   } else {
     result_2_2 <- time_phase("Step 2.2: Visualization Generation", {
-      source("STEP_2_Transformation_Validation/exp_5_visualizations.R")
+      source("STEP_3_Application_Implementation/exp_5_visualizations.R")
     })
     
     if (!result_2_2$success) {
@@ -579,9 +609,9 @@ if (should_run_step(2)) {
     cat("\n")
     
     pause_for_review(
-      paste0("Review Step 2 results:\n",
-             "  - STEP_2_Transformation_Validation/results/exp5_*.csv\n",
-             "  - STEP_2_Transformation_Validation/results/figures/\n\n",
+      paste0("Review Step 2 results (Copula Sensitivity):\n",
+             "  - STEP_2_Copula_Sensitivity_Analyses/results/\n\n",
+             "Note: Step 2 is now copula sensitivity analyses (CORE CONTRIBUTION)\n\n",
              "Verify:\n",
              "  ✓ At least one method classified as ACCEPTABLE\n",
              "  ✓ I-spline (4 knots) = UNACCEPTABLE/MARGINAL\n\n",
@@ -633,21 +663,21 @@ if (should_run_step(3)) {
     # Select parallel vs sequential script
     if (USE_PARALLEL && exp$name != "exp_2_sample_size") {
       # Use parallel version (except Exp 2 which has limited parallelization benefit)
-      exp_file <- file.path("STEP_3_Sensitivity_Analyses", 
+      exp_file <- file.path("STEP_2_Copula_Sensitivity_Analyses", 
                            paste0(exp$name, "_parallel.R"))
       
       # Fall back to sequential if parallel doesn't exist
       if (!file.exists(exp_file)) {
-        exp_file <- file.path("STEP_3_Sensitivity_Analyses", 
+        exp_file <- file.path("STEP_2_Copula_Sensitivity_Analyses", 
                              paste0(exp$name, ".R"))
         cat("Note: Parallel version not found, using sequential version\n")
       }
     } else {
-      exp_file <- file.path("STEP_3_Sensitivity_Analyses", 
+      exp_file <- file.path("STEP_2_Copula_Sensitivity_Analyses", 
                            paste0(exp$name, ".R"))
     }
     
-    exp_results_marker <- file.path("STEP_3_Sensitivity_Analyses/results", exp$name)
+    exp_results_marker <- file.path("STEP_2_Copula_Sensitivity_Analyses/results", exp$name)
     
     if (!file.exists(exp_file)) {
       cat("Warning: Experiment file not found:", exp_file, "\n")
@@ -698,9 +728,9 @@ if (should_run_step(3)) {
   cat("\n")
   
   pause_for_review(
-    paste0("Review Step 3 experiment results:\n",
-           "  - STEP_3_Sensitivity_Analyses/results/\n\n",
-           "If experiments completed successfully, we'll proceed to Step 4 (deep dive)."),
+    paste0("Review Step 2 experiment results (Copula Sensitivity - CORE):\n",
+           "  - STEP_2_Copula_Sensitivity_Analyses/results/\n\n",
+           "If experiments completed successfully, we'll proceed to Step 3 (application implementation)."),
     "Step 3 Complete"
   )
   
@@ -927,8 +957,8 @@ if (should_run_step(1) && length(ALL_DATASET_RESULTS$step1) > 0) {
 if (should_run_step(2) && length(ALL_DATASET_RESULTS$step2) > 0) {
   cat("Combining STEP 2 results from", length(ALL_DATASET_RESULTS$step2), "datasets...\n")
   step2_combined <- rbindlist(ALL_DATASET_RESULTS$step2, fill = TRUE)
-  output_file <- "STEP_2_Transformation_Validation/results/exp5_transformation_validation_all_datasets.csv"
-  dir.create("STEP_2_Transformation_Validation/results", showWarnings = FALSE, recursive = TRUE)
+  output_file <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_all_datasets.csv"
+  dir.create("STEP_3_Application_Implementation/results", showWarnings = FALSE, recursive = TRUE)
   fwrite(step2_combined, output_file)
   cat("✓ Combined STEP 2 results saved to:", output_file, "\n\n")
 }
@@ -937,8 +967,8 @@ if (should_run_step(2) && length(ALL_DATASET_RESULTS$step2) > 0) {
 if (should_run_step(3) && length(ALL_DATASET_RESULTS$step3) > 0) {
   cat("Combining STEP 3 results from", length(ALL_DATASET_RESULTS$step3), "datasets...\n")
   step3_combined <- rbindlist(ALL_DATASET_RESULTS$step3, fill = TRUE)
-  output_file <- "STEP_3_Sensitivity_Analyses/results/sensitivity_analyses_all_datasets.csv"
-  dir.create("STEP_3_Sensitivity_Analyses/results", showWarnings = FALSE, recursive = TRUE)
+  output_file <- "STEP_2_Copula_Sensitivity_Analyses/results/sensitivity_analyses_all_datasets.csv"
+  dir.create("STEP_2_Copula_Sensitivity_Analyses/results", showWarnings = FALSE, recursive = TRUE)
   fwrite(step3_combined, output_file)
   cat("✓ Combined STEP 3 results saved to:", output_file, "\n\n")
 }
@@ -976,8 +1006,8 @@ cat("  Log file:", LOG_FILE, "\n\n")
 cat("Output Locations:\n")
 cat("-----------------\n")
 if (should_run_step(1)) cat("  Step 1: STEP_1_Family_Selection/results/\n")
-if (should_run_step(2)) cat("  Step 2: STEP_2_Transformation_Validation/results/\n")
-if (should_run_step(3)) cat("  Step 3: STEP_3_Sensitivity_Analyses/results/\n")
+if (should_run_step(2)) cat("  Step 2: STEP_2_Copula_Sensitivity_Analyses/results/ (CORE)\n")
+if (should_run_step(3)) cat("  Step 3: STEP_3_Application_Implementation/results/\n")
 if (should_run_step(4)) cat("  Step 4: STEP_4_Deep_Dive_Reporting/results/\n")
 cat("\n")
 

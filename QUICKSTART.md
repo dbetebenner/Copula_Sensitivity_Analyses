@@ -24,12 +24,12 @@ source("master_analysis.R")
 ```
 **Runtime:** 30-60 minutes (local) or 4-6 minutes (EC2)
 
-### Steps 1-2 (Add Transformation Validation)
+### Steps 1-2 (Add Copula Sensitivity - CORE CONTRIBUTION)
 ```r
 STEPS_TO_RUN <- c(1, 2)
 source("master_analysis.R")
 ```
-**Runtime:** 70-120 minutes
+**Runtime:** 4-7 hours (includes core sensitivity analyses)
 
 ### Custom Selection
 ```r
@@ -88,33 +88,37 @@ source("master_analysis.R")
 ## 📊 What Each Step Does
 
 ### STEP 1: Copula Family Selection (30-60 min)
-- Tests 5 copula families across 28 conditions
-- **Output:** Best copula family identified (typically t-copula)
+- Tests 6 copula families (5 parametric + comonotonic) across 129 conditions
+- **Output:** Best copula family identified (t-copula)
 - **Location:** `STEP_1_Family_Selection/results/`
+- **Paper:** Chapter 3, Section 3.1
 
-### STEP 2: Transformation Validation (40-60 min)
-- Validates 15+ marginal transformation methods
-- **Output:** Method classification (EXCELLENT/ACCEPTABLE/MARGINAL/UNACCEPTABLE)
-- **Location:** `STEP_2_Transformation_Validation/results/`
+### STEP 2: Copula Sensitivity Analyses ⭐ **CORE CONTRIBUTION** (3-6 hours)
+- Tests t-copula robustness across 4 dimensions
+- Experiments: grade span, sample size, content area, cohort
+- **Output:** Validates Sklar-theoretic extension of TAMP
+- **Location:** `STEP_2_Copula_Sensitivity_Analyses/results/`
+- **Paper:** Chapter 3, Section 3.2 (Central empirical contribution)
 
-### STEP 3: Sensitivity Analyses (3-6 hours)
-- Tests copula robustness across conditions
-- 4 experiments: grade span, sample size, content area, cohort
-- **Output:** Parameter stability analysis
-- **Location:** `STEP_3_Sensitivity_Analyses/results/`
+### STEP 3: Application Implementation (40-60 min)
+- Validates 15+ marginal transformation methods for invertibility
+- **Output:** Method classification for score-scale reporting
+- **Location:** `STEP_3_Application_Implementation/results/`
+- **Paper:** Chapter 3, Section 3.3 (Implementation detail)
 
 ### STEP 4: Deep Dive & Reporting (1-2 hours)
-- Detailed t-copula analysis
+- Detailed t-copula analysis + SGP vs SGPc concordance
 - Generates publication materials
 - **Output:** LaTeX tables, figures, comprehensive report
 - **Location:** `STEP_4_Deep_Dive_Reporting/results/`
+- **Paper:** Chapter 3, Section 3.4 + Chapter 4
 
 ---
 
 ## 🎯 Common Workflows
 
-### Quick Test (1-2 hours)
-Run just the methodological centerpiece:
+### Core Methodology (4-7 hours)
+Run Steps 1-2 to complete the core contribution (family selection + sensitivity):
 ```r
 STEPS_TO_RUN <- c(1, 2)
 source("master_analysis.R")
@@ -127,7 +131,7 @@ STEPS_TO_RUN <- NULL
 source("master_analysis.R")
 ```
 
-### Sensitivity Analysis Only (3-6 hours)
+### Application Implementation Only (40-60 min)
 If you already have STEP 1-2 results:
 ```r
 STEPS_TO_RUN <- 3
@@ -206,8 +210,8 @@ tail -f output.log
 
 ### 4. Expected Runtime (EC2 c6i.4xlarge)
 - STEP 1: ~5 minutes (parallel)
-- STEP 2: ~40 minutes
-- STEP 3: ~2-3 hours
+- STEP 2: ~2-3 hours (copula sensitivity - CORE)
+- STEP 3: ~40 minutes (transformation implementation)
 - STEP 4: ~1 hour
 - **Total: ~4-5 hours**
 
@@ -279,15 +283,15 @@ After running, you should see:
 - ✓ Selected copula family printed in summary
 - ✓ 5 PDF visualizations created
 
-**STEP 2:**
+**STEP 2:** ⭐ **CORE CONTRIBUTION**
+- ✓ 4 experiment subdirectories with results
+- ✓ CSV files with copula parameter estimates
+- ✓ PDF visualizations showing robustness
+
+**STEP 3:**
 - ✓ `exp5_transformation_validation_summary.csv` exists
 - ✓ Method classifications available
 - ✓ Figures directory created
-
-**STEP 3:**
-- ✓ 4 experiment subdirectories with results
-- ✓ CSV files with parameter estimates
-- ✓ PDF visualizations
 
 **STEP 4:**
 - ✓ LaTeX tables in `tables/` subdirectory
@@ -296,6 +300,6 @@ After running, you should see:
 
 ---
 
-**Version:** 3.0  
-**Last Updated:** October 2025  
+**Version:** 4.0 (Reorganized to emphasize copula sensitivity as core contribution)  
+**Last Updated:** November 2025  
 **Status:** ✓ Current and Tested

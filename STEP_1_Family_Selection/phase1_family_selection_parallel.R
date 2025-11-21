@@ -1,6 +1,6 @@
 ############################################################################
 ### PHASE 1: COPULA FAMILY SELECTION STUDY (PARALLEL VERSION)
-### Parallelized across 28 conditions using parallel package
+### Parallelized across 42 conditions using parallel package
 ###
 ### Objective: Identify which copula family consistently provides best fit
 ###           for longitudinal educational assessment data
@@ -13,7 +13,7 @@
 ###   - Uses parallel package (base R, no extra dependencies)
 ###   - Each condition processed independently on separate cores
 ###   - Expected speedup: 14-15x on c6i.4xlarge (16 cores)
-###   - Target runtime: 4-6 minutes (vs 60-90 minutes sequential)
+###   - Target runtime: 6-8 minutes (vs 90-120 minutes sequential)
 ############################################################################
 
 require(data.table)
@@ -140,8 +140,15 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
   cat("  (Representative sampling for copula family selection)\n\n")
   
   # Strategic subset conditions
+  # Expanded to include Grade 3 and Grade 7 priors
+  # Grade range: G3→G7 (elementary), G7→G8 (middle school transition)
   CONDITIONS <- list(
-    # 1-year spans
+    # === 1-YEAR SPANS ===
+    # Grade 3 prior (early elementary)
+    list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "MATHEMATICS", span = 1),
+    list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "READING", span = 1),
+    
+    # Grade 4-6 prior (existing)
     list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", span = 1),
     list(grade_prior = 4, grade_current = 5, year_prior = "2011", content = "MATHEMATICS", span = 1),
     list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 1),
@@ -150,7 +157,16 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
     list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "READING", span = 1),
     list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "WRITING", span = 1),
     
-    # 2-year spans
+    # Grade 7 prior (middle school transition)
+    list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 1),
+    list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "READING", span = 1),
+    
+    # === 2-YEAR SPANS ===
+    # Grade 3 prior
+    list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", span = 2),
+    list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "READING", span = 2),
+    
+    # Grade 4-6 prior (existing)
     list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 2),
     list(grade_prior = 4, grade_current = 6, year_prior = "2011", content = "MATHEMATICS", span = 2),
     list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 2),
@@ -159,7 +175,16 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
     list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "READING", span = 2),
     list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "WRITING", span = 2),
     
-    # 3-year spans
+    # Grade 7 prior
+    list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "MATHEMATICS", span = 2),
+    list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "READING", span = 2),
+    
+    # === 3-YEAR SPANS ===
+    # Grade 3 prior
+    list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 3),
+    list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "READING", span = 3),
+    
+    # Grade 4-6 prior (existing)
     list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 3),
     list(grade_prior = 4, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", span = 3),
     list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 3),
@@ -168,7 +193,16 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
     list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "READING", span = 3),
     list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "WRITING", span = 3),
     
-    # 4-year spans
+    # Grade 7 prior
+    list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "MATHEMATICS", span = 3),
+    list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "READING", span = 3),
+    
+    # === 4-YEAR SPANS ===
+    # Grade 3 prior
+    list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", span = 4),
+    list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "READING", span = 4),
+    
+    # Grade 4-6 prior (existing + expanded)
     list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "MATHEMATICS", span = 4),
     list(grade_prior = 4, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 4),
     list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "MATHEMATICS", span = 4),
@@ -262,10 +296,21 @@ cat("Total fits:", length(CONDITIONS) * length(COPULA_FAMILIES), "\n\n")
 ################################################################################
 
 # Function to process a single condition (runs on each worker independently)
-process_condition <- function(i, cond, copula_families) {
+process_condition <- function(i, cond, copula_families, progress_file, total_conditions) {
   
   # This function runs on each worker independently
   # It must be self-contained and return a complete result
+  
+  # === PROGRESS TRACKING: START ===
+  start_time <- Sys.time()
+  start_msg <- sprintf("[%s] STARTED  %3d/%d: %-4s G%d->G%d (%s->%s)\n",
+                       format(start_time, "%H:%M:%S"),
+                       i, total_conditions,
+                       cond$content, cond$grade_prior, cond$grade_current,
+                       cond$year_prior, 
+                       if (!is.null(cond$year_current)) cond$year_current else as.character(as.numeric(cond$year_prior) + cond$year_span))
+  cat(start_msg, file = progress_file, append = TRUE)
+  # === END PROGRESS TRACKING ===
   
   tryCatch({
     
@@ -295,6 +340,29 @@ process_condition <- function(i, cond, copula_families) {
     framework_prior <- create_ispline_framework(pairs_full$SCALE_SCORE_PRIOR)
     framework_current <- create_ispline_framework(pairs_full$SCALE_SCORE_CURRENT)
     
+    # Check if we should generate contour plots
+    GENERATE_CONTOUR_PLOTS <- exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv) && 
+                             get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv, inherits = FALSE)
+    
+    # Prepare output directory for plots if needed
+    if (GENERATE_CONTOUR_PLOTS) {
+      dataset_id <- if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown"
+      year_current <- if (!is.null(cond$year_current)) {
+        cond$year_current 
+      } else {
+        as.character(as.numeric(cond$year_prior) + cond$year_span)
+      }
+      
+      plot_output_dir <- file.path("STEP_1_Family_Selection/results", 
+                                   dataset_id,
+                                   "contour_plots",
+                                   sprintf("%s_G%d_G%d_%s", 
+                                          cond$year_prior, cond$grade_prior, 
+                                          cond$grade_current, cond$content))
+    } else {
+      plot_output_dir <- NULL
+    }
+    
     # Fit all copula families
     # IMPORTANT: Phase 1 uses empirical ranks (not I-spline) for copula family selection
     # This ensures uniform pseudo-observations and preserves tail dependence structure
@@ -306,7 +374,9 @@ process_condition <- function(i, cond, copula_families) {
       copula_families = copula_families,
       return_best = FALSE,
       use_empirical_ranks = TRUE,  # Phase 1: Use ranks to avoid I-spline distortion
-      n_bootstrap_gof = N_BOOTSTRAP_GOF_VALUE  # Captured from .GlobalEnv and exported to workers
+      n_bootstrap_gof = N_BOOTSTRAP_GOF_VALUE,  # Captured from .GlobalEnv and exported to workers
+      save_copula_data = GENERATE_CONTOUR_PLOTS,  # New parameter
+      output_dir = plot_output_dir  # Directory for saving copula data
     )
     
     # Extract results for each family
@@ -412,6 +482,68 @@ process_condition <- function(i, cond, copula_families) {
       }
     }
     
+    # Generate visualization plots if requested
+    if (GENERATE_CONTOUR_PLOTS && !is.null(copula_fits$pseudo_obs)) {
+      # Source the visualization functions if not already loaded
+      if (!exists("generate_condition_plots")) {
+        if (file.exists("functions/copula_contour_plots.R")) {
+          source("functions/copula_contour_plots.R")
+        }
+      }
+      
+      # Generate plots if function is available
+      if (exists("generate_condition_plots")) {
+        year_current <- if (!is.null(cond$year_current)) {
+          cond$year_current 
+        } else {
+          as.character(as.numeric(cond$year_prior) + cond$year_span)
+        }
+        
+        condition_info <- list(
+          dataset_id = if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown",
+          dataset_number = {
+            dataset_id <- if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown"
+            parts <- strsplit(dataset_id, "_")[[1]]
+            if (length(parts) >= 2) parts[2] else dataset_id
+          },
+          year_prior = cond$year_prior,
+          year_current = year_current,
+          grade_prior = cond$grade_prior,
+          grade_current = cond$grade_current,
+          content = cond$content
+        )
+        
+        tryCatch({
+          generate_condition_plots(
+            pseudo_obs = copula_fits$pseudo_obs,
+            original_scores = pairs_full[, .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT)],
+            copula_results = copula_fits$results,
+            best_family = copula_fits$best_family,
+            output_dir = plot_output_dir,
+            condition_info = condition_info,
+            save_plots = TRUE,
+            grid_size = 300,  # High resolution for publication-quality plots
+            export_formats = EXPORT_FORMATS,
+            export_dpi = EXPORT_DPI,
+            export_verbose = EXPORT_VERBOSE
+          )
+        }, error = function(e) {
+          warning(sprintf("Failed to generate plots for condition %d: %s", i, e$message))
+        })
+      }
+    }
+    
+    # === PROGRESS TRACKING: COMPLETE ===
+    end_time <- Sys.time()
+    elapsed <- as.numeric(difftime(end_time, start_time, units = "mins"))
+    complete_msg <- sprintf("[%s] COMPLETE %3d/%d: %-4s G%d->G%d (%.1f min, n=%d, best=%s)\n",
+                            format(end_time, "%H:%M:%S"),
+                            i, total_conditions,
+                            cond$content, cond$grade_prior, cond$grade_current,
+                            elapsed, n_pairs, copula_fits$best_family)
+    cat(complete_msg, file = progress_file, append = TRUE)
+    # === END PROGRESS TRACKING ===
+    
     # Return list with success status
     return(list(
       condition_id = i,
@@ -423,6 +555,18 @@ process_condition <- function(i, cond, copula_families) {
     ))
     
   }, error = function(e) {
+    
+    # === PROGRESS TRACKING: ERROR ===
+    end_time <- Sys.time()
+    elapsed <- as.numeric(difftime(end_time, start_time, units = "mins"))
+    error_msg <- sprintf("[%s] ERROR    %3d/%d: %-4s G%d->G%d (%.1f min) - %s\n",
+                         format(end_time, "%H:%M:%S"),
+                         i, total_conditions,
+                         cond$content, cond$grade_prior, cond$grade_current,
+                         elapsed, substr(as.character(e$message), 1, 50))
+    cat(error_msg, file = progress_file, append = TRUE)
+    # === END PROGRESS TRACKING ===
+    
     return(list(
       condition_id = i,
       success = FALSE,
@@ -435,14 +579,41 @@ process_condition <- function(i, cond, copula_families) {
 ### RUN PARALLEL ANALYSIS
 ################################################################################
 
+# Define results directory for this dataset (for progress file)
+if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset$id)) {
+  results_dir <- file.path("STEP_1_Family_Selection/results", current_dataset$id)
+} else {
+  results_dir <- "STEP_1_Family_Selection/results"
+}
+dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Initialize progress file for real-time monitoring
+progress_file <- file.path(results_dir, ".progress.txt")
+if (file.exists(progress_file)) file.remove(progress_file)
+
+# Write header
+cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = FALSE)
+cat("COPULA FAMILY SELECTION: Progress Log\n", file = progress_file, append = TRUE)
+cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
+cat("Started:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n", file = progress_file, append = TRUE)
+cat("Total conditions:", length(CONDITIONS), "\n", file = progress_file, append = TRUE)
+cat("Copula families:", paste(COPULA_FAMILIES, collapse = ", "), "\n", file = progress_file, append = TRUE)
+cat("Workers:", n_cores_use, "\n", file = progress_file, append = TRUE)
+cat(paste(rep("=", 70), collapse=""), "\n\n", file = progress_file, append = TRUE)
+
 cat("Starting parallel processing of", length(CONDITIONS), "conditions...\n")
-cat("Progress will be shown as conditions complete.\n\n")
+cat("Progress will be shown as conditions complete.\n")
+cat("Monitor progress: tail -f", progress_file, "\n\n")
 
 start_time <- Sys.time()
 
+# Store total conditions for progress messages
+total_conditions <- length(CONDITIONS)
+
 # Export process_condition function to cluster
 # N_BOOTSTRAP_GOF_VALUE already exported earlier, but include here for clarity
-clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES", "N_BOOTSTRAP_GOF_VALUE"), 
+clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES", "N_BOOTSTRAP_GOF_VALUE", 
+                    "progress_file", "total_conditions"), 
               envir = environment())
 
 # Run parallel processing
@@ -450,12 +621,29 @@ all_condition_results <- parLapply(
   cl = cl,
   X = seq_along(CONDITIONS),
   fun = function(i) {
-    process_condition(i, CONDITIONS[[i]], COPULA_FAMILIES)
+    process_condition(i, CONDITIONS[[i]], COPULA_FAMILIES, progress_file, total_conditions)
   }
 )
 
 end_time <- Sys.time()
 duration <- difftime(end_time, start_time, units = "mins")
+
+# Write final summary to progress file
+cat("\n", paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
+cat("ANALYSIS COMPLETE\n", file = progress_file, append = TRUE)
+cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
+cat("Finished:", format(end_time, "%Y-%m-%d %H:%M:%S"), "\n", file = progress_file, append = TRUE)
+cat("Total time:", round(duration, 2), "minutes\n", file = progress_file, append = TRUE)
+cat("Average per condition:", round(duration / total_conditions, 2), "minutes\n", file = progress_file, append = TRUE)
+
+# Count results
+n_success <- sum(sapply(all_condition_results, function(x) x$success))
+n_failed <- total_conditions - n_success
+cat("Successful:", n_success, "/", total_conditions, "\n", file = progress_file, append = TRUE)
+if (n_failed > 0) {
+  cat("Failed:", n_failed, "\n", file = progress_file, append = TRUE)
+}
+cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
 
 cat("\n====================================================================\n")
 cat("PARALLEL PROCESSING COMPLETE\n")
