@@ -1112,7 +1112,7 @@ if (length(missing_cols) > 0) {
   
   # Generate theoretical lambda contour curves in (nu, rho) space
   # For a given lambda value, find the rho values across a range of nu
-  generate_lambda_contour <- function(lambda_target, nu_seq = 10^seq(log10(2), log10(100), length = 200)) {
+  generate_lambda_contour <- function(lambda_target, nu_seq = 10^seq(log10(2), log10(160), length = 200)) {
     # For each nu, solve for rho that gives the target lambda
     # Lambda formula: lambda = 2 * pt(-sqrt((nu+1)(1-rho)/(1+rho)), df = nu+1)
     # We need to solve this numerically for rho
@@ -1150,12 +1150,12 @@ if (length(missing_cols) > 0) {
     ), by = year_span]
     setorder(year_span_stats_ca, year_span)
     
-    # Create labels for lambda contours - position at x=101, left-justified
-    # Get rho value at nu=101 for each lambda contour
+    # Create labels for lambda contours - position at x=163, left-justified
+    # Get rho value at nu=163 for each lambda contour
     contour_labels <- lambda_contours[, {
-      # Find rho value closest to nu=101 for labeling
-      idx <- which.min(abs(nu - 101))
-      list(nu_label = 103, rho_label = rho[idx])
+      # Find rho value closest to nu=163 for labeling
+      idx <- which.min(abs(nu - 163))
+      list(nu_label = 163, rho_label = rho[idx])
     }, by = lambda]
     contour_labels[, label := sprintf("lambda==%.2f", lambda)]
     
@@ -1165,7 +1165,7 @@ if (length(missing_cols) > 0) {
                 aes(x = nu, y = rho, group = factor(lambda)),
                 inherit.aes = FALSE,
                 color = "gray75", linetype = "dashed", linewidth = 0.3, alpha = 0.7) +
-      # Add contour labels at x=101, left-justified
+      # Add contour labels at x=153, left-justified
       geom_text(data = contour_labels,
                 aes(x = nu_label, y = rho_label, label = label),
                 inherit.aes = FALSE,
@@ -1227,7 +1227,7 @@ if (length(missing_cols) > 0) {
   # Generate theoretical lambda contour curves
   # These show constant tail dependence in (nu, rho) space
   cat("Generating theoretical lambda contours...\n")
-  lambda_values <- c(0.01, 0.05, 0.10, 0.15, 0.20, 0.25)
+  lambda_values <- c(0.001, 0.01, 0.05, 0.10, 0.15, 0.20, 0.25)
   lambda_contours <- rbindlist(lapply(lambda_values, generate_lambda_contour))
   cat("Contours generated for λ =", paste(lambda_values, collapse = ", "), "\n\n")
   
@@ -1447,6 +1447,58 @@ aic_weights_summary <- mean_aic_by_family[, .(family, mean_delta_aic, mean_aic_w
 setorder(aic_weights_summary, -mean_aic_weight)
 fwrite(aic_weights_summary, file.path(output_dir, "phase1_aic_weights_summary.csv"))
 cat("Saved:", file.path(output_dir, "phase1_aic_weights_summary.csv"), "\n")
+
+################################################################################
+### EXPORT ANALYSIS MANIFEST FOR AI-ASSISTED PARAMETER SELECTION
+################################################################################
+
+cat("\n====================================================================\n")
+cat("EXPORTING ANALYSIS MANIFEST\n")
+cat("====================================================================\n\n")
+
+# Source copula_contour_plots.R for export_analysis_manifest function
+manifest_source_paths <- c(
+  "functions/copula_contour_plots.R",
+  "../functions/copula_contour_plots.R"
+)
+manifest_sourced <- FALSE
+for (path in manifest_source_paths) {
+  if (file.exists(path)) {
+    source(path)
+    manifest_sourced <- TRUE
+    cat("Sourced export functions from:", path, "\n")
+    break
+  }
+}
+
+if (manifest_sourced && exists("export_analysis_manifest")) {
+  # Export the analysis manifest (JSON + MD)
+  tryCatch({
+    export_analysis_manifest(
+      results_dt = results,
+      output_dir = output_dir,
+      manifest_filename = "analysis_manifest.json",
+      include_sensitivity = TRUE
+    )
+    
+    # Also export the markdown version
+    if (exists("export_manifest_markdown")) {
+      export_manifest_markdown(
+        manifest_file = file.path(output_dir, "analysis_manifest.json"),
+        output_file = file.path(output_dir, "analysis_manifest.md")
+      )
+    }
+    
+    cat("\nManifest files created for AI-assisted parameter selection:\n")
+    cat("  - analysis_manifest.json: Structured data for programmatic access\n")
+    cat("  - analysis_manifest.md: Human-readable parameter recommendations\n")
+  }, error = function(e) {
+    cat("Warning: Could not export analysis manifest:", e$message, "\n")
+  })
+} else {
+  cat("Note: export_analysis_manifest function not available.\n")
+  cat("      To generate manifest, ensure copula_contour_plots.R is in functions/\n")
+}
 
 # Write text summary
 summary_file <- file.path(output_dir, "phase1_summary.txt")

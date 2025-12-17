@@ -80,10 +80,14 @@ Copula_Sensitivity_Analyses/
 ├── README.md                      # This file
 │
 ├── functions/                     # Shared utility functions
-│   ├── longitudinal_pairs.R
-│   ├── ispline_ecdf.R
-│   ├── copula_bootstrap.R
-│   ├── copula_diagnostics.R
+│   ├── longitudinal_pairs.R       # Extract paired longitudinal scores
+│   ├── ispline_ecdf.R             # I-spline ECDF framework
+│   ├── copula_bootstrap.R         # Copula fitting with bootstrap
+│   ├── copula_contour_plots.R     # Visualization + manifest export
+│   ├── copula_diagnostics.R       # Diagnostic utilities
+│   ├── sgpc_engine.R              # SGPc (copula-based SGP) calculation
+│   ├── export_plot_utils.R        # Multi-format plot export (PDF/SVG/PNG)
+│   ├── gofCopula_parallel.R       # Parallel goodness-of-fit testing
 │   └── transformation_diagnostics.R
 │
 ├── STEP_1_Family_Selection/
@@ -119,6 +123,40 @@ Copula_Sensitivity_Analyses/
 └── development/                   # Scratch/exploratory files
 ```
 
+### Condition Output Structure (NEW)
+
+Each analyzed condition (e.g., `2010_G5_G6_MATHEMATICS/`) now follows this structure:
+
+```
+{condition}/
+├── PARAMETRIC/                    # Parametric copula outputs
+│   ├── CLAYTON/
+│   ├── COMONOTONIC/
+│   ├── FRANK/
+│   ├── GAUSSIAN/
+│   ├── GUMBEL/
+│   └── T/
+│       ├── t_copula_CDF.pdf
+│       ├── t_copula_PDF.pdf
+│       ├── t_copula_with_uncertainty_CDF.pdf
+│       ├── comparison_empirical_vs_t_CDF.pdf
+│       ├── comparison_empirical_vs_t_full.pdf
+│       └── comparison_empirical_vs_t_summary.{json,md}
+├── EMPIRICAL/                     # Empirical copula outputs
+│   ├── RAW/                       # Deheuvels empirical copula
+│   │   ├── raw_copula_CDF.pdf
+│   │   └── raw_vs_SGP_ORDER_1_comparison.pdf
+│   ├── BERNSTEIN/                 # Bernstein smoothed copula
+│   │   ├── bernstein_copula_CDF.pdf
+│   │   └── bernstein_vs_SGP_ORDER_1_comparison.pdf
+│   └── comparison_raw_vs_bernstein_CDF.pdf
+├── summary_grid.pdf               # 15x15 summary visualization
+├── condition_summary.json
+└── condition_summary.md
+```
+
+**Note:** KDE (kernel density) empirical copula is excluded from downstream analyses. Only **Raw (Deheuvels)** and **Bernstein** smoothed copulas are used for SGPc calculation and traditional SGP comparison. See the Step 1 README for details on this methodological decision.
+
 ---
 
 ## Key Features
@@ -151,9 +189,34 @@ See `METHODOLOGY_OVERVIEW.md` for:
 - Complete documentation per step
 - Validated end-to-end workflow
 
+### 5. **AI-Consumable Output (NEW)**
+Analysis results are exported in AI-friendly formats for automated summarization and parameter recommendations:
+
+**JSON Manifest** (`analysis_manifest.json`):
+```json
+{
+  "metadata": { "generated_at": "...", "n_conditions": 129 },
+  "parameter_recommendations": {
+    "overall_best": { "family": "t", "rho": 0.85, "df": 8 },
+    "by_year_span": { "1": {...}, "2": {...}, "4": {...} },
+    "by_content_area": { "MATHEMATICS": {...}, "READING": {...} }
+  },
+  "family_selection_summary": [...]
+}
+```
+
+**Markdown Summary** (`analysis_manifest.md`):
+- Human-readable parameter recommendations
+- Stratified by year span and content area
+- Usage guide with R code examples for TIMSS-like applications
+
+**Per-Family Summaries** (in each condition's output):
+- `{family}_summary.json` - Structured fit metrics, tail dependence, SGPc comparison
+- `{family}_summary.md` - Human-readable summary with parameter recommendations
+
 ---
 
-## Current Status (November 2025)
+## Current Status (December 2025)
 
 **Implementation Phase:** Ready for EC2 production run
 
@@ -165,9 +228,10 @@ See `METHODOLOGY_OVERVIEW.md` for:
    - Maximum pseudo-likelihood (`method="mpl"`) for consistency
 
 2. **Multi-Dataset Analysis** (Nov 2025)
-   - 3 datasets (varied content/grades): 129 conditions total
+   - 4 datasets (varied content/grades/time periods): ~170 conditions total
    - Combined output: `STEP_1_Family_Selection/results/dataset_all/`
-   - Individual datasets in `dataset_1/`, `dataset_2/`, `dataset_3/`
+   - Individual datasets in `dataset_1/`, `dataset_2/`, `dataset_3/`, `dataset_4/`
+   - Dataset 4 includes pandemic analysis: `dataset_4/pandemic_analysis/`
 
 3. **EC2 Optimization** (Nov 2025)
    - FORK cluster (Unix) for shared memory parallelization
@@ -180,22 +244,48 @@ See `METHODOLOGY_OVERVIEW.md` for:
    - P-values interpretable as relative evidence against model fit
    - Practical significance vs. statistical significance distinction critical
 
+5. **AI-Consumable Manifest Export** (Dec 2025)
+   - `analysis_manifest.json` - Unified JSON manifest for AI summarization
+   - `analysis_manifest.md` - Human-readable parameter recommendations
+   - Per-family `{family}_summary.json` and `{family}_summary.md` files
+   - Stratified recommendations by year span and content area
+   - Usage guide for TIMSS-like sampled data applications
+
+6. **Pandemic Impact Analysis** (Dec 2025)
+   - Dataset 4: COVID-19 as natural experiment (2019-2021 vs pre-pandemic baselines)
+   - 10 matched pandemic-baseline pairs across grade levels
+   - Tests whether COVID disrupted copula dependency structure
+   - Automated pandemic comparison script: `STEP_1_Family_Selection/pandemic_analysis_dataset4.R`
+   - Convenience execution script: `run_dataset4_analysis.R`
+
 ### Next Steps
-- Run `run_production_ec2.R` on EC2 for final results
+- Run Dataset 4 pandemic analysis: `source("run_dataset4_analysis.R")`
+- Run `run_production_ec2.R` on EC2 for final results (all datasets)
 - Generate GoF visualizations via `phase1_analysis.R`
-- Document findings in paper (statistical vs. practical significance)
+- Review AI-generated parameter recommendations from manifest files
+- Review pandemic analysis results: `STEP_1_Family_Selection/results/dataset_4/pandemic_analysis/`
+- Document findings in paper (statistical vs. practical significance + pandemic effects)
 
 ---
 
 ## Requirements
 
 ### Data
-Colorado longitudinal assessment data (trimmed for copula analysis):
+Four anonymized state assessment datasets for copula sensitivity analysis:
 ```
-Data/Copula_Sensitivity_Test_Data_CO.Rdata
+Data/Copula_Sensitivity_Data_Set_1.Rdata  # Dataset 1 (Vertical Scale)
+Data/Copula_Sensitivity_Data_Set_2.Rdata  # Dataset 2 (Non-Vertical Scale)
+Data/Copula_Sensitivity_Data_Set_3.Rdata  # Dataset 3 (Assessment Transition)
+Data/Copula_Sensitivity_Data_Set_4.Rdata  # Dataset 4 (Vertical Scale with COVID-19 gap)
 ```
 
-This is a trimmed dataset with 7 essential variables (ID, GRADE, YEAR, CONTENT_AREA, SCALE_SCORE, VALID_CASE, SCALE_SCORE_PRIOR) that reduces memory usage by ~75-80%. See `Data/README.md` for details.
+Each dataset contains 9 variables (7 core variables for copula analysis + 2 secondary variables for sensitivity analyses). See `Data/README.md` for complete specifications.
+
+**Dataset 4 Special Features:**
+- Years: 2016-2019, 2021-2025 (2020 excluded due to COVID-19 testing interruption)
+- Grades: 3-8, 11 (includes high school)
+- Enables pandemic impact analysis: comparing 2019-2021 dependency structures to pre-pandemic baselines
+- See `DATASET_4_CONDITIONS_LIST.md` for complete condition specifications
 
 ### R Packages
 ```r
@@ -243,10 +333,16 @@ source("master_analysis.R")
 
 | Step | Results Directory | Key Files |
 |------|-------------------|-----------|
-| 1 | `STEP_1_Family_Selection/results/` | `phase1_*.csv`, `phase1_*.pdf` |
+| 1 | `STEP_1_Family_Selection/results/dataset_all/` | `phase1_*.csv`, `phase1_*.{pdf,svg,png}`, `analysis_manifest.{json,md}` |
+| 1 | `STEP_1_Family_Selection/results/dataset_*/` | Per-dataset results + contour plots |
 | 2 | `STEP_2_Copula_Sensitivity_Analyses/results/` | `exp_*/*.csv`, `exp_*/*.pdf` |
 | 3 | `STEP_3_Application_Implementation/results/` | `exp5_*.csv`, `exp5_*.RData`, `figures/` |
 | 4 | `STEP_4_Deep_Dive_Reporting/results/` | `*.RData`, `tables/*.tex`, `figures/*.pdf` |
+
+**AI-Consumable Files (Step 1):**
+- `analysis_manifest.json` - Unified manifest with parameter recommendations
+- `analysis_manifest.md` - Human-readable summary for TIMSS-like applications
+- `{family}_summary.json` - Per-family structured summaries (in contour_plots subdirs)
 
 ---
 
@@ -367,11 +463,11 @@ Chestnut Hill, Massachusetts
 ## Acknowledgments
 
 - AI contribution: OpenAI GPT and Anthropic Claude models
-- Data: Colorado Department of Education
+- Data: Three anonymized state education agencies (identities withheld for research purposes)
 - Funding: [If applicable]
 
 ---
 
-**Version:** 4.0 (Reorganized to emphasize copula sensitivity as core contribution)  
-**Last Updated:** November 2025  
+**Version:** 4.1 (Added AI-consumable manifest export for parameter recommendations)  
+**Last Updated:** December 2025  
 **Status:** ✓ Production Ready

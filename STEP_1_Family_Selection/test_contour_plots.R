@@ -52,6 +52,7 @@ if (PROJECT_ROOT == getwd()) {
 source(paste0(func_prefix, "functions/longitudinal_pairs.R"))
 source(paste0(func_prefix, "functions/ispline_ecdf.R"))
 source(paste0(func_prefix, "functions/copula_bootstrap.R"))
+source(paste0(func_prefix, "functions/sgpc_engine.R"))  # SGPc calculation engine
 source(paste0(func_prefix, "functions/copula_contour_plots.R"))
 source(paste0(func_prefix, "dataset_configs.R"))
 
@@ -89,27 +90,56 @@ cat("  Description:", current_dataset$description, "\n\n")
 ################################################################################
 
 # Load the actual data from .Rdata file
+# PREFER SGP data file (contains SGP_ORDER_1 and SGP columns for comparison)
 if (!exists("STATE_DATA_LONG")) {
   cat("Loading state data from file...\n")
   
-  # Try local path first
-  data_path <- current_dataset$local_path
+  # Check if SGP data file exists (preferred - contains traditional SGP columns)
+  # NOTE: Use func_prefix to handle running from subdirectory
+  sgp_data_path <- paste0(func_prefix, current_dataset$local_path_sgp)
+  use_sgp_data <- !is.null(current_dataset$local_path_sgp) && file.exists(sgp_data_path)
   
-  if (!file.exists(data_path)) {
-    stop("Data file not found at: ", data_path,
-         "\nPlease ensure data is available or update path in dataset_configs.R")
-  }
-  
-  load(data_path)
-  
-  # Rename the loaded object to STATE_DATA_LONG
-  if (exists(current_dataset$rdata_object_name)) {
-    STATE_DATA_LONG <- get(current_dataset$rdata_object_name)
-    WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG"
-    cat("  Loaded:", current_dataset$rdata_object_name, "\n")
-    cat("  Rows:", nrow(STATE_DATA_LONG), "\n\n")
+  if (use_sgp_data) {
+    cat("  Using SGP data file (includes SGP_ORDER_1 and SGP columns)\n")
+    load(sgp_data_path)
+    
+    if (exists(current_dataset$rdata_object_name_sgp)) {
+      STATE_DATA_LONG <- get(current_dataset$rdata_object_name_sgp)
+      WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG"
+      cat("  Loaded:", current_dataset$rdata_object_name_sgp, "\n")
+      cat("  Rows:", nrow(STATE_DATA_LONG), "\n")
+      
+      # Check for SGP columns
+      has_sgp_order_1 <- "SGP_ORDER_1" %in% names(STATE_DATA_LONG)
+      has_sgp <- "SGP" %in% names(STATE_DATA_LONG)
+      cat("  SGP_ORDER_1 column:", has_sgp_order_1, "\n")
+      cat("  SGP column:", has_sgp, "\n\n")
+    } else {
+      stop("Expected object '", current_dataset$rdata_object_name_sgp, "' not found in SGP .Rdata file")
+    }
   } else {
-    stop("Expected object '", current_dataset$rdata_object_name, "' not found in .Rdata file")
+    # Fallback to base data file
+    cat("  SGP data file not found, using base data file\n")
+    cat("  Note: SGPc vs SGP_ORDER_1 comparison will be skipped\n")
+    
+    # NOTE: Use func_prefix to handle running from subdirectory
+    data_path <- paste0(func_prefix, current_dataset$local_path)
+    
+    if (!file.exists(data_path)) {
+      stop("Data file not found at: ", data_path,
+           "\nPlease ensure data is available or update path in dataset_configs.R")
+    }
+    
+    load(data_path)
+    
+    if (exists(current_dataset$rdata_object_name)) {
+      STATE_DATA_LONG <- get(current_dataset$rdata_object_name)
+      WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG"
+      cat("  Loaded:", current_dataset$rdata_object_name, "\n")
+      cat("  Rows:", nrow(STATE_DATA_LONG), "\n\n")
+    } else {
+      stop("Expected object '", current_dataset$rdata_object_name, "' not found in .Rdata file")
+    }
   }
 }
 
@@ -199,22 +229,13 @@ framework_current <- create_ispline_framework(pairs_full$SCALE_SCORE_CURRENT)
 # Define copula families to test
 copula_families <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
 
-# Set up output directory (relative to project root)
-if (PROJECT_ROOT == getwd()) {
-  output_dir <- file.path("STEP_1_Family_Selection/results/test/contour_plots",
-                          sprintf("%s_G%d_G%d_%s", 
-                                 test_condition$year_prior, 
-                                 test_condition$grade_prior, 
-                                 test_condition$grade_current, 
-                                 test_condition$content))
-} else {
-  output_dir <- file.path("results/test/contour_plots",
-                          sprintf("%s_G%d_G%d_%s", 
-                                 test_condition$year_prior, 
-                                 test_condition$grade_prior, 
-                                 test_condition$grade_current, 
-                                 test_condition$content))
-}
+# Set up output directory (absolute path to avoid duplication)
+output_dir <- file.path(PROJECT_ROOT, "STEP_1_Family_Selection/results/test/contour_plots",
+                        sprintf("%s_G%d_G%d_%s", 
+                               test_condition$year_prior, 
+                               test_condition$grade_prior, 
+                               test_condition$grade_current, 
+                               test_condition$content))
 
 # Fit copulas with data saving enabled
 copula_fits <- fit_copula_from_pairs(
@@ -256,7 +277,7 @@ cat("\n")
 
 cat("Generating visualization plots...\n")
 
-# Prepare condition info for plotting
+# Prepare condition info for plotting (includes year_span for enhanced JSON/MD export)
 condition_info <- list(
   dataset_id = test_condition$dataset_id,
   dataset_number = {
@@ -272,20 +293,41 @@ condition_info <- list(
   year_current = test_condition$year_current,
   grade_prior = test_condition$grade_prior,
   grade_current = test_condition$grade_current,
-  content = test_condition$content
+  content = test_condition$content,
+  year_span = test_condition$year_span,  # NEW: Required for manifest export
+  scaling_type = current_dataset$scaling_by_year$scaling_type[1],  # NEW: From dataset config
+  is_cross_content = FALSE  # NEW: Same content area for prior/current
 )
+
+# Load empCopula objects if available
+empirical_copulas_file <- file.path(output_dir, "empirical_copulas.rds")
+empirical_copulas <- NULL
+if (file.exists(empirical_copulas_file)) {
+  empirical_copulas <- tryCatch({
+    result <- readRDS(empirical_copulas_file)
+    cat("✓ Loaded empirical copula objects (Raw, Bernstein)\n")
+    result  # Return the loaded object, not cat()'s NULL
+  }, error = function(e) {
+    warning(sprintf("Failed to load empirical_copulas.rds: %s", e$message))
+    NULL
+  })
+}
 
 # NOTE: Initial plots generated without bootstrap uncertainty
 # Bootstrap is run afterwards and uncertainty plots added separately
 # To integrate bootstrap into all plots, move bootstrap section before this call
 plots <- generate_condition_plots(
   pseudo_obs = copula_fits$pseudo_obs,
-  original_scores = pairs_full[, .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT)],
+  original_scores = pairs_full[, .SD, .SDcols = intersect(
+    names(pairs_full), 
+    c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT", "SGP_ORDER_1", "SGP")
+  )],
   copula_results = copula_fits$results,
   best_family = copula_fits$best_family,
   output_dir = output_dir,
   condition_info = condition_info,
   bootstrap_results = NULL,  # Will be added after bootstrap section
+  empirical_copulas = empirical_copulas,  # NEW: Pass empCopula objects
   save_plots = TRUE,
   grid_size = 300,  # High resolution for smooth contours
   export_formats = EXPORT_FORMATS,
@@ -373,12 +415,16 @@ cat("  (Zissou1 background + black gradient uncertainty + empirical overlay)\n\n
 # This will create the new uncertainty overlay plots in each family subdirectory
 uncertainty_plots <- generate_condition_plots(
   pseudo_obs = copula_fits$pseudo_obs,
-  original_scores = pairs_full[, .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT)],
+  original_scores = pairs_full[, .SD, .SDcols = intersect(
+    names(pairs_full), 
+    c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT", "SGP_ORDER_1", "SGP")
+  )],
   copula_results = copula_fits$results,
   best_family = copula_fits$best_family,
   output_dir = output_dir,
   condition_info = condition_info,
   bootstrap_results = bootstrap_results,  # NOW with bootstrap results!
+  empirical_copulas = empirical_copulas,  # NEW: Pass empCopula objects
   save_plots = TRUE,
   grid_size = 300,  # High resolution for smooth contours
   export_formats = EXPORT_FORMATS,
@@ -426,6 +472,12 @@ cat("    4. [family]_copula_CDF.pdf - Parametric copula (with sample size)\n")
 cat("    5. [family]_copula_PDF.pdf - Copula density function\n")
 cat("    6. [family]_copula_with_uncertainty_CDF.pdf - WITH bootstrap ribbons\n")
 cat("    7. comparison_empirical_vs_[family]_CDF.pdf - Difference heatmap\n")
+cat("    8. [family]_summary.json - AI-consumable summary with enhanced fields\n")
+cat("    9. [family]_summary.md - Human-readable summary with recommendations\n")
+cat("\n")
+cat("  MANIFEST TEST DIRECTORY:\n")
+cat("    10. manifest_test/test_analysis_manifest.json - Unified manifest (AI-friendly)\n")
+cat("    11. manifest_test/test_analysis_manifest.md - Unified manifest (human-readable)\n")
 cat("\n")
 cat("  Note: Inline contour labels (0.1-0.9) replace legends on uncertainty plots\n")
 cat("  Note: PDF uncertainty plots not created (ribbon method for CDFs only)\n")
@@ -436,6 +488,175 @@ cat("  Elapsed time:", round(bootstrap_elapsed, 1), "seconds\n")
 if (USE_PARALLEL) {
   cat("  Speedup from parallelization: ~", round(N_CORES * 0.7, 1), "x\n")
 }
+cat("\n")
+
+################################################################################
+### TEST ANALYSIS MANIFEST EXPORT (NEW FUNCTIONALITY)
+################################################################################
+
+cat("\n")
+cat("====================================================================\n")
+cat("TEST: ANALYSIS MANIFEST EXPORT\n")
+cat("====================================================================\n")
+cat("\n")
+
+cat("Testing export_analysis_manifest() and export_manifest_markdown()...\n")
+cat("This simulates what phase1_analysis.R does after aggregating all results.\n\n")
+
+# Create a mock results data.table that mimics the structure from phase1_family_selection
+# This allows testing the manifest export without running the full analysis
+mock_results <- data.table(
+  dataset_id = rep(test_condition$dataset_id, length(copula_families)),
+  condition_id = rep(sprintf("%s_G%d_G%d_%s", 
+                              test_condition$year_prior,
+                              test_condition$grade_prior,
+                              test_condition$grade_current,
+                              test_condition$content), 
+                     length(copula_families)),
+  year_span = rep(test_condition$year_span, length(copula_families)),
+  grade_prior = rep(test_condition$grade_prior, length(copula_families)),
+  grade_current = rep(test_condition$grade_current, length(copula_families)),
+  content_area = rep(test_condition$content, length(copula_families)),
+  n_pairs = rep(nrow(pairs_full), length(copula_families)),
+  family = copula_families
+)
+
+# Add AIC/BIC values from actual copula fits
+mock_results[, aic := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$aic else NA_real_
+})]
+mock_results[, bic := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$bic else NA_real_
+})]
+mock_results[, tau := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$tau else NA_real_
+})]
+
+# Add tail dependence
+mock_results[, tail_dep_lower := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$tail_dep_lower else NA_real_
+})]
+mock_results[, tail_dep_upper := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$tail_dep_upper else NA_real_
+})]
+
+# Add copula parameters
+mock_results[, parameter_1 := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]]) && !is.null(copula_fits$results[[f]]$parameters)) {
+    copula_fits$results[[f]]$parameters[1]
+  } else NA_real_
+})]
+mock_results[, parameter_2 := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]]) && !is.null(copula_fits$results[[f]]$parameters) &&
+      length(copula_fits$results[[f]]$parameters) > 1) {
+    copula_fits$results[[f]]$parameters[2]
+  } else NA_real_
+})]
+
+# Calculate delta_aic (relative to best)
+min_aic <- min(mock_results$aic, na.rm = TRUE)
+mock_results[, delta_aic_vs_best := aic - min_aic]
+mock_results[, best_aic := family[which.min(aic)]]
+
+# Add GoF columns (may be NA if not calculated)
+mock_results[, gof_statistic := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]]) && !is.null(copula_fits$results[[f]]$gof_statistic)) {
+    copula_fits$results[[f]]$gof_statistic
+  } else NA_real_
+})]
+mock_results[, gof_pvalue := sapply(family, function(f) {
+  if (!is.null(copula_fits$results[[f]]) && !is.null(copula_fits$results[[f]]$gof_pvalue)) {
+    copula_fits$results[[f]]$gof_pvalue
+  } else NA_real_
+})]
+
+cat("Mock results data.table created with", nrow(mock_results), "rows\n")
+cat("  Families:", paste(mock_results$family, collapse = ", "), "\n")
+cat("  Best family (by AIC):", mock_results$best_aic[1], "\n\n")
+
+# Export the manifest
+manifest_output_dir <- file.path(output_dir, "manifest_test")
+dir.create(manifest_output_dir, showWarnings = FALSE, recursive = TRUE)
+
+cat("Exporting unified analysis manifest...\n")
+
+manifest_data <- tryCatch({
+  export_analysis_manifest(
+    results_dt = mock_results,
+    output_dir = manifest_output_dir,
+    manifest_filename = "test_analysis_manifest.json"
+  )
+}, error = function(e) {
+  cat("  ERROR in export_analysis_manifest():", e$message, "\n")
+  NULL
+})
+
+if (!is.null(manifest_data)) {
+  cat("  ✓ JSON manifest exported successfully\n")
+  
+  # Export markdown version
+  # Note: export_manifest_markdown() takes a file path, not the manifest data object
+  json_manifest_path <- file.path(manifest_output_dir, "test_analysis_manifest.json")
+  md_output_path <- file.path(manifest_output_dir, "test_analysis_manifest.md")
+  
+  tryCatch({
+    export_manifest_markdown(
+      manifest_file = json_manifest_path,
+      output_file = md_output_path
+    )
+    cat("  ✓ Markdown manifest exported successfully\n")
+  }, error = function(e) {
+    cat("  ERROR in export_manifest_markdown():", e$message, "\n")
+  })
+  
+  # Verify files exist
+  json_file <- file.path(manifest_output_dir, "test_analysis_manifest.json")
+  md_file <- file.path(manifest_output_dir, "test_analysis_manifest.md")
+  
+  if (file.exists(json_file)) {
+    json_size <- file.info(json_file)$size
+    cat("\n  JSON file:", json_file, "\n")
+    cat("  Size:", round(json_size / 1024, 1), "KB\n")
+  }
+  
+  if (file.exists(md_file)) {
+    md_size <- file.info(md_file)$size
+    cat("  Markdown file:", md_file, "\n")
+    cat("  Size:", round(md_size / 1024, 1), "KB\n")
+  }
+  
+  # Quick validation of manifest structure
+  cat("\nManifest structure validation:\n")
+  cat("  - metadata:", !is.null(manifest_data$metadata), "\n")
+  cat("  - overall_statistics:", !is.null(manifest_data$overall_statistics), "\n")
+  cat("  - parameter_recommendations:", !is.null(manifest_data$parameter_recommendations), "\n")
+  cat("  - condition_index:", !is.null(manifest_data$condition_index), "\n")
+  
+  if (!is.null(manifest_data$parameter_recommendations)) {
+    cat("\nParameter recommendations:\n")
+    rec <- manifest_data$parameter_recommendations
+    if (!is.null(rec$overall_best)) {
+      cat("  Overall best family:", rec$overall_best$family, "\n")
+      if (!is.null(rec$overall_best$parameters)) {
+        cat("  Parameters:", paste(names(rec$overall_best$parameters), "=", 
+                                   unlist(rec$overall_best$parameters), collapse = ", "), "\n")
+      }
+    }
+    if (!is.null(rec$by_year_span) && length(rec$by_year_span) > 0) {
+      cat("  By year_span:", length(rec$by_year_span), "entries\n")
+    }
+    if (!is.null(rec$by_content_area) && length(rec$by_content_area) > 0) {
+      cat("  By content_area:", length(rec$by_content_area), "entries\n")
+    }
+  }
+} else {
+  cat("  ✗ Manifest export failed - check function implementation\n")
+}
+
+cat("\n")
+cat("====================================================================\n")
+cat("MANIFEST EXPORT TEST COMPLETE\n")
+cat("====================================================================\n")
 cat("\n")
 
 ################################################################################

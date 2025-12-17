@@ -50,12 +50,29 @@ create_longitudinal_pairs <- function(data,
                      .(ID, SCALE_SCORE_PRIOR = SCALE_SCORE)]
   
   # Extract current grade data
+  # Build column selection dynamically to include SGP columns if present
+  base_cols <- c("ID", "SCALE_SCORE")
+  sgp_cols <- character(0)
+  
+  # Check for SGP columns (from b-spline quantile regression)
+  if ("SGP_ORDER_1" %in% names(data)) {
+    sgp_cols <- c(sgp_cols, "SGP_ORDER_1")
+  }
+  if ("SGP" %in% names(data)) {
+    sgp_cols <- c(sgp_cols, "SGP")
+  }
+  
+  all_cols <- c(base_cols, sgp_cols)
+  
   data_current <- data[GRADE == grade_current & 
                        YEAR == year_current & 
                        CONTENT_AREA == content_current &
                        !is.na(SCALE_SCORE) &
                        SCALE_SCORE >= min_valid_score,
-                       .(ID, SCALE_SCORE_CURRENT = SCALE_SCORE)]
+                       ..all_cols]
+  
+  # Rename SCALE_SCORE to SCALE_SCORE_CURRENT
+  setnames(data_current, "SCALE_SCORE", "SCALE_SCORE_CURRENT")
   
   # Merge on ID to get matched pairs
   pairs <- merge(data_prior, data_current, by = "ID")
@@ -80,7 +97,17 @@ create_longitudinal_pairs <- function(data,
       "- N =", nrow(data_current), "\n")
   cat("  Matched pairs: N =", nrow(pairs), "\n")
   cat("  Grade span:", grade_current - grade_prior, "years\n")
-  cat("  Time span:", as.numeric(year_current) - as.numeric(year_prior), "years\n\n")
+  cat("  Time span:", as.numeric(year_current) - as.numeric(year_prior), "years\n")
+  
+  # Report SGP columns if present
+  if (length(sgp_cols) > 0) {
+    cat("  SGP columns included:", paste(sgp_cols, collapse = ", "), "\n")
+    for (col in sgp_cols) {
+      n_valid <- sum(!is.na(pairs[[col]]))
+      cat(sprintf("    %s: %d valid (%.1f%%)\n", col, n_valid, 100 * n_valid / nrow(pairs)))
+    }
+  }
+  cat("\n")
   
   return(pairs)
 }

@@ -3,20 +3,49 @@
 ### Multi-dataset copula sensitivity analysis
 ################################################################################
 
+# VARIABLE STRUCTURE (consistent across all datasets):
+# Each dataset contains 9 variables:
+#
+# Core Variables (Required for Copula Analysis):
+#   1. VALID_CASE        - Data validity flag (character)
+#   2. CONTENT_AREA      - Subject tested (character, varies by dataset)
+#   3. YEAR              - Assessment year (character)
+#   4. GRADE             - Grade level (character)
+#   5. ID                - Student identifier for longitudinal matching (character)
+#   6. SCALE_SCORE       - Test score, primary analysis variable (numeric)
+#   7. SCALE_SCORE_PRIOR - Prior year score if pre-computed (numeric, mostly NA)
+#
+# Secondary Variables (For Sensitivity Analyses):
+#   8. SCHOOL_NUMBER     - School identifier (character)
+#   9. DISTRICT_NUMBER   - District identifier (character)
+#
+# Note: SCHOOL_NUMBER and DISTRICT_NUMBER are included for secondary sensitivity
+# analyses but are not required for core copula fitting procedures.
+
+# DATASET METADATA:
+# - anonymized_state: Public-facing label (State A, B, C) - use in all publications
+# - source_state: Internal tracking only (CO, NV) - NEVER expose in public materials
+#   This field helps maintain data provenance during construction and analysis but
+#   must remain confidential to protect state partnerships and data agreements.
+
 DATASETS <- list(
   
-  # Dataset 1: Vertically scaled (original Colorado data)
+  # Dataset 1: Vertically scaled
   dataset_1 = list(
     id = "dataset_1",
     name = "Dataset 1 (Vertical Scale)",
     description = "Multi-year vertically scaled state assessment",
     anonymized_state = "State A",
+    source_state = "CO",  # Internal use only - not for publication
     has_transition = FALSE,
     transition_year = NA,
     rdata_object_name = "Copula_Sensitivity_Data_Set_1",
     local_path = "Data/Copula_Sensitivity_Data_Set_1.Rdata",
     ec2_path = "Data/Copula_Sensitivity_Data_Set_1.Rdata",
 #    ec2_path = "/data/Dropbox/Damian Betebenner/TEMP/Copula_Sensitivity_Analyses/Data/Copula_Sensitivity_Data_Set_1.Rdata",
+    rdata_object_name_sgp = "Copula_Sensitivity_Data_Set_1_SGP",
+    local_path_sgp = "Data/Copula_Sensitivity_Data_Set_1_SGP.Rdata",
+    ec2_path_sgp = "Data/Copula_Sensitivity_Data_Set_1_SGP.Rdata",
     years_available = 2005:2014,
     grades_available = 3:10,
     content_areas = c("MATHEMATICS", "READING", "WRITING"),
@@ -37,12 +66,16 @@ DATASETS <- list(
     name = "Dataset 2 (Non-Vertical Scale)",
     description = "Multi-year non-vertically scaled state assessment",
     anonymized_state = "State B",
+    source_state = "NV",  # Internal use only - not for publication
     has_transition = FALSE,
     transition_year = NA,
     rdata_object_name = "Copula_Sensitivity_Data_Set_2",
     local_path = "Data/Copula_Sensitivity_Data_Set_2.Rdata",
     ec2_path = "Data/Copula_Sensitivity_Data_Set_2.Rdata",
 #    ec2_path = "/data/Dropbox/Damian Betebenner/TEMP/Copula_Sensitivity_Analyses/Data/Copula_Sensitivity_Data_Set_2.Rdata",
+    rdata_object_name_sgp = "Copula_Sensitivity_Data_Set_2_SGP",
+    local_path_sgp = "Data/Copula_Sensitivity_Data_Set_2_SGP.Rdata",
+    ec2_path_sgp = "Data/Copula_Sensitivity_Data_Set_2_SGP.Rdata",
     years_available = 2007:2014, 
     grades_available = c(3:8, 10),
     content_areas = c("MATHEMATICS", "READING"),
@@ -63,15 +96,19 @@ DATASETS <- list(
     name = "Dataset 3 (Transition)",
     description = "Multi-year with assessment transition",
     anonymized_state = "State C",
+    source_state = "CO",  # Internal use only - not for publication (combines pre/post transition)
     has_transition = TRUE,
     transition_year = 2015,
     rdata_object_name = "Copula_Sensitivity_Data_Set_3",
     local_path = "Data/Copula_Sensitivity_Data_Set_3.Rdata",
     ec2_path = "Data/Copula_Sensitivity_Data_Set_3.Rdata",
 #    ec2_path = "/data/Dropbox/Damian Betebenner/TEMP/Copula_Sensitivity_Analyses/Data/Copula_Sensitivity_Data_Set_3.Rdata",
+    rdata_object_name_sgp = "Copula_Sensitivity_Data_Set_3_SGP",
+    local_path_sgp = "Data/Copula_Sensitivity_Data_Set_3_SGP.Rdata",
+    ec2_path_sgp = "Data/Copula_Sensitivity_Data_Set_3_SGP.Rdata",
     years_available = 2013:2017,
     grades_available = 3:8,
-    content_areas = c("ELA", "MATHEMATICS"),
+    content_areas = c("ELA", "MATHEMATICS", "READING"),
     
     # Year-specific scaling lookup with transition
     scaling_by_year = data.frame(
@@ -81,7 +118,37 @@ DATASETS <- list(
       stringsAsFactors = FALSE
     ),
     
-    notes = "Assessment transition in 2015. Vertical scale (2013-2014) to non-vertical scale (2015-2017)."
+    notes = "Assessment transition in 2015. Vertical scale (2013-2014) to non-vertical scale (2015-2017). READING appears only in 2013-2014 (pre-transition), ELA appears only in 2015-2017 (post-transition), while MATHEMATICS spans all years. The distinction between READING and ELA is intentional to detect potential impacts of test blueprint changes on dependence structure."
+  ),
+  
+  # Dataset 4: Vertically scaled (Hawaii)
+  dataset_4 = list(
+    id = "dataset_4",
+    name = "Dataset 4 (Vertical Scale)",
+    description = "Multi-year vertically scaled state assessment with COVID-19 gap",
+    anonymized_state = "State D",
+    source_state = "HI",  # Internal use only - not for publication
+    has_transition = FALSE,
+    transition_year = NA,
+    rdata_object_name = "Copula_Sensitivity_Data_Set_4",
+    local_path = "Data/Copula_Sensitivity_Data_Set_4.Rdata",
+    ec2_path = "Data/Copula_Sensitivity_Data_Set_4.Rdata",
+#    ec2_path = "/data/Dropbox/Damian Betebenner/TEMP/Copula_Sensitivity_Analyses/Data/Copula_Sensitivity_Data_Set_4.Rdata",
+    rdata_object_name_sgp = "Copula_Sensitivity_Data_Set_4_SGP",
+    local_path_sgp = "Data/Copula_Sensitivity_Data_Set_4_SGP.Rdata",
+    ec2_path_sgp = "Data/Copula_Sensitivity_Data_Set_4_SGP.Rdata",
+    years_available = c(2016:2019, 2021:2025),
+    grades_available = c(3:8, 11),
+    content_areas = c("MATHEMATICS", "READING"),
+    
+    # Year-specific scaling lookup
+    scaling_by_year = data.frame(
+      year = c(2016:2019, 2021:2025),
+      scaling_type = rep("vertical", 9),
+      stringsAsFactors = FALSE
+    ),
+    
+    notes = "Vertically scaled across all years. 2020 excluded due to COVID-19 testing interruption. Proficiency cut increases with grade. Grade 11 included."
   )
 )
 

@@ -56,6 +56,116 @@ if (USE_EXHAUSTIVE_CONDITIONS) {
   # Generate all valid conditions for this dataset
   CONDITIONS <- generate_exhaustive_conditions(current_dataset, max_year_span = 4)
   
+} else if (exists("current_dataset", envir = .GlobalEnv) && 
+           !is.null(current_dataset) && 
+           current_dataset$id == "dataset_4") {
+  
+  cat("Using PANDEMIC-FOCUSED conditions for", current_dataset$name, "\n")
+  cat("  Primary focus: 2019-2021 pandemic pairs vs. pre-pandemic baselines\n")
+  cat("  Secondary: Strategic subset of pre/post-pandemic periods\n\n")
+  
+  # Dataset 4: Hawaii with COVID-19 gap (2020 missing)
+  # Years available: 2016-2019, 2021-2025
+  # Grades: 3-8, 11
+  # Content: MATHEMATICS, READING
+  
+  CONDITIONS <- list(
+    # ========================================================================
+    # PANDEMIC PAIRS (2019-2021): Core comparison conditions
+    # Testing impact of COVID disruption on dependency structure
+    # ========================================================================
+    
+    # 2-year pandemic spans (G3→G5, G4→G6, G5→G7, G6→G8)
+    list(grade_prior = 3, grade_current = 5, year_prior = "2019", content = "MATHEMATICS", year_span = 2, is_pandemic_pair = TRUE),
+    list(grade_prior = 3, grade_current = 5, year_prior = "2019", content = "READING", year_span = 2, is_pandemic_pair = TRUE),
+    list(grade_prior = 4, grade_current = 6, year_prior = "2019", content = "MATHEMATICS", year_span = 2, is_pandemic_pair = TRUE),
+    list(grade_prior = 4, grade_current = 6, year_prior = "2019", content = "READING", year_span = 2, is_pandemic_pair = TRUE),
+    list(grade_prior = 5, grade_current = 7, year_prior = "2019", content = "MATHEMATICS", year_span = 2, is_pandemic_pair = TRUE),
+    list(grade_prior = 5, grade_current = 7, year_prior = "2019", content = "READING", year_span = 2, is_pandemic_pair = TRUE),
+    list(grade_prior = 6, grade_current = 8, year_prior = "2019", content = "MATHEMATICS", year_span = 2, is_pandemic_pair = TRUE),
+    list(grade_prior = 6, grade_current = 8, year_prior = "2019", content = "READING", year_span = 2, is_pandemic_pair = TRUE),
+    
+    # 3-year pandemic span (G8→G11): 2018-2021
+    list(grade_prior = 8, grade_current = 11, year_prior = "2018", content = "MATHEMATICS", year_span = 3, is_pandemic_pair = TRUE),
+    list(grade_prior = 8, grade_current = 11, year_prior = "2018", content = "READING", year_span = 3, is_pandemic_pair = TRUE),
+    
+    # ========================================================================
+    # PRE-PANDEMIC BASELINES (2017-2019 / 2016-2019): Direct comparison pairs
+    # Same grade spans, same time length, pre-COVID
+    # ========================================================================
+    
+    # 2-year pre-pandemic baselines (2017-2019)
+    list(grade_prior = 3, grade_current = 5, year_prior = "2017", content = "MATHEMATICS", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G3_G5_MATHEMATICS"),
+    list(grade_prior = 3, grade_current = 5, year_prior = "2017", content = "READING", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G3_G5_READING"),
+    list(grade_prior = 4, grade_current = 6, year_prior = "2017", content = "MATHEMATICS", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G4_G6_MATHEMATICS"),
+    list(grade_prior = 4, grade_current = 6, year_prior = "2017", content = "READING", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G4_G6_READING"),
+    list(grade_prior = 5, grade_current = 7, year_prior = "2017", content = "MATHEMATICS", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G5_G7_MATHEMATICS"),
+    list(grade_prior = 5, grade_current = 7, year_prior = "2017", content = "READING", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G5_G7_READING"),
+    list(grade_prior = 6, grade_current = 8, year_prior = "2017", content = "MATHEMATICS", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G6_G8_MATHEMATICS"),
+    list(grade_prior = 6, grade_current = 8, year_prior = "2017", content = "READING", year_span = 2, is_baseline_pair = TRUE, baseline_for = "2019_G6_G8_READING"),
+    
+    # 3-year pre-pandemic baseline (2016-2019)
+    list(grade_prior = 8, grade_current = 11, year_prior = "2016", content = "MATHEMATICS", year_span = 3, is_baseline_pair = TRUE, baseline_for = "2018_G8_G11_MATHEMATICS"),
+    list(grade_prior = 8, grade_current = 11, year_prior = "2016", content = "READING", year_span = 3, is_baseline_pair = TRUE, baseline_for = "2018_G8_G11_READING"),
+    
+    # ========================================================================
+    # STRATEGIC SUBSET: 1-YEAR SPANS
+    # Pre-pandemic and post-pandemic samples for broader coverage
+    # ========================================================================
+    
+    # Pre-pandemic 1-year
+    list(grade_prior = 3, grade_current = 4, year_prior = "2016", content = "MATHEMATICS", year_span = 1),
+    list(grade_prior = 4, grade_current = 5, year_prior = "2017", content = "READING", year_span = 1),
+    list(grade_prior = 5, grade_current = 6, year_prior = "2018", content = "MATHEMATICS", year_span = 1),
+    list(grade_prior = 6, grade_current = 7, year_prior = "2018", content = "READING", year_span = 1),
+    list(grade_prior = 7, grade_current = 8, year_prior = "2017", content = "MATHEMATICS", year_span = 1),
+    
+    # Post-pandemic 1-year
+    list(grade_prior = 3, grade_current = 4, year_prior = "2021", content = "MATHEMATICS", year_span = 1),
+    list(grade_prior = 4, grade_current = 5, year_prior = "2022", content = "READING", year_span = 1),
+    list(grade_prior = 5, grade_current = 6, year_prior = "2023", content = "MATHEMATICS", year_span = 1),
+    list(grade_prior = 6, grade_current = 7, year_prior = "2024", content = "READING", year_span = 1),
+    list(grade_prior = 7, grade_current = 8, year_prior = "2023", content = "MATHEMATICS", year_span = 1),
+    
+    # ========================================================================
+    # STRATEGIC SUBSET: 2-YEAR SPANS (beyond pandemic pairs)
+    # ========================================================================
+    
+    # Pre-pandemic 2-year (different cohorts)
+    list(grade_prior = 3, grade_current = 5, year_prior = "2016", content = "MATHEMATICS", year_span = 2),
+    list(grade_prior = 4, grade_current = 6, year_prior = "2016", content = "READING", year_span = 2),
+    list(grade_prior = 5, grade_current = 7, year_prior = "2016", content = "MATHEMATICS", year_span = 2),
+    
+    # Post-pandemic 2-year (recovery period)
+    list(grade_prior = 3, grade_current = 5, year_prior = "2022", content = "MATHEMATICS", year_span = 2),
+    list(grade_prior = 4, grade_current = 6, year_prior = "2022", content = "READING", year_span = 2),
+    list(grade_prior = 5, grade_current = 7, year_prior = "2023", content = "MATHEMATICS", year_span = 2),
+    list(grade_prior = 6, grade_current = 8, year_prior = "2023", content = "READING", year_span = 2),
+    
+    # ========================================================================
+    # STRATEGIC SUBSET: 3-YEAR SPANS (beyond pandemic pairs)
+    # ========================================================================
+    
+    # Pre-pandemic 3-year
+    list(grade_prior = 3, grade_current = 6, year_prior = "2016", content = "MATHEMATICS", year_span = 3),
+    list(grade_prior = 4, grade_current = 7, year_prior = "2016", content = "READING", year_span = 3),
+    list(grade_prior = 5, grade_current = 8, year_prior = "2017", content = "MATHEMATICS", year_span = 3),
+    
+    # Post-pandemic 3-year
+    list(grade_prior = 3, grade_current = 6, year_prior = "2022", content = "MATHEMATICS", year_span = 3),
+    list(grade_prior = 5, grade_current = 8, year_prior = "2022", content = "READING", year_span = 3),
+    
+    # ========================================================================
+    # STRATEGIC SUBSET: 4-YEAR SPANS
+    # Note: 2016-2020 not possible (2020 missing)
+    # ========================================================================
+    
+    # Post-pandemic 4-year (long-term recovery)
+    list(grade_prior = 3, grade_current = 7, year_prior = "2021", content = "MATHEMATICS", year_span = 4),
+    list(grade_prior = 4, grade_current = 8, year_prior = "2021", content = "READING", year_span = 4),
+    list(grade_prior = 3, grade_current = 7, year_prior = "2021", content = "READING", year_span = 4)
+  )
+  
 } else {
   cat("Using STRATEGIC SUBSET conditions\n")
   cat("  (Representative sampling for copula family selection)\n\n")
@@ -198,6 +308,53 @@ if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) 
     cond$includes_transition_span <- crosses_transition(current_dataset, cond$year_prior, year_current)
     cond$transition_period <- get_transition_period(current_dataset, cond$year_prior, year_current)
     
+    # Add pandemic-specific metadata (for dataset_4 / Hawaii)
+    if (current_dataset$id == "dataset_4") {
+      year_prior_num <- as.numeric(cond$year_prior)
+      year_current_num <- as.numeric(year_current)
+      
+      # Classify pandemic period
+      # 2020 was cancelled, so:
+      #   - "before": Both years < 2020 (includes 2019 prior)
+      #   - "during": Span crosses 2020 gap (2019 prior, 2021+ current)
+      #   - "after": Both years >= 2021
+      if (year_current_num < 2020) {
+        cond$pandemic_period <- "before"
+      } else if (year_prior_num < 2020 && year_current_num >= 2021) {
+        cond$pandemic_period <- "during"
+      } else {
+        cond$pandemic_period <- "after"
+      }
+      
+      # Set is_pandemic_pair flag (if not already set in condition definition)
+      if (is.null(cond$is_pandemic_pair)) {
+        cond$is_pandemic_pair <- FALSE
+      }
+      
+      # Set is_baseline_pair flag (if not already set in condition definition)
+      if (is.null(cond$is_baseline_pair)) {
+        cond$is_baseline_pair <- FALSE
+      }
+      
+      # If this is a baseline pair, ensure baseline_for is set
+      # If this is a pandemic pair, create baseline_condition_id link
+      if (cond$is_pandemic_pair) {
+        # Create condition_id for linking to baseline
+        # Format: YEAR_GPRIOR_GCURRENT_CONTENT
+        cond$baseline_condition_id <- paste0(
+          as.character(year_prior_num - 2), "_",  # 2019 -> 2017, 2018 -> 2016
+          "G", cond$grade_prior, "_G", cond$grade_current, "_",
+          cond$content
+        )
+      }
+    } else {
+      # For non-dataset_4, these are NA
+      cond$pandemic_period <- NA_character_
+      cond$is_pandemic_pair <- FALSE
+      cond$is_baseline_pair <- FALSE
+      cond$baseline_condition_id <- NA_character_
+    }
+    
     # Update the condition in the list
     CONDITIONS[[i]] <- cond
   }
@@ -310,7 +467,16 @@ for (i in seq_along(CONDITIONS)) {
                                         cond$year_prior, cond$grade_prior, 
                                         cond$grade_current, cond$content))
     
-    # Prepare condition info with dataset_number extraction
+    # Prepare condition info with dataset_number extraction and metadata enrichment
+    # Get dataset config for metadata lookup
+    dataset_config <- if (exists("DATASETS", envir = .GlobalEnv) && !is.null(DATASETS[[dataset_id]])) {
+      DATASETS[[dataset_id]]
+    } else if (exists("current_dataset", envir = .GlobalEnv)) {
+      current_dataset
+    } else {
+      NULL
+    }
+    
     condition_info <- list(
       dataset_id = dataset_id,
       dataset_number = {
@@ -321,19 +487,52 @@ for (i in seq_along(CONDITIONS)) {
       year_current = year_current,
       grade_prior = cond$grade_prior,
       grade_current = cond$grade_current,
-      content = cond$content
+      content = cond$content,
+      # NEW: Metadata from dataset config for enhanced JSON/summary display
+      scale_note = if (!is.null(dataset_config)) dataset_config$notes else NA,
+      transition_period = if (!is.null(dataset_config) && exists("get_transition_period", mode = "function")) {
+        tryCatch(get_transition_period(dataset_config, cond$year_prior, year_current), error = function(e) NA)
+      } else NA,
+      pandemic_period = if (!is.null(dataset_config) && exists("get_pandemic_period", mode = "function")) {
+        tryCatch(get_pandemic_period(dataset_config, cond$year_prior, year_current), error = function(e) NA)
+      } else NA,
+      testing_mode_prior = if (!is.null(dataset_config) && exists("get_testing_mode", mode = "function")) {
+        tryCatch(get_testing_mode(dataset_config, cond$year_prior), error = function(e) NA)
+      } else NA,
+      testing_mode_current = if (!is.null(dataset_config) && exists("get_testing_mode", mode = "function")) {
+        tryCatch(get_testing_mode(dataset_config, year_current), error = function(e) NA)
+      } else NA,
+      has_missing_years = if (!is.null(dataset_config) && exists("has_missing_years_in_span", mode = "function")) {
+        tryCatch(has_missing_years_in_span(dataset_config, cond$year_prior, year_current), error = function(e) FALSE)
+      } else FALSE
     )
+    
+    # Load empCopula objects if available
+    empirical_copulas_file <- file.path(plot_output_dir, "empirical_copulas.rds")
+    empirical_copulas <- NULL
+    if (file.exists(empirical_copulas_file)) {
+      empirical_copulas <- tryCatch({
+        readRDS(empirical_copulas_file)
+      }, error = function(e) {
+        warning(sprintf("Failed to load empirical_copulas.rds: %s", e$message))
+        NULL
+      })
+    }
     
     # Generate plots (wrapped in tryCatch to prevent failures from stopping analysis)
     tryCatch({
       if (exists("generate_condition_plots")) {
         generate_condition_plots(
           pseudo_obs = copula_fits$pseudo_obs,
-          original_scores = pairs_full[, .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT)],
+          original_scores = pairs_full[, .SD, .SDcols = intersect(
+            names(pairs_full), 
+            c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT", "SGP_ORDER_1", "SGP")
+          )],
           copula_results = copula_fits$results,
           best_family = copula_fits$best_family,
           output_dir = plot_output_dir,
           condition_info = condition_info,
+          empirical_copulas = empirical_copulas,  # NEW: Pass empCopula objects
           save_plots = TRUE,
           grid_size = 300,  # High resolution for publication-quality plots
           export_formats = if (exists("EXPORT_FORMATS", envir = .GlobalEnv)) EXPORT_FORMATS else c("pdf"),
@@ -347,6 +546,146 @@ for (i in seq_along(CONDITIONS)) {
     }, error = function(e) {
       cat("  ⚠ Warning: Failed to generate plots:", e$message, "\n")
     })
+  }
+  
+  ##############################################################################
+  ### CALCULATE SGPc (Copula-based Student Growth Percentiles)
+  ##############################################################################
+  
+  if (exists("CALCULATE_SGPC", envir = .GlobalEnv) && 
+      get("CALCULATE_SGPC", envir = .GlobalEnv, inherits = FALSE) &&
+      !is.null(copula_fits$pseudo_obs) &&
+      exists("sgpc_engine")) {
+    
+    cat("\nCalculating SGPc for all copula families...\n")
+    
+    # Get pseudo-observations
+    U <- copula_fits$pseudo_obs[, 1]
+    V <- copula_fits$pseudo_obs[, 2]
+    
+    # Prepare output directory for SGPc results
+    dataset_id <- if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown"
+    year_current <- if (!is.null(cond$year_current)) {
+      cond$year_current 
+    } else {
+      as.character(as.numeric(cond$year_prior) + cond$year_span)
+    }
+    
+    sgpc_output_dir <- file.path("STEP_1_Family_Selection/results", 
+                                 dataset_id,
+                                 "sgpc",
+                                 sprintf("%s_G%d_G%d_%s", 
+                                        cond$year_prior, cond$grade_prior, 
+                                        cond$grade_current, cond$content))
+    dir.create(sgpc_output_dir, showWarnings = FALSE, recursive = TRUE)
+    
+    # Initialize SGPc data.table with row identifiers
+    sgpc_results <- data.table(
+      pair_idx = 1:nrow(pairs_full),
+      ID = pairs_full$ID,
+      YEAR_PRIOR = cond$year_prior,
+      YEAR_CURRENT = year_current,
+      GRADE_PRIOR = cond$grade_prior,
+      GRADE_CURRENT = cond$grade_current,
+      CONTENT_AREA = cond$content,
+      U = U,
+      V = V
+    )
+    
+    # Add traditional SGP if available in the source data
+    if ("SGP" %in% names(get_state_data())) {
+      # Need to merge from original data based on ID + YEAR + GRADE + CONTENT
+      state_data <- get_state_data()
+      trad_sgp <- state_data[
+        ID %in% pairs_full$ID & 
+        YEAR == year_current & 
+        GRADE == as.character(cond$grade_current) &
+        CONTENT_AREA == cond$content,
+        .(ID, SGP_traditional = SGP)
+      ]
+      sgpc_results <- merge(sgpc_results, trad_sgp, by = "ID", all.x = TRUE)
+      cat("  ✓ Traditional SGP merged for comparison\n")
+    }
+    
+    # Calculate SGPc for each parametric copula family
+    for (family in COPULA_FAMILIES) {
+      col_name <- paste0("SGPc_", family)
+      
+      if (!is.null(copula_fits$results[[family]])) {
+        sgpc_results[[col_name]] <- tryCatch({
+          if (family == "comonotonic") {
+            # Comonotonic uses string specification
+            sgpc_engine(U, V, "comonotonic", scale = "percentile")
+          } else if (!is.null(copula_fits$results[[family]]$copula)) {
+            sgpc_engine(U, V, copula_fits$results[[family]]$copula, scale = "percentile")
+          } else {
+            NA_integer_
+          }
+        }, error = function(e) {
+          warning(sprintf("SGPc calculation failed for %s: %s", family, e$message))
+          rep(NA_integer_, nrow(sgpc_results))
+        })
+        cat(sprintf("  ✓ SGPc_%s calculated\n", family))
+      } else {
+        sgpc_results[[col_name]] <- NA_integer_
+      }
+    }
+    
+    # Calculate SGPc for empirical copula (Bernstein smoothed) if available
+    empirical_copulas_file <- file.path(plot_output_dir, "empirical_copulas.rds")
+    if (file.exists(empirical_copulas_file)) {
+      empirical_copulas <- tryCatch({
+        readRDS(empirical_copulas_file)
+      }, error = function(e) NULL)
+      
+      if (!is.null(empirical_copulas) && !is.null(empirical_copulas$bernstein)) {
+        sgpc_results[["SGPc_bernstein"]] <- tryCatch({
+          sgpc_engine(U, V, empirical_copulas$bernstein, scale = "percentile", grid_size = 200)
+        }, error = function(e) {
+          warning(sprintf("SGPc calculation failed for Bernstein: %s", e$message))
+          rep(NA_integer_, nrow(sgpc_results))
+        })
+        cat("  ✓ SGPc_bernstein calculated (empirical copula)\n")
+      }
+    } else {
+      # Try to create empirical copula on the fly
+      if (exists("fit_empirical_copulas")) {
+        cat("  Creating Bernstein empirical copula...\n")
+        emp_cops <- tryCatch({
+          fit_empirical_copulas(copula_fits$pseudo_obs, methods = "bernstein")
+        }, error = function(e) NULL)
+        
+        if (!is.null(emp_cops) && !is.null(emp_cops$bernstein)) {
+          sgpc_results[["SGPc_bernstein"]] <- tryCatch({
+            sgpc_engine(U, V, emp_cops$bernstein, scale = "percentile", grid_size = 200)
+          }, error = function(e) {
+            warning(sprintf("SGPc calculation failed for Bernstein: %s", e$message))
+            rep(NA_integer_, nrow(sgpc_results))
+          })
+          cat("  ✓ SGPc_bernstein calculated\n")
+        }
+      }
+    }
+    
+    # Save SGPc results for this condition
+    sgpc_file <- file.path(sgpc_output_dir, "sgpc_results.rds")
+    saveRDS(sgpc_results, sgpc_file)
+    cat(sprintf("  ✓ SGPc results saved: %s\n", sgpc_file))
+    
+    # Store summary statistics
+    sgpc_cols <- grep("^SGPc_", names(sgpc_results), value = TRUE)
+    if (length(sgpc_cols) > 0 && "SGP_traditional" %in% names(sgpc_results)) {
+      cat("\n  SGPc vs Traditional SGP Correlations:\n")
+      for (col in sgpc_cols) {
+        valid_idx <- !is.na(sgpc_results[[col]]) & !is.na(sgpc_results$SGP_traditional)
+        if (sum(valid_idx) > 10) {
+          corr <- cor(sgpc_results[[col]][valid_idx], sgpc_results$SGP_traditional[valid_idx])
+          cat(sprintf("    %-20s: r = %.4f (n = %d)\n", col, corr, sum(valid_idx)))
+        }
+      }
+    }
+    
+    cat("\n")
   }
   
   # Extract results for each family

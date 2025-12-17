@@ -193,9 +193,10 @@ Bottom-right: τ by cohort (stable)
 
 **Section 5.1: Data Sources and Preparation**
 ```
-We apply our copula-based pseudo-growth simulation to Colorado longitudinal assessment 
-data (2003-2013, Grades 3-10, N=~58,000 longitudinal pairs). Data include Mathematics, 
-Reading, and Writing assessments with IRT-scaled scores.
+We apply our copula-based pseudo-growth simulation to three anonymized state longitudinal 
+assessment datasets (2003-2017 combined, Grades 3-10). Data include Mathematics, Reading, 
+Writing, and ELA assessments with scaled scores spanning vertical, non-vertical, and 
+transitional scaling regimes.
 ```
 
 **Section 5.2: Implementation Details**
@@ -216,7 +217,7 @@ Based on STEP_1 family selection, we fit t-copulas with estimated degrees of fre
 
 **5.4.1: National Assessment Example**
 ```
-We demonstrate the framework using Grade 4→8 Colorado Mathematics data (N=58,009 pairs). 
+We demonstrate the framework using Grade 4→8 state assessment Mathematics data (N=58,009 pairs). 
 The t-copula with ν≈8 and τ≈0.71 provided excellent fit...
 
 [Include conditional distribution plot]
@@ -280,14 +281,14 @@ load("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData")
 **Data Sources:**
 
 **3.1: Copula Family Selection** (STEP_1)
-- Test 6 copula families across 129 conditions
+- Test 6 copula families across 129 conditions × 3 datasets
 - t-copula selected via AIC/BIC
-- Data: Colorado 2003-2013
+- Data: Three state datasets (2003-2017 combined)
 
 **3.2: Copula Sensitivity Analyses** ⭐ **CORE CONTRIBUTION** (STEP_2)
 - Grade span, sample size, content, cohort robustness
 - Validates Sklar-theoretic extension
-- Data: Colorado varied conditions
+- Data: Multi-dataset varied conditions
 
 **3.3: Application Implementation** (STEP_3)
 - Transformation methods for invertibility
@@ -297,7 +298,7 @@ load("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData")
 **3.4: Deep Dive & SGPc** (STEP_4)
 - t-Copula properties
 - SGP vs SGPc concordance analysis
-- Data: Colorado + synthetic growth percentiles
+- Data: State assessment + synthetic growth percentiles
 
 ### Chapter 4: TIMSS Application
 **Data Source:** International assessment data

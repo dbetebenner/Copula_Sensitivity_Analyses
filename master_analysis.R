@@ -38,7 +38,11 @@ source("dataset_configs.R")
   
 # Select which datasets to analyze
 # Set to NULL to run all datasets, or specify vector of dataset IDs
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # c("dataset_1", "dataset_2", "dataset_3") or NULL for all
+# Examples:
+#   DATASETS_TO_RUN <- NULL                              # Run all 4 datasets (default)
+#   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
+#   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # Default: Run all 4 datasets
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -107,6 +111,26 @@ if (!is.null(N_BOOTSTRAP_GOF)) {
 
 # Generate contour plots during Step 1 (comprehensive approach)
 GENERATE_CONTOUR_PLOTS <- TRUE
+
+############################################################################
+### CONFIGURATION: SGPc (Copula-based SGP) Calculation
+############################################################################
+
+# Use SGP data files (contains traditional SGP column for comparison)
+# Set to TRUE to load *_SGP.Rdata files, FALSE for base data files
+if (!exists("USE_SGP_DATA")) USE_SGP_DATA <- TRUE
+
+# Calculate SGPc (copula-based SGP) during Step 1
+# Requires USE_SGP_DATA = TRUE for meaningful comparison
+if (!exists("CALCULATE_SGPC")) CALCULATE_SGPC <- TRUE
+
+if (USE_SGP_DATA) {
+  cat("SGP Data: ENABLED (loading files with traditional SGP column)\n")
+  if (CALCULATE_SGPC) {
+    cat("SGPc Calculation: ENABLED (will compute copula-based SGPs)\n")
+  }
+  cat("\n")
+}
 
 ############################################################################
 ### EC2/LOCAL AUTO-DETECTION
@@ -255,7 +279,8 @@ source_all_functions <- function() {
     "copula_bootstrap.R",
     "copula_contour_plots.R",
     "copula_diagnostics.R",
-    "transformation_diagnostics.R"
+    "transformation_diagnostics.R",
+    "sgpc_engine.R"  # SGPc calculation engine
   )
   
   for (func_file in function_files) {
@@ -349,8 +374,18 @@ for (dataset_idx in seq_along(datasets_to_analyze)) {
   cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
   
   # Set dataset-specific paths and names (use EC2 path if on EC2)
-  CURRENT_DATA_PATH <- if (IS_EC2) current_dataset$ec2_path else current_dataset$local_path
-  CURRENT_RDATA_OBJECT <- current_dataset$rdata_object_name
+  # Use SGP data files if enabled and available
+  if (USE_SGP_DATA && !is.null(current_dataset$local_path_sgp)) {
+    CURRENT_DATA_PATH <- if (IS_EC2) current_dataset$ec2_path_sgp else current_dataset$local_path_sgp
+    CURRENT_RDATA_OBJECT <- current_dataset$rdata_object_name_sgp
+    cat("  Using SGP data file (includes traditional SGP column)\n")
+  } else {
+    CURRENT_DATA_PATH <- if (IS_EC2) current_dataset$ec2_path else current_dataset$local_path
+    CURRENT_RDATA_OBJECT <- current_dataset$rdata_object_name
+    if (USE_SGP_DATA) {
+      cat("  WARNING: SGP data file not configured, using base data\n")
+    }
+  }
   CURRENT_DATASET_NAME <- current_dataset$name
   
   # Results suffix for this dataset (used in all output files)
@@ -812,6 +847,142 @@ if (should_run_step(4)) {
   cat("### STEP 4: SKIPPED (not in STEPS_TO_RUN)\n")
   cat("####################################################################\n\n")
 }
+
+################################################################################
+### SGPc AGGREGATION AND SAVE (Per Dataset)
+################################################################################
+
+  if (exists("CALCULATE_SGPC", envir = .GlobalEnv) && 
+      get("CALCULATE_SGPC", envir = .GlobalEnv, inherits = FALSE) &&
+      should_run_step(1)) {
+    
+    cat("\n")
+    cat("####################################################################\n")
+    cat("### AGGREGATING SGPc RESULTS FOR DATASET\n")
+    cat("####################################################################\n\n")
+    
+    # Find all SGPc result files for this dataset
+    dataset_id <- current_dataset$id
+    sgpc_dir <- file.path("STEP_1_Family_Selection/results", dataset_id, "sgpc")
+    
+    if (dir.exists(sgpc_dir)) {
+      sgpc_files <- list.files(sgpc_dir, pattern = "sgpc_results\\.rds$", 
+                               recursive = TRUE, full.names = TRUE)
+      
+      if (length(sgpc_files) > 0) {
+        cat("Found", length(sgpc_files), "SGPc result files\n")
+        
+        # Load and combine all SGPc results
+        sgpc_list <- lapply(sgpc_files, function(f) {
+          tryCatch(readRDS(f), error = function(e) NULL)
+        })
+        sgpc_list <- sgpc_list[!sapply(sgpc_list, is.null)]
+        
+        if (length(sgpc_list) > 0) {
+          # Combine all condition SGPc results
+          all_sgpc <- rbindlist(sgpc_list, fill = TRUE)
+          
+          cat("Combined SGPc results:", nrow(all_sgpc), "rows\n")
+          
+          # Save combined SGPc file
+          combined_sgpc_file <- file.path(sgpc_dir, "sgpc_all_conditions.rds")
+          saveRDS(all_sgpc, combined_sgpc_file)
+          cat("✓ Combined SGPc saved:", combined_sgpc_file, "\n")
+          
+          # Try to merge back into main data file
+          state_data <- get_state_data()
+          
+          # Get SGPc columns
+          sgpc_cols <- grep("^SGPc_", names(all_sgpc), value = TRUE)
+          
+          if (length(sgpc_cols) > 0) {
+            cat("\nMerging SGPc columns into main data...\n")
+            cat("  Columns:", paste(sgpc_cols, collapse = ", "), "\n")
+            
+            # Create unique key for merging: ID + YEAR + GRADE + CONTENT_AREA
+            # Note: SGPc is for YEAR_CURRENT (when current score was measured)
+            all_sgpc[, merge_key := paste(ID, YEAR_CURRENT, GRADE_CURRENT, CONTENT_AREA, sep = "_")]
+            state_data[, merge_key := paste(ID, YEAR, GRADE, CONTENT_AREA, sep = "_")]
+            
+            # Get mean SGPc per student/year/grade/content (in case of multiple priors)
+            # This handles cases where a student might have multiple prior configurations
+            sgpc_to_merge <- all_sgpc[, c(list(merge_key = merge_key[1]), 
+                                         lapply(.SD, function(x) as.integer(round(mean(x, na.rm = TRUE))))), 
+                                     by = merge_key, 
+                                     .SDcols = sgpc_cols]
+            sgpc_to_merge[, merge_key := NULL]  # Remove duplicate
+            setnames(sgpc_to_merge, "merge_key", "merge_key_drop")
+            sgpc_to_merge[, merge_key := merge_key_drop][, merge_key_drop := NULL]
+            
+            # Remove any existing SGPc columns from state_data
+            existing_sgpc_cols <- grep("^SGPc_", names(state_data), value = TRUE)
+            if (length(existing_sgpc_cols) > 0) {
+              state_data[, (existing_sgpc_cols) := NULL]
+            }
+            
+            # Merge
+            state_data <- merge(state_data, sgpc_to_merge, by = "merge_key", all.x = TRUE)
+            state_data[, merge_key := NULL]
+            
+            # Count merged rows
+            n_merged <- sum(!is.na(state_data[[sgpc_cols[1]]]))
+            cat("  Merged rows with SGPc:", format(n_merged, big.mark = ","), "\n")
+            
+            # Update the workspace object
+            assign(WORKSPACE_OBJECT_NAME, state_data)
+            
+            # Save updated data file
+            if (USE_SGP_DATA && !is.null(current_dataset$local_path_sgp)) {
+              output_path <- current_dataset$local_path_sgp
+              rdata_object_name <- current_dataset$rdata_object_name_sgp
+              
+              # Create object with correct name and save
+              assign(rdata_object_name, state_data)
+              save(list = rdata_object_name, file = output_path)
+              
+              cat("✓ Updated data file saved:", output_path, "\n")
+              cat("  Total observations:", format(nrow(state_data), big.mark = ","), "\n")
+              cat("  SGPc columns added:", paste(sgpc_cols, collapse = ", "), "\n")
+            }
+            
+            # Generate summary statistics
+            cat("\nSGPc Summary by Copula Family:\n")
+            cat(paste(rep("-", 60), collapse = ""), "\n")
+            
+            for (col in sgpc_cols) {
+              valid_vals <- state_data[[col]][!is.na(state_data[[col]])]
+              if (length(valid_vals) > 0) {
+                cat(sprintf("  %-20s: n=%s, mean=%.1f, sd=%.1f\n", 
+                            col, format(length(valid_vals), big.mark = ","),
+                            mean(valid_vals), sd(valid_vals)))
+              }
+            }
+            
+            # Correlations with traditional SGP
+            if ("SGP" %in% names(state_data)) {
+              cat("\nCorrelations with Traditional SGP:\n")
+              cat(paste(rep("-", 60), collapse = ""), "\n")
+              
+              for (col in sgpc_cols) {
+                valid_idx <- !is.na(state_data[[col]]) & !is.na(state_data$SGP)
+                if (sum(valid_idx) > 100) {
+                  corr <- cor(state_data[[col]][valid_idx], state_data$SGP[valid_idx])
+                  cat(sprintf("  %-20s: r=%.4f (n=%s)\n", col, corr, 
+                              format(sum(valid_idx), big.mark = ",")))
+                }
+              }
+            }
+            
+            cat("\n")
+          }
+        }
+      } else {
+        cat("No SGPc result files found for dataset:", dataset_id, "\n")
+      }
+    } else {
+      cat("SGPc directory not found:", sgpc_dir, "\n")
+    }
+  }
 
 ################################################################################
 ### FINAL SUMMARY

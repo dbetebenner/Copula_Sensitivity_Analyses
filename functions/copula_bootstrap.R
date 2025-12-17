@@ -367,6 +367,17 @@ fit_copula_from_pairs <- function(scores_prior,
       # Save fitted copula results
       saveRDS(results, file = file.path(output_dir, "copula_results.rds"))
       
+      # === NEW: Create and save empCopula objects ===
+      empirical_copulas <- fit_empirical_copulas(
+        pseudo_obs, 
+        methods = c("raw", "bernstein")
+      )
+      if (!is.null(empirical_copulas)) {
+        saveRDS(empirical_copulas, file = file.path(output_dir, "empirical_copulas.rds"))
+        cat(sprintf("  Saved %d empCopula objects (raw + bernstein)\n", length(empirical_copulas)))
+      }
+      # === END NEW ===
+      
       # Calculate and save empirical copula grid for visualization
       if (requireNamespace("ks", quietly = TRUE)) {
         # Use our new function if available
@@ -414,6 +425,45 @@ fit_copula_from_pairs <- function(scores_prior,
   } else {
     stop("All copula fits failed")
   }
+}
+
+
+#' Fit empirical copula estimators using copula package
+#' 
+#' @param pseudo_obs Matrix of pseudo-observations (n x 2)
+#' @param methods Vector of methods: "raw", "bernstein"
+#' 
+#' @return Named list of empCopula objects
+#' 
+#' @details
+#' Creates standardized empCopula objects for archival and future SGPc calculations.
+#' Does NOT replace existing custom implementations used for current plotting.
+#' 
+#' Methods:
+#' - raw: Deheuvels empirical copula (step function) for parametric comparison
+#' - bernstein: Bernstein polynomial smoothing (via beta) for SGPc calculations
+fit_empirical_copulas <- function(pseudo_obs, 
+                                   methods = c("raw", "bernstein")) {
+  require(copula)
+  
+  empirical_copulas <- list()
+  
+  tryCatch({
+    # Raw Deheuvels empirical copula (for parametric comparison)
+    if ("raw" %in% methods) {
+      empirical_copulas$raw <- empCopula(pseudo_obs)
+    }
+    
+    # Bernstein polynomial smoothing (for SGPc calculations)
+    if ("bernstein" %in% methods) {
+      empirical_copulas$bernstein <- empCopula(pseudo_obs, smoothing = "beta")
+    }
+  }, error = function(e) {
+    warning(sprintf("Error creating empCopula objects: %s", e$message))
+    return(NULL)
+  })
+  
+  return(empirical_copulas)
 }
 
 

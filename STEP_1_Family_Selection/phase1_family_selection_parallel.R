@@ -60,6 +60,15 @@ if (exists("N_BOOTSTRAP_GOF", envir = .GlobalEnv)) {
   N_BOOTSTRAP_GOF_VALUE <- NULL
   cat("Goodness-of-Fit Testing: DISABLED\n")
 }
+
+# Capture CALCULATE_SGPC for workers
+if (exists("CALCULATE_SGPC", envir = .GlobalEnv)) {
+  CALCULATE_SGPC_VALUE <- get("CALCULATE_SGPC", envir = .GlobalEnv)
+  cat("SGPc Calculation: ENABLED\n")
+} else {
+  CALCULATE_SGPC_VALUE <- FALSE
+  cat("SGPc Calculation: DISABLED\n")
+}
 cat("\n")
 
 # Export setup differs by cluster type
@@ -78,6 +87,7 @@ if (.Platform$OS.type == "unix") {
     source("functions/longitudinal_pairs.R")
     source("functions/ispline_ecdf.R")
     source("functions/copula_bootstrap.R")
+    source("functions/sgpc_engine.R")
   })
   
 } else {
@@ -85,7 +95,7 @@ if (.Platform$OS.type == "unix") {
   cat("Exporting data and functions to PSOCK workers...\n")
   
   clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data", 
-                      "N_BOOTSTRAP_GOF_VALUE"), envir = environment())
+                      "N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE"), envir = environment())
   
   clusterEvalQ(cl, {
     require(data.table)
@@ -97,6 +107,7 @@ if (.Platform$OS.type == "unix") {
     source("functions/longitudinal_pairs.R")
     source("functions/ispline_ecdf.R")
     source("functions/copula_bootstrap.R")
+    source("functions/sgpc_engine.R")
   })
 }
 
@@ -499,10 +510,21 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
           as.character(as.numeric(cond$year_prior) + cond$year_span)
         }
         
+        # Prepare condition info with metadata enrichment
+        dataset_id <- if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown"
+        
+        # Get dataset config for metadata lookup
+        dataset_config <- if (exists("DATASETS", envir = .GlobalEnv) && !is.null(DATASETS[[dataset_id]])) {
+          DATASETS[[dataset_id]]
+        } else if (exists("current_dataset", envir = .GlobalEnv)) {
+          current_dataset
+        } else {
+          NULL
+        }
+        
         condition_info <- list(
-          dataset_id = if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown",
+          dataset_id = dataset_id,
           dataset_number = {
-            dataset_id <- if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown"
             parts <- strsplit(dataset_id, "_")[[1]]
             if (length(parts) >= 2) parts[2] else dataset_id
           },
@@ -510,17 +532,50 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
           year_current = year_current,
           grade_prior = cond$grade_prior,
           grade_current = cond$grade_current,
-          content = cond$content
+          content = cond$content,
+          # NEW: Metadata from dataset config for enhanced JSON/summary display
+          scale_note = if (!is.null(dataset_config)) dataset_config$notes else NA,
+          transition_period = if (!is.null(dataset_config) && exists("get_transition_period", mode = "function")) {
+            tryCatch(get_transition_period(dataset_config, cond$year_prior, year_current), error = function(e) NA)
+          } else NA,
+          pandemic_period = if (!is.null(dataset_config) && exists("get_pandemic_period", mode = "function")) {
+            tryCatch(get_pandemic_period(dataset_config, cond$year_prior, year_current), error = function(e) NA)
+          } else NA,
+          testing_mode_prior = if (!is.null(dataset_config) && exists("get_testing_mode", mode = "function")) {
+            tryCatch(get_testing_mode(dataset_config, cond$year_prior), error = function(e) NA)
+          } else NA,
+          testing_mode_current = if (!is.null(dataset_config) && exists("get_testing_mode", mode = "function")) {
+            tryCatch(get_testing_mode(dataset_config, year_current), error = function(e) NA)
+          } else NA,
+          has_missing_years = if (!is.null(dataset_config) && exists("has_missing_years_in_span", mode = "function")) {
+            tryCatch(has_missing_years_in_span(dataset_config, cond$year_prior, year_current), error = function(e) FALSE)
+          } else FALSE
         )
+        
+        # Load empCopula objects if available
+        empirical_copulas_file <- file.path(plot_output_dir, "empirical_copulas.rds")
+        empirical_copulas <- NULL
+        if (file.exists(empirical_copulas_file)) {
+          empirical_copulas <- tryCatch({
+            readRDS(empirical_copulas_file)
+          }, error = function(e) {
+            warning(sprintf("Failed to load empirical_copulas.rds: %s", e$message))
+            NULL
+          })
+        }
         
         tryCatch({
           generate_condition_plots(
             pseudo_obs = copula_fits$pseudo_obs,
-            original_scores = pairs_full[, .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT)],
+            original_scores = pairs_full[, .SD, .SDcols = intersect(
+              names(pairs_full), 
+              c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT", "SGP_ORDER_1", "SGP")
+            )],
             copula_results = copula_fits$results,
             best_family = copula_fits$best_family,
             output_dir = plot_output_dir,
             condition_info = condition_info,
+            empirical_copulas = empirical_copulas,  # NEW: Pass empCopula objects
             save_plots = TRUE,
             grid_size = 300,  # High resolution for publication-quality plots
             export_formats = EXPORT_FORMATS,
@@ -530,6 +585,89 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
         }, error = function(e) {
           warning(sprintf("Failed to generate plots for condition %d: %s", i, e$message))
         })
+      }
+    }
+    
+    # =========================================================================
+    # SGPc CALCULATION (if enabled)
+    # =========================================================================
+    sgpc_results <- NULL
+    
+    if (isTRUE(CALCULATE_SGPC_VALUE) && !is.null(copula_fits$pseudo_obs)) {
+      
+      # Get pseudo-observations for SGPc calculation
+      u_sgpc <- copula_fits$pseudo_obs[, 1]
+      v_sgpc <- copula_fits$pseudo_obs[, 2]
+      
+      # Initialize data.table with student identifiers
+      year_current <- if (!is.null(cond$year_current)) {
+        cond$year_current 
+      } else {
+        as.character(as.numeric(cond$year_prior) + cond$year_span)
+      }
+      
+      sgpc_results <- data.table(
+        ID = pairs_full$ID,
+        YEAR = year_current,
+        GRADE = cond$grade_current,
+        CONTENT_AREA = cond$content
+      )
+      
+      # Calculate SGPc for each fitted parametric copula family
+      for (family in copula_families) {
+        if (!is.null(copula_fits$results[[family]])) {
+          
+          if (family == "comonotonic") {
+            # Comonotonic: SGPc = u (prior percentile)
+            sgpc_values <- sgpc_engine(u_sgpc, v_sgpc, "comonotonic", scale = "percentile")
+          } else {
+            # Parametric copula
+            fitted_copula_obj <- copula_fits$results[[family]]$copula
+            sgpc_values <- sgpc_engine(u_sgpc, v_sgpc, fitted_copula_obj, scale = "percentile")
+          }
+          
+          col_name <- paste0("SGPc_", family)
+          sgpc_results[, (col_name) := sgpc_values]
+        }
+      }
+      
+      # Calculate SGPc for empirical copulas if available
+      if (GENERATE_CONTOUR_PLOTS && !is.null(plot_output_dir)) {
+        empirical_copulas_file <- file.path(plot_output_dir, "empirical_copulas.rds")
+        if (file.exists(empirical_copulas_file)) {
+          emp_copulas <- tryCatch(readRDS(empirical_copulas_file), error = function(e) NULL)
+          
+          if (!is.null(emp_copulas)) {
+            # Bernstein smoothed empirical copula
+            if (!is.null(emp_copulas$bernstein)) {
+              sgpc_bernstein <- sgpc_engine(u_sgpc, v_sgpc, emp_copulas$bernstein, scale = "percentile")
+              sgpc_results[, SGPc_empirical_bernstein := sgpc_bernstein]
+            }
+            
+            # Raw empirical copula (if available)
+            if (!is.null(emp_copulas$raw)) {
+              sgpc_raw <- sgpc_engine(u_sgpc, v_sgpc, emp_copulas$raw, scale = "percentile")
+              sgpc_results[, SGPc_empirical_raw := sgpc_raw]
+            }
+          }
+        }
+      }
+      
+      # Save SGPc results for this condition
+      if (!is.null(plot_output_dir)) {
+        sgpc_output_dir <- file.path(plot_output_dir, "sgpc_results")
+        dir.create(sgpc_output_dir, showWarnings = FALSE, recursive = TRUE)
+        
+        # Save full SGPc results
+        sgpc_output_file <- file.path(sgpc_output_dir, "sgpc_values.rds")
+        saveRDS(sgpc_results, file = sgpc_output_file)
+        
+        # Calculate and save correlations between SGPc variants
+        sgpc_cols <- grep("^SGPc_", names(sgpc_results), value = TRUE)
+        if (length(sgpc_cols) > 1) {
+          cor_matrix <- cor(sgpc_results[, ..sgpc_cols], use = "pairwise.complete.obs")
+          saveRDS(cor_matrix, file.path(sgpc_output_dir, "sgpc_correlations.rds"))
+        }
       }
     }
     
@@ -551,7 +689,8 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
       n_pairs = n_pairs,
       best_family = copula_fits$best_family,
       empirical_tau = copula_fits$empirical_tau,
-      results = family_results
+      results = family_results,
+      sgpc_results = sgpc_results  # May be NULL if SGPc calculation disabled
     ))
     
   }, error = function(e) {
@@ -611,9 +750,9 @@ start_time <- Sys.time()
 total_conditions <- length(CONDITIONS)
 
 # Export process_condition function to cluster
-# N_BOOTSTRAP_GOF_VALUE already exported earlier, but include here for clarity
+# N_BOOTSTRAP_GOF_VALUE and CALCULATE_SGPC_VALUE already exported earlier, but include here for clarity
 clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES", "N_BOOTSTRAP_GOF_VALUE", 
-                    "progress_file", "total_conditions"), 
+                    "CALCULATE_SGPC_VALUE", "progress_file", "total_conditions"), 
               envir = environment())
 
 # Run parallel processing
