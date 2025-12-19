@@ -22,6 +22,12 @@ if (requireNamespace("ggdensity", quietly = TRUE)) {
   require(ggdensity)
 }
 
+# Load goftest for Anderson-Darling tests
+if (!requireNamespace("goftest", quietly = TRUE)) {
+  warning("Package 'goftest' not available. Anderson-Darling tests will be skipped.\n",
+          "Install with: install.packages('goftest')")
+}
+
 # Source multi-format export utility
 tryCatch({
   # Try common locations for export_plot_utils.R
@@ -739,7 +745,9 @@ plot_copula_comparison <- function(empirical_grid,
                                   plot_type = "side_by_side",
                                   subtitle = NULL,
                                   x_label = expression(u[prior]),
-                                  y_label = expression(v[current])) {
+                                  y_label = expression(v[current]),
+                                  copula_result = NULL,
+                                  show_stats = TRUE) {
   
   grid_size <- nrow(empirical_grid$u_grid)
   
@@ -835,6 +843,72 @@ plot_copula_comparison <- function(empirical_grid,
       scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
       scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
     
+    # Calculate copula surface difference statistics
+    mean_abs_diff <- mean(abs(diff_values), na.rm = TRUE)
+    rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
+    q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
+    
+    # Add statistics annotation if requested
+    if (show_stats && !is.null(copula_result)) {
+      # Extract copula fit statistics
+      cvm_stat <- copula_result$gof_statistic %||% NA
+      cvm_pval <- copula_result$gof_pvalue %||% NA
+      delta_aic <- copula_result$delta_aic %||% NA
+      aic_weight <- copula_result$aic_weight %||% NA
+      
+      # Build statistics label
+      stats_parts <- c()
+      
+      # Absolute Fit section
+      if (!is.na(cvm_stat)) {
+        if (!is.na(cvm_pval)) {
+          cvm_line <- sprintf("CvM = %.4f (p %s %.3f)", 
+                             cvm_stat,
+                             ifelse(cvm_pval < 0.001, "<", "="),
+                             ifelse(cvm_pval < 0.001, 0.001, cvm_pval))
+        } else {
+          cvm_line <- sprintf("CvM = %.4f", cvm_stat)
+        }
+        stats_parts <- c(stats_parts, 
+                        sprintf("Absolute Fit (%s):", tools::toTitleCase(family)),
+                        cvm_line,
+                        "")
+      }
+      
+      # Relative Fit section
+      if (!is.na(delta_aic) || !is.na(aic_weight)) {
+        rel_lines <- c("Relative Fit:")
+        
+        if (!is.na(delta_aic)) {
+          rel_lines <- c(rel_lines, sprintf("dAIC = %.1f", delta_aic))
+        }
+        
+        if (!is.na(aic_weight)) {
+          rel_lines <- c(rel_lines, sprintf("wAIC = %.4f", aic_weight))
+        }
+        
+        stats_parts <- c(stats_parts, rel_lines, "")
+      }
+      
+      # Copula Surface Difference section (always shown)
+      stats_parts <- c(stats_parts, 
+                      "Surface Difference:",
+                      sprintf("Max |D| = %.5f", max_abs_diff),
+                      sprintf("Mean |D| = %.5f", mean_abs_diff),
+                      sprintf("RMSE = %.5f", rmse_diff))
+      
+      stats_label <- paste(stats_parts, collapse = "\n")
+      
+      # Add annotation box (matching ECDF plot styling)
+      p <- p +
+        annotate("label", x = 0.02, y = 0.98, hjust = 0, vjust = 1,
+                 label = stats_label, 
+                 size = 2.3,
+                 fill = rgb(238, 238, 238, maxColorValue = 255), 
+                 alpha = 0.65,
+                 label.padding = unit(0.25, "lines"))
+    }
+    
     return(p)
     
   } else if (plot_type == "side_by_side") {
@@ -879,7 +953,8 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
                                              subtitle = NULL,
                                              x_label = expression(u[prior]),
                                              y_label = expression(v[current]),
-                                             sample_size = NULL) {
+                                             sample_size = NULL,
+                                             show_stats = TRUE) {
   require(ggplot2)
   require(data.table)
   require(copula)
@@ -969,7 +1044,183 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
     scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
     scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
   
+  # Calculate and add statistics annotation
+  if (show_stats) {
+    max_abs_diff <- max(abs(diff_values), na.rm = TRUE)
+    mean_abs_diff <- mean(abs(diff_values), na.rm = TRUE)
+    rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
+    q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
+    
+    stats_label <- sprintf(
+      paste0(
+        "Surface Difference:\n",
+        "Max |D| = %.5f\n",
+        "Mean |D| = %.5f\n",
+        "RMSE = %.5f\n",
+        "Q95(|D|) = %.5f"
+      ),
+      max_abs_diff,
+      mean_abs_diff,
+      rmse_diff,
+      q95_abs_diff
+    )
+    
+    # Add annotation box (matching ECDF plot styling)
+    p <- p +
+      annotate("label", x = 0.02, y = 0.98, hjust = 0, vjust = 1,
+               label = stats_label, 
+               size = 2.3,
+               fill = rgb(238, 238, 238, maxColorValue = 255), 
+               alpha = 0.65,
+               label.padding = unit(0.25, "lines"))
+  }
+  
   return(p)
+}
+
+
+#' Calculate Enhanced ECDF Comparison Statistics
+#'
+#' Computes comprehensive statistics for comparing two sets of values (typically SGP/SGPc),
+#' with scenario-specific metrics for calibration vs agreement assessment.
+#'
+#' @param values1 First vector of values (0-100 scale)
+#' @param values2 Second vector of values (0-100 scale)
+#' @param u_prior Optional prior scores (0-1 scale) for conditional/stratified analysis
+#' @param scenario Either "calibration" (testing uniformity + agreement) or "agreement" (method comparison only)
+#' @param label1 Label for first method (for documentation)
+#' @param label2 Label for second method (for documentation)
+#'
+#' @return List of statistics appropriate for the scenario
+#'
+#' @details
+#' Scenario A (calibration): For validating empirical copula as baseline
+#'   - Uniformity tests: KS, Anderson-Darling (if available), max bin deviation
+#'   - Agreement metrics: Spearman rho, Wasserstein-1, Q90/Q95(|Δ|), MAE, P(|Δ|>10)
+#'   - Conditional: max_decile_KS (worst decile uniformity)
+#'
+#' Scenario B (agreement): For comparing parametric vs empirical methods
+#'   - Agreement metrics: Spearman rho, Wasserstein-1, Q90/Q95(|Δ|), MAE, P(|Δ|>10)
+#'   - Distributional: 2-sample KS, CvM
+#'   - Conditional: worst_decile P(|Δ|>10)
+#'
+#' @export
+calculate_ecdf_statistics <- function(values1, 
+                                      values2, 
+                                      u_prior = NULL,
+                                      scenario = c("calibration", "agreement"),
+                                      label1 = "Method1",
+                                      label2 = "Method2") {
+  
+  scenario <- match.arg(scenario)
+  n <- length(values1)
+  
+  # Common metrics for both scenarios
+  diff_raw <- values1 - values2
+  mean1 <- mean(values1, na.rm = TRUE)
+  mean2 <- mean(values2, na.rm = TRUE)
+  
+  # ECDFs
+  ecdf1 <- ecdf(values1)
+  ecdf2 <- ecdf(values2)
+  x_grid <- seq(0, 100, length.out = 500)
+  F1 <- ecdf1(x_grid)
+  F2 <- ecdf2(x_grid)
+  
+  # Agreement metrics (both scenarios)
+  spearman_rho <- cor(values1, values2, method = "spearman", use = "pairwise.complete.obs")
+  wasserstein1 <- mean(abs(F1 - F2)) * 100  # In percentile points
+  q90_abs_diff <- quantile(abs(diff_raw), 0.90, na.rm = TRUE)
+  q95_abs_diff <- quantile(abs(diff_raw), 0.95, na.rm = TRUE)
+  mae <- mean(abs(diff_raw), na.rm = TRUE)
+  pct_large_diff <- mean(abs(diff_raw) > 10, na.rm = TRUE)
+  
+  # Two-sample KS
+  ks_two_sample <- ks.test(values1 / 100, values2 / 100)
+  ks_distance <- as.numeric(ks_two_sample$statistic)
+  
+  # CvM (integrated squared difference)
+  cvm_stat <- mean((F1 - F2)^2)
+  
+  results <- list(
+    scenario = scenario,
+    label1 = label1,
+    label2 = label2,
+    n = n,
+    mean1 = mean1,
+    mean2 = mean2,
+    median_diff = median(diff_raw, na.rm = TRUE),
+    spearman_rho = spearman_rho,
+    wasserstein1_pp = wasserstein1,
+    q90_abs_diff = q90_abs_diff,
+    q95_abs_diff = q95_abs_diff,
+    mae = mae,
+    pct_large_diff_10 = pct_large_diff,
+    ks_distance = ks_distance,
+    cvm_stat = cvm_stat
+  )
+  
+  # Scenario A: Calibration metrics (vs uniform)
+  if (scenario == "calibration") {
+    # Uniformity tests for each curve
+    ks1_uniform <- ks.test(values1 / 100, "punif")
+    ks2_uniform <- ks.test(values2 / 100, "punif")
+    
+    results$ks_uniform_1 <- as.numeric(ks1_uniform$statistic)
+    results$ks_uniform_2 <- as.numeric(ks2_uniform$statistic)
+    
+    # Anderson-Darling (tail-sensitive) - only if package available
+    if (requireNamespace("goftest", quietly = TRUE)) {
+      ad_uniform_1 <- goftest::ad.test(values1 / 100, null = "punif")
+      ad_uniform_2 <- goftest::ad.test(values2 / 100, null = "punif")
+      
+      results$ad_uniform_1 <- as.numeric(ad_uniform_1$statistic)
+      results$ad_uniform_2 <- as.numeric(ad_uniform_2$statistic)
+    } else {
+      results$ad_uniform_1 <- NA
+      results$ad_uniform_2 <- NA
+    }
+    
+    # Discrete uniformity: max bin deviation (10 bins for deciles)
+    bin_counts1 <- table(cut(values1, breaks = seq(0, 100, 10), include.lowest = TRUE))
+    bin_props1 <- bin_counts1 / sum(bin_counts1)
+    results$max_bin_dev_1 <- max(abs(bin_props1 - 0.1))
+    
+    bin_counts2 <- table(cut(values2, breaks = seq(0, 100, 10), include.lowest = TRUE))
+    bin_props2 <- bin_counts2 / sum(bin_counts2)
+    results$max_bin_dev_2 <- max(abs(bin_props2 - 0.1))
+    
+    # Conditional calibration if u_prior provided
+    if (!is.null(u_prior) && length(u_prior) == n) {
+      deciles <- cut(u_prior, breaks = seq(0, 1, 0.1), labels = 1:10, include.lowest = TRUE)
+      
+      decile_ks <- sapply(1:10, function(d) {
+        idx <- which(deciles == d)
+        if (length(idx) < 10) return(NA)
+        ks_test <- ks.test(values1[idx] / 100, "punif")
+        as.numeric(ks_test$statistic)
+      })
+      
+      results$max_decile_ks <- max(decile_ks, na.rm = TRUE)
+      results$worst_decile <- which.max(decile_ks)
+    }
+  }
+  
+  # Scenario B: Conditional agreement metrics
+  if (scenario == "agreement" && !is.null(u_prior) && length(u_prior) == n) {
+    deciles <- cut(u_prior, breaks = seq(0, 1, 0.1), labels = 1:10, include.lowest = TRUE)
+    
+    decile_large_diff <- sapply(1:10, function(d) {
+      idx <- which(deciles == d)
+      if (length(idx) < 10) return(NA)
+      mean(abs(diff_raw[idx]) > 10, na.rm = TRUE)
+    })
+    
+    results$worst_decile_pct_large <- max(decile_large_diff, na.rm = TRUE)
+    results$worst_decile_num <- which.max(decile_large_diff)
+  }
+  
+  return(results)
 }
 
 
@@ -1056,30 +1307,23 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
   # Also filter u_obs for prior score decile calculation
   u_prior <- if (!is.null(u_obs)) u_obs[valid_idx] else NULL
   
-  # Calculate statistics
-  diff_raw_bern <- s_bern - s_raw
-  mean_raw <- mean(s_raw, na.rm = TRUE)
-  mean_bern <- mean(s_bern, na.rm = TRUE)
-  median_diff <- median(diff_raw_bern, na.rm = TRUE)
+  # Calculate enhanced statistics (SCENARIO A: Calibration)
+  # This validates that both Raw and Bernstein empirical copulas yield well-calibrated SGPc
+  statistics <- calculate_ecdf_statistics(
+    values1 = s_raw,
+    values2 = s_bern,
+    u_prior = u_prior,
+    scenario = "calibration",
+    label1 = "Raw",
+    label2 = "Bernstein"
+  )
   
-  # KS test
-  ks_result <- ks.test(s_raw / 100, s_bern / 100)
-  ks_distance <- as.numeric(ks_result$statistic)
-  
-  # Correlation
-  corr <- cor(s_raw, s_bern, use = "pairwise.complete.obs")
-  
-  # Calculate ECDFs
+  # Calculate ECDFs for plotting
   ecdf_raw <- ecdf(s_raw)
   ecdf_bern <- ecdf(s_bern)
-  
   x_grid <- seq(0, 100, length.out = 500)
   F_raw <- ecdf_raw(x_grid)
   F_bern <- ecdf_bern(x_grid)
-  max_cdf_diff <- max(abs(F_raw - F_bern), na.rm = TRUE)
-  
-  # Proportion with large disagreement
-  pct_large_diff <- mean(abs(diff_raw_bern) > 10, na.rm = TRUE)
   
   # Colors
   color_raw <- "black"
@@ -1144,22 +1388,49 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
       aspect.ratio = 0.7
     )
   
-  # Add statistics annotation
-  stats_label <- sprintf(
-    "n = %s\nmean (Raw/Bern): %.1f / %.1f\nmed(diff) = %.1f\nKS = %.3f\nr = %.3f\nP(|diff|>10) = %.3f",
-    format(n_valid, big.mark = ","),
-    mean_raw, mean_bern,
-    median_diff,
-    ks_distance,
-    corr,
-    pct_large_diff
-  )
+  # Add enhanced statistics annotation (SCENARIO A: Calibration)
+  # Format with conditional AD display
+  if (!is.na(statistics$ad_uniform_1)) {
+    # Anderson-Darling available
+    stats_label <- sprintf(
+      paste0(
+        "n = %s\n",
+        "KS(Raw->U) = %.3f | KS(Bern->U) = %.3f\n",
+        "AD(Raw->U) = %.2f | AD(Bern->U) = %.2f\n",
+        "Max bin dev: %.3f | %.3f\n",
+        "Agreement: rho_s = %.3f | W1 = %.1f pp\n",
+        "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
+      ),
+      format(statistics$n, big.mark = ","),
+      statistics$ks_uniform_1, statistics$ks_uniform_2,
+      statistics$ad_uniform_1, statistics$ad_uniform_2,
+      statistics$max_bin_dev_1, statistics$max_bin_dev_2,
+      statistics$spearman_rho, statistics$wasserstein1_pp,
+      statistics$q90_abs_diff, statistics$pct_large_diff_10
+    )
+  } else {
+    # AD not available (goftest package missing)
+    stats_label <- sprintf(
+      paste0(
+        "n = %s\n",
+        "KS(Raw->U) = %.3f | KS(Bern->U) = %.3f\n",
+        "Max bin dev: %.3f | %.3f\n",
+        "Agreement: rho_s = %.3f | W1 = %.1f pp\n",
+        "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
+      ),
+      format(statistics$n, big.mark = ","),
+      statistics$ks_uniform_1, statistics$ks_uniform_2,
+      statistics$max_bin_dev_1, statistics$max_bin_dev_2,
+      statistics$spearman_rho, statistics$wasserstein1_pp,
+      statistics$q90_abs_diff, statistics$pct_large_diff_10
+    )
+  }
   
   p_ecdf <- p_ecdf +
     annotate("label", x = 2, y = 0.98, hjust = 0, vjust = 1,
-             label = stats_label, size = 2.5, 
-             fill = "white", alpha = 0.85,
-             label.padding = unit(0.3, "lines"))
+             label = stats_label, size = 2.3, 
+             fill = rgb(238, 238, 238, maxColorValue = 255), alpha = 0.65,
+             label.padding = unit(0.25, "lines"))
   
   # --- Bottom Right: 10x10 Prior Score × SGPc Decile Heatmap ---
   # Shows dual percentages: Raw SGPc % (top, black) and Bernstein SGPc % (bottom, magenta)
@@ -1383,17 +1654,7 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     combined_plot = combined,
     copula_diff_plot = copula_diff_plot,
     sgpc_panel = right_panel,
-    statistics = list(
-      n_valid = n_valid,
-      mean_raw = mean_raw,
-      mean_bernstein = mean_bern,
-      median_diff = median_diff,
-      ks_distance = ks_distance,
-      ks_pvalue = ks_result$p.value,
-      correlation = corr,
-      pct_diff_gt_10 = pct_large_diff,
-      max_cdf_diff = max_cdf_diff
-    ),
+    statistics = statistics,  # Enhanced statistics from calculate_ecdf_statistics
     copula_diff_stats = copula_diff_stats
   ))
 }
@@ -1777,7 +2038,8 @@ generate_condition_plots <- function(pseudo_obs,
       subtitle = labels$subtitle,
       x_label = labels$x_label,
       y_label = labels$y_label,
-      sample_size = n_pairs
+      sample_size = n_pairs,
+      show_stats = TRUE
     )
     
     if (save_plots) {
@@ -2129,7 +2391,9 @@ generate_condition_plots <- function(pseudo_obs,
           plot_type = "difference",
           subtitle = labels$subtitle,
           x_label = labels$x_label,
-          y_label = labels$y_label
+          y_label = labels$y_label,
+          copula_result = copula_results[[family]],
+          show_stats = TRUE
         )
         
         if (save_plots) {
@@ -2682,28 +2946,16 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
     F_sgpb <- ecdf_sgpb(x_grid)
   }
   
-  # Calculate statistics (all on 0-100 scale)
-  diff_raw <- s_emp - s_par
-  mean_emp <- mean(s_emp, na.rm = TRUE)
-  mean_par <- mean(s_par, na.rm = TRUE)
-  median_diff <- median(diff_raw, na.rm = TRUE)
-  
-  # KS test (use normalized 0-1 for proper test)
-  ks_result <- ks.test(s_emp / 100, s_par / 100)
-  ks_distance <- as.numeric(ks_result$statistic)
-  
-  # Cramér-von Mises: integrated squared difference between ECDFs
-  # Using numerical integration on the evaluation grid
-  cvm_stat <- mean((F_emp - F_par)^2)
-  
-  # Correlation
-  corr <- cor(s_emp, s_par, use = "pairwise.complete.obs")
-  
-  # Proportion with large disagreement (>10 percentile points)
-  pct_large_diff <- mean(abs(diff_raw) > 10, na.rm = TRUE)
-  
-  # Max CDF difference
-  max_cdf_diff <- max(abs(delta_F), na.rm = TRUE)
+  # Calculate enhanced statistics (SCENARIO B: Agreement)
+  # This assesses how well the parametric copula approximates the empirical baseline
+  statistics <- calculate_ecdf_statistics(
+    values1 = s_emp,
+    values2 = s_par,
+    u_prior = u_obs,
+    scenario = "agreement",
+    label1 = "Empirical",
+    label2 = family_title
+  )
   
   # Prepare ECDF data for ggplot (copula-based methods)
   ecdf_data <- data.table(
@@ -2796,24 +3048,30 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
       aspect.ratio = 0.7
     )
   
-  # Add statistics annotation if requested (narrative order)
+  # Add enhanced statistics annotation (SCENARIO B: Agreement)
   if (show_stats) {
     stats_label <- sprintf(
-      "n = %s\nmean (Emp/Par): %.1f / %.1f\nmed(diff) = %.1f\nKS = %.3f\nCvM = %.5f\nr = %.3f\nP(|diff|>10) = %.3f",
-      format(n_valid, big.mark = ","),
-      mean_emp, mean_par,
-      median_diff,
-      ks_distance,
-      cvm_stat,
-      corr,
-      pct_large_diff
+      paste0(
+        "n = %s\n",
+        "mean (Emp/Par): %.1f / %.1f\n",
+        "Agreement: rho_s = %.3f | W1 = %.1f pp\n",
+        "Deviation: Q90(|D|) = %.1f | Q95 = %.1f\n",
+        "P(|D|>10) = %.3f | MAE = %.2f\n",
+        "KS (2-sample) = %.4f"
+      ),
+      format(statistics$n, big.mark = ","),
+      statistics$mean1, statistics$mean2,
+      statistics$spearman_rho, statistics$wasserstein1_pp,
+      statistics$q90_abs_diff, statistics$q95_abs_diff,
+      statistics$pct_large_diff_10, statistics$mae,
+      statistics$ks_distance
     )
     
     p_ecdf <- p_ecdf +
       annotate("label", x = 2, y = 0.98, hjust = 0, vjust = 1,
-               label = stats_label, size = 2.5, 
-               fill = "white", alpha = 0.85,
-               label.padding = unit(0.3, "lines"))
+               label = stats_label, size = 2.3, 
+               fill = rgb(238, 238, 238, maxColorValue = 255), alpha = 0.65,
+               label.padding = unit(0.25, "lines"))
   }
   
   # --- Bottom Panel: 10x10 Decile Heatmap ---
@@ -2983,30 +3241,20 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
   cor_par_sgp1 <- if (has_sgp_order_1) cor(s_par, s_sgp1, use = "pairwise.complete.obs") else NA
   cor_par_sgpb <- if (has_sgp_best) cor(s_par, s_sgpb, use = "pairwise.complete.obs") else NA
   
-  # Return list with plot and statistics
+  # Return list with plot and enhanced statistics
+  # Add SGP-specific stats to the enhanced statistics object
+  statistics$has_sgp_order_1 <- has_sgp_order_1
+  statistics$has_sgp_best <- has_sgp_best
+  statistics$mean_sgp_order_1 <- mean_sgp1
+  statistics$mean_sgp_best <- mean_sgpb
+  statistics$cor_empirical_sgp_order_1 <- cor_emp_sgp1
+  statistics$cor_empirical_sgp_best <- cor_emp_sgpb
+  statistics$cor_parametric_sgp_order_1 <- cor_par_sgp1
+  statistics$cor_parametric_sgp_best <- cor_par_sgpb
+  
   return(list(
     plot = combined,
-    statistics = list(
-      n_valid = n_valid,
-      mean_empirical = mean_emp,
-      mean_parametric = mean_par,
-      median_diff = median_diff,
-      ks_distance = ks_distance,
-      ks_pvalue = ks_result$p.value,
-      cvm_stat = cvm_stat,
-      correlation = corr,
-      pct_diff_gt_10 = pct_large_diff,
-      max_cdf_diff = max_cdf_diff,
-      # Traditional SGP statistics
-      has_sgp_order_1 = has_sgp_order_1,
-      has_sgp_best = has_sgp_best,
-      mean_sgp_order_1 = mean_sgp1,
-      mean_sgp_best = mean_sgpb,
-      cor_empirical_sgp_order_1 = cor_emp_sgp1,
-      cor_empirical_sgp_best = cor_emp_sgpb,
-      cor_parametric_sgp_order_1 = cor_par_sgp1,
-      cor_parametric_sgp_best = cor_par_sgpb
-    )
+    statistics = statistics  # Enhanced statistics from calculate_ecdf_statistics + SGP extras
   ))
 }
 
@@ -3080,29 +3328,17 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
   x_grid <- seq(0, 100, length.out = 500)
   F_sgpc <- ecdf_sgpc(x_grid)
   F_sgp <- ecdf_sgp(x_grid)
-  delta_F <- F_sgpc - F_sgp
   
-  # Calculate statistics (all on 0-100 scale)
-  diff_raw <- s_sgpc - s_sgp
-  mean_sgpc <- mean(s_sgpc, na.rm = TRUE)
-  mean_sgp <- mean(s_sgp, na.rm = TRUE)
-  median_diff <- median(diff_raw, na.rm = TRUE)
-  
-  # KS test (use normalized 0-1 for proper test)
-  ks_result <- ks.test(s_sgpc / 100, s_sgp / 100)
-  ks_distance <- as.numeric(ks_result$statistic)
-  
-  # Cramér-von Mises: integrated squared difference between ECDFs
-  cvm_stat <- mean((F_sgpc - F_sgp)^2)
-  
-  # Correlation
-  corr <- cor(s_sgpc, s_sgp, use = "pairwise.complete.obs")
-  
-  # Proportion with large disagreement (>10 percentile points)
-  pct_large_diff <- mean(abs(diff_raw) > 10, na.rm = TRUE)
-  
-  # Max CDF difference
-  max_cdf_diff <- max(abs(delta_F), na.rm = TRUE)
+  # Calculate enhanced statistics (SCENARIO A: Calibration + SGP comparison)
+  # This validates empirical copula calibration and compares to traditional SGP
+  statistics <- calculate_ecdf_statistics(
+    values1 = s_sgpc,
+    values2 = s_sgp,
+    u_prior = u_prior,
+    scenario = "calibration",
+    label1 = "SGPc",
+    label2 = "SGP"
+  )
   
   # Prepare ECDF data for ggplot
   ecdf_data <- data.table(
@@ -3152,24 +3388,62 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
       aspect.ratio = 0.7
     )
   
-  # Add statistics annotation if requested
+  # Add enhanced statistics annotation (SCENARIO A: Calibration + SGP)
   if (show_stats) {
-    stats_label <- sprintf(
-      "n = %s\nmean (SGPc/SGP): %.1f / %.1f\nmed(diff) = %.1f\nKS = %.3f\nCvM = %.5f\nr = %.3f\nP(|diff|>10) = %.3f",
-      format(n_valid, big.mark = ","),
-      mean_sgpc, mean_sgp,
-      median_diff,
-      ks_distance,
-      cvm_stat,
-      corr,
-      pct_large_diff
-    )
+    # Format with conditional display based on available metrics
+    if (!is.na(statistics$ad_uniform_1) && !is.null(statistics$max_decile_ks)) {
+      # Full display: AD tests + conditional calibration
+      stats_label <- sprintf(
+        paste0(
+          "n = %s\n",
+          "KS(SGPc->U) = %.3f | KS(SGP->U) = %.3f\n",
+          "vs SGP: rho_s = %.3f | W1 = %.1f pp\n",
+          "Q90(|D|) = %.1f | P(|D|>10) = %.3f\n",
+          "Max decile KS: %.3f (decile %d)"
+        ),
+        format(statistics$n, big.mark = ","),
+        statistics$ks_uniform_1, statistics$ks_uniform_2,
+        statistics$spearman_rho, statistics$wasserstein1_pp,
+        statistics$q90_abs_diff, statistics$pct_large_diff_10,
+        statistics$max_decile_ks, statistics$worst_decile
+      )
+    } else if (!is.na(statistics$ad_uniform_1)) {
+      # AD available but no u_prior for conditional
+      stats_label <- sprintf(
+        paste0(
+          "n = %s\n",
+          "KS(SGPc->U) = %.3f | KS(SGP->U) = %.3f\n",
+          "AD(SGPc->U) = %.2f | AD(SGP->U) = %.2f\n",
+          "vs SGP: rho_s = %.3f | W1 = %.1f pp\n",
+          "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
+        ),
+        format(statistics$n, big.mark = ","),
+        statistics$ks_uniform_1, statistics$ks_uniform_2,
+        statistics$ad_uniform_1, statistics$ad_uniform_2,
+        statistics$spearman_rho, statistics$wasserstein1_pp,
+        statistics$q90_abs_diff, statistics$pct_large_diff_10
+      )
+    } else {
+      # Minimal display (no AD, no conditional)
+      stats_label <- sprintf(
+        paste0(
+          "n = %s\n",
+          "KS(SGPc->U) = %.3f | KS(SGP->U) = %.3f\n",
+          "vs SGP: rho_s = %.3f | W1 = %.1f pp\n",
+          "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
+        ),
+        format(statistics$n, big.mark = ","),
+        statistics$ks_uniform_1, statistics$ks_uniform_2,
+        statistics$spearman_rho, statistics$wasserstein1_pp,
+        statistics$q90_abs_diff, statistics$pct_large_diff_10
+      )
+    }
     
     p_ecdf <- p_ecdf +
       annotate("label", x = 2, y = 0.98, hjust = 0, vjust = 1,
-               label = stats_label, size = 2.5, 
-               fill = "white", alpha = 0.85,
-               label.padding = unit(0.3, "lines"))
+               label = stats_label, size = 2.3, 
+               fill = rgb(238, 238, 238, maxColorValue = 255), alpha = 0.65,
+               label.padding = unit(0.25, "lines"))
   }
   
   # --- Bottom Panel: 10x10 Decile Heatmap ---
@@ -3259,22 +3533,13 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
   # --- Combine Panels ---
   combined <- p_ecdf / p_heatmap + plot_layout(heights = c(1, 1.5))
   
-  # Return list with plot and statistics
+  # Return list with enhanced statistics
+  # Add method to statistics object
+  statistics$method <- method
+  
   return(list(
     plot = combined,
-    statistics = list(
-      n_valid = n_valid,
-      mean_sgpc = mean_sgpc,
-      mean_sgp = mean_sgp,
-      median_diff = median_diff,
-      ks_distance = ks_distance,
-      ks_pvalue = ks_result$p.value,
-      cvm_stat = cvm_stat,
-      correlation = corr,
-      pct_diff_gt_10 = pct_large_diff,
-      max_cdf_diff = max_cdf_diff,
-      method = method
-    )
+    statistics = statistics  # Enhanced statistics from calculate_ecdf_statistics
   ))
 }
 
@@ -3512,9 +3777,9 @@ plot_empirical_vs_sgp_dual_pct <- function(sgpc_empirical,
       geom_tile(aes(fill = deviation), color = "white", linewidth = 0.3) +
       # Cell text annotations: SGPc % (top, black) and SGP % (bottom, teal)
       geom_text(aes(label = sprintf("%.1f", sgpc_pct)), 
-                size = 4.0, color = color_sgpc, nudge_y = 0.15) +
+                size = 3.0, color = color_sgpc, nudge_y = 0.15) +
       geom_text(aes(label = sprintf("%.1f", sgp_pct)), 
-                size = 4.0, color = color_sgp, nudge_y = -0.15) +
+                size = 3.0, color = color_sgp, nudge_y = -0.15) +
       # Color scale (armyblue diverging)
       scale_fill_gradientn(
         colors = armyblue_palette,
@@ -3637,7 +3902,9 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
     plot_type = "difference",
     subtitle = subtitle,
     x_label = x_label,
-    y_label = y_label
+    y_label = y_label,
+    copula_result = copula_result,
+    show_stats = TRUE
   )
   
   # Calculate copula difference statistics

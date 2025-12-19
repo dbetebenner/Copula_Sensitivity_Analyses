@@ -1,0 +1,1192 @@
+
+Started abcSGP Monday November 24 06:37:15 2025
+
+
+	abcSGP(
+		 sgp_object = Copula_Sensitivity_Data_Set_3
+		state = DATASET_3
+		steps = c("prepareSGP", "analyzeSGP", "combineSGP")
+		prepareSGP.create.additional.variables = FALSE
+		sgp.percentiles = TRUE
+		sgp.projections = FALSE
+		sgp.projections.lagged = FALSE
+		sgp.percentiles.baseline = FALSE
+		sgp.projections.baseline = FALSE
+		sgp.projections.lagged.baseline = FALSE
+		parallel.config = parallel.config
+		sgp.config = dataset_3_sgp_config )
+
+
+Started prepareSGP Monday November 24 06:37:15 2025
+
+
+	prepareSGP(
+		 data = sgp_object
+		data_supplementary = data_supplementary
+		state = state
+		var.names = prepareSGP.var.names
+		create.additional.variables = prepareSGP.create.additional.variables
+		fix.duplicates = fix.duplicates
+		create.achievement.level = prepareSGP.create.achievement.level )
+
+	NOTE: All values of observed data reside within the LOSS/HOSS values in the SGPstateData meta-data for DATASET_3.
+	NOTE: All values of observed data reside within the BOUNDARY values in the SGPstateData meta-data for DATASET_3.
+Finished prepareSGP Monday November 24 06:37:17 2025 in 1.614 Seconds 
+
+	CSEMs are required in SGPstateData to simulate SGPs for confidence interval calculations. Confidence intervals will not be calculated.
+
+Started analyzeSGP Monday November 24 06:37:17 2025
+
+
+	analyzeSGP(
+		 sgp_object = sgp_object
+		state = state
+		years = years
+		content_areas = content_areas
+		grades = grades
+		sgp.percentiles = sgp.percentiles
+		sgp.projections = sgp.projections
+		sgp.projections.lagged = sgp.projections.lagged
+		sgp.percentiles.baseline = sgp.percentiles.baseline
+		sgp.projections.baseline = sgp.projections.baseline
+		sgp.projections.lagged.baseline = sgp.projections.lagged.baseline
+		sgp.minimum.default.panel.years = sgp.minimum.default.panel.years
+		sgp.use.my.coefficient.matrices = sgp.use.my.coefficient.matrices
+		sgp.test.cohort.size = sgp.test.cohort.size
+		return.sgp.test.results = return.sgp.test.results
+		simulate.sgps = simulate.sgps
+		calculate.simex = calculate.simex
+		calculate.simex.baseline = calculate.simex.baseline
+		calculate.srs = calculate.srs
+		calculate.srs.baseline = calculate.srs.baseline
+		goodness.of.fit.print = goodness.of.fit.print
+		sgp.config = sgp.config
+		parallel.config = parallel.config
+		verbose.output = verbose.output
+		get.cohort.data.info = get.cohort.data.info
+		sgp.sqlite = sgp.sqlite
+		sgp.percentiles.equated = sgp.percentiles.equated
+		sgp.percentiles.equating.method = sgp.percentiles.equating.method
+		sgp.percentiles.calculate.sgps = sgp.percentiles.calculate.sgps
+		SGPt = SGPt
+		fix.duplicates = fix.duplicates )
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 6, 7, 8  (N=38,723)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:38:30 2025 in 1 Minute, 12.352 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4  (N=58,882)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:38:33 2025 in 1 Minute, 15.591 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 6, 7, 8  (N=50,777)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:39:27 2025 in 2 Minutes, 9.693 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 5, 6, 7  (N=51,349)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:39:29 2025 in 2 Minutes, 11.816 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 5, 6, 7  (N=53,623)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:39:39 2025 in 2 Minutes, 21.247 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 4, 5, 6  (N=55,984)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:39:49 2025 in 2 Minutes, 31.315 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:38:33 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4  (N=60,429)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:39:56 2025 in 1 Minute, 22.721 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 4, 5, 6  (N=56,097)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:39:58 2025 in 2 Minutes, 40.208 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:37:18 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4, 5  (N=58,331)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:39:59 2025 in 2 Minutes, 41.505 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:39:58 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 6, 7, 8  (N=38,723)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:41:09 2025 in 1 Minute, 11.106 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:39:56 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4  (N=58,882)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:41:10 2025 in 1 Minute, 14.378 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:38:30 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4, 5  (N=58,837)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:41:23 2025 in 2 Minutes, 52.771 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:39:27 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 6, 7, 8  (N=50,777)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:41:36 2025 in 2 Minutes, 8.287 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:39:30 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 5, 6, 7  (N=53,623)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:41:48 2025 in 2 Minutes, 18.778 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:39:39 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 4, 5, 6  (N=55,984)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:42:08 2025 in 2 Minutes, 29.221 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:39:59 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 5, 6, 7  (N=51,349)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:42:09 2025 in 2 Minutes, 10.21 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:39:49 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4, 5  (N=58,331)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:42:29 2025 in 2 Minutes, 39.89 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:41:23 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4  (N=60,429)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:42:45 2025 in 1 Minute, 22.418 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:41:36 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 6, 7, 8  (N=48,638)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:43:34 2025 in 1 Minute, 58.408 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:42:29 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 3, 4  (N=57,661)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:43:41 2025 in 1 Minute, 11.982 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:41:09 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 4, 5, 6  (N=56,097)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:43:47 2025 in 2 Minutes, 38.198 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:42:45 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 6, 7, 8  (N=36,856)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:43:51 2025 in 1 Minute, 5.72 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:41:10 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4, 5  (N=58,837)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:44:03 2025 in 2 Minutes, 52.497 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:41:48 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 5, 6, 7  (N=53,079)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:44:07 2025 in 2 Minutes, 19.099 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:42:08 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 4, 5, 6  (N=55,360)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:44:36 2025 in 2 Minutes, 27.6 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:42:09 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 3, 4, 5  (N=57,321)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:44:45 2025 in 2 Minutes, 35.162 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:43:51 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 3, 4  (N=58,827)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:45:09 2025 in 1 Minute, 18.15 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:44:03 2025
+		Content Area: ELA, Year: 2014, Grade Progression: 7, 8  (N=58,448)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:45:23 2025 in 1 Minute, 19.823 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:44:08 2025
+		Content Area: ELA, Year: 2014, Grade Progression: 6, 7  (N=58,805)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:45:27 2025 in 1 Minute, 19.793 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:43:34 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 5, 6, 7  (N=50,644)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:45:46 2025 in 2 Minutes, 11.945 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:44:36 2025
+		Content Area: ELA, Year: 2014, Grade Progression: 5, 6  (N=59,598)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:45:59 2025 in 1 Minute, 23.598 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:44:45 2025
+		Content Area: ELA, Year: 2014, Grade Progression: 4, 5  (N=60,905)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:46:11 2025 in 1 Minute, 26.594 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:43:41 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 4, 5, 6  (N=55,535)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:46:21 2025 in 2 Minutes, 40.266 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:45:09 2025
+		Content Area: ELA, Year: 2014, Grade Progression: 3, 4  (N=59,170)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:46:30 2025 in 1 Minute, 20.474 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:43:47 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 3, 4, 5  (N=57,348)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:46:36 2025 in 2 Minutes, 48.254 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:45:23 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 7, 8  (N=58,525)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:46:49 2025 in 1 Minute, 26.427 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:45:27 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 6, 7  (N=59,405)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:46:56 2025 in 1 Minute, 28.94 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:45:46 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 5, 6  (N=59,734)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:47:13 2025 in 1 Minute, 27.012 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:46:00 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 4, 5  (N=61,023)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:47:30 2025 in 1 Minute, 30.854 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 06:46:11 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 3, 4  (N=60,587)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 06:47:36 2025 in 1 Minute, 24.478 Seconds
+
+Finished analyzeSGP Monday November 24 06:47:37 2025 in 10 Minutes, 20.086 Seconds 
+
+Started combineSGP Monday November 24 06:47:37 2025
+
+Started abcSGP Monday November 24 18:22:15 2025
+
+
+	abcSGP(
+		 sgp_object = Copula_Sensitivity_Data_Set_3
+		state = DATASET_3
+		steps = c("prepareSGP", "analyzeSGP", "combineSGP")
+		prepareSGP.create.additional.variables = FALSE
+		sgp.percentiles = TRUE
+		sgp.projections = FALSE
+		sgp.projections.lagged = FALSE
+		sgp.percentiles.baseline = FALSE
+		sgp.projections.baseline = FALSE
+		sgp.projections.lagged.baseline = FALSE
+		parallel.config = parallel.config
+		sgp.config = dataset_3_sgp_config )
+
+
+Started prepareSGP Monday November 24 18:22:15 2025
+
+
+	prepareSGP(
+		 data = sgp_object
+		data_supplementary = data_supplementary
+		state = state
+		var.names = prepareSGP.var.names
+		create.additional.variables = prepareSGP.create.additional.variables
+		fix.duplicates = fix.duplicates
+		create.achievement.level = prepareSGP.create.achievement.level )
+
+	NOTE: All values of observed data reside within the LOSS/HOSS values in the SGPstateData meta-data for DATASET_3.
+	NOTE: All values of observed data reside within the BOUNDARY values in the SGPstateData meta-data for DATASET_3.
+Finished prepareSGP Monday November 24 18:22:16 2025 in 0.901 Seconds 
+
+	CSEMs are required in SGPstateData to simulate SGPs for confidence interval calculations. Confidence intervals will not be calculated.
+
+Started analyzeSGP Monday November 24 18:22:16 2025
+
+
+	analyzeSGP(
+		 sgp_object = sgp_object
+		state = state
+		years = years
+		content_areas = content_areas
+		grades = grades
+		sgp.percentiles = sgp.percentiles
+		sgp.projections = sgp.projections
+		sgp.projections.lagged = sgp.projections.lagged
+		sgp.percentiles.baseline = sgp.percentiles.baseline
+		sgp.projections.baseline = sgp.projections.baseline
+		sgp.projections.lagged.baseline = sgp.projections.lagged.baseline
+		sgp.minimum.default.panel.years = sgp.minimum.default.panel.years
+		sgp.use.my.coefficient.matrices = sgp.use.my.coefficient.matrices
+		sgp.test.cohort.size = sgp.test.cohort.size
+		return.sgp.test.results = return.sgp.test.results
+		simulate.sgps = simulate.sgps
+		calculate.simex = calculate.simex
+		calculate.simex.baseline = calculate.simex.baseline
+		calculate.srs = calculate.srs
+		calculate.srs.baseline = calculate.srs.baseline
+		goodness.of.fit.print = goodness.of.fit.print
+		sgp.config = sgp.config
+		parallel.config = parallel.config
+		verbose.output = verbose.output
+		get.cohort.data.info = get.cohort.data.info
+		sgp.sqlite = sgp.sqlite
+		sgp.percentiles.equated = sgp.percentiles.equated
+		sgp.percentiles.equating.method = sgp.percentiles.equating.method
+		sgp.percentiles.calculate.sgps = sgp.percentiles.calculate.sgps
+		SGPt = SGPt
+		fix.duplicates = fix.duplicates )
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 6, 7, 8  (N=38,723)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:23:29 2025 in 1 Minute, 12.563 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4  (N=58,882)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:23:32 2025 in 1 Minute, 15.658 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 6, 7, 8  (N=50,777)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:24:28 2025 in 2 Minutes, 11.096 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 5, 6, 7  (N=51,349)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:24:30 2025 in 2 Minutes, 13.231 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 5, 6, 7  (N=53,623)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:24:40 2025 in 2 Minutes, 22.857 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 4, 5, 6  (N=55,984)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:24:50 2025 in 2 Minutes, 32.957 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:23:32 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4  (N=60,429)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:24:58 2025 in 1 Minute, 25.159 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 4, 5, 6  (N=56,097)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:24:59 2025 in 2 Minutes, 42.257 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:22:17 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4, 5  (N=58,331)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:25:01 2025 in 2 Minutes, 43.98 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:24:58 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 3, 4  (N=57,661)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:26:11 2025 in 1 Minute, 13.155 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:24:59 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 6, 7, 8  (N=38,723)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:26:12 2025 in 1 Minute, 12.468 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:23:29 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4, 5  (N=58,837)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:26:26 2025 in 2 Minutes, 56.278 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:24:28 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 6, 7, 8  (N=48,638)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:26:29 2025 in 2 Minutes, 1.157 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:24:30 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 5, 6, 7  (N=53,079)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:26:52 2025 in 2 Minutes, 21.604 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:24:40 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 4, 5, 6  (N=55,360)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:27:09 2025 in 2 Minutes, 29.356 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:25:01 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 5, 6, 7  (N=51,349)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:27:13 2025 in 2 Minutes, 12.088 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:24:50 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 3, 4, 5  (N=57,321)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:27:27 2025 in 2 Minutes, 36.99 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:26:26 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4  (N=60,429)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:27:49 2025 in 1 Minute, 23.016 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:26:29 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 6, 7, 8  (N=51,350)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:28:34 2025 in 2 Minutes, 5.394 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:27:27 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 3, 4  (N=57,190)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:28:36 2025 in 1 Minute, 9.158 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:26:11 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 4, 5, 6  (N=56,097)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:28:50 2025 in 2 Minutes, 39.429 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:27:49 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 6, 7, 8  (N=36,856)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:28:54 2025 in 1 Minute, 5.638 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:26:12 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4, 5  (N=58,837)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:29:05 2025 in 2 Minutes, 53.54 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:26:52 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 5, 6, 7  (N=53,896)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:29:12 2025 in 2 Minutes, 20.313 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:27:09 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 4, 5, 6  (N=57,043)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:29:44 2025 in 2 Minutes, 34.621 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:27:13 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 3, 4, 5  (N=58,178)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:29:49 2025 in 2 Minutes, 35.606 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:28:54 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 3, 4  (N=58,827)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:30:12 2025 in 1 Minute, 17.401 Seconds
+
+	NOTE: READING Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:29:05 2025
+		Content Area: READING, Year: 2014, Grade Progression: 7, 8  (N=58,448)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:30:24 2025 in 1 Minute, 18.989 Seconds
+
+	NOTE: READING Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:29:12 2025
+		Content Area: READING, Year: 2014, Grade Progression: 6, 7  (N=58,805)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:30:31 2025 in 1 Minute, 18.845 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:28:35 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 5, 6, 7  (N=50,644)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:30:45 2025 in 2 Minutes, 10.76 Seconds
+
+	NOTE: READING Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:29:44 2025
+		Content Area: READING, Year: 2014, Grade Progression: 5, 6  (N=59,598)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:31:06 2025 in 1 Minute, 22.081 Seconds
+
+	NOTE: READING Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:29:49 2025
+		Content Area: READING, Year: 2014, Grade Progression: 4, 5  (N=60,905)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:31:14 2025 in 1 Minute, 25.158 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:28:36 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 4, 5, 6  (N=55,535)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:31:14 2025 in 2 Minutes, 37.864 Seconds
+
+	NOTE: READING Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:30:12 2025
+		Content Area: READING, Year: 2014, Grade Progression: 3, 4  (N=59,170)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:31:30 2025 in 1 Minute, 17.976 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:28:50 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 3, 4, 5  (N=57,348)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:31:36 2025 in 2 Minutes, 45.369 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:30:24 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 7, 8  (N=58,525)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:31:48 2025 in 1 Minute, 23.499 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:30:31 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 6, 7  (N=59,405)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:31:57 2025 in 1 Minute, 25.999 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:30:45 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 5, 6  (N=59,734)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:32:10 2025 in 1 Minute, 24.803 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:31:06 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 4, 5  (N=61,023)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:32:34 2025 in 1 Minute, 28.589 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:31:14 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 3, 4  (N=60,587)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:32:36 2025 in 1 Minute, 22.461 Seconds
+
+Finished analyzeSGP Monday November 24 18:32:37 2025 in 10 Minutes, 21.079 Seconds 
+
+Started combineSGP Monday November 24 18:32:37 2025
+
+Started abcSGP Monday November 24 18:40:24 2025
+
+
+	abcSGP(
+		 sgp_object = Copula_Sensitivity_Data_Set_3
+		state = DATASET_3
+		steps = c("prepareSGP", "analyzeSGP", "combineSGP")
+		prepareSGP.create.additional.variables = FALSE
+		sgp.percentiles = TRUE
+		sgp.projections = FALSE
+		sgp.projections.lagged = FALSE
+		sgp.percentiles.baseline = FALSE
+		sgp.projections.baseline = FALSE
+		sgp.projections.lagged.baseline = FALSE
+		parallel.config = parallel.config
+		sgp.config = dataset_3_sgp_config )
+
+
+Started prepareSGP Monday November 24 18:40:24 2025
+
+
+	prepareSGP(
+		 data = sgp_object
+		data_supplementary = data_supplementary
+		state = state
+		var.names = prepareSGP.var.names
+		create.additional.variables = prepareSGP.create.additional.variables
+		fix.duplicates = fix.duplicates
+		create.achievement.level = prepareSGP.create.achievement.level )
+
+	NOTE: All values of observed data reside within the LOSS/HOSS values in the SGPstateData meta-data for DATASET_3.
+	NOTE: All values of observed data reside within the BOUNDARY values in the SGPstateData meta-data for DATASET_3.
+Finished prepareSGP Monday November 24 18:40:25 2025 in 0.898 Seconds 
+
+	CSEMs are required in SGPstateData to simulate SGPs for confidence interval calculations. Confidence intervals will not be calculated.
+
+Started analyzeSGP Monday November 24 18:40:25 2025
+
+
+	analyzeSGP(
+		 sgp_object = sgp_object
+		state = state
+		years = years
+		content_areas = content_areas
+		grades = grades
+		sgp.percentiles = sgp.percentiles
+		sgp.projections = sgp.projections
+		sgp.projections.lagged = sgp.projections.lagged
+		sgp.percentiles.baseline = sgp.percentiles.baseline
+		sgp.projections.baseline = sgp.projections.baseline
+		sgp.projections.lagged.baseline = sgp.projections.lagged.baseline
+		sgp.minimum.default.panel.years = sgp.minimum.default.panel.years
+		sgp.use.my.coefficient.matrices = sgp.use.my.coefficient.matrices
+		sgp.test.cohort.size = sgp.test.cohort.size
+		return.sgp.test.results = return.sgp.test.results
+		simulate.sgps = simulate.sgps
+		calculate.simex = calculate.simex
+		calculate.simex.baseline = calculate.simex.baseline
+		calculate.srs = calculate.srs
+		calculate.srs.baseline = calculate.srs.baseline
+		goodness.of.fit.print = goodness.of.fit.print
+		sgp.config = sgp.config
+		parallel.config = parallel.config
+		verbose.output = verbose.output
+		get.cohort.data.info = get.cohort.data.info
+		sgp.sqlite = sgp.sqlite
+		sgp.percentiles.equated = sgp.percentiles.equated
+		sgp.percentiles.equating.method = sgp.percentiles.equating.method
+		sgp.percentiles.calculate.sgps = sgp.percentiles.calculate.sgps
+		SGPt = SGPt
+		fix.duplicates = fix.duplicates )
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 6, 7, 8  (N=38,723)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:41:37 2025 in 1 Minute, 11.404 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4  (N=58,882)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:41:40 2025 in 1 Minute, 14.564 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 6, 7, 8  (N=50,777)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:42:33 2025 in 2 Minutes, 8.24 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 5, 6, 7  (N=51,349)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:42:36 2025 in 2 Minutes, 10.232 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 5, 6, 7  (N=53,623)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:42:45 2025 in 2 Minutes, 19.49 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 4, 5, 6  (N=55,984)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:42:55 2025 in 2 Minutes, 29.681 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:41:40 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4  (N=60,429)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:43:02 2025 in 1 Minute, 22.446 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 4, 5, 6  (N=56,097)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:43:04 2025 in 2 Minutes, 38.535 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:40:25 2025
+		Content Area: ELA, Year: 2017, Grade Progression: 3, 4, 5  (N=58,331)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:43:05 2025 in 2 Minutes, 40.233 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:43:04 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 6, 7, 8  (N=36,856)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:44:10 2025 in 1 Minute, 5.792 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:43:02 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 3, 4  (N=57,661)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:44:15 2025 in 1 Minute, 12.446 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:41:37 2025
+		Content Area: MATHEMATICS, Year: 2017, Grade Progression: 3, 4, 5  (N=58,837)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:44:29 2025 in 2 Minutes, 52.702 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:42:34 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 6, 7, 8  (N=48,638)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:44:32 2025 in 1 Minute, 58.899 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:42:36 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 5, 6, 7  (N=53,079)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:44:54 2025 in 2 Minutes, 18.876 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:42:45 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 4, 5, 6  (N=55,360)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:45:12 2025 in 2 Minutes, 27.117 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:43:06 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 5, 6, 7  (N=50,644)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:45:16 2025 in 2 Minutes, 10.353 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:42:55 2025
+		Content Area: ELA, Year: 2016, Grade Progression: 3, 4, 5  (N=57,321)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:45:30 2025 in 2 Minutes, 35.114 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:44:29 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 3, 4  (N=58,827)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:45:47 2025 in 1 Minute, 17.362 Seconds
+
+	NOTE: ELA Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:44:32 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 6, 7, 8  (N=51,350)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:46:38 2025 in 2 Minutes, 5.743 Seconds
+
+	NOTE: ELA Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:45:30 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 3, 4  (N=57,190)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:46:39 2025 in 1 Minute, 9.202 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:44:10 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 4, 5, 6  (N=55,535)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:46:47 2025 in 2 Minutes, 37.453 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:45:47 2025
+		Content Area: MATHEMATICS, Year: 2015, Grade Progression: 6, 7, 8  (N=37,994)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:46:56 2025 in 1 Minute, 8.966 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:44:15 2025
+		Content Area: MATHEMATICS, Year: 2016, Grade Progression: 3, 4, 5  (N=57,348)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:47:00 2025 in 2 Minutes, 45.086 Seconds
+
+	NOTE: ELA Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:44:54 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 5, 6, 7  (N=53,896)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:47:15 2025 in 2 Minutes, 20.575 Seconds
+
+	NOTE: ELA Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:45:12 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 4, 5, 6  (N=57,043)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:47:46 2025 in 2 Minutes, 34.191 Seconds
+
+	NOTE: ELA Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:45:16 2025
+		Content Area: ELA, Year: 2015, Grade Progression: 3, 4, 5  (N=58,178)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:47:52 2025 in 2 Minutes, 35.584 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:46:56 2025
+		Content Area: MATHEMATICS, Year: 2015, Grade Progression: 3, 4  (N=58,615)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:48:10 2025 in 1 Minute, 14.416 Seconds
+
+	NOTE: READING Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:47:00 2025
+		Content Area: READING, Year: 2014, Grade Progression: 7, 8  (N=58,448)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:48:19 2025 in 1 Minute, 18.78 Seconds
+
+	NOTE: READING Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:47:15 2025
+		Content Area: READING, Year: 2014, Grade Progression: 6, 7  (N=58,805)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:48:34 2025 in 1 Minute, 18.854 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:46:38 2025
+		Content Area: MATHEMATICS, Year: 2015, Grade Progression: 5, 6, 7  (N=52,029)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:48:56 2025 in 2 Minutes, 17.343 Seconds
+
+	NOTE: READING Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:47:46 2025
+		Content Area: READING, Year: 2014, Grade Progression: 5, 6  (N=59,598)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:49:08 2025 in 1 Minute, 22.089 Seconds
+
+	NOTE: READING Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:47:52 2025
+		Content Area: READING, Year: 2014, Grade Progression: 4, 5  (N=60,905)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:49:17 2025 in 1 Minute, 25.117 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:46:39 2025
+		Content Area: MATHEMATICS, Year: 2015, Grade Progression: 4, 5, 6  (N=57,004)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:49:23 2025 in 2 Minutes, 43.512 Seconds
+
+	NOTE: READING Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:48:10 2025
+		Content Area: READING, Year: 2014, Grade Progression: 3, 4  (N=59,170)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:49:29 2025 in 1 Minute, 18.243 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:46:47 2025
+		Content Area: MATHEMATICS, Year: 2015, Grade Progression: 3, 4, 5  (N=58,305)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:49:31 2025 in 2 Minutes, 44.163 Seconds
+
+	NOTE: MATHEMATICS Grade 8 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:48:19 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 7, 8  (N=58,525)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:49:42 2025 in 1 Minute, 23.653 Seconds
+
+	NOTE: MATHEMATICS Grade 7 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:48:34 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 6, 7  (N=59,405)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:50:00 2025 in 1 Minute, 26.023 Seconds
+
+	NOTE: MATHEMATICS Grade 6 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:48:56 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 5, 6  (N=59,734)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:50:20 2025 in 1 Minute, 24.834 Seconds
+
+	NOTE: MATHEMATICS Grade 5 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:49:08 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 4, 5  (N=61,023)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:50:37 2025 in 1 Minute, 29.022 Seconds
+
+	NOTE: MATHEMATICS Grade 4 data does not include ACHIEVEMENT_LEVEL_PRIOR variable. Prior Achievement Level plot panel will not be included in goodness of fit plot.
+	Started studentGrowthPercentiles: Monday November 24 18:49:17 2025
+		Content Area: MATHEMATICS, Year: 2014, Grade Progression: 3, 4  (N=60,587)
+		NOTE: Growth Levels are currently not specified for the indicated state.
+			Please contact the SGP package administrator to have your state's data included in the package.
+			Student growth percentiles will be calculated without augmented growth levels.
+	Finished studentGrowthPercentiles: Monday November 24 18:50:40 2025 in 1 Minute, 22.877 Seconds
+
+Finished analyzeSGP Monday November 24 18:50:41 2025 in 10 Minutes, 16.031 Seconds 
+
+Started combineSGP Monday November 24 18:50:41 2025
+Finished combineSGP Monday November 24 18:50:42 2025 in 1.162 Seconds 
+
+Finished abcSGP Monday November 24 18:50:42 2025 in 10 Minutes, 18.105 Seconds 
+

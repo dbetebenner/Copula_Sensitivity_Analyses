@@ -133,6 +133,52 @@ if (USE_SGP_DATA) {
 }
 
 ############################################################################
+### CONFIGURATION: Exhaustive Same-Cohort Analysis
+############################################################################
+
+# Use exhaustive conditions (all valid year/grade/content combinations) for ALL datasets
+# This generates same-cohort trajectories (e.g., 2005 G3→G4, 2005 G3→G5, 2005 G3→G6, 2005 G3→G7)
+# to study copula stability across time spans
+#
+# Options:
+#   USE_EXHAUSTIVE_ALL_DATASETS <- FALSE  # Strategic subset only (default, ~42 conditions/dataset)
+#   USE_EXHAUSTIVE_ALL_DATASETS <- TRUE   # Exhaustive analysis (~250-300 conditions/dataset)
+if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- FALSE
+
+# Test mode: Limit to small subset of conditions for validation
+# This is useful for testing exhaustive configuration before full EC2 run
+#
+# Options:
+#   TEST_MODE <- FALSE                    # Full analysis (default)
+#   TEST_MODE <- TRUE                     # Test with subset
+#   TEST_N_CONDITIONS_PER_DATASET <- 1    # Number of conditions to test per dataset
+if (!exists("TEST_MODE")) TEST_MODE <- FALSE
+if (!exists("TEST_N_CONDITIONS_PER_DATASET")) TEST_N_CONDITIONS_PER_DATASET <- 1
+
+if (USE_EXHAUSTIVE_ALL_DATASETS) {
+  cat("====================================================================\n")
+  cat("EXHAUSTIVE SAME-COHORT ANALYSIS: ENABLED\n")
+  cat("====================================================================\n")
+  cat("  This will analyze ALL valid year/grade/content combinations\n")
+  cat("  to establish copula stability across time spans (1-4 years)\n")
+  cat("  Expected conditions per dataset: ~250-300\n")
+  cat("  Estimated runtime on EC2 (parallel): ~2-4 hours per dataset\n")
+  if (TEST_MODE) {
+    cat("\n")
+    cat("  TEST MODE: ACTIVE\n")
+    cat("  Will analyze only", TEST_N_CONDITIONS_PER_DATASET, "condition(s) per dataset\n")
+    cat("  for validation before full run\n")
+  }
+  cat("====================================================================\n\n")
+} else {
+  cat("Strategic Subset Mode: Using representative sampling (~42 conditions/dataset)\n")
+  if (TEST_MODE) {
+    cat("  TEST MODE: Will analyze only", TEST_N_CONDITIONS_PER_DATASET, "condition(s) per dataset\n")
+  }
+  cat("\n")
+}
+
+############################################################################
 ### EC2/LOCAL AUTO-DETECTION
 ############################################################################
 

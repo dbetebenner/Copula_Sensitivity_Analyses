@@ -21,6 +21,9 @@ require(splines2)
 require(copula)
 require(parallel)
 
+# Null-coalescing operator (for compatibility)
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 cat("====================================================================\n")
 cat("PHASE 1: COPULA FAMILY SELECTION STUDY (PARALLEL)\n")
 cat("====================================================================\n")
@@ -130,13 +133,28 @@ COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic
 # 2. Exhaustive (dataset 3): All valid combinations for transition analysis
 
 # Check if we should use exhaustive conditions for this dataset
-USE_EXHAUSTIVE_CONDITIONS <- exists("current_dataset", envir = .GlobalEnv) && 
-                             !is.null(current_dataset) && 
-                             current_dataset$id == "dataset_3"
+# Priority: Global flag (USE_EXHAUSTIVE_ALL_DATASETS) > Dataset-specific (dataset_3)
+USE_EXHAUSTIVE_CONDITIONS <- FALSE
+
+if (exists("USE_EXHAUSTIVE_ALL_DATASETS", envir = .GlobalEnv)) {
+  USE_EXHAUSTIVE_CONDITIONS <- get("USE_EXHAUSTIVE_ALL_DATASETS", envir = .GlobalEnv)
+  if (USE_EXHAUSTIVE_CONDITIONS) {
+    cat("====================================================================\n")
+    cat("EXHAUSTIVE MODE: ENABLED (Global setting)\n")
+    cat("====================================================================\n")
+  }
+} else if (exists("current_dataset", envir = .GlobalEnv) && 
+           !is.null(current_dataset) && 
+           current_dataset$id == "dataset_3") {
+  # Fallback: Dataset 3 uses exhaustive by default (transition analysis)
+  USE_EXHAUSTIVE_CONDITIONS <- TRUE
+}
 
 if (USE_EXHAUSTIVE_CONDITIONS) {
-  cat("Using EXHAUSTIVE conditions for", current_dataset$name, "\n")
-  cat("  (All valid year/grade/content combinations for transition analysis)\n\n")
+  cat("Using EXHAUSTIVE conditions for", 
+      if(exists("current_dataset")) current_dataset$name else "all datasets", "\n")
+  cat("  (All valid year/grade/content combinations across 1-4 year spans)\n")
+  cat("  Purpose: Establish copula stability across time spans\n\n")
   
   # Generate all valid conditions for this dataset
   CONDITIONS <- generate_exhaustive_conditions(current_dataset, max_year_span = 4)
@@ -295,6 +313,65 @@ if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) 
     cat("Available content areas:", paste(available_content_areas, collapse = ", "), "\n")
     cat("Filtered out", filtered_count, "condition(s) with unavailable content areas\n")
     cat("Remaining conditions:", length(CONDITIONS), "\n\n")
+  }
+}
+
+################################################################################
+### TEST MODE: LIMIT CONDITIONS FOR VALIDATION
+################################################################################
+
+# If TEST_MODE is enabled, limit to small subset for validation
+if (exists("TEST_MODE", envir = .GlobalEnv) && get("TEST_MODE", envir = .GlobalEnv)) {
+  
+  n_conditions_test <- 1  # Default
+  if (exists("TEST_N_CONDITIONS_PER_DATASET", envir = .GlobalEnv)) {
+    n_conditions_test <- get("TEST_N_CONDITIONS_PER_DATASET", envir = .GlobalEnv)
+  }
+  
+  original_count_test <- length(CONDITIONS)
+  
+  if (original_count_test > n_conditions_test) {
+    cat("\n")
+    cat("====================================================================\n")
+    cat("TEST MODE: LIMITING CONDITIONS\n")
+    cat("====================================================================\n")
+    cat("Original conditions:", original_count_test, "\n")
+    cat("Test subset size:", n_conditions_test, "\n")
+    
+    # Select diverse conditions across time spans if possible
+    # Strategy: Pick one condition from each time span (1, 2, 3, 4 years)
+    if (n_conditions_test >= 4 && USE_EXHAUSTIVE_CONDITIONS) {
+      # Try to get one from each time span
+      spans_available <- sapply(CONDITIONS, function(c) c$year_span %||% c$span)
+      selected_indices <- c()
+      
+      for (span in 1:4) {
+        span_indices <- which(spans_available == span)
+        if (length(span_indices) > 0) {
+          # Pick first condition from this span
+          selected_indices <- c(selected_indices, span_indices[1])
+          if (length(selected_indices) >= n_conditions_test) break
+        }
+      }
+      
+      CONDITIONS <- CONDITIONS[selected_indices]
+      cat("Selected conditions:")
+      for (i in seq_along(CONDITIONS)) {
+        cond <- CONDITIONS[[i]]
+        cat(sprintf("\n  %d. G%d->G%d (%s, %s, span=%d)", 
+                   i, cond$grade_prior, cond$grade_current, 
+                   cond$year_prior, cond$content, 
+                   cond$year_span %||% cond$span))
+      }
+    } else {
+      # Just take first n conditions
+      CONDITIONS <- CONDITIONS[1:n_conditions_test]
+      cat("Selected first", n_conditions_test, "condition(s)\n")
+    }
+    
+    cat("\n")
+    cat("Remaining conditions:", length(CONDITIONS), "\n")
+    cat("====================================================================\n\n")
   }
 }
 
