@@ -144,7 +144,7 @@ if (exists("USE_EXHAUSTIVE_ALL_DATASETS", envir = .GlobalEnv)) {
     cat("====================================================================\n")
   }
 } else if (exists("current_dataset", envir = .GlobalEnv) && 
-           !is.null(current_dataset) && 
+                             !is.null(current_dataset) && 
            current_dataset$id == "dataset_3") {
   # Fallback: Dataset 3 uses exhaustive by default (transition analysis)
   USE_EXHAUSTIVE_CONDITIONS <- TRUE

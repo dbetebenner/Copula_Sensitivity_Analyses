@@ -806,7 +806,7 @@ plot_copula_comparison <- function(empirical_grid,
         oob = scales::squish,  # Clamp out-of-bounds to extremal colors
         name = "Difference\n(Emp - Par)"
       ) +
-      coord_equal() +
+      coord_equal(clip = "off") +
       labs(
         title = title_expr,
         subtitle = subtitle,
@@ -849,64 +849,79 @@ plot_copula_comparison <- function(empirical_grid,
     q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
     
     # Add statistics annotation if requested
-    if (show_stats && !is.null(copula_result)) {
-      # Extract copula fit statistics
-      cvm_stat <- copula_result$gof_statistic %||% NA
-      cvm_pval <- copula_result$gof_pvalue %||% NA
-      delta_aic <- copula_result$delta_aic %||% NA
-      aic_weight <- copula_result$aic_weight %||% NA
-      
-      # Build statistics label
-      stats_parts <- c()
-      
-      # Absolute Fit section
-      if (!is.na(cvm_stat)) {
-        if (!is.na(cvm_pval)) {
-          cvm_line <- sprintf("CvM = %.4f (p %s %.3f)", 
-                             cvm_stat,
-                             ifelse(cvm_pval < 0.001, "<", "="),
-                             ifelse(cvm_pval < 0.001, 0.001, cvm_pval))
-        } else {
-          cvm_line <- sprintf("CvM = %.4f", cvm_stat)
+    if (show_stats) {
+      fmt5 <- function(x) sprintf("%.5f", x)
+      text_lines <- list()
+      y_pos <- 0.00
+
+      if (!is.null(copula_result)) {
+        # Extract copula fit statistics
+        cvm_stat <- copula_result$gof_statistic %||% NA
+        cvm_pval <- copula_result$gof_pvalue %||% NA
+        delta_aic <- copula_result$delta_aic %||% NA
+        aic_weight <- copula_result$aic_weight %||% NA
+
+        if (!is.na(cvm_stat)) {
+          text_lines <- c(text_lines, list(list(y_offset = y_pos,
+                                                 label = sprintf("'Absolute Fit (%s):'", tools::toTitleCase(family)))))
+          y_pos <- y_pos + 0.05
+
+          if (!is.na(cvm_pval)) {
+            pval_txt <- ifelse(cvm_pval < 0.001, "'<'~0.001", sprintf("'='~%.3f", cvm_pval))
+            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+                                                   label = sprintf("CvM==%.4f~'('*italic(p)~%s*')'", cvm_stat, pval_txt))))
+          } else {
+            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+                                                   label = sprintf("CvM==%.4f", cvm_stat))))
+          }
+          y_pos <- y_pos + 0.05
         }
-        stats_parts <- c(stats_parts, 
-                        sprintf("Absolute Fit (%s):", tools::toTitleCase(family)),
-                        cvm_line,
-                        "")
+
+        if (!is.na(delta_aic) || !is.na(aic_weight)) {
+          text_lines <- c(text_lines, list(list(y_offset = y_pos, label = "'Relative Fit:'")))
+          y_pos <- y_pos + 0.05
+
+          if (!is.na(delta_aic)) {
+            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+                                                   label = sprintf("Delta*AIC==%.1f", delta_aic))))
+            y_pos <- y_pos + 0.05
+          }
+          if (!is.na(aic_weight)) {
+            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+                                                   label = sprintf("wAIC==%.4f", aic_weight))))
+            y_pos <- y_pos + 0.05
+          }
+        }
       }
+
+      text_lines <- c(text_lines,
+                      list(list(y_offset = y_pos, label = "'Surface Difference:'")),
+                      list(list(y_offset = y_pos + 0.05, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff)))),
+                      list(list(y_offset = y_pos + 0.10, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff)))),
+                      list(list(y_offset = y_pos + 0.15, label = sprintf("RMSE==%s", fmt5(rmse_diff)))))
       
-      # Relative Fit section
-      if (!is.na(delta_aic) || !is.na(aic_weight)) {
-        rel_lines <- c("Relative Fit:")
-        
-        if (!is.na(delta_aic)) {
-          rel_lines <- c(rel_lines, sprintf("dAIC = %.1f", delta_aic))
-        }
-        
-        if (!is.na(aic_weight)) {
-          rel_lines <- c(rel_lines, sprintf("wAIC = %.4f", aic_weight))
-        }
-        
-        stats_parts <- c(stats_parts, rel_lines, "")
-      }
-      
-      # Copula Surface Difference section (always shown)
-      stats_parts <- c(stats_parts, 
-                      "Surface Difference:",
-                      sprintf("Max |D| = %.5f", max_abs_diff),
-                      sprintf("Mean |D| = %.5f", mean_abs_diff),
-                      sprintf("RMSE = %.5f", rmse_diff))
-      
-      stats_label <- paste(stats_parts, collapse = "\n")
-      
-      # Add annotation box (matching ECDF plot styling)
+      # Add background box first
+      total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
       p <- p +
-        annotate("label", x = 0.02, y = 0.98, hjust = 0, vjust = 1,
-                 label = stats_label, 
-                 size = 2.3,
-                 fill = rgb(238, 238, 238, maxColorValue = 255), 
-                 alpha = 0.65,
-                 label.padding = unit(0.25, "lines"))
+        annotate("rect",
+                 xmin = 0.00, xmax = 0.35,
+                 ymin = 0.98 - total_height, ymax = 0.98,
+                 fill = rgb(248, 248, 248, maxColorValue = 255),
+                 alpha = 0.65)
+      
+      # Add each text line individually with immediate evaluation
+      for (i in seq_along(text_lines)) {
+        p <- p +
+          annotate("text",
+                   x = 0.02,
+                   y = 0.98 - text_lines[[i]]$y_offset,
+                   hjust = 0,
+                   vjust = 1,
+                   label = text_lines[[i]]$label,
+                   parse = TRUE,
+                   size = 2.3,
+                   color = "black")
+      }
     }
     
     return(p)
@@ -1009,7 +1024,7 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
       name = "Difference\n(Bern - Raw)",
       na.value = "gray50"
     ) +
-    coord_equal() +
+    coord_equal(clip = "off") +
     labs(
       title = title_expr,
       subtitle = subtitle,
@@ -1051,28 +1066,39 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
     rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
     q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
     
-    stats_label <- sprintf(
-      paste0(
-        "Surface Difference:\n",
-        "Max |D| = %.5f\n",
-        "Mean |D| = %.5f\n",
-        "RMSE = %.5f\n",
-        "Q95(|D|) = %.5f"
-      ),
-      max_abs_diff,
-      mean_abs_diff,
-      rmse_diff,
-      q95_abs_diff
+    # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
+    fmt5 <- function(x) sprintf("%.5f", x)
+    
+    text_lines <- list(
+      list(y_offset = 0.00, label = "'Surface Difference:'"),
+      list(y_offset = 0.03, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))),
+      list(y_offset = 0.06, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))),
+      list(y_offset = 0.09, label = sprintf("RMSE==%s", fmt5(rmse_diff))),
+      list(y_offset = 0.12, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff)))
     )
     
-    # Add annotation box (matching ECDF plot styling)
+    # Add background box first
+    total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
     p <- p +
-      annotate("label", x = 0.02, y = 0.98, hjust = 0, vjust = 1,
-               label = stats_label, 
-               size = 2.3,
-               fill = rgb(238, 238, 238, maxColorValue = 255), 
-               alpha = 0.65,
-               label.padding = unit(0.25, "lines"))
+      annotate("rect",
+               xmin = 0.00, xmax = 0.35,
+               ymin = 0.98 - total_height, ymax = 0.98,
+               fill = rgb(248, 248, 248, maxColorValue = 255),
+               alpha = 0.65)
+    
+    # Add each text line individually with immediate evaluation
+    for (i in seq_along(text_lines)) {
+      p <- p +
+        annotate("text",
+                 x = 0.02,
+                 y = 0.98 - text_lines[[i]]$y_offset,
+                 hjust = 0,
+                 vjust = 1,
+                 label = text_lines[[i]]$label,
+                 parse = TRUE,
+                 size = 2.3,
+                 color = "black")
+    }
   }
   
   return(p)
@@ -1389,48 +1415,62 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     )
   
   # Add enhanced statistics annotation (SCENARIO A: Calibration)
-  # Format with conditional AD display
+  # Build plotmath expression using atop()
+  # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
+  text_lines <- list()
+  
   if (!is.na(statistics$ad_uniform_1)) {
     # Anderson-Darling available
-    stats_label <- sprintf(
-      paste0(
-        "n = %s\n",
-        "KS(Raw->U) = %.3f | KS(Bern->U) = %.3f\n",
-        "AD(Raw->U) = %.2f | AD(Bern->U) = %.2f\n",
-        "Max bin dev: %.3f | %.3f\n",
-        "Agreement: rho_s = %.3f | W1 = %.1f pp\n",
-        "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
-      ),
-      format(statistics$n, big.mark = ","),
-      statistics$ks_uniform_1, statistics$ks_uniform_2,
-      statistics$ad_uniform_1, statistics$ad_uniform_2,
-      statistics$max_bin_dev_1, statistics$max_bin_dev_2,
-      statistics$spearman_rho, statistics$wasserstein1_pp,
-      statistics$q90_abs_diff, statistics$pct_large_diff_10
+    text_lines <- list(
+      list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
+      list(y_offset = 0.03, label = sprintf("KS(Raw %%->%% U)==%.3f~'|'~KS(Bern %%->%% U)==%.3f",
+                      statistics$ks_uniform_1, statistics$ks_uniform_2)),
+      list(y_offset = 0.06, label = sprintf("AD(Raw %%->%% U)==%.2f~'|'~AD(Bern %%->%% U)==%.2f",
+                      statistics$ad_uniform_1, statistics$ad_uniform_2)),
+      list(y_offset = 0.09, label = sprintf("'Max bin dev:'~%.3f~'|'~%.3f",
+                      statistics$max_bin_dev_1, statistics$max_bin_dev_2)),
+      list(y_offset = 0.12, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+                      statistics$spearman_rho, statistics$wasserstein1_pp)),
+      list(y_offset = 0.15, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+                      statistics$q90_abs_diff, statistics$pct_large_diff_10))
     )
   } else {
     # AD not available (goftest package missing)
-    stats_label <- sprintf(
-      paste0(
-        "n = %s\n",
-        "KS(Raw->U) = %.3f | KS(Bern->U) = %.3f\n",
-        "Max bin dev: %.3f | %.3f\n",
-        "Agreement: rho_s = %.3f | W1 = %.1f pp\n",
-        "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
-      ),
-      format(statistics$n, big.mark = ","),
-      statistics$ks_uniform_1, statistics$ks_uniform_2,
-      statistics$max_bin_dev_1, statistics$max_bin_dev_2,
-      statistics$spearman_rho, statistics$wasserstein1_pp,
-      statistics$q90_abs_diff, statistics$pct_large_diff_10
+    text_lines <- list(
+      list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
+      list(y_offset = 0.03, label = sprintf("KS(Raw %%->%% U)==%.3f~'|'~KS(Bern %%->%% U)==%.3f",
+                      statistics$ks_uniform_1, statistics$ks_uniform_2)),
+      list(y_offset = 0.06, label = sprintf("'Max bin dev:'~%.3f~'|'~%.3f",
+                      statistics$max_bin_dev_1, statistics$max_bin_dev_2)),
+      list(y_offset = 0.09, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+                      statistics$spearman_rho, statistics$wasserstein1_pp)),
+      list(y_offset = 0.12, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+                      statistics$q90_abs_diff, statistics$pct_large_diff_10))
     )
   }
   
+  # Add background box first
+  total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
   p_ecdf <- p_ecdf +
-    annotate("label", x = 2, y = 0.98, hjust = 0, vjust = 1,
-             label = stats_label, size = 2.3, 
-             fill = rgb(238, 238, 238, maxColorValue = 255), alpha = 0.65,
-             label.padding = unit(0.25, "lines"))
+    annotate("rect",
+             xmin = 1.8, xmax = 98,
+             ymin = 0.98 - total_height, ymax = 0.98,
+             fill = rgb(248, 248, 248, maxColorValue = 255),
+             alpha = 0.65)
+  
+  # Add each text line individually with immediate evaluation
+  for (i in seq_along(text_lines)) {
+    p_ecdf <- p_ecdf +
+      annotate("text",
+               x = 2,
+               y = 0.98 - text_lines[[i]]$y_offset,
+               hjust = 0,
+               vjust = 1,
+               label = text_lines[[i]]$label,
+               parse = TRUE,
+               size = 2.3,
+               color = "black")
+  }
   
   # --- Bottom Right: 10x10 Prior Score × SGPc Decile Heatmap ---
   # Shows dual percentages: Raw SGPc % (top, black) and Bernstein SGPc % (bottom, magenta)
@@ -3050,28 +3090,42 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
   
   # Add enhanced statistics annotation (SCENARIO B: Agreement)
   if (show_stats) {
-    stats_label <- sprintf(
-      paste0(
-        "n = %s\n",
-        "mean (Emp/Par): %.1f / %.1f\n",
-        "Agreement: rho_s = %.3f | W1 = %.1f pp\n",
-        "Deviation: Q90(|D|) = %.1f | Q95 = %.1f\n",
-        "P(|D|>10) = %.3f | MAE = %.2f\n",
-        "KS (2-sample) = %.4f"
-      ),
-      format(statistics$n, big.mark = ","),
-      statistics$mean1, statistics$mean2,
-      statistics$spearman_rho, statistics$wasserstein1_pp,
-      statistics$q90_abs_diff, statistics$q95_abs_diff,
-      statistics$pct_large_diff_10, statistics$mae,
-      statistics$ks_distance
+    # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
+    text_lines <- list(
+      list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
+      list(y_offset = 0.03, label = sprintf("'mean (Emp/Par):'~%.1f~'/'~%.1f",
+                      statistics$mean1, statistics$mean2)),
+      list(y_offset = 0.06, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+                      statistics$spearman_rho, statistics$wasserstein1_pp)),
+      list(y_offset = 0.09, label = sprintf("'Deviation:'~Q[90](abs(Delta))==%.1f~'|'~Q[95]==%.1f",
+                      statistics$q90_abs_diff, statistics$q95_abs_diff)),
+      list(y_offset = 0.12, label = sprintf("P(abs(Delta) > 10)==%.3f~'|'~MAE==%.2f",
+                      statistics$pct_large_diff_10, statistics$mae)),
+      list(y_offset = 0.15, label = sprintf("'KS (2-sample)'==%.4f", statistics$ks_distance))
     )
     
+    # Add background box first
+    total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
     p_ecdf <- p_ecdf +
-      annotate("label", x = 2, y = 0.98, hjust = 0, vjust = 1,
-               label = stats_label, size = 2.3, 
-               fill = rgb(238, 238, 238, maxColorValue = 255), alpha = 0.65,
-               label.padding = unit(0.25, "lines"))
+      annotate("rect",
+               xmin = 1.8, xmax = 98,
+               ymin = 0.98 - total_height, ymax = 0.98,
+               fill = rgb(248, 248, 248, maxColorValue = 255),
+               alpha = 0.65)
+    
+    # Add each text line individually with immediate evaluation
+    for (i in seq_along(text_lines)) {
+      p_ecdf <- p_ecdf +
+        annotate("text",
+                 x = 2,
+                 y = 0.98 - text_lines[[i]]$y_offset,
+                 hjust = 0,
+                 vjust = 1,
+                 label = text_lines[[i]]$label,
+                 parse = TRUE,
+                 size = 2.3,
+                 color = "black")
+    }
   }
   
   # --- Bottom Panel: 10x10 Decile Heatmap ---
@@ -3390,60 +3444,70 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
   
   # Add enhanced statistics annotation (SCENARIO A: Calibration + SGP)
   if (show_stats) {
-    # Format with conditional display based on available metrics
+    # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
+    text_lines <- list()
+    
     if (!is.na(statistics$ad_uniform_1) && !is.null(statistics$max_decile_ks)) {
       # Full display: AD tests + conditional calibration
-      stats_label <- sprintf(
-        paste0(
-          "n = %s\n",
-          "KS(SGPc->U) = %.3f | KS(SGP->U) = %.3f\n",
-          "vs SGP: rho_s = %.3f | W1 = %.1f pp\n",
-          "Q90(|D|) = %.1f | P(|D|>10) = %.3f\n",
-          "Max decile KS: %.3f (decile %d)"
-        ),
-        format(statistics$n, big.mark = ","),
-        statistics$ks_uniform_1, statistics$ks_uniform_2,
-        statistics$spearman_rho, statistics$wasserstein1_pp,
-        statistics$q90_abs_diff, statistics$pct_large_diff_10,
-        statistics$max_decile_ks, statistics$worst_decile
+      text_lines <- list(
+        list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
+        list(y_offset = 0.03, label = sprintf("KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
+                        statistics$ks_uniform_1, statistics$ks_uniform_2)),
+        list(y_offset = 0.06, label = sprintf("'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+                        statistics$spearman_rho, statistics$wasserstein1_pp)),
+        list(y_offset = 0.09, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+                        statistics$q90_abs_diff, statistics$pct_large_diff_10)),
+        list(y_offset = 0.12, label = sprintf("'Max decile KS:'~%.3f~'(decile'~%d*')'",
+                        statistics$max_decile_ks, statistics$worst_decile))
       )
     } else if (!is.na(statistics$ad_uniform_1)) {
       # AD available but no u_prior for conditional
-      stats_label <- sprintf(
-        paste0(
-          "n = %s\n",
-          "KS(SGPc->U) = %.3f | KS(SGP->U) = %.3f\n",
-          "AD(SGPc->U) = %.2f | AD(SGP->U) = %.2f\n",
-          "vs SGP: rho_s = %.3f | W1 = %.1f pp\n",
-          "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
-        ),
-        format(statistics$n, big.mark = ","),
-        statistics$ks_uniform_1, statistics$ks_uniform_2,
-        statistics$ad_uniform_1, statistics$ad_uniform_2,
-        statistics$spearman_rho, statistics$wasserstein1_pp,
-        statistics$q90_abs_diff, statistics$pct_large_diff_10
+      text_lines <- list(
+        list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
+        list(y_offset = 0.03, label = sprintf("KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
+                        statistics$ks_uniform_1, statistics$ks_uniform_2)),
+        list(y_offset = 0.06, label = sprintf("AD(SGPc %%->%% U)==%.2f~'|'~AD(SGP %%->%% U)==%.2f",
+                        statistics$ad_uniform_1, statistics$ad_uniform_2)),
+        list(y_offset = 0.09, label = sprintf("'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+                        statistics$spearman_rho, statistics$wasserstein1_pp)),
+        list(y_offset = 0.12, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+                        statistics$q90_abs_diff, statistics$pct_large_diff_10))
       )
     } else {
       # Minimal display (no AD, no conditional)
-      stats_label <- sprintf(
-        paste0(
-          "n = %s\n",
-          "KS(SGPc->U) = %.3f | KS(SGP->U) = %.3f\n",
-          "vs SGP: rho_s = %.3f | W1 = %.1f pp\n",
-          "Q90(|D|) = %.1f | P(|D|>10) = %.3f"
-        ),
-        format(statistics$n, big.mark = ","),
-        statistics$ks_uniform_1, statistics$ks_uniform_2,
-        statistics$spearman_rho, statistics$wasserstein1_pp,
-        statistics$q90_abs_diff, statistics$pct_large_diff_10
+      text_lines <- list(
+        list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
+        list(y_offset = 0.03, label = sprintf("KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
+                        statistics$ks_uniform_1, statistics$ks_uniform_2)),
+        list(y_offset = 0.06, label = sprintf("'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+                        statistics$spearman_rho, statistics$wasserstein1_pp)),
+        list(y_offset = 0.09, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+                        statistics$q90_abs_diff, statistics$pct_large_diff_10))
       )
     }
     
+    # Add background box first
+    total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
     p_ecdf <- p_ecdf +
-      annotate("label", x = 2, y = 0.98, hjust = 0, vjust = 1,
-               label = stats_label, size = 2.3, 
-               fill = rgb(238, 238, 238, maxColorValue = 255), alpha = 0.65,
-               label.padding = unit(0.25, "lines"))
+      annotate("rect",
+               xmin = 1.8, xmax = 98,
+               ymin = 0.98 - total_height, ymax = 0.98,
+               fill = rgb(248, 248, 248, maxColorValue = 255),
+               alpha = 0.65)
+    
+    # Add each text line individually with immediate evaluation
+    for (i in seq_along(text_lines)) {
+      p_ecdf <- p_ecdf +
+        annotate("text",
+                 x = 2,
+                 y = 0.98 - text_lines[[i]]$y_offset,
+                 hjust = 0,
+                 vjust = 1,
+                 label = text_lines[[i]]$label,
+                 parse = TRUE,
+                 size = 2.3,
+                 color = "black")
+    }
   }
   
   # --- Bottom Panel: 10x10 Decile Heatmap ---
@@ -3810,7 +3874,7 @@ plot_empirical_vs_sgp_dual_pct <- function(sgpc_empirical,
         axis.title.x.top = element_blank(),
         axis.title.y.left = element_text(size = 9, margin = margin(0, 0, 0, 4, "pt")),
         axis.text.y.left = element_text(size = 9, hjust = 1, margin = margin(0, 0, 0, 4, "pt")),
-        axis.text.x.top = element_text(size = 6, vjust = 1, margin = margin(6, 0, 0, 0, "pt")),
+        axis.text.x.top = element_text(size = 7, vjust = 1, margin = margin(6, 0, 0, 0, "pt")),
         panel.grid = element_blank(),
         plot.margin = margin(5, 35, 10, 5, "pt"),
         plot.background = element_rect(fill = "transparent", color = NA),
@@ -4169,6 +4233,7 @@ export_copula_summary <- function(output_dir,
         max_cdf_diff = round(sgpc_stats$max_cdf_diff %||% NA, 4)
       )
     } else {
+      cat("  ⚠ SGPc statistics are NULL - SGPc comparison fields will be unavailable\n")
       list(available = FALSE)
     },
     # NEW: Traditional SGP comparison (b-spline quantile regression)
@@ -4927,12 +4992,16 @@ generate_summary_grid_latex <- function(output_dir,
   
   metadata <- NULL
   if (file.exists(json_path)) {
+    cat(sprintf("✓ Found metadata JSON: %s\n", basename(json_path)))
     metadata <- tryCatch({
       jsonlite::fromJSON(json_path)
     }, error = function(e) {
-      warning("Could not read JSON metadata: ", e$message)
+      warning(sprintf("Could not read JSON metadata from %s: %s", json_path, e$message))
       NULL
     })
+  } else {
+    warning(sprintf("Metadata JSON not found: %s\n  This may result in incomplete summary grid fields.", json_path))
+    cat("  Note: SGPc comparison fields will show '--' if JSON metadata is missing.\n")
   }
   
   # --- Extract values for display ---
@@ -4977,6 +5046,15 @@ generate_summary_grid_latex <- function(output_dir,
   corr_val <- metadata$sgpc_comparison$correlation %||% sgpc_stats$correlation %||% NA
   ks_dist <- metadata$sgpc_comparison$ks_distance %||% sgpc_stats$ks_distance %||% NA
   
+  # Diagnostic: Check if SGPc stats are missing
+  if (is.na(mean_emp) && is.na(mean_par) && is.na(corr_val)) {
+    warning("SGPc comparison statistics are missing. This typically means:\n",
+            "  1. CALCULATE_SGPC was set to FALSE, or\n",
+            "  2. SGPc calculation failed during plot generation, or\n",
+            "  3. JSON metadata file is missing/incomplete.\n",
+            "  → SGPc comparison fields will display as '--' in summary grid.")
+  }
+  
   # Traditional SGP comparison
   has_sgp <- !is.null(metadata$traditional_sgp_comparison$has_sgp_order_1) && 
              metadata$traditional_sgp_comparison$has_sgp_order_1
@@ -5003,19 +5081,23 @@ generate_summary_grid_latex <- function(output_dir,
   }
   
   # --- Build LaTeX document ---
-  # Format numbers for display
+  # Format numbers for display with better edge case handling
   fmt_num <- function(x, digits = 3) {
-    if (is.null(x)) return("--")
-    if (length(x) == 0) return("--")
-    if (!is.numeric(x)) return("--")
-    if (is.na(x)) return("--")
+    if (is.null(x)) return("\\textendash\\textendash")
+    if (length(x) == 0) return("\\textendash\\textendash")
+    if (!is.numeric(x)) return("\\textendash\\textendash")
+    if (is.na(x)) return("\\textendash\\textendash")
+    if (is.nan(x)) return("\\textendash\\textendash")
+    if (is.infinite(x)) return(if (x > 0) "$+\\infty$" else "$-\\infty$")
     format(round(x, digits), nsmall = digits)
   }
   fmt_int <- function(x) {
-    if (is.null(x)) return("--")
-    if (length(x) == 0) return("--")
-    if (!is.numeric(x)) return("--")
-    if (is.na(x)) return("--")
+    if (is.null(x)) return("\\textendash\\textendash")
+    if (length(x) == 0) return("\\textendash\\textendash")
+    if (!is.numeric(x)) return("\\textendash\\textendash")
+    if (is.na(x)) return("\\textendash\\textendash")
+    if (is.nan(x)) return("\\textendash\\textendash")
+    if (is.infinite(x)) return("\\textendash\\textendash")
     format(x, big.mark = ",", scientific = FALSE)
   }
   
@@ -5072,10 +5154,23 @@ generate_summary_grid_latex <- function(output_dir,
   delta_aic <- metadata$relative_fit$delta_aic_vs_best %||% NA
   is_best <- metadata$relative_fit$is_best_aic %||% FALSE
   
-  fit_quality_str <- if (isTRUE(is_best) || is.na(delta_aic)) {
+  # Diagnostic: Check fit quality data
+  if (is.na(delta_aic) && !isTRUE(is_best)) {
+    cat("  Note: Delta AIC is NA and is_best_aic is FALSE/missing.\n")
+    cat("        Displaying 'Best fit' as default (likely only one copula family tested).\n")
+  }
+  
+  fit_quality_str <- if (isTRUE(is_best)) {
     "{\\color{armyblue}\\textbf{Best fit}}"
+  } else if (is.na(delta_aic) || is.nan(delta_aic)) {
+    # If delta_aic is NA/NaN but not marked as best, assume it's the only one tested
+    "{\\color{armyblue}\\textbf{Best fit}}"
+  } else if (is.infinite(delta_aic)) {
+    "\\textendash\\textendash"
   } else {
-    sprintf("$\\Delta$AIC: +%s", fmt_num(delta_aic, 1))
+    # Format with sign based on value
+    sign_str <- if (delta_aic >= 0) "+" else ""
+    sprintf("$\\Delta$AIC: %s%s", sign_str, fmt_num(abs(delta_aic), 1))
   }
   
   tex_lines <- c(
@@ -5154,6 +5249,20 @@ generate_summary_grid_latex <- function(output_dir,
     sprintf("\\quad Fit Quality: %s\\\\", fit_quality_str)
   )
   
+  # Diagnostic: Track field availability for summary report
+  fields_available <- list(
+    condition_info = !any(is.na(c(grade_prior, grade_current, year_prior, year_current))),
+    n_pairs = !is.na(n_pairs),
+    copula_params = nchar(param_str) > 0,
+    kendall_tau = !is.na(kendall_tau),
+    aic_bic = !is.na(aic_val) && !is.na(bic_val),
+    sgpc_means = !is.na(mean_emp) && !is.na(mean_par),
+    sgpc_corr = !is.na(corr_val),
+    sgpc_ks = !is.na(ks_dist),
+    sgpc_cvm = !is.na(cvm_stat),
+    sgp_comparison = has_sgp && !is.null(cor_emp_sgp) && !is.na(cor_emp_sgp)
+  )
+  
   # Add parameters if available
   if (nchar(param_str) > 0) {
     tex_lines <- c(tex_lines, sprintf("\\quad Params: %s\\\\", param_str))
@@ -5164,6 +5273,9 @@ generate_summary_grid_latex <- function(output_dir,
   cvm_str <- if (!is.null(cvm_stat) && is.numeric(cvm_stat) && !is.na(cvm_stat)) {
     fmt_num(cvm_stat, 6)
   } else {
+    if (is.na(cvm_stat)) {
+      cat("  Note: CvM statistic is NA (SGPc comparison may not have been calculated)\n")
+    }
     "\\textendash\\textendash"
   }
   
@@ -5282,6 +5394,36 @@ generate_summary_grid_latex <- function(output_dir,
     if (!keep_tex && compiled && file.exists(tex_path)) {
       file.remove(tex_path)
     }
+    
+    # Print diagnostic summary of field availability
+    cat("\n=== Summary Grid Field Availability ===\n")
+    cat(sprintf("  Condition Info: %s\n", if (fields_available$condition_info) "✓" else "✗ MISSING"))
+    cat(sprintf("  Sample Size (n): %s\n", if (fields_available$n_pairs) "✓" else "✗ MISSING"))
+    cat(sprintf("  Copula Parameters: %s\n", if (fields_available$copula_params) "✓" else "✗ MISSING"))
+    cat(sprintf("  Kendall's τ: %s\n", if (fields_available$kendall_tau) "✓" else "✗ MISSING"))
+    cat(sprintf("  AIC/BIC: %s\n", if (fields_available$aic_bic) "✓" else "✗ MISSING"))
+    cat(sprintf("  SGPc Means (Emp/Par): %s\n", if (fields_available$sgpc_means) "✓" else "✗ MISSING"))
+    cat(sprintf("  SGPc Correlation: %s\n", if (fields_available$sgpc_corr) "✓" else "✗ MISSING"))
+    cat(sprintf("  SGPc KS Distance: %s\n", if (fields_available$sgpc_ks) "✓" else "✗ MISSING"))
+    cat(sprintf("  SGPc CvM Statistic: %s\n", if (fields_available$sgpc_cvm) "✓" else "✗ MISSING"))
+    cat(sprintf("  SGP Comparison: %s\n", if (fields_available$sgp_comparison) "✓" else "✗ MISSING"))
+    
+    missing_fields <- names(fields_available)[!unlist(fields_available)]
+    if (length(missing_fields) > 0) {
+      cat("\n⚠ Missing fields detected. Common causes:\n")
+      if ("sgpc_means" %in% missing_fields || "sgpc_corr" %in% missing_fields) {
+        cat("  • SGPc fields: Set CALCULATE_SGPC=TRUE and ensure Bernstein copula is available\n")
+      }
+      if ("sgp_comparison" %in% missing_fields) {
+        cat("  • SGP comparison: Ensure SGP_ORDER_1 column exists in dataset\n")
+      }
+      if ("copula_params" %in% missing_fields) {
+        cat("  • Copula parameters: Check that copula fitting succeeded\n")
+      }
+    } else {
+      cat("\n✓ All fields successfully populated\n")
+    }
+    cat("=====================================\n\n")
     
     invisible(pdf_path)
   } else {
