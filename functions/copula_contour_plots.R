@@ -864,7 +864,7 @@ plot_copula_comparison <- function(empirical_grid,
         if (!is.na(cvm_stat)) {
           text_lines <- c(text_lines, list(list(y_offset = y_pos,
                                                  label = sprintf("'Absolute Fit (%s):'", tools::toTitleCase(family)))))
-          y_pos <- y_pos + 0.05
+          y_pos <- y_pos + 0.03
 
           if (!is.na(cvm_pval)) {
             pval_txt <- ifelse(cvm_pval < 0.001, "'<'~0.001", sprintf("'='~%.3f", cvm_pval))
@@ -874,55 +874,55 @@ plot_copula_comparison <- function(empirical_grid,
             text_lines <- c(text_lines, list(list(y_offset = y_pos,
                                                    label = sprintf("CvM==%.4f", cvm_stat))))
           }
-          y_pos <- y_pos + 0.05
+          y_pos <- y_pos + 0.03
         }
 
         if (!is.na(delta_aic) || !is.na(aic_weight)) {
           text_lines <- c(text_lines, list(list(y_offset = y_pos, label = "'Relative Fit:'")))
-          y_pos <- y_pos + 0.05
+          y_pos <- y_pos + 0.03
 
           if (!is.na(delta_aic)) {
             text_lines <- c(text_lines, list(list(y_offset = y_pos,
                                                    label = sprintf("Delta*AIC==%.1f", delta_aic))))
-            y_pos <- y_pos + 0.05
+            y_pos <- y_pos + 0.03
           }
           if (!is.na(aic_weight)) {
             text_lines <- c(text_lines, list(list(y_offset = y_pos,
                                                    label = sprintf("wAIC==%.4f", aic_weight))))
-            y_pos <- y_pos + 0.05
+            y_pos <- y_pos + 0.03
           }
         }
       }
 
       text_lines <- c(text_lines,
                       list(list(y_offset = y_pos, label = "'Surface Difference:'")),
-                      list(list(y_offset = y_pos + 0.05, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff)))),
-                      list(list(y_offset = y_pos + 0.10, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff)))),
-                      list(list(y_offset = y_pos + 0.15, label = sprintf("RMSE==%s", fmt5(rmse_diff)))))
+                      list(list(y_offset = y_pos + 0.03, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff)))),
+                      list(list(y_offset = y_pos + 0.06, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff)))),
+                      list(list(y_offset = y_pos + 0.09, label = sprintf("RMSE==%s", fmt5(rmse_diff)))))
       
       # Add background box first
       total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
       p <- p +
         annotate("rect",
-                 xmin = 0.00, xmax = 0.35,
-                 ymin = 0.98 - total_height, ymax = 0.98,
-                 fill = rgb(248, 248, 248, maxColorValue = 255),
-                 alpha = 0.65)
+                 xmin = 0.01, xmax = 0.17,
+                 ymin = 0.99 - total_height, ymax = 0.99,
+                 fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.85,
+                 linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
       
       # Add each text line individually with immediate evaluation
       for (i in seq_along(text_lines)) {
         p <- p +
           annotate("text",
                    x = 0.02,
-                   y = 0.98 - text_lines[[i]]$y_offset,
+                   y = 0.99 - text_lines[[i]]$y_offset,
                    hjust = 0,
                    vjust = 1,
                    label = text_lines[[i]]$label,
                    parse = TRUE,
-                   size = 2.3,
+                   size = 2.4,
                    color = "black")
       }
-    }
+    } ### End of if (show_stats)
     
     return(p)
     
@@ -1081,10 +1081,10 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
     total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
     p <- p +
       annotate("rect",
-               xmin = 0.00, xmax = 0.35,
-               ymin = 0.98 - total_height, ymax = 0.98,
-               fill = rgb(248, 248, 248, maxColorValue = 255),
-               alpha = 0.65)
+               xmin = 0.01, xmax = 0.17,
+               ymin = 0.99 - total_height, ymax = 0.99,
+               fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.85,
+               linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
     
     # Add each text line individually with immediate evaluation
     for (i in seq_along(text_lines)) {
@@ -1096,7 +1096,7 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
                  vjust = 1,
                  label = text_lines[[i]]$label,
                  parse = TRUE,
-                 size = 2.3,
+                 size = 2.4,
                  color = "black")
     }
   }
@@ -1453,22 +1453,22 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
   total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
   p_ecdf <- p_ecdf +
     annotate("rect",
-             xmin = 1.8, xmax = 98,
-             ymin = 0.98 - total_height, ymax = 0.98,
-             fill = rgb(248, 248, 248, maxColorValue = 255),
-             alpha = 0.65)
+             xmin = 2, xmax = 60, # Wider due to dual empirical copula statistics labels
+             ymin = 0.99 - total_height, ymax = 0.99,
+             fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
+             linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
   
   # Add each text line individually with immediate evaluation
   for (i in seq_along(text_lines)) {
     p_ecdf <- p_ecdf +
       annotate("text",
-               x = 2,
+               x = 3.5,
                y = 0.98 - text_lines[[i]]$y_offset,
                hjust = 0,
                vjust = 1,
                label = text_lines[[i]]$label,
                parse = TRUE,
-               size = 2.3,
+               size = 2.1,
                color = "black")
   }
   
@@ -3108,22 +3108,22 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
     total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
     p_ecdf <- p_ecdf +
       annotate("rect",
-               xmin = 1.8, xmax = 98,
+               xmin = 2, xmax = 45,
                ymin = 0.98 - total_height, ymax = 0.98,
-               fill = rgb(248, 248, 248, maxColorValue = 255),
-               alpha = 0.65)
+               fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
+               linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
     
     # Add each text line individually with immediate evaluation
     for (i in seq_along(text_lines)) {
       p_ecdf <- p_ecdf +
         annotate("text",
-                 x = 2,
+                 x = 3.5,
                  y = 0.98 - text_lines[[i]]$y_offset,
                  hjust = 0,
                  vjust = 1,
                  label = text_lines[[i]]$label,
                  parse = TRUE,
-                 size = 2.3,
+                 size = 2.1,
                  color = "black")
     }
   }
@@ -3490,10 +3490,10 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
     total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
     p_ecdf <- p_ecdf +
       annotate("rect",
-               xmin = 1.8, xmax = 98,
+               xmin = 1.8, xmax = 45,
                ymin = 0.98 - total_height, ymax = 0.98,
-               fill = rgb(248, 248, 248, maxColorValue = 255),
-               alpha = 0.65)
+               fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
+               linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
     
     # Add each text line individually with immediate evaluation
     for (i in seq_along(text_lines)) {
@@ -5003,29 +5003,37 @@ generate_summary_grid_latex <- function(output_dir,
     warning(sprintf("Metadata JSON not found: %s\n  This may result in incomplete summary grid fields.", json_path))
     cat("  Note: SGPc comparison fields will show '--' if JSON metadata is missing.\n")
   }
+
+  metadata <- metadata %||% list()
+  cond_meta <- metadata$condition %||% list()
+  copula_meta <- metadata$copula %||% list()
+  sgpc_meta <- metadata$sgpc_comparison %||% list()
+  traditional_sgp_meta <- metadata$traditional_sgp_comparison %||% list()
+  strat_meta <- metadata$stratification %||% list()
+  relative_meta <- metadata$relative_fit %||% list()
   
   # --- Extract values for display ---
   # Condition info
-  content_area <- condition_info$content %||% metadata$condition$content_area %||% "Unknown"
+  content_area <- condition_info$content %||% cond_meta$content_area %||% "Unknown"
   content_formatted <- tools::toTitleCase(tolower(content_area))
-  grade_prior <- condition_info$grade_prior %||% metadata$condition$grade_prior
+  grade_prior <- condition_info$grade_prior %||% cond_meta$grade_prior
 
-  grade_current <- condition_info$grade_current %||% metadata$condition$grade_current
-  year_prior <- condition_info$year_prior %||% metadata$condition$year_prior
-  year_current <- condition_info$year_current %||% metadata$condition$year_current
-  dataset_id <- condition_info$dataset_id %||% metadata$condition$dataset_id %||% "Unknown"
-  dataset_number <- condition_info$dataset_number %||% metadata$condition$dataset_number %||% 
+  grade_current <- condition_info$grade_current %||% cond_meta$grade_current
+  year_prior <- condition_info$year_prior %||% cond_meta$year_prior
+  year_current <- condition_info$year_current %||% cond_meta$year_current
+  dataset_id <- condition_info$dataset_id %||% cond_meta$dataset_id %||% "Unknown"
+  dataset_number <- condition_info$dataset_number %||% cond_meta$dataset_number %||% 
                     gsub("dataset_", "", dataset_id)
   
   # Copula parameters
   family_title <- tools::toTitleCase(best_family)
-  n_pairs <- metadata$copula$n_pairs %||% condition_info$n_pairs %||% NA
-  kendall_tau <- metadata$copula$kendall_tau %||% NA
-  aic_val <- metadata$copula$aic %||% NA
-  bic_val <- metadata$copula$bic %||% NA
+  n_pairs <- copula_meta$n_pairs %||% condition_info$n_pairs %||% NA
+  kendall_tau <- copula_meta$kendall_tau %||% NA
+  aic_val <- copula_meta$aic %||% NA
+  bic_val <- copula_meta$bic %||% NA
   
   # Extract copula-specific parameters
-  params_list <- metadata$copula$parameters
+  params_list <- copula_meta$parameters
   param_str <- ""
   if (!is.null(params_list)) {
     if (!is.null(params_list$rho)) {
@@ -5041,10 +5049,10 @@ generate_summary_grid_latex <- function(output_dir,
   }
   
   # SGPc comparison stats
-  mean_emp <- metadata$sgpc_comparison$mean_empirical %||% sgpc_stats$mean_empirical %||% NA
-  mean_par <- metadata$sgpc_comparison$mean_parametric %||% sgpc_stats$mean_parametric %||% NA
-  corr_val <- metadata$sgpc_comparison$correlation %||% sgpc_stats$correlation %||% NA
-  ks_dist <- metadata$sgpc_comparison$ks_distance %||% sgpc_stats$ks_distance %||% NA
+  mean_emp <- sgpc_meta$mean_empirical %||% sgpc_stats$mean_empirical %||% NA
+  mean_par <- sgpc_meta$mean_parametric %||% sgpc_stats$mean_parametric %||% NA
+  corr_val <- sgpc_meta$correlation %||% sgpc_stats$correlation %||% NA
+  ks_dist <- sgpc_meta$ks_distance %||% sgpc_stats$ks_distance %||% NA
   
   # Diagnostic: Check if SGPc stats are missing
   if (is.na(mean_emp) && is.na(mean_par) && is.na(corr_val)) {
@@ -5056,10 +5064,13 @@ generate_summary_grid_latex <- function(output_dir,
   }
   
   # Traditional SGP comparison
-  has_sgp <- !is.null(metadata$traditional_sgp_comparison$has_sgp_order_1) && 
-             metadata$traditional_sgp_comparison$has_sgp_order_1
-  cor_emp_sgp <- metadata$traditional_sgp_comparison$cor_empirical_vs_sgp_order_1 %||% NA
-  cor_par_sgp <- metadata$traditional_sgp_comparison$cor_parametric_vs_sgp_order_1 %||% NA
+  has_sgp <- !is.null(traditional_sgp_meta$has_sgp_order_1) && 
+             traditional_sgp_meta$has_sgp_order_1
+  cor_emp_sgp <- traditional_sgp_meta$cor_empirical_vs_sgp_order_1 %||% NA
+  cor_par_sgp <- traditional_sgp_meta$cor_parametric_vs_sgp_order_1 %||% NA
+  
+  # Extract CvM statistic for SGPc comparison (needed for fields_available)
+  cvm_stat <- sgpc_meta$cvm_stat %||% NA
   
   # --- Determine PDF paths (relative to output_dir) ---
   # These will be relative paths in the LaTeX document
@@ -5102,13 +5113,12 @@ generate_summary_grid_latex <- function(output_dir,
   }
   
   # Extract metadata for enhanced display
-  n_pairs <- metadata$copula$n_pairs %||% NA
-  scaling_type <- metadata$stratification$scaling_type %||% NA
-  scale_note <- metadata$stratification$scale_note %||% NA
-  pandemic_period <- metadata$stratification$pandemic_period %||% NA
-  testing_mode_prior <- metadata$stratification$testing_mode_prior %||% NA
-  testing_mode_current <- metadata$stratification$testing_mode_current %||% NA
-  has_missing_years <- metadata$stratification$has_missing_years %||% FALSE
+  n_pairs <- copula_meta$n_pairs %||% NA
+  scaling_type <- strat_meta$scaling_type %||% NA
+  scale_note <- strat_meta$scale_note %||% NA
+  pandemic_period <- strat_meta$pandemic_period %||% NA
+  testing_mode_prior <- strat_meta$testing_mode_prior %||% NA
+  testing_mode_current <- strat_meta$testing_mode_current %||% NA
   
   # Format for display
   n_pairs_str <- fmt_int(n_pairs)
@@ -5151,8 +5161,9 @@ generate_summary_grid_latex <- function(output_dir,
   }
   
   # Fit quality display (delta AIC or "Best fit")
-  delta_aic <- metadata$relative_fit$delta_aic_vs_best %||% NA
-  is_best <- metadata$relative_fit$is_best_aic %||% FALSE
+  delta_aic_raw <- relative_meta$delta_aic_vs_best %||% NA
+  delta_aic <- suppressWarnings(as.numeric(delta_aic_raw))
+  is_best <- relative_meta$is_best_aic %||% FALSE
   
   # Diagnostic: Check fit quality data
   if (is.na(delta_aic) && !isTRUE(is_best)) {
@@ -5268,8 +5279,7 @@ generate_summary_grid_latex <- function(output_dir,
     tex_lines <- c(tex_lines, sprintf("\\quad Params: %s\\\\", param_str))
   }
   
-  # Extract CvM statistic for SGPc comparison
-  cvm_stat <- metadata$sgpc_comparison$cvm_stat %||% NA
+  # Format CvM statistic for display
   cvm_str <- if (!is.null(cvm_stat) && is.numeric(cvm_stat) && !is.na(cvm_stat)) {
     fmt_num(cvm_stat, 6)
   } else {
