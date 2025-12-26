@@ -844,6 +844,7 @@ plot_copula_comparison <- function(empirical_grid,
       scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
     
     # Calculate copula surface difference statistics
+    max_abs_diff <- max(abs(diff_values), na.rm = TRUE)
     mean_abs_diff <- mean(abs(diff_values), na.rm = TRUE)
     rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
     q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
@@ -852,7 +853,8 @@ plot_copula_comparison <- function(empirical_grid,
     if (show_stats) {
       fmt5 <- function(x) sprintf("%.5f", x)
       text_lines <- list()
-      y_pos <- 0.00
+      y_pos <- 0.015
+      y_increment <- 0.02
 
       if (!is.null(copula_result)) {
         # Extract copula fit statistics
@@ -862,50 +864,51 @@ plot_copula_comparison <- function(empirical_grid,
         aic_weight <- copula_result$aic_weight %||% NA
 
         if (!is.na(cvm_stat)) {
-          text_lines <- c(text_lines, list(list(y_offset = y_pos,
+          text_lines <- c(text_lines, list(list(x_offset = 0.02, y_offset = y_pos,
                                                  label = sprintf("'Absolute Fit (%s):'", tools::toTitleCase(family)))))
-          y_pos <- y_pos + 0.03
+          y_pos <- y_pos + y_increment
 
           if (!is.na(cvm_pval)) {
             pval_txt <- ifelse(cvm_pval < 0.001, "'<'~0.001", sprintf("'='~%.3f", cvm_pval))
-            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+            text_lines <- c(text_lines, list(list(x_offset = 0.02, y_offset = y_pos,
                                                    label = sprintf("CvM==%.4f~'('*italic(p)~%s*')'", cvm_stat, pval_txt))))
           } else {
-            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+            text_lines <- c(text_lines, list(list(x_offset = 0.02, y_offset = y_pos,
                                                    label = sprintf("CvM==%.4f", cvm_stat))))
           }
-          y_pos <- y_pos + 0.03
+          y_pos <- y_pos + y_increment
         }
 
         if (!is.na(delta_aic) || !is.na(aic_weight)) {
-          text_lines <- c(text_lines, list(list(y_offset = y_pos, label = "'Relative Fit:'")))
-          y_pos <- y_pos + 0.03
+          text_lines <- c(text_lines, list(list(x_offset = 0.02, y_offset = y_pos, label = "'Relative Fit:'")))
+          y_pos <- y_pos + y_increment
 
           if (!is.na(delta_aic)) {
-            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+            text_lines <- c(text_lines, list(list(x_offset = 0.02, y_offset = y_pos,
                                                    label = sprintf("Delta*AIC==%.1f", delta_aic))))
-            y_pos <- y_pos + 0.03
+            y_pos <- y_pos + y_increment
           }
           if (!is.na(aic_weight)) {
-            text_lines <- c(text_lines, list(list(y_offset = y_pos,
+            text_lines <- c(text_lines, list(list(x_offset = 0.02, y_offset = y_pos,
                                                    label = sprintf("wAIC==%.4f", aic_weight))))
-            y_pos <- y_pos + 0.03
+            y_pos <- y_pos + y_increment
           }
         }
       }
 
       text_lines <- c(text_lines,
-                      list(list(y_offset = y_pos, label = "'Surface Difference:'")),
-                      list(list(y_offset = y_pos + 0.03, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff)))),
-                      list(list(y_offset = y_pos + 0.06, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff)))),
-                      list(list(y_offset = y_pos + 0.09, label = sprintf("RMSE==%s", fmt5(rmse_diff)))))
+                      list(list(x_offset = 0.0, y_offset = y_pos, label = "'Surface Difference:'")),
+                      list(list(x_offset = 0.2, y_offset = y_pos + y_increment, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff)))),
+                      list(list(x_offset = 0.2, y_offset = y_pos + 2*y_increment, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff)))),
+                      list(list(x_offset = 0.2, y_offset = y_pos + 3*y_increment, label = sprintf("RMSE==%s", fmt5(rmse_diff)))),
+                      list(list(x_offset = 0.2, y_offset = y_pos + 4*y_increment, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff)))))
       
       # Add background box first
       total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
       p <- p +
         annotate("rect",
-                 xmin = 0.01, xmax = 0.17,
-                 ymin = 0.99 - total_height, ymax = 0.99,
+                 xmin = 0.01, xmax = 0.175,
+                 ymin = 0.985 - total_height, ymax = 0.985,
                  fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.85,
                  linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
       
@@ -913,7 +916,7 @@ plot_copula_comparison <- function(empirical_grid,
       for (i in seq_along(text_lines)) {
         p <- p +
           annotate("text",
-                   x = 0.02,
+                   x = 0.02 + text_lines[[i]]$x_offset,
                    y = 0.99 - text_lines[[i]]$y_offset,
                    hjust = 0,
                    vjust = 1,
@@ -1061,28 +1064,29 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
   
   # Calculate and add statistics annotation
   if (show_stats) {
+    fmt5 <- function(x) sprintf("%.5f", x)
+    y_pos <- 0.015
+    y_increment <- 0.02
+
     max_abs_diff <- max(abs(diff_values), na.rm = TRUE)
     mean_abs_diff <- mean(abs(diff_values), na.rm = TRUE)
     rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
     q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
     
-    # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
-    fmt5 <- function(x) sprintf("%.5f", x)
-    
     text_lines <- list(
-      list(y_offset = 0.00, label = "'Surface Difference:'"),
-      list(y_offset = 0.03, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))),
-      list(y_offset = 0.06, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))),
-      list(y_offset = 0.09, label = sprintf("RMSE==%s", fmt5(rmse_diff))),
-      list(y_offset = 0.12, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff)))
+      list(y_offset = y_pos, label = "'Surface Difference:'"),
+      list(y_offset = y_pos + y_increment, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))),
+      list(y_offset = y_pos + 2*y_increment, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))),
+      list(y_offset = y_pos + 3*y_increment, label = sprintf("RMSE==%s", fmt5(rmse_diff))),
+      list(y_offset = y_pos + 4*y_increment, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff)))
     )
     
     # Add background box first
     total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
     p <- p +
       annotate("rect",
-               xmin = 0.01, xmax = 0.17,
-               ymin = 0.99 - total_height, ymax = 0.99,
+               xmin = 0.01, xmax = 0.175,
+               ymin = 0.985 - total_height, ymax = 0.985,
                fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.85,
                linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
     
@@ -1431,11 +1435,11 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
                       statistics$max_bin_dev_1, statistics$max_bin_dev_2)),
       list(y_offset = 0.12, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
                       statistics$spearman_rho, statistics$wasserstein1_pp)),
-      list(y_offset = 0.15, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
-                      statistics$q90_abs_diff, statistics$pct_large_diff_10))
+      list(y_offset = 0.15, label = sprintf("Q[95](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+                      statistics$q95_abs_diff, statistics$pct_large_diff_10))
     )
   } else {
-    # AD not available (goftest package missing)
+    # AD not available (if goftest package missing)
     text_lines <- list(
       list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
       list(y_offset = 0.03, label = sprintf("KS(Raw %%->%% U)==%.3f~'|'~KS(Bern %%->%% U)==%.3f",
@@ -1444,16 +1448,16 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
                       statistics$max_bin_dev_1, statistics$max_bin_dev_2)),
       list(y_offset = 0.09, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
                       statistics$spearman_rho, statistics$wasserstein1_pp)),
-      list(y_offset = 0.12, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
-                      statistics$q90_abs_diff, statistics$pct_large_diff_10))
+      list(y_offset = 0.12, label = sprintf("Q[95](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+                      statistics$q95_abs_diff, statistics$pct_large_diff_10))
     )
   }
   
   # Add background box first
-  total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
+  total_height <- text_lines[[length(text_lines)]]$y_offset + 0.04
   p_ecdf <- p_ecdf +
     annotate("rect",
-             xmin = 2, xmax = 60, # Wider due to dual empirical copula statistics labels
+             xmin = 2, xmax = 52, # Wider due to dual empirical copula statistics labels
              ymin = 0.99 - total_height, ymax = 0.99,
              fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
              linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
@@ -1468,7 +1472,7 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
                vjust = 1,
                label = text_lines[[i]]$label,
                parse = TRUE,
-               size = 2.1,
+               size = 2.0,
                color = "black")
   }
   
@@ -1636,7 +1640,7 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     ) +
     # Line 1: ΔC(u,v) → ΔSGPc
     draw_label(
-      label = bquote(Delta*C(u,v) %=>% Delta*SGPc),
+      label = bquote(C(u,v) %=>% SGPc),
       x = x_center, y = 0.55,
       hjust = 0.5, vjust = 0.5,
       size = 10,
@@ -3105,10 +3109,10 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
     )
     
     # Add background box first
-    total_height <- text_lines[[length(text_lines)]]$y_offset + 0.035
+    total_height <- text_lines[[length(text_lines)]]$y_offset + 0.04
     p_ecdf <- p_ecdf +
       annotate("rect",
-               xmin = 2, xmax = 45,
+               xmin = 2, xmax = 38,
                ymin = 0.98 - total_height, ymax = 0.98,
                fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
                linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
@@ -3123,7 +3127,7 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
                  vjust = 1,
                  label = text_lines[[i]]$label,
                  parse = TRUE,
-                 size = 2.1,
+                 size = 2.0,
                  color = "black")
     }
   }
@@ -4072,7 +4076,7 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
     ) +
     # Line 1: ΔC(u,v) → ΔSGPc
     draw_label(
-      label = bquote(Delta*C(u,v) %=>% Delta*SGPc),
+      label = bquote(C(u,v) %=>% SGPc),
       x = x_center, y = 0.55,
       hjust = 0.5, vjust = 0.5,
       size = 10,
