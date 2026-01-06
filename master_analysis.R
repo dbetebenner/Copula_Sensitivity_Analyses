@@ -35,6 +35,14 @@ if (!requireNamespace("ks", quietly = TRUE)) {
 # Load dataset configurations
 cat("Loading dataset configurations from dataset_configs.R\n")
 source("dataset_configs.R")
+
+# Load confidential state mappings if available (git-ignored)
+if (file.exists("dataset_configs_local.R")) {
+  source("dataset_configs_local.R")
+} else {
+  cat("Note: dataset_configs_local.R not found. Using placeholder state identifiers.\n")
+  cat("      Create this file locally with actual state mappings if needed.\n")
+}
   
 # Select which datasets to analyze
 # Set to NULL to run all datasets, or specify vector of dataset IDs

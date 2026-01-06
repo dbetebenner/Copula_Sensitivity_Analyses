@@ -39,6 +39,7 @@ source("functions/copula_bootstrap.R")
 source("functions/copula_contour_plots.R")
 source("functions/sgpc_engine.R")
 source("dataset_configs.R")
+if (file.exists("dataset_configs_local.R")) source("dataset_configs_local.R")
 cat("Functions loaded successfully\n\n")
 
 # Helper function to save in multiple formats

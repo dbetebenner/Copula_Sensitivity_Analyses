@@ -40,3 +40,8 @@ prototypes/experimental/
 # setup scripts
 setup_ec2.sh
 sync_to_paper.sh
+
+# Confidential state mappings (NEVER commit)
+dataset_configs_local.R
+*_CONFIDENTIAL.R
+state_config.R

@@ -10,6 +10,7 @@ cat("====================================================================\n\n")
 
 # Load dataset configurations
 source("dataset_configs.R")
+if (file.exists("dataset_configs_local.R")) source("dataset_configs_local.R")
 
 # Test with dataset_3 (transition dataset)
 cat("Testing with Dataset 3 (Assessment Transition)\n\n")

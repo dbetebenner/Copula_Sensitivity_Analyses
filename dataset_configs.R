@@ -24,9 +24,12 @@
 
 # DATASET METADATA:
 # - anonymized_state: Public-facing label (State A, B, C) - use in all publications
-# - source_state: Internal tracking only (CO, NV) - NEVER expose in public materials
+# - source_state: CONFIDENTIAL - actual values are in dataset_configs_local.R (git-ignored)
 #   This field helps maintain data provenance during construction and analysis but
 #   must remain confidential to protect state partnerships and data agreements.
+#
+# NOTE: After sourcing this file, source dataset_configs_local.R to load actual
+#       state identifiers. That file is git-ignored and should never be committed.
 
 DATASETS <- list(
   
@@ -36,7 +39,7 @@ DATASETS <- list(
     name = "Dataset 1 (Vertical Scale)",
     description = "Multi-year vertically scaled state assessment",
     anonymized_state = "State A",
-    source_state = "CO",  # Internal use only - not for publication
+    source_state = "CONFIDENTIAL",  # Actual value in dataset_configs_local.R
     has_transition = FALSE,
     transition_year = NA,
     rdata_object_name = "Copula_Sensitivity_Data_Set_1",
@@ -66,7 +69,7 @@ DATASETS <- list(
     name = "Dataset 2 (Non-Vertical Scale)",
     description = "Multi-year non-vertically scaled state assessment",
     anonymized_state = "State B",
-    source_state = "NV",  # Internal use only - not for publication
+    source_state = "CONFIDENTIAL",  # Actual value in dataset_configs_local.R
     has_transition = FALSE,
     transition_year = NA,
     rdata_object_name = "Copula_Sensitivity_Data_Set_2",
@@ -96,7 +99,7 @@ DATASETS <- list(
     name = "Dataset 3 (Transition)",
     description = "Multi-year with assessment transition",
     anonymized_state = "State C",
-    source_state = "CO",  # Internal use only - not for publication (combines pre/post transition)
+    source_state = "CONFIDENTIAL",  # Actual value in dataset_configs_local.R (combines pre/post transition)
     has_transition = TRUE,
     transition_year = 2015,
     rdata_object_name = "Copula_Sensitivity_Data_Set_3",
@@ -121,13 +124,13 @@ DATASETS <- list(
     notes = "Assessment transition in 2015. Vertical scale (2013-2014) to non-vertical scale (2015-2017). READING appears only in 2013-2014 (pre-transition), ELA appears only in 2015-2017 (post-transition), while MATHEMATICS spans all years. The distinction between READING and ELA is intentional to detect potential impacts of test blueprint changes on dependence structure."
   ),
   
-  # Dataset 4: Vertically scaled (Hawaii)
+  # Dataset 4: Vertically scaled (with COVID-19 gap)
   dataset_4 = list(
     id = "dataset_4",
     name = "Dataset 4 (Vertical Scale)",
     description = "Multi-year vertically scaled state assessment with COVID-19 gap",
     anonymized_state = "State D",
-    source_state = "HI",  # Internal use only - not for publication
+    source_state = "CONFIDENTIAL",  # Actual value in dataset_configs_local.R
     has_transition = FALSE,
     transition_year = NA,
     rdata_object_name = "Copula_Sensitivity_Data_Set_4",

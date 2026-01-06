@@ -55,6 +55,9 @@ source(paste0(func_prefix, "functions/copula_bootstrap.R"))
 source(paste0(func_prefix, "functions/sgpc_engine.R"))  # SGPc calculation engine
 source(paste0(func_prefix, "functions/copula_contour_plots.R"))
 source(paste0(func_prefix, "dataset_configs.R"))
+# Load confidential state mappings if available (git-ignored)
+local_config <- paste0(func_prefix, "dataset_configs_local.R")
+if (file.exists(local_config)) source(local_config)
 
 ################################################################################
 ### CONFIGURATION

@@ -39,6 +39,8 @@ cat("Loading functions...\n")
 source(paste0(func_prefix, "functions/copula_contour_plots.R"))
 source(paste0(func_prefix, "functions/export_plot_utils.R"))
 source(paste0(func_prefix, "dataset_configs.R"))
+local_config <- paste0(func_prefix, "dataset_configs_local.R")
+if (file.exists(local_config)) source(local_config)
 
 ################################################################################
 ### CONFIGURATION

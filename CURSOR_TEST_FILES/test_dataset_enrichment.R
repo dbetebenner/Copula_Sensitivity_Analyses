@@ -11,6 +11,7 @@ cat("====================================================================\n\n")
 if (file.exists("dataset_configs.R")) {
   cat("✓ Loading dataset_configs.R\n")
   source("dataset_configs.R")
+  if (file.exists("dataset_configs_local.R")) source("dataset_configs_local.R")
 } else {
   stop("ERROR: dataset_configs.R not found")
 }

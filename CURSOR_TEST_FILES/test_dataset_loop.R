@@ -13,6 +13,7 @@ cat("====================================================================\n\n")
 if (file.exists("dataset_configs.R")) {
   cat("✓ Found dataset_configs.R\n")
   source("dataset_configs.R")
+  if (file.exists("dataset_configs_local.R")) source("dataset_configs_local.R")
   
   cat("✓ Loaded", length(DATASETS), "dataset configurations:\n\n")
   

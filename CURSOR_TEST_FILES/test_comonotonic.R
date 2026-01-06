@@ -17,6 +17,7 @@ source("functions/copula_bootstrap.R")
 
 # Load dataset configurations
 source("dataset_configs.R")
+if (file.exists("dataset_configs_local.R")) source("dataset_configs_local.R")
 
 # Load a dataset for testing (use dataset_1)
 cat("Loading test data (dataset_1)...\n")
