@@ -687,8 +687,24 @@ bootstrap_parameter_stability <- function(U_prior,
   }
   
   # Run bootstrap
+  # Using PSOCK clusters (socket-based) instead of fork-based mclapply
+  # This is safe with BLAS operations on macOS (Accelerate framework is not fork-safe)
   if (parallel && require(parallel)) {
-    boot_results <- mclapply(1:n_bootstrap, bootstrap_once, mc.cores = 4)
+    n_cores <- min(4, max(1, detectCores() - 1))
+    cl <- makeCluster(n_cores, type = "PSOCK")
+    on.exit(stopCluster(cl), add = TRUE)
+    
+    # Export required objects to workers
+    clusterExport(cl, c("U_prior", "U_current", "n", "copula_family",
+                        "fit_copula_from_uniform"),
+                  envir = environment())
+    
+    # Load required packages on workers
+    clusterEvalQ(cl, {
+      suppressPackageStartupMessages(library(copula))
+    })
+    
+    boot_results <- parLapply(cl, 1:n_bootstrap, bootstrap_once)
   } else {
     boot_results <- lapply(1:n_bootstrap, bootstrap_once)
   }

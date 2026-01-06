@@ -313,30 +313,8 @@ if (file.exists(empirical_copulas_file)) {
   })
 }
 
-# NOTE: Initial plots generated without bootstrap uncertainty
-# Bootstrap is run afterwards and uncertainty plots added separately
-# To integrate bootstrap into all plots, move bootstrap section before this call
-plots <- generate_condition_plots(
-  pseudo_obs = copula_fits$pseudo_obs,
-  original_scores = pairs_full[, .SD, .SDcols = intersect(
-    names(pairs_full), 
-    c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT", "SGP_ORDER_1", "SGP")
-  )],
-  copula_results = copula_fits$results,
-  best_family = copula_fits$best_family,
-  output_dir = output_dir,
-  condition_info = condition_info,
-  bootstrap_results = NULL,  # Will be added after bootstrap section
-  empirical_copulas = empirical_copulas,  # NEW: Pass empCopula objects
-  save_plots = TRUE,
-  grid_size = 300,  # High resolution for smooth contours
-  export_formats = EXPORT_FORMATS,
-  export_dpi = EXPORT_DPI,
-  export_verbose = EXPORT_VERBOSE
-)
-
 ################################################################################
-### BOOTSTRAP UNCERTAINTY QUANTIFICATION
+### BOOTSTRAP UNCERTAINTY QUANTIFICATION (RUN BEFORE PLOT GENERATION)
 ################################################################################
 
 cat("\n")
@@ -399,21 +377,21 @@ bootstrap_elapsed <- difftime(Sys.time(), bootstrap_start_time, units = "secs")
 cat("Bootstrap completed in", round(bootstrap_elapsed, 1), "seconds\n\n")
 
 ################################################################################
-### GENERATE UNCERTAINTY OVERLAY PLOTS (NEW INTEGRATED APPROACH)
+### GENERATE ALL VISUALIZATION PLOTS (SINGLE PASS WITH BOOTSTRAP)
 ################################################################################
 
 cat("\n")
 cat("====================================================================\n")
-cat("GENERATING UNCERTAINTY OVERLAY PLOTS\n")
+cat("GENERATING ALL VISUALIZATION PLOTS\n")
 cat("====================================================================\n")
 cat("\n")
 
-cat("Creating gradient uncertainty visualizations for each copula family...\n")
-cat("  (Zissou1 background + black gradient uncertainty + empirical overlay)\n\n")
+cat("Creating all plots in a single pass (empirical + parametric + uncertainty)...\n")
+cat("  (Includes bootstrap uncertainty ribbons for parametric copulas)\n\n")
 
-# Call the modified generate_condition_plots with bootstrap_results
-# This will create the new uncertainty overlay plots in each family subdirectory
-uncertainty_plots <- generate_condition_plots(
+# Single call to generate_condition_plots with bootstrap_results included
+# This generates ALL plots: empirical, parametric, comparisons, and uncertainty overlays
+plots <- generate_condition_plots(
   pseudo_obs = copula_fits$pseudo_obs,
   original_scores = pairs_full[, .SD, .SDcols = intersect(
     names(pairs_full), 
@@ -423,8 +401,8 @@ uncertainty_plots <- generate_condition_plots(
   best_family = copula_fits$best_family,
   output_dir = output_dir,
   condition_info = condition_info,
-  bootstrap_results = bootstrap_results,  # NOW with bootstrap results!
-  empirical_copulas = empirical_copulas,  # NEW: Pass empCopula objects
+  bootstrap_results = bootstrap_results,  # Includes bootstrap uncertainty
+  empirical_copulas = empirical_copulas,
   save_plots = TRUE,
   grid_size = 300,  # High resolution for smooth contours
   export_formats = EXPORT_FORMATS,
@@ -441,12 +419,6 @@ for (family in names(copula_fits$results)) {
   }
 }
 cat("\n")
-cat("Note: PDF uncertainty plots are not created - the uncertainty ribbon\n")
-cat("      visualization is designed for CDFs only.\n")
-cat("\n")
-
-# Legacy uncertainty plots removed - now using integrated uncertainty ribbon plots
-# located in family-specific subdirectories (e.g., T/t_copula_with_uncertainty_CDF.pdf)
 cat("====================================================================\n")
 cat("VISUALIZATION TEST COMPLETE\n")
 cat("====================================================================\n")
@@ -506,18 +478,18 @@ cat("This simulates what phase1_analysis.R does after aggregating all results.\n
 # Create a mock results data.table that mimics the structure from phase1_family_selection
 # This allows testing the manifest export without running the full analysis
 mock_results <- data.table(
-  dataset_id = rep(test_condition$dataset_id, length(copula_families)),
+  dataset_id = rep(as.character(test_condition$dataset_id), length(copula_families)),
   condition_id = rep(sprintf("%s_G%d_G%d_%s", 
                               test_condition$year_prior,
                               test_condition$grade_prior,
                               test_condition$grade_current,
                               test_condition$content), 
                      length(copula_families)),
-  year_span = rep(test_condition$year_span, length(copula_families)),
-  grade_prior = rep(test_condition$grade_prior, length(copula_families)),
-  grade_current = rep(test_condition$grade_current, length(copula_families)),
-  content_area = rep(test_condition$content, length(copula_families)),
-  n_pairs = rep(nrow(pairs_full), length(copula_families)),
+  year_span = rep(as.integer(test_condition$year_span), length(copula_families)),
+  grade_prior = rep(as.integer(test_condition$grade_prior), length(copula_families)),
+  grade_current = rep(as.integer(test_condition$grade_current), length(copula_families)),
+  content_area = rep(as.character(test_condition$content), length(copula_families)),
+  n_pairs = rep(as.integer(nrow(pairs_full)), length(copula_families)),
   family = copula_families
 )
 
@@ -528,17 +500,30 @@ mock_results[, aic := sapply(family, function(f) {
 mock_results[, bic := sapply(family, function(f) {
   if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$bic else NA_real_
 })]
-mock_results[, tau := sapply(family, function(f) {
-  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$tau else NA_real_
-})]
+# Add Kendall's tau (use kendall_tau field, not tau)
+mock_results[, tau := vapply(family, function(f) {
+  res <- copula_fits$results[[f]]
+  if (!is.null(res) && !is.null(res$kendall_tau)) as.numeric(res$kendall_tau) else NA_real_
+}, FUN.VALUE = numeric(1))]
 
-# Add tail dependence
-mock_results[, tail_dep_lower := sapply(family, function(f) {
-  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$tail_dep_lower else NA_real_
-})]
-mock_results[, tail_dep_upper := sapply(family, function(f) {
-  if (!is.null(copula_fits$results[[f]])) copula_fits$results[[f]]$tail_dep_upper else NA_real_
-})]
+# Add tail dependence (calculate based on family, matching phase1_family_selection_parallel.R)
+mock_results[, tail_dep_lower := vapply(family, function(f) {
+  res <- copula_fits$results[[f]]
+  if (is.null(res)) return(NA_real_)
+  if (f == "t" && !is.null(res$tail_dependence_lower)) return(as.numeric(res$tail_dependence_lower))
+  if (f == "clayton" && !is.null(res$parameter)) return(2^(-1/res$parameter[1]))
+  if (f == "comonotonic") return(1)
+  return(0)  # gaussian, gumbel, frank have λ_L = 0
+}, FUN.VALUE = numeric(1))]
+
+mock_results[, tail_dep_upper := vapply(family, function(f) {
+  res <- copula_fits$results[[f]]
+  if (is.null(res)) return(NA_real_)
+  if (f == "t" && !is.null(res$tail_dependence_upper)) return(as.numeric(res$tail_dependence_upper))
+  if (f == "gumbel" && !is.null(res$parameter)) return(2 - 2^(1/res$parameter[1]))
+  if (f == "comonotonic") return(1)
+  return(0)  # gaussian, clayton, frank have λ_U = 0
+}, FUN.VALUE = numeric(1))]
 
 # Add copula parameters
 mock_results[, parameter_1 := sapply(family, function(f) {

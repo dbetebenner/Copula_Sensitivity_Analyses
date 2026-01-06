@@ -247,6 +247,16 @@ After running Step 1 with `CALCULATE_SGPC = TRUE`, the data files contain:
 
 3. **Empirical vs. parametric**: Bernstein-smoothed empirical copula provides non-parametric SGPc, useful for validating parametric assumptions.
 
+### Summary Grid Statistics (NEW - January 2026)
+
+The summary grid PDF now displays in the statistics box:
+- Copula parameters (ρ, df, θ depending on family)
+- Kendall's τ
+- AIC / BIC
+- **Tail dependence: λ_L and λ_U** (NEW)
+- SGPc comparison metrics (Mean Emp/Par, ρ_s, KS Distance, CvM)
+- Traditional SGP comparison (if available)
+
 ---
 
 ## AI-Consumable Manifest Export (NEW)
@@ -274,8 +284,11 @@ The analysis outputs are designed to be easily consumable by AI systems for:
   - Usage guide for TIMSS-like applications
 
 **Per-Family Summaries** (in each condition's contour_plots directory):
-- `{family}_summary.json` - Fit metrics, parameters, tail dependence, SGPc comparison
-- `{family}_summary.md` - Human-readable summary with recommendations
+- `{family}_summary.json` - Fit metrics, parameters, SGPc comparison, and **tail behaviour**:
+  - `copula_cdf_diff.tail_behaviour.lambda_L_empirical` / `lambda_L_parametric`
+  - `copula_cdf_diff.tail_behaviour.lambda_U_empirical` / `lambda_U_parametric`
+  - `copula_cdf_diff.tail_behaviour.tail_LL_rmse` / `tail_UU_rmse`
+- `{family}_summary.md` - Human-readable summary with recommendations and tail behaviour section
 
 ### Usage Example
 

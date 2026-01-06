@@ -505,18 +505,15 @@ bootstrap_copula_estimation <- function(pairs_data,
   cat("  Sample sizes: n_prior =", n_sample_prior, ", n_current =", n_sample_current, "\n")
   
   # Set up parallel processing if requested
+  # Using PSOCK clusters (socket-based) instead of fork-based mclapply
+  # This is safe with BLAS operations on macOS (Accelerate framework is not fork-safe)
   if (use_parallel) {
-    if (.Platform$OS.type == "unix") {
-      require(parallel)
-      if (is.null(n_cores)) {
-        n_cores <- detectCores() - 1
-      }
-      cat("  Parallel processing: ENABLED (", n_cores, "cores on Unix)\n\n")
-    } else {
-      warning("Parallel processing only supported on Unix/Mac. Running sequentially.")
-      use_parallel <- FALSE
-      cat("  Parallel processing: DISABLED (Windows not supported)\n\n")
+    require(parallel)
+    if (is.null(n_cores)) {
+      n_cores <- max(1, detectCores() - 1)
     }
+    n_cores <- max(1, n_cores)  # Ensure at least 1 core
+    cat("  Parallel processing: ENABLED (", n_cores, "cores via PSOCK socket cluster)\n\n")
   } else {
     cat("  Parallel processing: DISABLED\n\n")
   }
@@ -596,9 +593,32 @@ bootstrap_copula_estimation <- function(pairs_data,
   }
   
   # Run bootstrap iterations (parallel or sequential)
-  if (use_parallel) {
-    # Parallel execution with progress updates
-    boot_list <- mclapply(1:n_bootstrap, bootstrap_worker, mc.cores = n_cores)
+  if (use_parallel && n_cores > 1) {
+    # Parallel execution using PSOCK socket cluster (safe with BLAS on macOS)
+    cat("  Creating PSOCK cluster with", n_cores, "workers...\n")
+    cl <- makeCluster(n_cores, type = "PSOCK")
+    on.exit(stopCluster(cl), add = TRUE)
+    
+    # Export required objects to workers
+    clusterExport(cl, c("pairs_data", "n_sample_prior", "n_sample_current",
+                        "framework_prior", "framework_current", 
+                        "copula_families", "use_empirical_ranks",
+                        "sampling_method", "with_replacement",
+                        "fit_copula_from_pairs"),
+                  envir = environment())
+    
+    # Load required packages on workers
+    clusterEvalQ(cl, {
+      suppressPackageStartupMessages({
+        library(copula)
+        library(data.table)
+      })
+    })
+    
+    cat("  Running", n_bootstrap, "bootstrap iterations in parallel...\n")
+    boot_list <- parLapply(cl, 1:n_bootstrap, bootstrap_worker)
+    cat("  Parallel bootstrap complete.\n")
+    
   } else {
     # Sequential execution with progress updates
     boot_list <- vector("list", n_bootstrap)

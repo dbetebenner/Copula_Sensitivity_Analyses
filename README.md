@@ -142,6 +142,7 @@ Each analyzed condition (e.g., `2010_G5_G6_MATHEMATICS/`) now follows this struc
 │       ├── comparison_empirical_vs_t_CDF.pdf
 │       ├── comparison_empirical_vs_t_full.pdf
 │       └── comparison_empirical_vs_t_summary.{json,md}
+│           # Includes tail_behaviour section with λ_L, λ_U
 ├── EMPIRICAL/                     # Empirical copula outputs
 │   ├── RAW/                       # Deheuvels empirical copula
 │   │   ├── raw_copula_CDF.pdf
@@ -214,6 +215,19 @@ Analysis results are exported in AI-friendly formats for automated summarization
 - `{family}_summary.json` - Structured fit metrics, tail dependence, SGPc comparison
 - `{family}_summary.md` - Human-readable summary with parameter recommendations
 
+### 6. **Tail Dependence Statistics (NEW - January 2026)**
+Copula difference plots and exports now include tail behaviour metrics:
+
+- **Lower Tail Dependence (λ_L)**: Measures joint extreme low outcomes
+- **Upper Tail Dependence (λ_U)**: Measures joint extreme high outcomes
+- **Tail Region RMSE**: Fit quality in corners (u,v ≤ 0.10 or ≥ 0.90)
+
+These appear in:
+- Copula difference plot annotation boxes
+- `{family}_summary.json` under `copula_cdf_diff.tail_behaviour`
+- `{family}_summary.md` under "Tail Behaviour" section
+- Summary grid statistics box (λ_L, λ_U line)
+
 ---
 
 ## Current Status (December 2025)
@@ -233,8 +247,9 @@ Analysis results are exported in AI-friendly formats for automated summarization
    - Individual datasets in `dataset_1/`, `dataset_2/`, `dataset_3/`, `dataset_4/`
    - Dataset 4 includes pandemic analysis: `dataset_4/pandemic_analysis/`
 
-3. **EC2 Optimization** (Nov 2025)
-   - FORK cluster (Unix) for shared memory parallelization
+3. **EC2 Optimization** (Nov 2025, updated Jan 2026)
+   - PSOCK cluster (socket-based) for cross-platform parallelization
+   - Safe with macOS Accelerate BLAS (avoids fork-related segfaults)
    - Auto-detects EC2 environment, configures core allocation
    - Recommended: c8g.12xlarge (48 vCPUs, 96 GB RAM, Graviton3)
    - Expected runtime: 18-24 hours for N=1000 bootstrap

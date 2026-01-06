@@ -731,6 +731,103 @@ plot_copula_with_uncertainty_ribbons <- function(empirical_grid,
   return(p)
 }
 
+#' Calculate Tail Dependence Statistics from Copula CDF Grids
+#'
+#' Computes tail dependence coefficients and tail-region fit statistics
+#' from two copula CDF matrices (e.g., empirical vs parametric).
+#'
+#' @param u_seq Numeric vector of u values (typically seq(0.01, 0.99, length.out=100))
+#' @param v_seq Numeric vector of v values (same as u_seq for symmetric grid)
+#' @param cdf_mat_1 Matrix of CDF values for first copula (empirical)
+#' @param cdf_mat_2 Matrix of CDF values for second copula (parametric)
+#' @param tau_tail Numeric, tail threshold (default 0.10 means lower 10% and upper 10%)
+#'
+#' @return List containing:
+#'   - lambda_L_1, lambda_L_2: Lower tail dependence estimates for each copula
+#'   - lambda_U_1, lambda_U_2: Upper tail dependence estimates for each copula
+#'   - delta_lambda_L, delta_lambda_U: Differences (copula1 - copula2)
+#'   - tail_LL_rmse: RMSE in lower-left region (u,v <= tau)
+#'   - tail_UU_rmse: RMSE in upper-right region (u,v >= 1-tau)
+#'   - tau_tail: The threshold used
+#'
+#' @details
+#' Tail dependence formulas (empirical approximations):
+#'   λ_L ≈ C(τ, τ) / τ
+#'   λ_U ≈ (2τ - 1 + C(1-τ, 1-τ)) / τ
+#'
+#' @export
+calculate_copula_tail_statistics <- function(u_seq, v_seq, 
+                                              cdf_mat_1, cdf_mat_2,
+                                              tau_tail = 0.10) {
+  
+  # Find grid indices closest to tau and 1-tau
+  idx_lower <- which.min(abs(u_seq - tau_tail))
+  idx_upper <- which.min(abs(u_seq - (1 - tau_tail)))
+  
+  # Extract CDF values at (tau, tau) and (1-tau, 1-tau)
+  # cdf_mat[i, j] corresponds to C(u_seq[i], v_seq[j])
+  cdf_tau_tau_1 <- cdf_mat_1[idx_lower, idx_lower]
+  cdf_tau_tau_2 <- cdf_mat_2[idx_lower, idx_lower]
+  
+  cdf_1mtau_1 <- cdf_mat_1[idx_upper, idx_upper]
+  cdf_1mtau_2 <- cdf_mat_2[idx_upper, idx_upper]
+  
+  # Lower tail dependence: λ_L ≈ C(τ, τ) / τ
+  lambda_L_1 <- cdf_tau_tau_1 / tau_tail
+  lambda_L_2 <- cdf_tau_tau_2 / tau_tail
+  
+  # Upper tail dependence: λ_U ≈ (2τ - 1 + C(1-τ, 1-τ)) / τ
+  lambda_U_1 <- (2 * tau_tail - 1 + cdf_1mtau_1) / tau_tail
+  lambda_U_2 <- (2 * tau_tail - 1 + cdf_1mtau_2) / tau_tail
+  
+  # Clamp to [0, 1] (numerical estimates can slightly exceed bounds)
+  lambda_L_1 <- max(0, min(1, lambda_L_1))
+  lambda_L_2 <- max(0, min(1, lambda_L_2))
+  lambda_U_1 <- max(0, min(1, lambda_U_1))
+  lambda_U_2 <- max(0, min(1, lambda_U_2))
+  
+  # Calculate differences
+  delta_lambda_L <- lambda_L_1 - lambda_L_2
+  delta_lambda_U <- lambda_U_1 - lambda_U_2
+  
+  # Create masks for tail regions
+  mask_LL <- outer(u_seq <= tau_tail, v_seq <= tau_tail, "&")
+  mask_UU <- outer(u_seq >= (1 - tau_tail), v_seq >= (1 - tau_tail), "&")
+  
+  # Calculate RMSE in tail regions
+  diff_mat <- cdf_mat_1 - cdf_mat_2
+  
+  if (sum(mask_LL) > 0) {
+    tail_LL_rmse <- sqrt(mean(diff_mat[mask_LL]^2))
+    tail_LL_mean_abs <- mean(abs(diff_mat[mask_LL]))
+  } else {
+    tail_LL_rmse <- NA_real_
+    tail_LL_mean_abs <- NA_real_
+  }
+  
+  if (sum(mask_UU) > 0) {
+    tail_UU_rmse <- sqrt(mean(diff_mat[mask_UU]^2))
+    tail_UU_mean_abs <- mean(abs(diff_mat[mask_UU]))
+  } else {
+    tail_UU_rmse <- NA_real_
+    tail_UU_mean_abs <- NA_real_
+  }
+  
+  return(list(
+    lambda_L_1 = lambda_L_1,
+    lambda_L_2 = lambda_L_2,
+    delta_lambda_L = delta_lambda_L,
+    lambda_U_1 = lambda_U_1,
+    lambda_U_2 = lambda_U_2,
+    delta_lambda_U = delta_lambda_U,
+    tail_LL_rmse = tail_LL_rmse,
+    tail_LL_mean_abs = tail_LL_mean_abs,
+    tail_UU_rmse = tail_UU_rmse,
+    tail_UU_mean_abs = tail_UU_mean_abs,
+    tau_tail = tau_tail
+  ))
+}
+
 #' Create comparison plot between empirical and parametric copula
 #' 
 #' @param empirical_grid Output from calculate_empirical_copula_grid
@@ -895,6 +992,39 @@ plot_copula_comparison <- function(empirical_grid,
           }
         }
       }
+      
+      # === TAIL BEHAVIOUR SECTION ===
+      # Calculate tail dependence statistics from the CDF grids
+      grid_size <- length(u_seq)
+      emp_cdf_mat <- matrix(as.vector(empirical_grid$copula_values), 
+                            nrow = grid_size, ncol = grid_size, byrow = FALSE)
+      par_cdf_mat <- matrix(parametric_values, 
+                            nrow = grid_size, ncol = grid_size, byrow = FALSE)
+      
+      tail_stats <- calculate_copula_tail_statistics(
+        u_seq = u_seq, v_seq = v_seq,
+        cdf_mat_1 = emp_cdf_mat,
+        cdf_mat_2 = par_cdf_mat,
+        tau_tail = 0.10
+      )
+      
+      # Add tail behaviour block to statistics
+      text_lines <- c(text_lines, list(list(x_offset = 0.0, y_offset = y_pos, 
+                                             label = "bold('Tail Behaviour (tau = 0.10):')")))
+      y_pos <- y_pos + y_increment
+      
+      # Lower tail dependence (λ_L)
+      text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
+                                             label = sprintf("lambda[L]*':'~Emp==%.2f*','~Par==%.2f", 
+                                                            tail_stats$lambda_L_1, tail_stats$lambda_L_2))))
+      y_pos <- y_pos + y_increment
+      
+      # Upper tail dependence (λ_U)
+      text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
+                                             label = sprintf("lambda[U]*':'~Emp==%.2f*','~Par==%.2f", 
+                                                            tail_stats$lambda_U_1, tail_stats$lambda_U_2))))
+      y_pos <- y_pos + y_increment
+      # === END TAIL BEHAVIOUR SECTION ===
 
         text_lines <- c(list(list(x_offset = 0.0, y_offset = y_pos, label = "bold('Surface Difference:')")),
                         list(list(x_offset = 0.01, y_offset = y_pos + y_increment, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff)))),
@@ -909,7 +1039,7 @@ plot_copula_comparison <- function(empirical_grid,
       total_height <- max_y_offset + 0.025
       p <- p +
         annotate("rect",
-                 xmin = 0.01, xmax = 0.2,
+                 xmin = 0.01, xmax = 0.25,
                  ymin = 0.985 - total_height, ymax = 0.985,
                  fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.82,
                  linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
@@ -1007,7 +1137,11 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
   method1_label <- tools::toTitleCase(method1)
   method2_label <- tools::toTitleCase(method2)
   
-  # Add Deheuvels attribution to raw empirical method
+  # Initialize short labels for tail behaviour display (before Deheuvels is added)
+  method1_label_tail_behavior <- method1_label
+  method2_label_tail_behavior <- method2_label
+  
+  # Add Deheuvels attribution to raw empirical method (for title only)
   if (tolower(method1) == "raw") {
     method1_label <- paste0(method1_label, " (Deheuvels)")
   }
@@ -1083,13 +1217,34 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
     rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
     q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
     
-      text_lines <- list(
-        list(x_offset = 0.0, y_offset = y_pos, label = "bold('Surface Difference:')"),
-        list(x_offset = 0.01, y_offset = y_pos + y_increment, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))),
-        list(x_offset = 0.01, y_offset = y_pos + 2*y_increment, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))),
-        list(x_offset = 0.01, y_offset = y_pos + 3*y_increment, label = sprintf("RMSE==%s", fmt5(rmse_diff))),
-        list(x_offset = 0.01, y_offset = y_pos + 4*y_increment, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff)))
-      )
+    # === TAIL BEHAVIOUR SECTION ===
+    # Calculate tail dependence statistics from the CDF grids
+    cdf_mat_1 <- matrix(cdf1, nrow = grid_size, ncol = grid_size, byrow = FALSE)
+    cdf_mat_2 <- matrix(cdf2, nrow = grid_size, ncol = grid_size, byrow = FALSE)
+    
+    tail_stats <- calculate_copula_tail_statistics(
+      u_seq = u_seq, v_seq = v_seq,
+      cdf_mat_1 = cdf_mat_1,
+      cdf_mat_2 = cdf_mat_2,
+      tau_tail = 0.10
+    )
+    # === END TAIL BEHAVIOUR SECTION ===
+    
+    text_lines <- list(
+      list(x_offset = 0.0, y_offset = y_pos, label = "bold('Surface Difference:')"),
+      list(x_offset = 0.01, y_offset = y_pos + y_increment, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))),
+      list(x_offset = 0.01, y_offset = y_pos + 2*y_increment, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))),
+      list(x_offset = 0.01, y_offset = y_pos + 3*y_increment, label = sprintf("RMSE==%s", fmt5(rmse_diff))),
+      list(x_offset = 0.01, y_offset = y_pos + 4*y_increment, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff))),
+      # Tail behaviour statistics
+      list(x_offset = 0.0, y_offset = y_pos + 5*y_increment + 0.01, label = "bold('Tail Behaviour (tau = 0.10):')"),
+      list(x_offset = 0.01, y_offset = y_pos + 6*y_increment + 0.01,
+           label = sprintf("lambda[L]*':'~%s==%.2f*','~%s==%.2f", 
+                          method1_label_tail_behavior, tail_stats$lambda_L_1, method2_label_tail_behavior, tail_stats$lambda_L_2)),
+      list(x_offset = 0.01, y_offset = y_pos + 7*y_increment + 0.01,
+           label = sprintf("lambda[U]*':'~%s==%.2f*','~%s==%.2f",
+                          method1_label_tail_behavior, tail_stats$lambda_U_1, method2_label_tail_behavior, tail_stats$lambda_U_2))
+    )
     
     # Add background box first
     # Find maximum y_offset to ensure box covers all text
@@ -1097,7 +1252,7 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
     total_height <- max_y_offset + 0.025
     p <- p +
       annotate("rect",
-               xmin = 0.01, xmax = 0.175,
+               xmin = 0.01, xmax = 0.29,
                ymin = 0.985 - total_height, ymax = 0.985,
                fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.82,
                linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
@@ -1702,11 +1857,34 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
   cdf_bern <- pCopula(as.matrix(grid), copula = empirical_copulas$bernstein)
   diff_cdf <- cdf_bern - cdf_raw
   
+  # Calculate tail statistics for empirical methods comparison
+  raw_cdf_mat <- matrix(cdf_raw, nrow = grid_size, ncol = grid_size, byrow = FALSE)
+  bern_cdf_mat <- matrix(cdf_bern, nrow = grid_size, ncol = grid_size, byrow = FALSE)
+  
+  emp_tail_stats <- calculate_copula_tail_statistics(
+    u_seq = u_seq, v_seq = v_seq,
+    cdf_mat_1 = raw_cdf_mat,
+    cdf_mat_2 = bern_cdf_mat,
+    tau_tail = 0.10
+  )
+  
   copula_diff_stats <- list(
     max_positive = max(diff_cdf, na.rm = TRUE),
     max_negative = min(diff_cdf, na.rm = TRUE),
     mean_abs_diff = mean(abs(diff_cdf), na.rm = TRUE),
-    median_abs_diff = median(abs(diff_cdf), na.rm = TRUE)
+    median_abs_diff = median(abs(diff_cdf), na.rm = TRUE),
+    rmse_diff = sqrt(mean(diff_cdf^2, na.rm = TRUE)),
+    q95_abs_diff = as.numeric(quantile(abs(diff_cdf), 0.95, na.rm = TRUE)),
+    # Tail behaviour statistics (Raw vs Bernstein)
+    tau_tail = emp_tail_stats$tau_tail,
+    lambda_L_raw = emp_tail_stats$lambda_L_1,
+    lambda_L_bern = emp_tail_stats$lambda_L_2,
+    delta_lambda_L = emp_tail_stats$delta_lambda_L,
+    lambda_U_raw = emp_tail_stats$lambda_U_1,
+    lambda_U_bern = emp_tail_stats$lambda_U_2,
+    delta_lambda_U = emp_tail_stats$delta_lambda_U,
+    tail_LL_rmse = emp_tail_stats$tail_LL_rmse,
+    tail_UU_rmse = emp_tail_stats$tail_UU_rmse
   )
   
   return(list(
@@ -2529,11 +2707,36 @@ generate_condition_plots <- function(pseudo_obs,
           
           diff_values <- as.vector(empirical_grid_cdf$copula_values) - parametric_values
           
+          # Calculate tail statistics for fallback
+          emp_cdf_mat <- matrix(as.vector(empirical_grid_cdf$copula_values), 
+                                nrow = grid_size, ncol = grid_size, byrow = FALSE)
+          par_cdf_mat <- matrix(parametric_values, 
+                                nrow = grid_size, ncol = grid_size, byrow = FALSE)
+          
+          fallback_tail_stats <- calculate_copula_tail_statistics(
+            u_seq = u_seq, v_seq = v_seq,
+            cdf_mat_1 = emp_cdf_mat,
+            cdf_mat_2 = par_cdf_mat,
+            tau_tail = 0.10
+          )
+          
           fallback_copula_diff_stats <- list(
             max_positive = max(diff_values, na.rm = TRUE),
             max_negative = min(diff_values, na.rm = TRUE),
             mean_abs_diff = mean(abs(diff_values), na.rm = TRUE),
-            median_abs_diff = median(abs(diff_values), na.rm = TRUE)
+            median_abs_diff = median(abs(diff_values), na.rm = TRUE),
+            rmse_diff = sqrt(mean(diff_values^2, na.rm = TRUE)),
+            q95_abs_diff = as.numeric(quantile(abs(diff_values), 0.95, na.rm = TRUE)),
+            # Tail behaviour statistics
+            tau_tail = fallback_tail_stats$tau_tail,
+            lambda_L_emp = fallback_tail_stats$lambda_L_1,
+            lambda_L_par = fallback_tail_stats$lambda_L_2,
+            delta_lambda_L = fallback_tail_stats$delta_lambda_L,
+            lambda_U_emp = fallback_tail_stats$lambda_U_1,
+            lambda_U_par = fallback_tail_stats$lambda_U_2,
+            delta_lambda_U = fallback_tail_stats$delta_lambda_U,
+            tail_LL_rmse = fallback_tail_stats$tail_LL_rmse,
+            tail_UU_rmse = fallback_tail_stats$tail_UU_rmse
           )
           
           # Export summary files without SGPc stats
@@ -3571,7 +3774,7 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
     p_ecdf <- p_ecdf +
       annotate("rect",
                xmin = 1.8, xmax = 45,
-               ymin = 0.98 - total_height, ymax = 0.98,
+               ymin = 0.985 - total_height, ymax = 0.985,
                fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
                linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
     
@@ -4073,11 +4276,40 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
   
   diff_values <- as.vector(empirical_grid$copula_values) - parametric_values
   
+  # === TAIL STATISTICS CALCULATION ===
+  # Reshape CDF vectors to matrices for tail calculation
+  emp_cdf_mat <- matrix(as.vector(empirical_grid$copula_values), 
+                        nrow = grid_size, ncol = grid_size, byrow = FALSE)
+  par_cdf_mat <- matrix(parametric_values, 
+                        nrow = grid_size, ncol = grid_size, byrow = FALSE)
+  
+  tail_stats <- calculate_copula_tail_statistics(
+    u_seq = u_seq, v_seq = v_seq,
+    cdf_mat_1 = emp_cdf_mat,
+    cdf_mat_2 = par_cdf_mat,
+    tau_tail = 0.10
+  )
+  # === END TAIL STATISTICS ===
+  
   copula_diff_stats <- list(
+    # Existing statistics
     max_positive = max(diff_values, na.rm = TRUE),
     max_negative = min(diff_values, na.rm = TRUE),
     mean_abs_diff = mean(abs(diff_values), na.rm = TRUE),
-    median_abs_diff = median(abs(diff_values), na.rm = TRUE)
+    median_abs_diff = median(abs(diff_values), na.rm = TRUE),
+    # Additional global statistics
+    rmse_diff = sqrt(mean(diff_values^2, na.rm = TRUE)),
+    q95_abs_diff = as.numeric(quantile(abs(diff_values), 0.95, na.rm = TRUE)),
+    # NEW: Tail behaviour statistics
+    tau_tail = tail_stats$tau_tail,
+    lambda_L_emp = tail_stats$lambda_L_1,
+    lambda_L_par = tail_stats$lambda_L_2,
+    delta_lambda_L = tail_stats$delta_lambda_L,
+    lambda_U_emp = tail_stats$lambda_U_1,
+    lambda_U_par = tail_stats$lambda_U_2,
+    delta_lambda_U = tail_stats$delta_lambda_U,
+    tail_LL_rmse = tail_stats$tail_LL_rmse,
+    tail_UU_rmse = tail_stats$tail_UU_rmse
   )
   
   # --- Right Panel: SGPc Comparison ---
@@ -4346,10 +4578,25 @@ export_copula_summary <- function(output_dir,
     },
     copula_cdf_diff = if (!is.null(copula_diff_stats)) {
       list(
+        # Global surface statistics
         max_positive = round(copula_diff_stats$max_positive %||% NA, 5),
         max_negative = round(copula_diff_stats$max_negative %||% NA, 5),
         mean_abs_diff = round(copula_diff_stats$mean_abs_diff %||% NA, 5),
-        median_abs_diff = round(copula_diff_stats$median_abs_diff %||% NA, 5)
+        median_abs_diff = round(copula_diff_stats$median_abs_diff %||% NA, 5),
+        rmse_diff = round(copula_diff_stats$rmse_diff %||% NA, 5),
+        q95_abs_diff = round(copula_diff_stats$q95_abs_diff %||% NA, 5),
+        # NEW: Tail behaviour statistics
+        tail_behaviour = list(
+          tau = copula_diff_stats$tau_tail %||% 0.10,
+          lambda_L_empirical = round(copula_diff_stats$lambda_L_emp %||% NA, 3),
+          lambda_L_parametric = round(copula_diff_stats$lambda_L_par %||% NA, 3),
+          delta_lambda_L = round(copula_diff_stats$delta_lambda_L %||% NA, 3),
+          lambda_U_empirical = round(copula_diff_stats$lambda_U_emp %||% NA, 3),
+          lambda_U_parametric = round(copula_diff_stats$lambda_U_par %||% NA, 3),
+          delta_lambda_U = round(copula_diff_stats$delta_lambda_U %||% NA, 3),
+          tail_LL_rmse = round(copula_diff_stats$tail_LL_rmse %||% NA, 5),
+          tail_UU_rmse = round(copula_diff_stats$tail_UU_rmse %||% NA, 5)
+        )
       )
     } else {
       list(available = FALSE)
@@ -4370,8 +4617,8 @@ export_copula_summary <- function(output_dir,
     ),
     # NEW: Tail dependence (critical for t-copula characterization)
     tail_dependence = list(
-      lower = round(copula_result$tail_dep_lower %||% NA, 5),
-      upper = round(copula_result$tail_dep_upper %||% NA, 5)
+      lower = round(copula_result$tail_dependence_lower %||% NA, 5),
+      upper = round(copula_result$tail_dependence_upper %||% NA, 5)
     ),
     # NEW: Relative fit metrics for family comparison
     relative_fit = list(
@@ -4423,6 +4670,7 @@ export_copula_summary <- function(output_dir,
 - **AIC**: %.1f
 - **BIC**: %.1f
 - **Kendall\'s τ**: %.3f
+- **Tail Dependence (theor.)**: λ_L = %.4f, λ_U = %.4f
 
 ## Goodness-of-Fit
 - **CvM Statistic**: %.5f
@@ -4442,10 +4690,30 @@ export_copula_summary <- function(output_dir,
     summary_data$copula$aic %||% NA,
     summary_data$copula$bic %||% NA,
     summary_data$copula$kendall_tau %||% NA,
+    summary_data$tail_dependence$lower %||% NA,
+    summary_data$tail_dependence$upper %||% NA,
     summary_data$copula$gof_statistic %||% NA,
     summary_data$copula$gof_pvalue %||% NA,
     summary_data$copula$gof_method %||% "N/A"
   )
+  
+  # Relative fit section (conditional - only if relative_fit metrics are available)
+  rel_fit <- summary_data$relative_fit %||% list()
+  if (!is.na(rel_fit$delta_aic_vs_best %||% NA) || !is.na(rel_fit$aic_weight %||% NA)) {
+    md_relative_fit <- sprintf(
+'
+## Relative Fit (vs Best Model)
+- **ΔAIC (vs best)**: %.1f
+- **Akaike Weight (wAIC)**: %.4f
+- **Is Best by AIC**: %s
+',
+      rel_fit$delta_aic_vs_best %||% NA,
+      rel_fit$aic_weight %||% NA,
+      if (isTRUE(rel_fit$is_best_aic)) "Yes" else "No"
+    )
+  } else {
+    md_relative_fit <- ""
+  }
   
   # SGPc section (conditional - only if sgpc_stats is available)
   if (!is.null(sgpc_stats) && !is.null(sgpc_stats$n_valid) && sgpc_stats$n_valid > 0) {
@@ -4557,18 +4825,42 @@ export_copula_summary <- function(output_dir,
   
   # Copula CDF diff section and footer
   if (!is.null(copula_diff_stats) && !isTRUE(summary_data$copula_cdf_diff$available == FALSE)) {
+    # Extract tail behaviour from summary_data
+    tail_beh <- summary_data$copula_cdf_diff$tail_behaviour %||% list()
+    
     md_cdf_diff <- sprintf(
 '
 ## Copula CDF Difference
 - **Max Positive** (Emp > %s): %.5f
 - **Max Negative** (Emp < %s): %.5f
 - **Mean Absolute Difference**: %.5f
+- **RMSE**: %.5f
+- **Q95(|Δ|)**: %.5f
+
+### Tail Behaviour (τ = %.2f)
+- **Lower Tail Dependence λ_L**: Emp = %.3f, %s = %.3f (Δ = %.3f)
+- **Upper Tail Dependence λ_U**: Emp = %.3f, %s = %.3f (Δ = %.3f)
+- **RMSE in LL Tail (u,v ≤ τ)**: %.5f
+- **RMSE in UU Tail (u,v ≥ 1−τ)**: %.5f
 ',
       tools::toTitleCase(family),
       summary_data$copula_cdf_diff$max_positive %||% NA,
       tools::toTitleCase(family),
       summary_data$copula_cdf_diff$max_negative %||% NA,
-      summary_data$copula_cdf_diff$mean_abs_diff %||% NA
+      summary_data$copula_cdf_diff$mean_abs_diff %||% NA,
+      summary_data$copula_cdf_diff$rmse_diff %||% NA,
+      summary_data$copula_cdf_diff$q95_abs_diff %||% NA,
+      tail_beh$tau %||% 0.10,
+      tail_beh$lambda_L_empirical %||% NA,
+      tools::toTitleCase(family),
+      tail_beh$lambda_L_parametric %||% NA,
+      tail_beh$delta_lambda_L %||% NA,
+      tail_beh$lambda_U_empirical %||% NA,
+      tools::toTitleCase(family),
+      tail_beh$lambda_U_parametric %||% NA,
+      tail_beh$delta_lambda_U %||% NA,
+      tail_beh$tail_LL_rmse %||% NA,
+      tail_beh$tail_UU_rmse %||% NA
     )
   } else {
     md_cdf_diff <- "\n## Copula CDF Difference\n\n*CDF difference statistics not available.*\n"
@@ -4641,7 +4933,7 @@ tau(my_copula)  # Should be approximately %.3f
   )
   
   # Combine all sections
-  md_content <- paste0(md_header, md_sgpc, md_traditional_sgp, md_cdf_diff, md_recommendations, md_footer)
+  md_content <- paste0(md_header, md_relative_fit, md_sgpc, md_traditional_sgp, md_cdf_diff, md_recommendations, md_footer)
   
   writeLines(md_content, md_file)
   
@@ -4935,27 +5227,27 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
       "| Parameter | Median | Range (5th-95th) |",
       "|-----------|--------|------------------|",
       sprintf("| Kendall's τ | %.3f | [%.3f, %.3f] |", 
-              if (is.list(rec$tau)) rec$tau$median else rec$tau["median"],
-              if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"],
-              if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"]),
+              as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"]),
+              as.numeric(if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"]),
+              as.numeric(if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"])),
       sprintf("| Correlation ρ | %.3f | [%.3f, %.3f] |",
-              if (is.list(rec$rho)) rec$rho$median else rec$rho["median"],
-              if (is.list(rec$rho)) rec$rho$range[1] else rec$rho["range.5%"],
-              if (is.list(rec$rho)) rec$rho$range[2] else rec$rho["range.95%"]),
+              as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]),
+              as.numeric(if (is.list(rec$rho)) rec$rho$range[1] else rec$rho["range.5%"]),
+              as.numeric(if (is.list(rec$rho)) rec$rho$range[2] else rec$rho["range.95%"])),
       sprintf("| Degrees of freedom | %.1f | [%.1f, %.1f] |",
-              if (is.list(rec$df)) rec$df$median else rec$df["median"],
-              if (is.list(rec$df)) rec$df$range[1] else rec$df["range.5%"],
-              if (is.list(rec$df)) rec$df$range[2] else rec$df["range.95%"]),
+              as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"]),
+              as.numeric(if (is.list(rec$df)) rec$df$range[1] else rec$df["range.5%"]),
+              as.numeric(if (is.list(rec$df)) rec$df$range[2] else rec$df["range.95%"])),
       sprintf("| Tail dependence | - | [%.4f, %.4f] |",
-              if (is.list(rec$tail_dependence)) rec$tail_dependence$range[1] else rec$tail_dependence["range.5%"],
-              if (is.list(rec$tail_dependence)) rec$tail_dependence$range[2] else rec$tail_dependence["range.95%"]),
+              as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[1] else rec$tail_dependence["range.5%"]),
+              as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[2] else rec$tail_dependence["range.95%"])),
       "",
       "**R code:**",
       "```r",
       "library(copula)",
       sprintf("cop <- tCopula(param = %.3f, df = %.0f)", 
-              if (is.list(rec$rho)) rec$rho$median else rec$rho["median"],
-              if (is.list(rec$df)) rec$df$median else rec$df["median"]),
+              as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]),
+              as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"])),
       "```",
       ""
     )
@@ -4973,9 +5265,9 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
   
   for (content_name in names(manifest$parameter_recommendations$by_content_area)) {
     rec <- manifest$parameter_recommendations$by_content_area[[content_name]]
-    tau_median <- if (is.list(rec$tau)) rec$tau$median else rec$tau["median"]
-    tau_range1 <- if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"]
-    tau_range2 <- if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"]
+    tau_median <- as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"])
+    tau_range1 <- as.numeric(if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"])
+    tau_range2 <- as.numeric(if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"])
     md_lines <- c(md_lines,
       sprintf("| %s | %.3f | [%.3f, %.3f] | %d |",
               rec$content_area, tau_median,
@@ -5156,6 +5448,14 @@ generate_summary_grid_latex <- function(output_dir,
     }
   }
   
+  # Extract tail dependence coefficients
+  # Try multiple sources: metadata (JSON), copula_results, or copula_meta
+  tail_dep_meta <- metadata$tail_dependence %||% list()
+  lambda_L <- copula_results[[best_family]]$tail_dependence_lower %||% 
+              tail_dep_meta$lower %||% NA
+  lambda_U <- copula_results[[best_family]]$tail_dependence_upper %||% 
+              tail_dep_meta$upper %||% NA
+  
   # SGPc comparison stats
   # Note: calculate_ecdf_statistics() returns mean1/mean2 and spearman_rho
   # JSON exports them as mean_empirical/mean_parametric/correlation
@@ -5309,7 +5609,8 @@ generate_summary_grid_latex <- function(output_dir,
     "\\definecolor{armyblue}{RGB}{59,157,197}",
     "\\definecolor{textgray}{RGB}{60,60,60}",
     "\\definecolor{lightgray}{RGB}{245,245,245}",
-    "\\definecolor{bulletgray}{RGB}{160,160,160}",
+    "\\definecolor{titlebg}{RGB}{20,20,16}",
+    "\\definecolor{titletext}{RGB}{237,237,235}",
     "",
     "\\begin{document}",
     sprintf("\\setlength{\\fboxsep}{%dpt}", fbox_sep),
@@ -5319,10 +5620,10 @@ generate_summary_grid_latex <- function(output_dir,
     "",
     "% === TITLE ===",
     "\\noindent%",
-    "\\fbox{%",
+    "\\colorbox{titlebg}{%",
     "\\begin{minipage}[c][0.6in][c]{0.99\\textwidth}",
     "\\centering",
-    sprintf("{\\LARGE\\bfseries Copula Analysis: Data Set %s {\\color{bulletgray}\\ding{74}} %s {\\color{bulletgray}\\ding{74}} Grade %d$\\rightarrow$%d {\\color{bulletgray}\\ding{74}} Year %s$\\rightarrow$%s}",
+    sprintf("{\\color{titletext}\\LARGE\\bfseries Copula Analysis Data Set %s: %s \\raisebox{0.15ex}{\\large\\ding{97}} Grade %d\\,\\raisebox{0.05ex}{\\ding{254}}\\,%d \\raisebox{0.15ex}{\\large\\ding{97}} Year %s\\,\\raisebox{0.05ex}{\\ding{254}}\\,%s}",
             dataset_number, content_formatted, grade_prior, grade_current, year_prior, year_current),
     "\\end{minipage}%",
     "}",
@@ -5403,7 +5704,20 @@ generate_summary_grid_latex <- function(output_dir,
   tex_lines <- c(tex_lines,
     sprintf("\\quad Kendall $\\tau$: %s\\\\", fmt_num(kendall_tau)),
     sprintf("\\quad AIC: %s\\\\", fmt_num(aic_val, 1)),
-    sprintf("\\quad BIC: %s\\\\[0.5em]", fmt_num(bic_val, 1)),
+    sprintf("\\quad BIC: %s\\\\", fmt_num(bic_val, 1))
+  )
+  
+  # Add tail dependence if available (theoretical values from copula parameters)
+  if (!is.na(lambda_L) || !is.na(lambda_U)) {
+    tex_lines <- c(tex_lines,
+      sprintf("\\quad $\\lambda_L$: %s, $\\lambda_U$: %s \\textit{(theor.)}\\\\[0.5em]", 
+              fmt_num(lambda_L, 2), fmt_num(lambda_U, 2)))
+  } else {
+    # Add vertical space before SGPc section even if no tail dependence
+    tex_lines <- c(tex_lines, "\\\\[0.5em]")
+  }
+  
+  tex_lines <- c(tex_lines,
     "",
     "{\\bfseries SGPc Comparison:}\\\\",
     sprintf("\\quad Mean Emp/Par: %s / %s\\\\", fmt_num(mean_emp, 1), fmt_num(mean_par, 1)),
