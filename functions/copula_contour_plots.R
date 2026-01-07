@@ -5267,6 +5267,7 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
   for (span_name in names(manifest$parameter_recommendations$by_year_span)) {
     rec <- manifest$parameter_recommendations$by_year_span[[span_name]]
     
+    # Start with common header and tau (available for all families)
     md_lines <- c(md_lines,
       sprintf("### %d-Year Span", rec$year_span),
       "",
@@ -5278,28 +5279,63 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
       sprintf("| Kendall's τ | %.3f | [%.3f, %.3f] |", 
               as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"]),
               as.numeric(if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"]),
-              as.numeric(if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"])),
-      sprintf("| Correlation ρ | %.3f | [%.3f, %.3f] |",
-              as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]),
-              as.numeric(if (is.list(rec$rho)) rec$rho$range[1] else rec$rho["range.5%"]),
-              as.numeric(if (is.list(rec$rho)) rec$rho$range[2] else rec$rho["range.95%"])),
-      sprintf("| Degrees of freedom | %.1f | [%.1f, %.1f] |",
-              as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"]),
-              as.numeric(if (is.list(rec$df)) rec$df$range[1] else rec$df["range.5%"]),
-              as.numeric(if (is.list(rec$df)) rec$df$range[2] else rec$df["range.95%"])),
-      sprintf("| Tail dependence | - | [%.4f, %.4f] |",
-              as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[1] else rec$tail_dependence["range.5%"]),
-              as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[2] else rec$tail_dependence["range.95%"])),
-      "",
-      "**R code:**",
-      "```r",
-      "library(copula)",
-      sprintf("cop <- tCopula(param = %.3f, df = %.0f)", 
-              as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]),
-              as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"])),
-      "```",
-      ""
+              as.numeric(if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"]))
     )
+    
+    # Add t-copula specific parameters (rho, df) only when family is "t"
+    is_t_family <- grepl("^t", rec$recommended_family, ignore.case = TRUE)
+    if (is_t_family && !is.null(rec$rho) && !is.null(rec$df)) {
+      md_lines <- c(md_lines,
+        sprintf("| Correlation ρ | %.3f | [%.3f, %.3f] |",
+                as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]),
+                as.numeric(if (is.list(rec$rho)) rec$rho$range[1] else rec$rho["range.5%"]),
+                as.numeric(if (is.list(rec$rho)) rec$rho$range[2] else rec$rho["range.95%"])),
+        sprintf("| Degrees of freedom | %.1f | [%.1f, %.1f] |",
+                as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"]),
+                as.numeric(if (is.list(rec$df)) rec$df$range[1] else rec$df["range.5%"]),
+                as.numeric(if (is.list(rec$df)) rec$df$range[2] else rec$df["range.95%"]))
+      )
+    }
+    
+    # Add tail dependence if available (relevant for t, clayton, gumbel)
+    if (!is.null(rec$tail_dependence)) {
+      tail_range1 <- as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[1] else rec$tail_dependence["range.5%"])
+      tail_range2 <- as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[2] else rec$tail_dependence["range.95%"])
+      if (!is.na(tail_range1) && !is.na(tail_range2)) {
+        md_lines <- c(md_lines,
+          sprintf("| Tail dependence | - | [%.4f, %.4f] |", tail_range1, tail_range2)
+        )
+      }
+    }
+    
+    # Add R code example (family-specific)
+    md_lines <- c(md_lines, "")
+    if (is_t_family && !is.null(rec$rho) && !is.null(rec$df)) {
+      rho_val <- as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"])
+      df_val <- as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"])
+      if (!is.na(rho_val) && !is.na(df_val)) {
+        md_lines <- c(md_lines,
+          "**R code:**",
+          "```r",
+          "library(copula)",
+          sprintf("cop <- tCopula(param = %.3f, df = %.0f)", rho_val, df_val),
+          "```"
+        )
+      }
+    } else {
+      # Generic code example for non-t families
+      tau_val <- as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"])
+      if (!is.na(tau_val)) {
+        md_lines <- c(md_lines,
+          "**R code:**",
+          "```r",
+          "library(copula)",
+          sprintf("# For %s copula, use tau = %.3f to derive parameter", rec$recommended_family, tau_val),
+          "```"
+        )
+      }
+    }
+    md_lines <- c(md_lines, "")
   }
   
   # Add content area recommendations
