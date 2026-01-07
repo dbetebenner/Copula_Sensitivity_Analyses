@@ -72,6 +72,37 @@ if (exists("CALCULATE_SGPC", envir = .GlobalEnv)) {
   CALCULATE_SGPC_VALUE <- FALSE
   cat("SGPc Calculation: DISABLED\n")
 }
+
+# Capture GENERATE_UNCERTAINTY_PLOTS for workers (bootstrap uncertainty bands)
+if (exists("GENERATE_UNCERTAINTY_PLOTS", envir = .GlobalEnv)) {
+  GENERATE_UNCERTAINTY_PLOTS_VALUE <- get("GENERATE_UNCERTAINTY_PLOTS", envir = .GlobalEnv)
+} else {
+  GENERATE_UNCERTAINTY_PLOTS_VALUE <- TRUE  # Default ON to match test_contour_plots.R
+}
+
+# Capture N_BOOTSTRAP_UNCERTAINTY for workers
+if (exists("N_BOOTSTRAP_UNCERTAINTY", envir = .GlobalEnv)) {
+  N_BOOTSTRAP_UNCERTAINTY_VALUE <- get("N_BOOTSTRAP_UNCERTAINTY", envir = .GlobalEnv)
+} else {
+  N_BOOTSTRAP_UNCERTAINTY_VALUE <- 100  # Match test_contour_plots.R
+}
+
+# Capture BOOTSTRAP_ALL_FAMILIES for workers
+if (exists("BOOTSTRAP_ALL_FAMILIES", envir = .GlobalEnv)) {
+  BOOTSTRAP_ALL_FAMILIES_VALUE <- get("BOOTSTRAP_ALL_FAMILIES", envir = .GlobalEnv)
+} else {
+  BOOTSTRAP_ALL_FAMILIES_VALUE <- TRUE  # All 5 parametric families
+}
+
+if (GENERATE_UNCERTAINTY_PLOTS_VALUE && exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv) && 
+    get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv)) {
+  cat("Uncertainty Plots: ENABLED\n")
+  cat("  Bootstrap samples:", N_BOOTSTRAP_UNCERTAINTY_VALUE, "\n")
+  cat("  Families:", ifelse(BOOTSTRAP_ALL_FAMILIES_VALUE, "ALL (5 parametric)", "BEST ONLY"), "\n")
+  cat("  Mode: SEQUENTIAL within each parallel worker\n")
+} else if (!GENERATE_UNCERTAINTY_PLOTS_VALUE) {
+  cat("Uncertainty Plots: DISABLED\n")
+}
 cat("\n")
 
 # Export setup differs by cluster type
@@ -98,7 +129,9 @@ if (.Platform$OS.type == "unix") {
   cat("Exporting data and functions to PSOCK workers...\n")
   
   clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data", 
-                      "N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE"), envir = environment())
+                      "N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
+                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
+                      "BOOTSTRAP_ALL_FAMILIES_VALUE"), envir = environment())
   
   clusterEvalQ(cl, {
     require(data.table)
@@ -641,6 +674,46 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
           })
         }
         
+        # =====================================================================
+        # BOOTSTRAP UNCERTAINTY QUANTIFICATION (sequential within worker)
+        # This generates uncertainty bands on parametric copula CDF plots
+        # =====================================================================
+        bootstrap_results <- NULL
+        
+        if (isTRUE(GENERATE_UNCERTAINTY_PLOTS_VALUE) && !is.null(copula_fits$pseudo_obs)) {
+          
+          # Determine which families to bootstrap
+          if (BOOTSTRAP_ALL_FAMILIES_VALUE) {
+            # All 5 parametric families (exclude comonotonic - deterministic)
+            bootstrap_families <- setdiff(copula_families, "comonotonic")
+          } else {
+            # Best family only (faster)
+            bootstrap_families <- copula_fits$best_family
+          }
+          
+          # Run bootstrap SEQUENTIALLY within this worker
+          # (Parallelization is across conditions, not within bootstrap)
+          bootstrap_results <- tryCatch({
+            bootstrap_copula_estimation(
+              pairs_data = pairs_full,
+              n_sample_prior = nrow(pairs_full),
+              n_sample_current = nrow(pairs_full),
+              n_bootstrap = N_BOOTSTRAP_UNCERTAINTY_VALUE,
+              framework_prior = framework_prior,
+              framework_current = framework_current,
+              sampling_method = "paired",  # Preserves within-student correlation
+              copula_families = bootstrap_families,
+              with_replacement = TRUE,
+              use_empirical_ranks = TRUE,  # Match Phase 1 approach
+              use_parallel = FALSE,  # CRITICAL: Sequential within worker (no nested parallelism)
+              n_cores = 1
+            )
+          }, error = function(e) {
+            warning(sprintf("Bootstrap failed for condition %d: %s", i, e$message))
+            NULL
+          })
+        }
+        
         tryCatch({
           generate_condition_plots(
             pseudo_obs = copula_fits$pseudo_obs,
@@ -652,7 +725,8 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
             best_family = copula_fits$best_family,
             output_dir = plot_output_dir,
             condition_info = condition_info,
-            empirical_copulas = empirical_copulas,  # NEW: Pass empCopula objects
+            bootstrap_results = bootstrap_results,  # Bootstrap uncertainty bands
+            empirical_copulas = empirical_copulas,
             save_plots = TRUE,
             grid_size = 300,  # High resolution for publication-quality plots
             export_formats = EXPORT_FORMATS,

@@ -121,6 +121,33 @@ if (!is.null(N_BOOTSTRAP_GOF)) {
 GENERATE_CONTOUR_PLOTS <- TRUE
 
 ############################################################################
+### CONFIGURATION: Bootstrap Uncertainty Plots
+############################################################################
+
+# Generate bootstrap uncertainty bands on parametric copula plots
+# This adds ~60-90 seconds per condition but provides confidence intervals
+# on the parametric copula CDF surfaces vs empirical
+if (!exists("GENERATE_UNCERTAINTY_PLOTS")) GENERATE_UNCERTAINTY_PLOTS <- TRUE
+
+# Number of bootstrap samples for uncertainty quantification
+# 50 = fast (~30s/condition), 100 = balanced (matches test_contour_plots.R), 200 = high precision
+if (!exists("N_BOOTSTRAP_UNCERTAINTY")) N_BOOTSTRAP_UNCERTAINTY <- 100
+
+# Bootstrap all families or just the best?
+# TRUE = all 5 parametric families (gaussian, t, clayton, gumbel, frank)
+# FALSE = best family only (faster but less complete visualization)
+if (!exists("BOOTSTRAP_ALL_FAMILIES")) BOOTSTRAP_ALL_FAMILIES <- TRUE
+
+if (GENERATE_UNCERTAINTY_PLOTS && GENERATE_CONTOUR_PLOTS) {
+  cat("Uncertainty Plots: ENABLED\n")
+  cat("  Bootstrap samples:", N_BOOTSTRAP_UNCERTAINTY, "\n")
+  cat("  Families:", ifelse(BOOTSTRAP_ALL_FAMILIES, "ALL (5 parametric)", "BEST ONLY"), "\n")
+  cat("  Note: Bootstrap runs sequentially within each parallel worker\n")
+  cat("  Est. additional time: ~", round(N_BOOTSTRAP_UNCERTAINTY * 0.6), "-", 
+      round(N_BOOTSTRAP_UNCERTAINTY * 0.9), "s per condition\n\n")
+}
+
+############################################################################
 ### CONFIGURATION: SGPc (Copula-based SGP) Calculation
 ############################################################################
 
@@ -154,14 +181,21 @@ if (USE_SGP_DATA) {
 if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- FALSE
 
 # Test mode: Limit to small subset of conditions for validation
-# This is useful for testing exhaustive configuration before full EC2 run
+# This is useful for testing the pipeline before full EC2 run
 #
 # Options:
-#   TEST_MODE <- FALSE                    # Full analysis (default)
+#   TEST_MODE <- FALSE                    # Full analysis (production)
 #   TEST_MODE <- TRUE                     # Test with subset
-#   TEST_N_CONDITIONS_PER_DATASET <- 1    # Number of conditions to test per dataset
+#   TEST_N_CONDITIONS_PER_DATASET <- 2    # Number of conditions to test per dataset
+#
+# EC2 WORKFLOW:
+#   1. Run with TEST_MODE=TRUE, TEST_N_CONDITIONS_PER_DATASET=2 to validate pipeline
+#   2. Review results to ensure everything is working
+#   3. Run with TEST_MODE=FALSE for full production run
+#
+# TIP: Use run_ec2_analysis.R wrapper script for easier mode switching
 if (!exists("TEST_MODE")) TEST_MODE <- FALSE
-if (!exists("TEST_N_CONDITIONS_PER_DATASET")) TEST_N_CONDITIONS_PER_DATASET <- 1
+if (!exists("TEST_N_CONDITIONS_PER_DATASET")) TEST_N_CONDITIONS_PER_DATASET <- 2
 
 if (USE_EXHAUSTIVE_ALL_DATASETS) {
   cat("====================================================================\n")
@@ -556,8 +590,9 @@ if (should_run_step(1)) {
     result_1_1 <- time_phase("Step 1.1: Family Selection", {
       # Use parallel version if enabled (EC2 or high-performance local)
       if (USE_PARALLEL) {
-        n_cores_use <- min(N_CORES, 15)  # Cap at 15 cores for stability
-        cat("Using parallel implementation (", n_cores_use, " cores)\n", sep = "")
+        # Note: phase1_family_selection_parallel.R does its own core detection
+        # EC2: uses detectCores() - 2, Local: uses detectCores() - 1
+        cat("Using parallel implementation (cores determined by parallel script)\n")
         source_with_path("STEP_1_Family_Selection/phase1_family_selection_parallel.R", "Step 1.1: Family Selection (Parallel)")
       } else {
         cat("Using sequential implementation\n")
