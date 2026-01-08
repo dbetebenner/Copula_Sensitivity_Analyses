@@ -108,8 +108,14 @@ cat("\n")
 # Export setup differs by cluster type
 if (.Platform$OS.type == "unix") {
   # FORK cluster: Workers inherit parent environment via copy-on-write
-  # Only need to load packages and source functions
-  cat("Setting up FORK workers (no data export needed)...\n")
+  # Data objects (STATE_DATA_LONG, etc.) are inherited, but local script variables are not
+  cat("Setting up FORK workers...\n")
+  
+  # Export configuration variables that are defined in this script's local environment
+  # (not in .GlobalEnv, so FORK workers don't automatically inherit them)
+  clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
+                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
+                      "BOOTSTRAP_ALL_FAMILIES_VALUE"), envir = environment())
   
   clusterEvalQ(cl, {
     require(data.table)

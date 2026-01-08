@@ -185,8 +185,8 @@ if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- FALSE
 #
 # Options:
 #   TEST_MODE <- FALSE                    # Full analysis (production)
-#   TEST_MODE <- TRUE                     # Test with subset
-#   TEST_N_CONDITIONS_PER_DATASET <- 2    # Number of conditions to test per dataset
+   TEST_MODE <- TRUE                     # Test with subset
+   TEST_N_CONDITIONS_PER_DATASET <- 2    # Number of conditions to test per dataset
 #
 # EC2 WORKFLOW:
 #   1. Run with TEST_MODE=TRUE, TEST_N_CONDITIONS_PER_DATASET=2 to validate pipeline
