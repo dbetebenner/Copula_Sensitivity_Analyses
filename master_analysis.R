@@ -390,9 +390,18 @@ sink(LOG_FILE, split = TRUE)
 ############################################################################
 
 # Set working directory to project root (where master_analysis.R is located)
-PROJECT_ROOT <- dirname(normalizePath(sys.frame(1)$ofile))
+# Use tryCatch to handle both source() (interactive) and Rscript (command line)
+PROJECT_ROOT <- tryCatch({
+  # Works when using source() interactively
+  dirname(normalizePath(sys.frame(1)$ofile))
+}, error = function(e) {
+  # Fallback for Rscript: use current working directory
+  # (assumes you're running from the project root)
+  getwd()
+})
+
 if (is.null(PROJECT_ROOT) || PROJECT_ROOT == "") {
-  # Fallback: assume we're in the project root
+  # Final fallback: assume we're in the project root
   PROJECT_ROOT <- getwd()
 }
 
