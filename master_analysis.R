@@ -81,11 +81,70 @@ should_run_step <- function(step_num) {
 }
 
 ############################################################################
+### CONFIGURATION: Performance Mode
+############################################################################
+
+# PERFORMANCE_MODE controls the trade-off between speed and output quality
+# Based on diagnostic testing (test_contour_plots_sequential.R):
+#   - Plot generation is the main bottleneck (56% of time)
+#   - Bootstrap uncertainty overlays are particularly expensive
+#   - Multi-format export adds significant I/O overhead
+#
+# Options:
+#   "fast"   - Quick exploration (~15-20 min/condition)
+#              Lower resolution, PDF only, uncertainty for best family only
+#   "full"   - Publication quality (~60-70 min/condition)
+#              High resolution, all formats, full uncertainty analysis
+#   "custom" - Use individual settings below (no auto-configuration)
+
+if (!exists("PERFORMANCE_MODE")) PERFORMANCE_MODE <- "fast"  # Default: fast for initial runs
+
+# Apply performance mode presets
+if (PERFORMANCE_MODE == "fast") {
+  # === FAST MODE: Optimized for bulk processing ===
+  GRID_SIZE <- 150                         # vs 300 (4x fewer grid points)
+  UNCERTAINTY_GRID_SIZE <- 100             # vs 300 (9x fewer for uncertainty)
+  EXPORT_FORMATS <- c("pdf")               # vs pdf,svg,png (3x less I/O)
+  SKIP_COMONOTONIC <- TRUE                 # Skip comonotonic (never selected)
+  N_BOOTSTRAP_UNCERTAINTY <- 50            # vs 100 (2x faster bootstrap)
+  BOOTSTRAP_ALL_FAMILIES <- FALSE          # Best family only (5x faster uncertainty)
+  GENERATE_UNCERTAINTY_PLOTS <- TRUE       # Keep uncertainty for best family
+  COMPARISON_FAMILIES <- "top3"            # Only generate full comparisons for top 3 by AIC
+  
+} else if (PERFORMANCE_MODE == "full") {
+  # === FULL MODE: Publication quality ===
+  GRID_SIZE <- 300                         # High resolution
+  UNCERTAINTY_GRID_SIZE <- 300             # Full resolution uncertainty
+  EXPORT_FORMATS <- c("pdf", "svg", "png") # All formats
+  SKIP_COMONOTONIC <- FALSE                # Include comonotonic
+  N_BOOTSTRAP_UNCERTAINTY <- 100           # Full bootstrap
+  BOOTSTRAP_ALL_FAMILIES <- TRUE           # All 5 parametric families
+  GENERATE_UNCERTAINTY_PLOTS <- TRUE       # Full uncertainty analysis
+  COMPARISON_FAMILIES <- "all"             # All families
+  
+} else {
+  # === CUSTOM MODE: Use individual settings ===
+  # Set these manually when PERFORMANCE_MODE <- "custom"
+  if (!exists("GRID_SIZE")) GRID_SIZE <- 200
+  if (!exists("UNCERTAINTY_GRID_SIZE")) UNCERTAINTY_GRID_SIZE <- 150
+  if (!exists("SKIP_COMONOTONIC")) SKIP_COMONOTONIC <- TRUE
+  if (!exists("COMPARISON_FAMILIES")) COMPARISON_FAMILIES <- "top3"
+}
+
+cat("Performance Mode:", PERFORMANCE_MODE, "\n")
+cat("  Grid size:", GRID_SIZE, "×", GRID_SIZE, "\n")
+cat("  Uncertainty grid:", UNCERTAINTY_GRID_SIZE, "×", UNCERTAINTY_GRID_SIZE, "\n")
+cat("  Export formats:", paste(EXPORT_FORMATS, collapse = ", "), "\n")
+cat("  Skip comonotonic:", SKIP_COMONOTONIC, "\n")
+cat("  Comparison families:", COMPARISON_FAMILIES, "\n")
+cat("\n")
+
+############################################################################
 ### CONFIGURATION: Multi-Format Plot Export
 ############################################################################
 
-# Multi-format export configuration for copula plots
-EXPORT_FORMATS <- c("pdf", "svg", "png")  # All formats for comprehensive output
+# Multi-format export configuration (may be overridden by PERFORMANCE_MODE above)
+if (!exists("EXPORT_FORMATS")) EXPORT_FORMATS <- c("pdf", "svg", "png")
 EXPORT_DPI <- 300                          # Publication quality
 EXPORT_VERBOSE <- FALSE                    # Reduce log noise in batch mode
 
@@ -125,26 +184,35 @@ GENERATE_CONTOUR_PLOTS <- TRUE
 ############################################################################
 
 # Generate bootstrap uncertainty bands on parametric copula plots
-# This adds ~60-90 seconds per condition but provides confidence intervals
-# on the parametric copula CDF surfaces vs empirical
+# This adds significant time per condition depending on settings:
+#   - Fast mode (50 samples, best only): ~5-10 min additional
+#   - Full mode (100 samples, all families): ~20-30 min additional
 if (!exists("GENERATE_UNCERTAINTY_PLOTS")) GENERATE_UNCERTAINTY_PLOTS <- TRUE
 
 # Number of bootstrap samples for uncertainty quantification
-# 50 = fast (~30s/condition), 100 = balanced (matches test_contour_plots.R), 200 = high precision
+# 25 = very fast, 50 = fast (recommended for bulk), 100 = balanced, 200 = high precision
 if (!exists("N_BOOTSTRAP_UNCERTAINTY")) N_BOOTSTRAP_UNCERTAINTY <- 100
 
 # Bootstrap all families or just the best?
 # TRUE = all 5 parametric families (gaussian, t, clayton, gumbel, frank)
-# FALSE = best family only (faster but less complete visualization)
+# FALSE = best family only (5x faster uncertainty plots)
 if (!exists("BOOTSTRAP_ALL_FAMILIES")) BOOTSTRAP_ALL_FAMILIES <- TRUE
+
+# Grid size for uncertainty overlay plots (can be lower than main grid)
+# Lower values significantly speed up uncertainty calculation
+if (!exists("UNCERTAINTY_GRID_SIZE")) UNCERTAINTY_GRID_SIZE <- GRID_SIZE
 
 if (GENERATE_UNCERTAINTY_PLOTS && GENERATE_CONTOUR_PLOTS) {
   cat("Uncertainty Plots: ENABLED\n")
   cat("  Bootstrap samples:", N_BOOTSTRAP_UNCERTAINTY, "\n")
+  cat("  Uncertainty grid:", UNCERTAINTY_GRID_SIZE, "×", UNCERTAINTY_GRID_SIZE, "\n")
   cat("  Families:", ifelse(BOOTSTRAP_ALL_FAMILIES, "ALL (5 parametric)", "BEST ONLY"), "\n")
   cat("  Note: Bootstrap runs sequentially within each parallel worker\n")
-  cat("  Est. additional time: ~", round(N_BOOTSTRAP_UNCERTAINTY * 0.6), "-", 
-      round(N_BOOTSTRAP_UNCERTAINTY * 0.9), "s per condition\n\n")
+  n_families <- ifelse(BOOTSTRAP_ALL_FAMILIES, 5, 1)
+  est_time_min <- (N_BOOTSTRAP_UNCERTAINTY * n_families * (UNCERTAINTY_GRID_SIZE/300)^2 * 0.5) / 60
+  est_time_max <- (N_BOOTSTRAP_UNCERTAINTY * n_families * (UNCERTAINTY_GRID_SIZE/300)^2 * 0.8) / 60
+  cat("  Est. additional time: ~", round(est_time_min, 1), "-", 
+      round(est_time_max, 1), " min per condition\n\n")
 }
 
 ############################################################################

@@ -94,15 +94,49 @@ if (exists("BOOTSTRAP_ALL_FAMILIES", envir = .GlobalEnv)) {
   BOOTSTRAP_ALL_FAMILIES_VALUE <- TRUE  # All 5 parametric families
 }
 
+# Capture GRID_SIZE for workers (main contour plot resolution)
+if (exists("GRID_SIZE", envir = .GlobalEnv)) {
+  GRID_SIZE_VALUE <- get("GRID_SIZE", envir = .GlobalEnv)
+} else {
+  GRID_SIZE_VALUE <- 300  # Default: high resolution
+}
+
+# Capture UNCERTAINTY_GRID_SIZE for workers (uncertainty overlay resolution)
+if (exists("UNCERTAINTY_GRID_SIZE", envir = .GlobalEnv)) {
+  UNCERTAINTY_GRID_SIZE_VALUE <- get("UNCERTAINTY_GRID_SIZE", envir = .GlobalEnv)
+} else {
+  UNCERTAINTY_GRID_SIZE_VALUE <- GRID_SIZE_VALUE  # Default: same as main grid
+}
+
+# Capture SKIP_COMONOTONIC for workers
+if (exists("SKIP_COMONOTONIC", envir = .GlobalEnv)) {
+  SKIP_COMONOTONIC_VALUE <- get("SKIP_COMONOTONIC", envir = .GlobalEnv)
+} else {
+  SKIP_COMONOTONIC_VALUE <- FALSE  # Default: include comonotonic
+}
+
+# Capture COMPARISON_FAMILIES for workers ("all" or "top3")
+if (exists("COMPARISON_FAMILIES", envir = .GlobalEnv)) {
+  COMPARISON_FAMILIES_VALUE <- get("COMPARISON_FAMILIES", envir = .GlobalEnv)
+} else {
+  COMPARISON_FAMILIES_VALUE <- "all"  # Default: all families
+}
+
 if (GENERATE_UNCERTAINTY_PLOTS_VALUE && exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv) && 
     get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv)) {
   cat("Uncertainty Plots: ENABLED\n")
   cat("  Bootstrap samples:", N_BOOTSTRAP_UNCERTAINTY_VALUE, "\n")
+  cat("  Uncertainty grid:", UNCERTAINTY_GRID_SIZE_VALUE, "×", UNCERTAINTY_GRID_SIZE_VALUE, "\n")
   cat("  Families:", ifelse(BOOTSTRAP_ALL_FAMILIES_VALUE, "ALL (5 parametric)", "BEST ONLY"), "\n")
   cat("  Mode: SEQUENTIAL within each parallel worker\n")
 } else if (!GENERATE_UNCERTAINTY_PLOTS_VALUE) {
   cat("Uncertainty Plots: DISABLED\n")
 }
+
+cat("Plot Generation Settings:\n")
+cat("  Main grid size:", GRID_SIZE_VALUE, "×", GRID_SIZE_VALUE, "\n")
+cat("  Skip comonotonic:", SKIP_COMONOTONIC_VALUE, "\n")
+cat("  Comparison families:", COMPARISON_FAMILIES_VALUE, "\n")
 cat("\n")
 
 # Export setup differs by cluster type
@@ -115,7 +149,10 @@ if (.Platform$OS.type == "unix") {
   # (not in .GlobalEnv, so FORK workers don't automatically inherit them)
   clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
                       "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
-                      "BOOTSTRAP_ALL_FAMILIES_VALUE"), envir = environment())
+                      "BOOTSTRAP_ALL_FAMILIES_VALUE",
+                      "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
+                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE"), 
+                envir = environment())
   
   clusterEvalQ(cl, {
     require(data.table)
@@ -137,7 +174,10 @@ if (.Platform$OS.type == "unix") {
   clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data", 
                       "N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
                       "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
-                      "BOOTSTRAP_ALL_FAMILIES_VALUE"), envir = environment())
+                      "BOOTSTRAP_ALL_FAMILIES_VALUE",
+                      "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
+                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE"), 
+                envir = environment())
   
   clusterEvalQ(cl, {
     require(data.table)
@@ -164,7 +204,16 @@ cat("Cluster initialized successfully.\n\n")
 # the implicit TAMP assumption (perfect positive dependence) misfits the data
 # Note: We focus on t-copula with data-driven df estimation (not fixed df)
 # as preliminary results showed free df consistently dominates fixed df variants
-COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
+#
+# SKIP_COMONOTONIC_VALUE: When TRUE, excludes comonotonic from testing
+# (comonotonic is never selected as best fit and adds ~15% overhead)
+if (SKIP_COMONOTONIC_VALUE) {
+  COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank")
+  cat("Copula families: gaussian, t, clayton, gumbel, frank (comonotonic SKIPPED)\n")
+} else {
+  COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
+  cat("Copula families: gaussian, t, clayton, gumbel, frank, comonotonic\n")
+}
 
 # Define test conditions
 # Two strategies:
@@ -734,7 +783,7 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
             bootstrap_results = bootstrap_results,  # Bootstrap uncertainty bands
             empirical_copulas = empirical_copulas,
             save_plots = TRUE,
-            grid_size = 300,  # High resolution for publication-quality plots
+            grid_size = GRID_SIZE_VALUE,  # Configurable resolution (fast=150, full=300)
             export_formats = EXPORT_FORMATS,
             export_dpi = EXPORT_DPI,
             export_verbose = EXPORT_VERBOSE
