@@ -96,8 +96,14 @@ should_run_step <- function(step_num) {
 #   "full"   - Publication quality (~60-70 min/condition)
 #              High resolution, all formats, full uncertainty analysis
 #   "custom" - Use individual settings below (no auto-configuration)
-
-if (!exists("PERFORMANCE_MODE")) PERFORMANCE_MODE <- "fast"  # Default: fast for initial runs
+#
+# ============================================================================
+# >>> CURRENT SETTING <<<
+# ============================================================================
+PERFORMANCE_MODE <- "fast"               # "fast", "full", or "custom"
+# ============================================================================
+#
+if (!exists("PERFORMANCE_MODE")) PERFORMANCE_MODE <- "fast"
 
 # Apply performance mode presets
 if (PERFORMANCE_MODE == "fast") {
@@ -251,17 +257,18 @@ if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- FALSE
 # Test mode: Limit to small subset of conditions for validation
 # This is useful for testing the pipeline before full EC2 run
 #
-# Options:
-#   TEST_MODE <- FALSE                    # Full analysis (production)
-   TEST_MODE <- TRUE                     # Test with subset
-   TEST_N_CONDITIONS_PER_DATASET <- 2    # Number of conditions to test per dataset
-#
 # EC2 WORKFLOW:
 #   1. Run with TEST_MODE=TRUE, TEST_N_CONDITIONS_PER_DATASET=2 to validate pipeline
 #   2. Review results to ensure everything is working
-#   3. Run with TEST_MODE=FALSE for full production run
+#   3. Set TEST_MODE=FALSE for full production run on larger instance
 #
-# TIP: Use run_ec2_analysis.R wrapper script for easier mode switching
+# ============================================================================
+# >>> CURRENT SETTINGS (EDIT THESE FOR YOUR RUN) <<<
+# ============================================================================
+TEST_MODE <- TRUE                        # TRUE=test subset, FALSE=full production
+TEST_N_CONDITIONS_PER_DATASET <- 2       # Conditions per dataset in test mode
+# ============================================================================
+#
 if (!exists("TEST_MODE")) TEST_MODE <- FALSE
 if (!exists("TEST_N_CONDITIONS_PER_DATASET")) TEST_N_CONDITIONS_PER_DATASET <- 2
 

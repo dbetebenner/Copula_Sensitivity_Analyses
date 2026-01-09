@@ -477,10 +477,107 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
   # This function runs on each worker independently
   # It must be self-contained and return a complete result
   
-  # === PROGRESS TRACKING: START ===
-  start_time <- Sys.time()
+  # === DETAILED STEP TIMING INFRASTRUCTURE ===
+  overall_start <- Sys.time()
+  step_timings <- list()  # Store timing for each step
+  current_step_start <- NULL
+  
+  # Helper function to record step timing
+  record_step <- function(step_name, extra_info = NULL) {
+    if (!is.null(current_step_start)) {
+      elapsed <- as.numeric(difftime(Sys.time(), current_step_start, units = "secs"))
+      step_timings[[step_name]] <<- list(
+        elapsed_secs = elapsed,
+        extra_info = extra_info
+      )
+    }
+  }
+  
+  # Helper function to write detailed progress file to condition directory
+  write_condition_progress <- function(output_dir, status, error_msg = NULL) {
+    if (is.null(output_dir) || !dir.exists(output_dir)) return(invisible(NULL))
+    
+    progress_file_path <- file.path(output_dir, "condition.progress")
+    overall_elapsed <- as.numeric(difftime(Sys.time(), overall_start, units = "secs"))
+    
+    # Build condition identifier
+    year_current <- if (!is.null(cond$year_current)) cond$year_current else 
+                    as.character(as.numeric(cond$year_prior) + cond$year_span)
+    dataset_id <- if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown"
+    
+    # Open file and write header
+    sink(progress_file_path)
+    on.exit(sink(), add = TRUE)
+    
+    cat(paste(rep("=", 70), collapse = ""), "\n")
+    cat("CONDITION PROGRESS REPORT\n")
+    cat(paste(rep("=", 70), collapse = ""), "\n")
+    cat("Dataset:     ", dataset_id, "\n")
+    cat("Content:     ", cond$content, "\n")
+    cat("Transition:  G", cond$grade_prior, " -> G", cond$grade_current, "\n", sep = "")
+    cat("Years:       ", cond$year_prior, " -> ", year_current, "\n")
+    cat("Started:     ", format(overall_start, "%Y-%m-%d %H:%M:%S"), "\n")
+    cat("Completed:   ", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
+    cat(paste(rep("-", 70), collapse = ""), "\n\n")
+    
+    # Step timing breakdown
+    cat("STEP TIMING BREAKDOWN:\n")
+    cat(paste(rep("-", 70), collapse = ""), "\n")
+    
+    total_accounted <- 0
+    bottleneck_step <- NULL
+    bottleneck_pct <- 0
+    
+    for (step_name in names(step_timings)) {
+      result <- step_timings[[step_name]]
+      pct <- if (overall_elapsed > 0) (result$elapsed_secs / overall_elapsed) * 100 else 0
+      
+      # Track bottleneck
+      if (pct > bottleneck_pct) {
+        bottleneck_pct <- pct
+        bottleneck_step <- step_name
+      }
+      
+      # Format time string
+      if (result$elapsed_secs > 60) {
+        time_str <- sprintf("%8.1f sec (%5.1f min)", result$elapsed_secs, result$elapsed_secs / 60)
+      } else {
+        time_str <- sprintf("%8.1f sec           ", result$elapsed_secs)
+      }
+      
+      # Bottleneck marker
+      marker <- if (pct > 40) " <-- BOTTLENECK" else ""
+      
+      cat(sprintf("%-25s %s  [%5.1f%%]%s\n", paste0(step_name, ":"), time_str, pct, marker))
+      
+      if (!is.null(result$extra_info)) {
+        cat(sprintf("%-25s (%s)\n", "", result$extra_info))
+      }
+      
+      total_accounted <- total_accounted + result$elapsed_secs
+    }
+    
+    cat(paste(rep("-", 70), collapse = ""), "\n")
+    cat(sprintf("%-25s %8.1f sec (%5.1f min)\n", "TOTAL:", overall_elapsed, overall_elapsed / 60))
+    cat(paste(rep("=", 70), collapse = ""), "\n\n")
+    
+    # Status summary
+    cat("STATUS: ", status, "\n")
+    if (!is.null(error_msg)) {
+      cat("ERROR:  ", error_msg, "\n")
+    }
+    if (!is.null(bottleneck_step) && bottleneck_pct > 30) {
+      cat("BOTTLENECK: ", bottleneck_step, " (", round(bottleneck_pct, 1), "%)\n", sep = "")
+    }
+    cat(paste(rep("=", 70), collapse = ""), "\n")
+    
+    invisible(NULL)
+  }
+  # === END TIMING INFRASTRUCTURE ===
+  
+  # === PROGRESS TRACKING: START (central log) ===
   start_msg <- sprintf("[%s] STARTED  %3d/%d: %-4s G%d->G%d (%s->%s)\n",
-                       format(start_time, "%H:%M:%S"),
+                       format(overall_start, "%H:%M:%S"),
                        i, total_conditions,
                        cond$content, cond$grade_prior, cond$grade_current,
                        cond$year_prior, 
@@ -489,6 +586,11 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
   # === END PROGRESS TRACKING ===
   
   tryCatch({
+    
+    # =====================================================================
+    # STEP 1: DATA PREPARATION
+    # =====================================================================
+    current_step_start <- Sys.time()
     
     # Create longitudinal pairs
     pairs_full <- create_longitudinal_pairs(
@@ -516,6 +618,8 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
     framework_prior <- create_ispline_framework(pairs_full$SCALE_SCORE_PRIOR)
     framework_current <- create_ispline_framework(pairs_full$SCALE_SCORE_CURRENT)
     
+    record_step("Step 1 - Data prep", sprintf("n_pairs=%s", format(n_pairs, big.mark = ",")))
+    
     # Check if we should generate contour plots
     GENERATE_CONTOUR_PLOTS <- exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv) && 
                              get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv, inherits = FALSE)
@@ -539,6 +643,11 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
       plot_output_dir <- NULL
     }
     
+    # =====================================================================
+    # STEP 2: COPULA FITTING + GOODNESS-OF-FIT
+    # =====================================================================
+    current_step_start <- Sys.time()
+    
     # Fit all copula families
     # IMPORTANT: Phase 1 uses empirical ranks (not I-spline) for copula family selection
     # This ensures uniform pseudo-observations and preserves tail dependence structure
@@ -554,6 +663,12 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
       save_copula_data = GENERATE_CONTOUR_PLOTS,  # New parameter
       output_dir = plot_output_dir  # Directory for saving copula data
     )
+    
+    record_step("Step 2 - Copula+GoF", 
+                sprintf("best=%s, tau=%.3f, gof_n=%s", 
+                        copula_fits$best_family, 
+                        copula_fits$empirical_tau,
+                        if (is.null(N_BOOTSTRAP_GOF_VALUE)) "skip" else N_BOOTSTRAP_GOF_VALUE))
     
     # Extract results for each family
     family_results <- list()
@@ -730,10 +845,12 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
         }
         
         # =====================================================================
-        # BOOTSTRAP UNCERTAINTY QUANTIFICATION (sequential within worker)
+        # STEP 3: BOOTSTRAP UNCERTAINTY QUANTIFICATION (sequential within worker)
         # This generates uncertainty bands on parametric copula CDF plots
         # =====================================================================
+        current_step_start <- Sys.time()
         bootstrap_results <- NULL
+        bootstrap_info <- "skipped"
         
         if (isTRUE(GENERATE_UNCERTAINTY_PLOTS_VALUE) && !is.null(copula_fits$pseudo_obs)) {
           
@@ -745,6 +862,9 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
             # Best family only (faster)
             bootstrap_families <- copula_fits$best_family
           }
+          
+          bootstrap_info <- sprintf("%d samples × %d families", 
+                                    N_BOOTSTRAP_UNCERTAINTY_VALUE, length(bootstrap_families))
           
           # Run bootstrap SEQUENTIALLY within this worker
           # (Parallelization is across conditions, not within bootstrap)
@@ -769,6 +889,13 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
           })
         }
         
+        record_step("Step 3 - Bootstrap", bootstrap_info)
+        
+        # =====================================================================
+        # STEP 4: PLOT GENERATION
+        # =====================================================================
+        current_step_start <- Sys.time()
+        
         tryCatch({
           generate_condition_plots(
             pseudo_obs = copula_fits$pseudo_obs,
@@ -791,13 +918,18 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
         }, error = function(e) {
           warning(sprintf("Failed to generate plots for condition %d: %s", i, e$message))
         })
+        
+        record_step("Step 4 - Plot gen", 
+                    sprintf("grid=%d, formats=%s", GRID_SIZE_VALUE, paste(EXPORT_FORMATS, collapse=",")))
       }
     }
     
     # =========================================================================
-    # SGPc CALCULATION (if enabled)
+    # STEP 5: SGPc CALCULATION (if enabled)
     # =========================================================================
+    current_step_start <- Sys.time()
     sgpc_results <- NULL
+    sgpc_info <- "skipped"
     
     if (isTRUE(CALCULATE_SGPC_VALUE) && !is.null(copula_fits$pseudo_obs)) {
       
@@ -875,11 +1007,25 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
           saveRDS(cor_matrix, file.path(sgpc_output_dir, "sgpc_correlations.rds"))
         }
       }
+      # Update info regardless of output directory
+      sgpc_cols <- grep("^SGPc_", names(sgpc_results), value = TRUE)
+      sgpc_info <- sprintf("%d variants", length(sgpc_cols))
     }
     
-    # === PROGRESS TRACKING: COMPLETE ===
+    record_step("Step 5 - SGPc", sgpc_info)
+    
+    # === WRITE DETAILED CONDITION PROGRESS FILE ===
+    if (!is.null(plot_output_dir) && dir.exists(plot_output_dir)) {
+      tryCatch({
+        write_condition_progress(plot_output_dir, "SUCCESS")
+      }, error = function(e) {
+        warning(sprintf("Failed to write condition progress: %s", e$message))
+      })
+    }
+    
+    # === PROGRESS TRACKING: COMPLETE (central log) ===
     end_time <- Sys.time()
-    elapsed <- as.numeric(difftime(end_time, start_time, units = "mins"))
+    elapsed <- as.numeric(difftime(end_time, overall_start, units = "mins"))
     complete_msg <- sprintf("[%s] COMPLETE %3d/%d: %-4s G%d->G%d (%.1f min, n=%d, best=%s)\n",
                             format(end_time, "%H:%M:%S"),
                             i, total_conditions,
@@ -903,7 +1049,7 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
     
     # === PROGRESS TRACKING: ERROR ===
     end_time <- Sys.time()
-    elapsed <- as.numeric(difftime(end_time, start_time, units = "mins"))
+    elapsed <- as.numeric(difftime(end_time, overall_start, units = "mins"))
     error_msg <- sprintf("[%s] ERROR    %3d/%d: %-4s G%d->G%d (%.1f min) - %s\n",
                          format(end_time, "%H:%M:%S"),
                          i, total_conditions,
@@ -1024,6 +1170,161 @@ if (n_failed > 0) {
   }
   cat("\n")
 }
+
+################################################################################
+### GENERATE RUN SUMMARY REPORT
+################################################################################
+
+# Generate comprehensive run summary by scanning condition.progress files
+generate_run_summary <- function(results_dir, all_results, duration_mins) {
+  
+  summary_file <- file.path(results_dir, sprintf("RUN_SUMMARY_%s.txt", format(Sys.Date(), "%Y-%m-%d")))
+  
+  # Find all condition.progress files
+  progress_files <- list.files(results_dir, pattern = "condition\\.progress$", 
+                               recursive = TRUE, full.names = TRUE)
+  
+  # Parse timing from progress files
+  step_timings <- list()
+  bottlenecks <- character()
+  
+  for (pf in progress_files) {
+    lines <- readLines(pf, warn = FALSE)
+    
+    # Extract step timings
+    step_pattern <- "^(Step \\d+ - [^:]+):\\s+([0-9.]+) sec"
+    step_lines <- grep(step_pattern, lines, value = TRUE)
+    
+    for (line in step_lines) {
+      match <- regmatches(line, regexec(step_pattern, line))[[1]]
+      if (length(match) >= 3) {
+        step_name <- match[2]
+        elapsed <- as.numeric(match[3])
+        if (is.null(step_timings[[step_name]])) {
+          step_timings[[step_name]] <- numeric()
+        }
+        step_timings[[step_name]] <- c(step_timings[[step_name]], elapsed)
+      }
+    }
+    
+    # Check for bottleneck
+    bottleneck_line <- grep("BOTTLENECK:", lines, value = TRUE)
+    if (length(bottleneck_line) > 0) {
+      bottlenecks <- c(bottlenecks, bottleneck_line[1])
+    }
+  }
+  
+  # Write summary report
+  sink(summary_file)
+  on.exit(sink(), add = TRUE)
+  
+  cat(paste(rep("=", 80), collapse = ""), "\n")
+  cat("COPULA SENSITIVITY ANALYSIS - RUN SUMMARY REPORT\n")
+  cat(paste(rep("=", 80), collapse = ""), "\n")
+  cat("Generated:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
+  cat("Results directory:", results_dir, "\n")
+  cat("\n")
+  
+  # Overall statistics
+  n_total <- length(all_results)
+  n_success <- sum(sapply(all_results, function(x) x$success))
+  n_failed <- n_total - n_success
+  
+  cat("OVERALL STATISTICS\n")
+  cat(paste(rep("-", 80), collapse = ""), "\n")
+  cat(sprintf("Total conditions:     %d\n", n_total))
+  cat(sprintf("Successful:           %d (%.1f%%)\n", n_success, 100 * n_success / n_total))
+  cat(sprintf("Failed:               %d (%.1f%%)\n", n_failed, 100 * n_failed / n_total))
+  cat(sprintf("Total runtime:        %.1f minutes (%.1f hours)\n", duration_mins, duration_mins / 60))
+  cat(sprintf("Avg per condition:    %.1f minutes\n", duration_mins / n_total))
+  cat("\n")
+  
+  # Failed conditions detail
+  if (n_failed > 0) {
+    cat("FAILED CONDITIONS\n")
+    cat(paste(rep("-", 80), collapse = ""), "\n")
+    for (result in all_results) {
+      if (!result$success) {
+        cond <- CONDITIONS[[result$condition_id]]
+        cat(sprintf("  - Condition %d: %s G%d->G%d %s - %s\n",
+                    result$condition_id,
+                    if (!is.null(cond$dataset_id)) cond$dataset_id else "unknown",
+                    cond$grade_prior, cond$grade_current,
+                    cond$content,
+                    if (!is.null(result$error)) result$error else "Unknown error"))
+      }
+    }
+    cat("\n")
+  }
+  
+  # Step timing aggregation
+  if (length(step_timings) > 0) {
+    cat("AVERAGE STEP TIMING (across successful conditions)\n")
+    cat(paste(rep("-", 80), collapse = ""), "\n")
+    
+    total_avg <- 0
+    for (step_name in names(step_timings)) {
+      timings <- step_timings[[step_name]]
+      avg_secs <- mean(timings, na.rm = TRUE)
+      med_secs <- median(timings, na.rm = TRUE)
+      max_secs <- max(timings, na.rm = TRUE)
+      total_avg <- total_avg + avg_secs
+    }
+    
+    for (step_name in names(step_timings)) {
+      timings <- step_timings[[step_name]]
+      avg_secs <- mean(timings, na.rm = TRUE)
+      med_secs <- median(timings, na.rm = TRUE)
+      max_secs <- max(timings, na.rm = TRUE)
+      pct <- if (total_avg > 0) 100 * avg_secs / total_avg else 0
+      
+      cat(sprintf("%-25s  avg=%6.1fs  med=%6.1fs  max=%6.1fs  [%5.1f%%]\n",
+                  paste0(step_name, ":"), avg_secs, med_secs, max_secs, pct))
+    }
+    cat(paste(rep("-", 80), collapse = ""), "\n")
+    cat(sprintf("%-25s  avg=%6.1fs\n", "TOTAL:", total_avg))
+    cat("\n")
+  }
+  
+  # Bottleneck analysis
+  if (length(bottlenecks) > 0) {
+    cat("BOTTLENECK ANALYSIS\n")
+    cat(paste(rep("-", 80), collapse = ""), "\n")
+    bottleneck_counts <- table(bottlenecks)
+    for (bn in names(sort(bottleneck_counts, decreasing = TRUE))) {
+      cat(sprintf("  %d conditions: %s\n", bottleneck_counts[bn], bn))
+    }
+    cat("\n")
+  }
+  
+  # Best family distribution
+  best_families <- sapply(all_results[sapply(all_results, function(x) x$success)], 
+                          function(x) x$best_family)
+  if (length(best_families) > 0) {
+    cat("BEST FAMILY DISTRIBUTION\n")
+    cat(paste(rep("-", 80), collapse = ""), "\n")
+    family_counts <- table(best_families)
+    for (fam in names(sort(family_counts, decreasing = TRUE))) {
+      pct <- 100 * family_counts[fam] / length(best_families)
+      cat(sprintf("  %-12s: %3d conditions (%5.1f%%)\n", fam, family_counts[fam], pct))
+    }
+    cat("\n")
+  }
+  
+  cat(paste(rep("=", 80), collapse = ""), "\n")
+  cat("END OF REPORT\n")
+  cat(paste(rep("=", 80), collapse = ""), "\n")
+  
+  invisible(summary_file)
+}
+
+# Generate summary report
+tryCatch({
+  summary_path <- generate_run_summary(results_dir, all_condition_results, as.numeric(duration))
+  cat("Run summary saved to:", summary_path, "\n\n")
+}, error = function(e) {
+  warning("Failed to generate run summary: ", e$message)
+})
 
 # Extract all results into single data.table
 all_results <- list()
