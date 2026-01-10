@@ -111,7 +111,17 @@ DATASETS <- list(
     ec2_path_sgp = "Data/Copula_Sensitivity_Data_Set_3_SGP.Rdata",
     years_available = 2013:2017,
     grades_available = 3:8,
-    content_areas = c("ELA", "MATHEMATICS", "READING"),
+    content_areas = c("ELA", "MATHEMATICS"),
+    
+    # Content area transition metadata (READING renamed to ELA for longitudinal pairing)
+    content_area_transition = list(
+      has_content_transition = TRUE,
+      transition_year = 2015,
+      pre_transition_name = "READING",
+      post_transition_name = "ELA",
+      affected_years_pre = c(2013, 2014),
+      affected_years_post = c(2015, 2016, 2017)
+    ),
     
     # Year-specific scaling lookup with transition
     scaling_by_year = data.frame(
@@ -121,7 +131,7 @@ DATASETS <- list(
       stringsAsFactors = FALSE
     ),
     
-    notes = "Assessment transition in 2015. Vertical scale (2013-2014) to non-vertical scale (2015-2017). READING appears only in 2013-2014 (pre-transition), ELA appears only in 2015-2017 (post-transition), while MATHEMATICS spans all years. The distinction between READING and ELA is intentional to detect potential impacts of test blueprint changes on dependence structure."
+    notes = "Assessment transition in 2015. Vertical scale (2013-2014) to non-vertical scale (2015-2017). All literacy assessments are coded as ELA to enable longitudinal pair analysis within a single content area; however, years 2013, 2014, and 2015 were originally READING tests and may reflect different test blueprints than the ELA assessments in 2016-2017."
   ),
   
   # Dataset 4: Vertically scaled (with COVID-19 gap)

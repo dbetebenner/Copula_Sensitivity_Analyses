@@ -1035,14 +1035,19 @@ if (should_run_step(4)) {
     cat("####################################################################\n\n")
     
     # Find all SGPc result files for this dataset
+    # SGPc files are saved in: contour_plots/CONDITION/sgpc_results/sgpc_values.rds
     dataset_id <- current_dataset$id
-    sgpc_dir <- file.path("STEP_1_Family_Selection/results", dataset_id, "sgpc")
+    dataset_results_dir <- file.path("STEP_1_Family_Selection/results", dataset_id)
     
-    if (dir.exists(sgpc_dir)) {
-      sgpc_files <- list.files(sgpc_dir, pattern = "sgpc_results\\.rds$", 
-                               recursive = TRUE, full.names = TRUE)
-      
-      if (length(sgpc_files) > 0) {
+    # Search recursively for sgpc_values.rds files in the contour_plots subdirectories
+    sgpc_files <- list.files(
+      path = dataset_results_dir,
+      pattern = "sgpc_values\\.rds$",
+      recursive = TRUE,
+      full.names = TRUE
+    )
+    
+    if (length(sgpc_files) > 0) {
         cat("Found", length(sgpc_files), "SGPc result files\n")
         
         # Load and combine all SGPc results
@@ -1057,8 +1062,8 @@ if (should_run_step(4)) {
           
           cat("Combined SGPc results:", nrow(all_sgpc), "rows\n")
           
-          # Save combined SGPc file
-          combined_sgpc_file <- file.path(sgpc_dir, "sgpc_all_conditions.rds")
+          # Save combined SGPc file in dataset results directory
+          combined_sgpc_file <- file.path(dataset_results_dir, "sgpc_all_conditions.rds")
           saveRDS(all_sgpc, combined_sgpc_file)
           cat("✓ Combined SGPc saved:", combined_sgpc_file, "\n")
           
@@ -1150,10 +1155,8 @@ if (should_run_step(4)) {
           }
         }
       } else {
-        cat("No SGPc result files found for dataset:", dataset_id, "\n")
-      }
-    } else {
-      cat("SGPc directory not found:", sgpc_dir, "\n")
+      cat("No SGPc result files found for dataset:", dataset_id, "\n")
+      cat("  (Searched in:", dataset_results_dir, ")\n")
     }
   }
 
