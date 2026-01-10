@@ -50,7 +50,10 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- NULL                              # Run all 4 datasets (default)
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # Default: Run all 4 datasets
+# ============================================================================
+# >>> CURRENT DATASET SELECTION (dataset_1 and dataset_2 already complete) <<<
+# ============================================================================
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- c("dataset_3", "dataset_4")
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
