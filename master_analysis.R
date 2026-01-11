@@ -1081,8 +1081,8 @@ if (should_run_step(4)) {
             cat("  Columns:", paste(sgpc_cols, collapse = ", "), "\n")
             
             # Create unique key for merging: ID + YEAR + GRADE + CONTENT_AREA
-            # Note: SGPc is for YEAR_CURRENT (when current score was measured)
-            all_sgpc[, merge_key := paste(ID, YEAR_CURRENT, GRADE_CURRENT, CONTENT_AREA, sep = "_")]
+            # Note: SGPc results have YEAR/GRADE columns (current year/grade when score was measured)
+            all_sgpc[, merge_key := paste(ID, YEAR, GRADE, CONTENT_AREA, sep = "_")]
             state_data[, merge_key := paste(ID, YEAR, GRADE, CONTENT_AREA, sep = "_")]
             
             # Get mean SGPc per student/year/grade/content (in case of multiple priors)
