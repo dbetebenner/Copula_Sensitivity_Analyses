@@ -255,7 +255,7 @@ if (USE_SGP_DATA) {
 # Options:
 #   USE_EXHAUSTIVE_ALL_DATASETS <- FALSE  # Strategic subset only (default, ~42 conditions/dataset)
 #   USE_EXHAUSTIVE_ALL_DATASETS <- TRUE   # Exhaustive analysis (~250-300 conditions/dataset)
-if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- FALSE
+if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- TRUE
 
 # Test mode: Limit to small subset of conditions for validation
 # This is useful for testing the pipeline before full EC2 run

@@ -40,14 +40,27 @@ if (exists("IS_EC2", envir = .GlobalEnv) && IS_EC2) {
   n_cores_use <- n_cores_available - 1
 }
 
-# Use FORK cluster on Unix systems (macOS, Linux)
-# FORK is faster and more memory-efficient than PSOCK
-if (.Platform$OS.type == "unix") {
-  cat("Initializing FORK cluster (Unix shared memory)...\n")
+# Detect OS for cluster type selection
+# - Linux: FORK (faster, memory-efficient via copy-on-write)
+# - macOS: PSOCK (FORK crashes due to Objective-C runtime fork() issues)
+# - Windows: PSOCK (FORK not available)
+is_macos <- Sys.info()["sysname"] == "Darwin"
+is_linux <- Sys.info()["sysname"] == "Linux"
+
+if (is_linux) {
+  # Linux: Use FORK cluster (fast, memory-efficient)
+  cat("Initializing FORK cluster (Linux shared memory)...\n")
   cl <- makeForkCluster(n_cores_use)
   cat("  Type: FORK (copy-on-write, no data export needed)\n")
 } else {
-  cat("Initializing PSOCK cluster (Windows fallback)...\n")
+  # macOS and Windows: Use PSOCK cluster
+  # macOS note: FORK crashes with "objc_initializeAfterForkError" due to 
+  # Objective-C runtime not being fork-safe after certain frameworks load
+  if (is_macos) {
+    cat("Initializing PSOCK cluster (macOS - FORK not safe)...\n")
+  } else {
+    cat("Initializing PSOCK cluster (Windows)...\n")
+  }
   cl <- makeCluster(n_cores_use, type = "PSOCK")
   cat("  Type: PSOCK (socket-based, requires data export)\n")
 }
@@ -140,7 +153,8 @@ cat("  Comparison families:", COMPARISON_FAMILIES_VALUE, "\n")
 cat("\n")
 
 # Export setup differs by cluster type
-if (.Platform$OS.type == "unix") {
+# Use is_linux (defined above) to determine if FORK cluster is in use
+if (is_linux) {
   # FORK cluster: Workers inherit parent environment via copy-on-write
   # Data objects (STATE_DATA_LONG, etc.) are inherited, but local script variables are not
   cat("Setting up FORK workers...\n")
@@ -168,7 +182,7 @@ if (.Platform$OS.type == "unix") {
   })
   
 } else {
-  # PSOCK cluster: Must explicitly export data and configuration
+  # PSOCK cluster (macOS, Windows): Must explicitly export data and configuration
   cat("Exporting data and functions to PSOCK workers...\n")
   
   clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data", 
