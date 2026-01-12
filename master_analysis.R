@@ -112,7 +112,7 @@ if (file.exists("dataset_configs_local.R")) {
 # ============================================================================
 # >>> CURRENT DATASET SELECTION (dataset_1 and dataset_2 already complete) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- c("dataset_3", "dataset_4")
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- c("dataset_4")
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
