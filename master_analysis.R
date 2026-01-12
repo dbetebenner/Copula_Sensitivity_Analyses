@@ -112,7 +112,7 @@ if (file.exists("dataset_configs_local.R")) {
 # ============================================================================
 # >>> CURRENT DATASET SELECTION (dataset_1 and dataset_2 already complete) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- c("dataset_4")
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- c("dataset_4", "dataset_3", "dataset_2", "dataset_1")  # Smallest first for early issue detection
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -327,7 +327,7 @@ if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- TRUE
 # ============================================================================
 # >>> CURRENT SETTINGS (EDIT THESE FOR YOUR RUN) <<<
 # ============================================================================
-TEST_MODE <- TRUE                        # TRUE=test subset, FALSE=full production
+TEST_MODE <- FALSE                       # Full production run
 TEST_N_CONDITIONS_PER_DATASET <- 2       # Conditions per dataset in test mode
 # ============================================================================
 #
