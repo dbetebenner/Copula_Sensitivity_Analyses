@@ -19,18 +19,77 @@
 ### CONFIGURATION: Multi-Dataset System
 ############################################################################
 
-# Check for optional visualization packages
-if (!requireNamespace("ggdensity", quietly = TRUE)) {
-  cat("Note: 'ggdensity' package can provide enhanced contour visualizations.\n")
-  cat("      Install with: install.packages('ggdensity')\n")
-  cat("      Proceeding with standard ggplot2 methods.\n\n")
+############################################################################
+### PACKAGE DEPENDENCY CHECK
+############################################################################
+# Front-load all package checks to fail early rather than mid-analysis
+
+cat("====================================================================\n")
+cat("CHECKING PACKAGE DEPENDENCIES\n")
+cat("====================================================================\n\n")
+
+# Required packages (analysis will fail without these)
+REQUIRED_PACKAGES <- c(
+  # Core analysis
+  "data.table",     # Data manipulation
+  "copula",         # Copula modeling
+  "splines2",       # I-spline transformations
+  "parallel",       # Parallel processing
+  
+  # Visualization
+  "ggplot2",        # Plotting
+  "grid",           # Grid graphics
+  "gridExtra",      # Grid arrangement
+  "scales",         # Axis scaling
+  
+  # Analysis reporting (Step 1.2)
+  "wesanderson",    # Color palettes
+  "vioplot",        # Violin plots
+  "ggbeeswarm"      # Beeswarm plots
+)
+
+# Optional packages (enhanced features, graceful degradation)
+OPTIONAL_PACKAGES <- c(
+  "ggdensity",      # Enhanced contour visualizations
+  "ks"              # Kernel density estimation
+)
+
+# Check required packages
+missing_required <- character(0)
+for (pkg in REQUIRED_PACKAGES) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    missing_required <- c(missing_required, pkg)
+  }
 }
 
-if (!requireNamespace("ks", quietly = TRUE)) {
-  cat("Note: 'ks' package enables kernel density estimation for copula visualization.\n")
-  cat("      Install with: install.packages('ks')\n")
-  cat("      Proceeding with simpler density methods.\n\n")
+if (length(missing_required) > 0) {
+  cat("❌ MISSING REQUIRED PACKAGES:\n")
+  cat("   ", paste(missing_required, collapse = ", "), "\n\n")
+  cat("   Install with:\n")
+  cat("   install.packages(c(", paste0('"', missing_required, '"', collapse = ", "), "))\n\n")
+  stop("Cannot proceed without required packages. Please install them first.")
+} else {
+  cat("✓ All required packages available:\n")
+  cat("  ", paste(REQUIRED_PACKAGES, collapse = ", "), "\n\n")
 }
+
+# Check optional packages (warnings only, don't stop)
+missing_optional <- character(0)
+for (pkg in OPTIONAL_PACKAGES) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    missing_optional <- c(missing_optional, pkg)
+  }
+}
+
+if (length(missing_optional) > 0) {
+  cat("⚠ Optional packages not installed (will use fallback methods):\n")
+  cat("  ", paste(missing_optional, collapse = ", "), "\n")
+  cat("  Install with: install.packages(c(", paste0('"', missing_optional, '"', collapse = ", "), "))\n\n")
+} else {
+  cat("✓ All optional packages available\n\n")
+}
+
+cat("====================================================================\n\n")
 
 # Load dataset configurations
 cat("Loading dataset configurations from dataset_configs.R\n")
@@ -1212,13 +1271,15 @@ if (should_run_step(1) && length(ALL_DATASET_RESULTS$step1) > 0) {
   cat("COMBINED RESULTS SUMMARY:\n")
   cat(paste(rep("-", 70), collapse=""), "\n", sep="")
   cat("  Total datasets combined:", length(ALL_DATASET_RESULTS$step1), "\n")
-  cat("  Total unique conditions:", uniqueN(step1_combined$condition_id), "\n")
-  cat("  Total copula families:", uniqueN(step1_combined$family), "\n")
+  # Count unique dataset+condition combinations (condition_id is not globally unique)
+  n_unique_conditions <- uniqueN(step1_combined[, paste(dataset_id, condition_id, sep = "_")])
+  n_unique_families <- uniqueN(step1_combined$family)
+  expected_rows <- n_unique_conditions * n_unique_families
+  cat("  Total unique conditions (across all datasets):", n_unique_conditions, "\n")
+  cat("  Total copula families:", n_unique_families, "\n")
   cat("  Total rows (conditions × families):", nrow(step1_combined), "\n")
-  cat("  Expected rows:", uniqueN(step1_combined$condition_id), "×", 
-      uniqueN(step1_combined$family), "=",
-      uniqueN(step1_combined$condition_id) * uniqueN(step1_combined$family), "\n")
-  if (nrow(step1_combined) != uniqueN(step1_combined$condition_id) * uniqueN(step1_combined$family)) {
+  cat("  Expected rows:", n_unique_conditions, "×", n_unique_families, "=", expected_rows, "\n")
+  if (nrow(step1_combined) != expected_rows) {
     cat("  ⚠ WARNING: Row count mismatch detected!\n")
   }
   cat("  Columns:", ncol(step1_combined), "\n")
