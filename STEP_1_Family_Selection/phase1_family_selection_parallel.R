@@ -911,12 +911,21 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
         current_step_start <- Sys.time()
         
         tryCatch({
+          # Build span-specific column names based on year_span
+          span_suffix <- paste0("_SPAN_", cond$year_span, "_YEAR")
+          sgp_order_col <- paste0("SGP_ORDER_1", span_suffix)
+          sgp_col <- paste0("SGP", span_suffix)
+          
+          # Include span-specific columns that exist, with fallback to legacy names
+          sgp_related_cols <- intersect(
+            names(pairs_full), 
+            c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT", 
+              sgp_order_col, sgp_col, "SGP_ORDER_1", "SGP")
+          )
+          
           generate_condition_plots(
             pseudo_obs = copula_fits$pseudo_obs,
-            original_scores = pairs_full[, .SD, .SDcols = intersect(
-              names(pairs_full), 
-              c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT", "SGP_ORDER_1", "SGP")
-            )],
+            original_scores = pairs_full[, .SD, .SDcols = sgp_related_cols],
             copula_results = copula_fits$results,
             best_family = copula_fits$best_family,
             output_dir = plot_output_dir,

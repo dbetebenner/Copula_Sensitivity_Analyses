@@ -41,6 +41,9 @@ create_longitudinal_pairs <- function(data,
     year_current <- as.character(year_prior_numeric + grade_span)
   }
   
+  # Calculate year_span early for SGP column detection
+  year_span <- as.numeric(year_current) - as.numeric(year_prior)
+  
   # Extract prior grade data
   data_prior <- data[GRADE == grade_prior & 
                      YEAR == year_prior & 
@@ -54,12 +57,26 @@ create_longitudinal_pairs <- function(data,
   base_cols <- c("ID", "SCALE_SCORE")
   sgp_cols <- character(0)
   
-  # Check for SGP columns (from b-spline quantile regression)
-  if ("SGP_ORDER_1" %in% names(data)) {
-    sgp_cols <- c(sgp_cols, "SGP_ORDER_1")
+  # Check for span-specific SGP columns (new naming convention: SGP_ORDER_1_SPAN_N_YEAR)
+  span_suffix <- paste0("_SPAN_", year_span, "_YEAR")
+  sgp_order_span_col <- paste0("SGP_ORDER_1", span_suffix)
+  sgp_span_col <- paste0("SGP", span_suffix)
+  
+  if (sgp_order_span_col %in% names(data)) {
+    sgp_cols <- c(sgp_cols, sgp_order_span_col)
   }
-  if ("SGP" %in% names(data)) {
-    sgp_cols <- c(sgp_cols, "SGP")
+  if (sgp_span_col %in% names(data)) {
+    sgp_cols <- c(sgp_cols, sgp_span_col)
+  }
+  
+  # Fallback: Check for legacy SGP columns (backwards compatibility)
+  if (length(sgp_cols) == 0) {
+    if ("SGP_ORDER_1" %in% names(data)) {
+      sgp_cols <- c(sgp_cols, "SGP_ORDER_1")
+    }
+    if ("SGP" %in% names(data)) {
+      sgp_cols <- c(sgp_cols, "SGP")
+    }
   }
   
   all_cols <- c(base_cols, sgp_cols)

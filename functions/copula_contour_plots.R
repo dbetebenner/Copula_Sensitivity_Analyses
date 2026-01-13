@@ -2464,21 +2464,42 @@ generate_condition_plots <- function(pseudo_obs,
   cat("  - Creating comparison plots with SGPc panels (empirical vs parametric)...\n")
   
   # Extract traditional SGP columns from original_scores if available
+  # Supports both legacy (SGP_ORDER_1, SGP) and span-specific (SGP_ORDER_1_SPAN_N_YEAR) naming
   sgp_order_1 <- NULL
   sgp_best <- NULL
+  sgp_order_1_col_name <- NULL
+  sgp_col_name <- NULL
   
   if (!is.null(original_scores)) {
-    # Check for SGP_ORDER_1 (single prior SGP)
-    if ("SGP_ORDER_1" %in% names(original_scores)) {
-      sgp_order_1 <- original_scores$SGP_ORDER_1
+    # Check for SGP_ORDER_1 column (span-specific or legacy)
+    # Pattern: SGP_ORDER_1_SPAN_N_YEAR (new) or SGP_ORDER_1 (legacy)
+    sgp_order_1_cols <- grep("^SGP_ORDER_1(_SPAN_[0-9]_YEAR)?$", names(original_scores), value = TRUE)
+    
+    if (length(sgp_order_1_cols) > 0) {
+      # Prefer span-specific if available, otherwise use legacy
+      if (any(grepl("_SPAN_", sgp_order_1_cols))) {
+        sgp_order_1_col_name <- sgp_order_1_cols[grepl("_SPAN_", sgp_order_1_cols)][1]
+      } else {
+        sgp_order_1_col_name <- "SGP_ORDER_1"
+      }
+      sgp_order_1 <- original_scores[[sgp_order_1_col_name]]
       n_valid_sgp1 <- sum(!is.na(sgp_order_1))
       cat(sprintf("    Found SGP_ORDER_1: %d valid values (%.1f%%)\n",
                   n_valid_sgp1, 100 * n_valid_sgp1 / nrow(original_scores)))
     }
     
-    # Check for SGP (best available - typically 2 priors when available)
-    if ("SGP" %in% names(original_scores)) {
-      sgp_best <- original_scores$SGP
+    # Check for SGP column (span-specific or legacy)
+    # Pattern: SGP_SPAN_N_YEAR (new) or SGP (legacy)
+    sgp_cols <- grep("^SGP(_SPAN_[0-9]_YEAR)?$", names(original_scores), value = TRUE)
+    
+    if (length(sgp_cols) > 0) {
+      # Prefer span-specific if available, otherwise use legacy
+      if (any(grepl("_SPAN_", sgp_cols))) {
+        sgp_col_name <- sgp_cols[grepl("_SPAN_", sgp_cols)][1]
+      } else {
+        sgp_col_name <- "SGP"
+      }
+      sgp_best <- original_scores[[sgp_col_name]]
       n_valid_sgpb <- sum(!is.na(sgp_best))
       cat(sprintf("    Found SGP (best): %d valid values (%.1f%%)\n",
                   n_valid_sgpb, 100 * n_valid_sgpb / nrow(original_scores)))
@@ -2535,14 +2556,15 @@ generate_condition_plots <- function(pseudo_obs,
     }
   }
   
-  # Generate SGPc vs SGP_ORDER_1 comparison plots for empirical copulas
+  # Generate SGPc vs SGP comparison plots for empirical copulas
   # These show dual-percentage 10x10 grids comparing empirical SGPc to traditional SGP
   # Saved to EMPIRICAL/RAW/ and EMPIRICAL/BERNSTEIN/ subdirectories
+  # Column name is stored in sgp_order_1_col_name (may be span-specific or legacy)
   if (!is.null(sgp_order_1) && sum(!is.na(sgp_order_1)) > 10) {
     cat("  - Creating SGPc vs SGP_ORDER_1 comparison plots for empirical copulas...\n")
     u_obs <- pseudo_obs[, 1]
     
-    # Bernstein vs SGP_ORDER_1 (dual-percentage grid)
+    # Bernstein vs SGP (dual-percentage grid)
     if (!is.null(sgpc_empirical)) {
       cat("    • Bernstein SGPc vs SGP_ORDER_1 (dual-percentage grid)\n")
       bernstein_vs_sgp <- tryCatch({
@@ -2567,7 +2589,7 @@ generate_condition_plots <- function(pseudo_obs,
       }
     }
     
-    # Raw vs SGP_ORDER_1 (dual-percentage grid)
+    # Raw vs SGP (dual-percentage grid)
     if (!is.null(sgpc_raw)) {
       cat("    • Raw SGPc vs SGP_ORDER_1 (dual-percentage grid)\n")
       raw_vs_sgp <- tryCatch({
