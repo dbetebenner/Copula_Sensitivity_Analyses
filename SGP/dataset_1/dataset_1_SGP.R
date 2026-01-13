@@ -105,7 +105,7 @@ for (span_config in seq_along(dataset_1_config)) {
                 parallel.config = parallel.config
             )
 
-    variables.to.save <- c("SGP", "SGP_ORDER_1", "SGP_ORDER_2", "SGP_ORDER", "SCALE_SCORE_PRIOR")
+    variables.to.save <- intersect(names(dataset_1_SGP_Object@Data), c("SGP", "SGP_ORDER_1", "SGP_ORDER_2", "SGP_ORDER", "SCALE_SCORE_PRIOR"))
     Copula_Sensitivity_Data_Set_1_SGP[, (variables.to.save) := dataset_1_SGP_Object@Data[, (variables.to.save), with = FALSE]]
     setnames(Copula_Sensitivity_Data_Set_1_SGP, variables.to.save, paste0(variables.to.save, "_SPAN_", span_config, "_YEAR"))
 } # End loop over time span configurations
