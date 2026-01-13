@@ -12,7 +12,7 @@ require(data.table)
 require(SGP)
 
 # Load dataset 3
-load("../../data/Copula_Sensitivity_Data_Set_3.Rdata")
+load("../../Data/Copula_Sensitivity_Data_Set_3.Rdata")
 Copula_Sensitivity_Data_Set_3_SGP <- copy(Copula_Sensitivity_Data_Set_3)
 
 
@@ -94,4 +94,4 @@ for (span_config in seq_along(dataset_3_config)) {
 } # End loop over time span configurations
 
 # Save SGP results
-save(Copula_Sensitivity_Data_Set_3_SGP, file="../../data/Copula_Sensitivity_Data_Set_3_SGP.Rdata")
+save(Copula_Sensitivity_Data_Set_3_SGP, file="../../Data/Copula_Sensitivity_Data_Set_3_SGP.Rdata")
