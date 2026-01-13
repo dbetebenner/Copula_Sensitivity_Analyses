@@ -17,11 +17,15 @@ Copula_Sensitivity_Data_Set_3_SGP <- copy(Copula_Sensitivity_Data_Set_3)
 
 
 # Create knots and boundaries for dataset 3
-dataset_3_knots_boundaries <- SGP::createKnotsBoundaries(Copula_Sensitivity_Data_Set_3)
+dataset_3_knots_boundaries <- list()
 dataset_3_knots_boundaries_ELA_2014 <- SGP::createKnotsBoundaries(Copula_Sensitivity_Data_Set_3[CONTENT_AREA == "ELA" & YEAR <= 2014])
-dataset_3_knots_boundaries_ELA_2017 <- SGP::createKnotsBoundaries(Copula_Sensitivity_Data_Set_3[CONTENT_AREA == "ELA" & YEAR > 2014 & YEAR <= 2017])
+dataset_3_knots_boundaries_MATHEMATICS_2014 <- SGP::createKnotsBoundaries(Copula_Sensitivity_Data_Set_3[CONTENT_AREA == "MATHEMATICS" & YEAR <= 2014])
+dataset_3_knots_boundaries_ELA_2015 <- SGP::createKnotsBoundaries(Copula_Sensitivity_Data_Set_3[CONTENT_AREA == "ELA" & YEAR >= 2015])
+dataset_3_knots_boundaries_MATHEMATICS_2015 <- SGP::createKnotsBoundaries(Copula_Sensitivity_Data_Set_3[CONTENT_AREA == "MATHEMATICS" & YEAR >= 2015])
 dataset_3_knots_boundaries[['ELA']] <- dataset_3_knots_boundaries_ELA_2014[['ELA']]
-dataset_3_knots_boundaries[['ELA.2015']] <- dataset_3_knots_boundaries_ELA_2017[['ELA']]
+dataset_3_knots_boundaries[['MATHEMATICS']] <- dataset_3_knots_boundaries_MATHEMATICS_2014[['MATHEMATICS']]
+dataset_3_knots_boundaries[['ELA.2015']] <- dataset_3_knots_boundaries_ELA_2015[['ELA']]
+dataset_3_knots_boundaries[['MATHEMATICS.2015']] <- dataset_3_knots_boundaries_MATHEMATICS_2015[['MATHEMATICS']]
 
 # Embed knots and boundaries into SGPstateData
 SGPstateData[["DATASET_3"]][["Achievement"]][["Knots_Boundaries"]] <- dataset_3_knots_boundaries
