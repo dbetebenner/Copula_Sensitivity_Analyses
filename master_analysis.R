@@ -162,7 +162,7 @@ should_run_step <- function(step_num) {
 # ============================================================================
 # >>> CURRENT SETTING <<<
 # ============================================================================
-PERFORMANCE_MODE <- "fast"               # "fast", "full", or "custom"
+PERFORMANCE_MODE <- "full"               # "fast", "full", or "custom"
 # ============================================================================
 #
 if (!exists("PERFORMANCE_MODE")) PERFORMANCE_MODE <- "fast"
