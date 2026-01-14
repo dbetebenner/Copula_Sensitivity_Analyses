@@ -156,11 +156,15 @@ cat("\n")
 # Use is_linux (defined above) to determine if FORK cluster is in use
 if (is_linux) {
   # FORK cluster: Workers inherit parent environment via copy-on-write
-  # Data objects (STATE_DATA_LONG, etc.) are inherited, but local script variables are not
+  # However, for multi-dataset mode, we need to explicitly export the combined dataset
+  # to ensure workers have access to STATE_DATA_LONG with the DATASET column
   cat("Setting up FORK workers...\n")
   
-  # Export configuration variables that are defined in this script's local environment
-  # (not in .GlobalEnv, so FORK workers don't automatically inherit them)
+  # Export data objects from .GlobalEnv (where STATE_DATA_LONG is stored)
+  clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data"), 
+                envir = .GlobalEnv)
+  
+  # Export configuration variables from local environment
   clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
                       "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
                       "BOOTSTRAP_ALL_FAMILIES_VALUE",
@@ -185,8 +189,12 @@ if (is_linux) {
   # PSOCK cluster (macOS, Windows): Must explicitly export data and configuration
   cat("Exporting data and functions to PSOCK workers...\n")
   
-  clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data", 
-                      "N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
+  # Export data objects from .GlobalEnv (where STATE_DATA_LONG is stored)
+  clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data"), 
+                envir = .GlobalEnv)
+  
+  # Export configuration variables from local environment
+  clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
                       "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
                       "BOOTSTRAP_ALL_FAMILIES_VALUE",
                       "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
