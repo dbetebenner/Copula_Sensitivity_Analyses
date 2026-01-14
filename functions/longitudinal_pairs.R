@@ -15,6 +15,7 @@
 #' @param content_prior Content area for prior grade
 #' @param content_current Content area for current grade (for cross-content analysis)
 #' @param min_valid_score Minimum valid scale score (to filter out missing/invalid)
+#' @param dataset_id Optional dataset identifier for filtering combined multi-dataset data
 #' 
 #' @return data.table with columns: ID, SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT,
 #'         GRADE_PRIOR, GRADE_CURRENT, YEAR_PRIOR, YEAR_CURRENT, CONTENT_PRIOR, CONTENT_CURRENT
@@ -25,9 +26,16 @@ create_longitudinal_pairs <- function(data,
                                       year_current = NULL,
                                       content_prior = "MATHEMATICS",
                                       content_current = NULL,
-                                      min_valid_score = 200) {
+                                      min_valid_score = 200,
+                                      dataset_id = NULL) {
   
   require(data.table)
+  
+  # Filter by dataset_id if provided (for multi-dataset processing)
+  # This allows processing combined datasets where data has a DATASET column
+  if (!is.null(dataset_id) && "DATASET" %in% names(data)) {
+    data <- data[DATASET == dataset_id]
+  }
   
   # Set content_current to content_prior if not specified (within-content analysis)
   if (is.null(content_current)) {

@@ -570,7 +570,7 @@ cat("  Log file:", LOG_FILE, "\n\n")
 # Determine datasets to loop over
 datasets_to_analyze <- DATASETS_TO_RUN
 
-cat("Beginning analysis loop...\n")
+cat("Beginning analysis...\n")
 cat("Number of datasets:", length(datasets_to_analyze), "\n\n")
 
 # Initialize accumulation lists for multi-dataset results
@@ -582,7 +582,151 @@ ALL_DATASET_RESULTS <- list(
 )
 cat("Results accumulation lists initialized\n\n")
 
-# MAIN DATASET LOOP - Each iteration processes one complete dataset through all STEPs
+############################################################################
+### LOAD ALL DATASETS UPFRONT (For efficient parallel processing)
+############################################################################
+# 
+# This section loads ALL datasets before starting parallel processing.
+# This enables running Step 1 across ALL conditions from ALL datasets
+# in a single parallel batch, maximizing CPU utilization on large instances.
+#
+# The combined dataset has a DATASET column to identify the source dataset.
+############################################################################
+
+cat(paste(rep("=", 80), collapse=""), "\n", sep="")
+cat("LOADING ALL DATASETS UPFRONT\n")
+cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
+
+ALL_DATASETS_LIST <- list()
+DATASET_CONFIGS <- list()  # Store configs for all datasets
+
+for (ds_idx in seq_along(datasets_to_analyze)) {
+  ds_id <- datasets_to_analyze[ds_idx]
+  ds_config <- DATASETS[[ds_id]]
+  
+  cat("Loading dataset", ds_idx, "of", length(datasets_to_analyze), ":", ds_config$name, "\n")
+  
+  # Determine path (SGP data if enabled and available)
+  if (USE_SGP_DATA && !is.null(ds_config$local_path_sgp)) {
+    ds_path <- if (IS_EC2) ds_config$ec2_path_sgp else ds_config$local_path_sgp
+    ds_object_name <- ds_config$rdata_object_name_sgp
+    cat("  Using SGP data file\n")
+  } else {
+    ds_path <- if (IS_EC2) ds_config$ec2_path else ds_config$local_path
+    ds_object_name <- ds_config$rdata_object_name
+  }
+  
+  cat("  Path:", ds_path, "\n")
+  
+  # Load the .Rdata file
+  load(ds_path)
+  
+  if (!exists(ds_object_name)) {
+    stop("ERROR: Data object '", ds_object_name, "' not found in ", ds_path)
+  }
+  
+  ds_data <- get(ds_object_name)
+  
+  # Ensure it's a data.table
+  if (!inherits(ds_data, "data.table")) {
+    ds_data <- as.data.table(ds_data)
+  }
+  
+  # Add DATASET column to identify source
+  ds_data[, DATASET := ds_id]
+  
+  cat("  Loaded", format(nrow(ds_data), big.mark = ","), "rows\n")
+  
+  ALL_DATASETS_LIST[[ds_id]] <- ds_data
+  DATASET_CONFIGS[[ds_id]] <- ds_config
+  
+  # Clean up the loaded object to free memory
+  rm(list = ds_object_name)
+}
+
+# Combine all datasets into one
+cat("\nCombining all datasets...\n")
+ALL_DATASETS_COMBINED <- rbindlist(ALL_DATASETS_LIST, fill = TRUE, use.names = TRUE)
+cat("✓ Combined dataset:", format(nrow(ALL_DATASETS_COMBINED), big.mark = ","), "rows\n")
+cat("  Datasets included:", paste(names(ALL_DATASETS_LIST), collapse = ", "), "\n")
+cat("  Memory usage: ~", round(object.size(ALL_DATASETS_COMBINED) / 1024^3, 2), "GB\n\n")
+
+# Assign to workspace for worker access
+assign(WORKSPACE_OBJECT_NAME, ALL_DATASETS_COMBINED)
+
+# Clean up individual datasets to free memory (combined version is in STATE_DATA_LONG)
+rm(ALL_DATASETS_LIST)
+gc()
+
+cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
+
+############################################################################
+### STEP 1: COPULA FAMILY SELECTION (ALL DATASETS IN PARALLEL)
+############################################################################
+# 
+# This runs BEFORE the per-dataset loop. All conditions from all datasets
+# are processed in a single parallel batch for maximum CPU utilization.
+############################################################################
+
+if (should_run_step(1)) {
+  
+  cat("\n")
+  cat("####################################################################\n")
+  cat("### STEP 1: COPULA FAMILY SELECTION (ALL DATASETS)\n")
+  cat("####################################################################\n\n")
+  
+  cat("Paper Section: Background → TAMP and Copulas; Methodology → Copula Selection\n")
+  cat("Objective: Identify which copula family best fits longitudinal education data\n")
+  cat("Hypothesis: t-copula will dominate due to heavy tails\n")
+  cat("Processing: ALL conditions from ALL datasets in single parallel batch\n")
+  cat("Estimated time: 30-60 minutes (parallel across all datasets)\n\n")
+  
+  ## Step 1.1: Family Selection (All Datasets)
+  phase1_results_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv"
+  
+  if (SKIP_COMPLETED && check_results_exist(phase1_results_file, "Step 1 family comparison (all datasets)")) {
+    cat("Skipping Step 1.1 (already completed)\n\n")
+  } else {
+    result_1_1 <- time_phase("Step 1.1: Family Selection (All Datasets)", {
+      # Pass ALL dataset configs to parallel script
+      # The parallel script will generate conditions for ALL datasets
+      ALL_DATASET_CONFIGS <- DATASET_CONFIGS
+      
+      if (USE_PARALLEL) {
+        cat("Using parallel implementation (all datasets in single batch)\n")
+        source_with_path("STEP_1_Family_Selection/phase1_family_selection_parallel.R", "Step 1.1: Family Selection (Parallel)")
+      } else {
+        cat("Using sequential implementation\n")
+        source_with_path("STEP_1_Family_Selection/phase1_family_selection.R", "Step 1.1: Family Selection")
+      }
+    })
+    
+    if (!result_1_1$success) {
+      stop("Step 1.1 failed. Cannot continue.")
+    }
+  }
+  
+  # Note: Step 1.2 (Analysis and Decision) runs at the end after all processing
+  
+} else {
+  cat("\n####################################################################\n")
+  cat("### STEP 1: SKIPPED (not in STEPS_TO_RUN)\n")
+  cat("####################################################################\n\n")
+}
+
+############################################################################
+### MAIN DATASET LOOP - Steps 2, 3, 4 (Per-Dataset Processing)
+############################################################################
+# 
+# Steps 2, 3, 4 may have per-dataset dependencies and are processed
+# sequentially per dataset. Step 1 has already been processed above.
+############################################################################
+
+cat("\n")
+cat(paste(rep("=", 80), collapse=""), "\n", sep="")
+cat("BEGINNING PER-DATASET PROCESSING (Steps 2-4)\n")
+cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
+
 for (dataset_idx in seq_along(datasets_to_analyze)) {
   
   dataset_id <- datasets_to_analyze[dataset_idx]
@@ -592,7 +736,7 @@ for (dataset_idx in seq_along(datasets_to_analyze)) {
   ###########################################################################
   
   # Load configuration for this dataset
-  current_dataset <- DATASETS[[dataset_id]]
+  current_dataset <- DATASET_CONFIGS[[dataset_id]]
   
   cat("\n")
   cat(paste(rep("=", 80), collapse=""), "\n", sep="")
@@ -626,31 +770,17 @@ for (dataset_idx in seq_along(datasets_to_analyze)) {
   RESULTS_SUFFIX <- paste0("_", dataset_id)
   
   ###########################################################################
-  # LOAD DATA FOR CURRENT DATASET
+  # FILTER COMBINED DATA FOR CURRENT DATASET
   ###########################################################################
   
-  cat("Loading data for:", CURRENT_DATASET_NAME, "\n")
-  cat("  Path:", CURRENT_DATA_PATH, "\n")
-  cat("  Object name:", CURRENT_RDATA_OBJECT, "\n")
+  cat("Filtering combined data for:", CURRENT_DATASET_NAME, "\n")
   
-  # Load the .Rdata file
-  load(CURRENT_DATA_PATH)
+  # Filter the combined dataset to just this dataset
+  # STATE_DATA_LONG will contain just this dataset's data for Steps 2-4
+  dataset_data <- ALL_DATASETS_COMBINED[DATASET == dataset_id]
+  assign(WORKSPACE_OBJECT_NAME, dataset_data)
   
-  # Assign to generic workspace name
-  if (exists(CURRENT_RDATA_OBJECT)) {
-    assign(WORKSPACE_OBJECT_NAME, get(CURRENT_RDATA_OBJECT))
-  } else {
-    stop("ERROR: Data table object '", CURRENT_RDATA_OBJECT, "' not found in .Rdata file.\n",
-         "Expected object name: ", CURRENT_RDATA_OBJECT, "\n",
-         "Available objects: ", paste(ls(), collapse = ", "))
-  }
-  
-  # Ensure it's a data.table
-  if (!inherits(get(WORKSPACE_OBJECT_NAME), "data.table")) {
-    assign(WORKSPACE_OBJECT_NAME, as.data.table(get(WORKSPACE_OBJECT_NAME)))
-  }
-  
-  cat("✓ Loaded", nrow(get(WORKSPACE_OBJECT_NAME)), "rows\n")
+  cat("✓ Filtered", format(nrow(dataset_data), big.mark = ","), "rows for", dataset_id, "\n")
   cat("  Workspace object:", WORKSPACE_OBJECT_NAME, "\n")
   cat("  Results suffix:", ifelse(RESULTS_SUFFIX == "", "(none)", RESULTS_SUFFIX), "\n\n")
 
@@ -712,55 +842,10 @@ time_phase <- function(phase_name, code) {
 }
 
 ################################################################################
-### STEP 1: COPULA FAMILY SELECTION
+### STEP 2: TRANSFORMATION METHOD VALIDATION (Per-Dataset)
 ################################################################################
-
-if (should_run_step(1)) {
-  
-  cat("\n")
-  cat("####################################################################\n")
-  cat("### STEP 1: COPULA FAMILY SELECTION\n")
-  cat("####################################################################\n\n")
-  
-  cat("Paper Section: Background → TAMP and Copulas; Methodology → Copula Selection\n")
-  cat("Objective: Identify which copula family best fits longitudinal education data\n")
-  cat("Hypothesis: t-copula will dominate due to heavy tails\n")
-  cat("Estimated time: 30-60 minutes\n\n")
-  
-  ## Step 1.1: Family Selection
-  phase1_results_file <- "STEP_1_Family_Selection/results/phase1_copula_family_comparison.csv"
-  
-  if (SKIP_COMPLETED && check_results_exist(phase1_results_file, "Step 1 family comparison")) {
-    cat("Skipping Step 1.1 (already completed)\n\n")
-  } else {
-    result_1_1 <- time_phase("Step 1.1: Family Selection", {
-      # Use parallel version if enabled (EC2 or high-performance local)
-      if (USE_PARALLEL) {
-        # Note: phase1_family_selection_parallel.R does its own core detection
-        # EC2: uses detectCores() - 2, Local: uses detectCores() - 1
-        cat("Using parallel implementation (cores determined by parallel script)\n")
-        source_with_path("STEP_1_Family_Selection/phase1_family_selection_parallel.R", "Step 1.1: Family Selection (Parallel)")
-      } else {
-        cat("Using sequential implementation\n")
-        source_with_path("STEP_1_Family_Selection/phase1_family_selection.R", "Step 1.1: Family Selection")
-      }
-    })
-    
-    if (!result_1_1$success) {
-      stop("Step 1.1 failed. Cannot continue.")
-    }
-  }
-  
-  # Note: Step 1.2 (Analysis and Decision) will run AFTER all datasets are combined
-  
-} else {
-  cat("\n####################################################################\n")
-  cat("### STEP 1: SKIPPED (not in STEPS_TO_RUN)\n")
-  cat("####################################################################\n\n")
-}
-
-################################################################################
-### STEP 2: TRANSFORMATION METHOD VALIDATION
+# Note: Step 1 has already been processed for ALL datasets above.
+# Steps 2-4 are processed per-dataset in this loop.
 ################################################################################
 
 if (should_run_step(2)) {
@@ -1250,119 +1335,131 @@ cat("COMBINING RESULTS FROM ALL DATASETS\n")
 cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
 
 # Combine STEP 1 results
-if (should_run_step(1) && length(ALL_DATASET_RESULTS$step1) > 0) {
+if (should_run_step(1)) {
   cat("\n")
   cat(paste(rep("=", 80), collapse=""), "\n", sep="")
   cat("COMBINING STEP 1 RESULTS FROM ALL DATASETS\n")
   cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
   
-  cat("Combining results from", length(ALL_DATASET_RESULTS$step1), "datasets...\n")
-  
-  step1_combined <- rbindlist(ALL_DATASET_RESULTS$step1, fill = TRUE)
-  
-  # Save to dataset_all subdirectory
   combined_results_dir <- "STEP_1_Family_Selection/results/dataset_all"
-  dir.create(combined_results_dir, showWarnings = FALSE, recursive = TRUE)
   output_file <- paste0(combined_results_dir, "/phase1_copula_family_comparison_all_datasets.csv")
-  fwrite(step1_combined, output_file)
   
-  cat("✓ Combined STEP 1 results saved to:", output_file, "\n\n")
-  
-  cat("COMBINED RESULTS SUMMARY:\n")
-  cat(paste(rep("-", 70), collapse=""), "\n", sep="")
-  cat("  Total datasets combined:", length(ALL_DATASET_RESULTS$step1), "\n")
-  # Count unique dataset+condition combinations (condition_id is not globally unique)
-  n_unique_conditions <- uniqueN(step1_combined[, paste(dataset_id, condition_id, sep = "_")])
-  n_unique_families <- uniqueN(step1_combined$family)
-  expected_rows <- n_unique_conditions * n_unique_families
-  cat("  Total unique conditions (across all datasets):", n_unique_conditions, "\n")
-  cat("  Total copula families:", n_unique_families, "\n")
-  cat("  Total rows (conditions × families):", nrow(step1_combined), "\n")
-  cat("  Expected rows:", n_unique_conditions, "×", n_unique_families, "=", expected_rows, "\n")
-  if (nrow(step1_combined) != expected_rows) {
-    cat("  ⚠ WARNING: Row count mismatch detected!\n")
-  }
-  cat("  Columns:", ncol(step1_combined), "\n")
-  cat(paste(rep("-", 70), collapse=""), "\n\n", sep="")
-  
-  # Detailed summary by dataset
-  cat("BREAKDOWN BY DATASET:\n")
-  cat(paste(rep("-", 70), collapse=""), "\n", sep="")
-  summary_table <- step1_combined[, .(
-    n_conditions = uniqueN(condition_id),
-    n_families = length(unique(family)),
-    n_rows = .N,
-    expected_rows = uniqueN(condition_id) * length(unique(family)),
-    has_mismatch = .N != (uniqueN(condition_id) * length(unique(family)))
-  ), by = dataset_id]
-  print(summary_table)
-  cat("\n")
-  
-  # Winners by dataset
-  cat("WINNING FAMILIES BY DATASET:\n")
-  cat(paste(rep("-", 70), collapse=""), "\n", sep="")
-  winners_table <- step1_combined[, is_winner := (family == best_aic)
-  ][is_winner == TRUE, .N, by = .(dataset_id, family)]
-  setorder(winners_table, dataset_id, -N)
-  print(winners_table)
-  cat("\n")
-  
-  ###########################################################################
-  # STEP 1.2: ANALYSIS AND DECISION (on combined data)
-  ###########################################################################
-  
-  cat("\n")
-  cat(paste(rep("=", 80), collapse=""), "\n", sep="")
-  cat("STEP 1.2: ANALYSIS AND DECISION\n")
-  cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
-  
-  phase1_decision_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_decision.RData"
-  
-  if (SKIP_COMPLETED && check_results_exist(phase1_decision_file, "Step 1 decision")) {
-    cat("Skipping Step 1.2 (already completed)\n\n")
+  # Check if combined results already exist (saved by parallel script in multi-dataset mode)
+  if (file.exists(output_file)) {
+    cat("Loading existing combined results from:", output_file, "\n")
+    step1_combined <- fread(output_file)
+  } else if (length(ALL_DATASET_RESULTS$step1) > 0) {
+    # Combine from per-dataset results (backwards compatibility)
+    cat("Combining results from", length(ALL_DATASET_RESULTS$step1), "datasets...\n")
+    step1_combined <- rbindlist(ALL_DATASET_RESULTS$step1, fill = TRUE)
+    
+    # Save combined results
+    dir.create(combined_results_dir, showWarnings = FALSE, recursive = TRUE)
+    fwrite(step1_combined, output_file)
+    cat("✓ Combined STEP 1 results saved to:", output_file, "\n\n")
   } else {
-    result_1_2 <- time_phase("Step 1.2: Analysis and Decision", {
-      source_with_path("STEP_1_Family_Selection/phase1_analysis.R", "Step 1.2: Analysis and Decision")
-    })
-    
-    if (!result_1_2$success) {
-      stop("Step 1.2 failed. Cannot continue.")
-    }
+    cat("No STEP 1 results found to combine.\n\n")
+    step1_combined <- NULL
   }
   
-  ## Review Step 1 Results
-  cat("\n")
-  cat("####################################################################\n")
-  cat("### STEP 1 RESULTS SUMMARY\n")
-  cat("####################################################################\n\n")
-  
-  if (file.exists(phase1_decision_file)) {
-    load(phase1_decision_file)
+  if (!is.null(step1_combined) && nrow(step1_combined) > 0) {
+    cat("COMBINED RESULTS SUMMARY:\n")
+    cat(paste(rep("-", 70), collapse=""), "\n", sep="")
+    n_datasets <- uniqueN(step1_combined$dataset_id)
+    cat("  Total datasets:", n_datasets, "\n")
+    # Count unique dataset+condition combinations (condition_id is not globally unique)
+    n_unique_conditions <- uniqueN(step1_combined[, paste(dataset_id, condition_id, sep = "_")])
+    n_unique_families <- uniqueN(step1_combined$family)
+    expected_rows <- n_unique_conditions * n_unique_families
+    cat("  Total unique conditions (across all datasets):", n_unique_conditions, "\n")
+    cat("  Total copula families:", n_unique_families, "\n")
+    cat("  Total rows (conditions × families):", nrow(step1_combined), "\n")
+    cat("  Expected rows:", n_unique_conditions, "×", n_unique_families, "=", expected_rows, "\n")
+    if (nrow(step1_combined) != expected_rows) {
+      cat("  ⚠ WARNING: Row count mismatch detected!\n")
+    }
+    cat("  Columns:", ncol(step1_combined), "\n")
+    cat(paste(rep("-", 70), collapse=""), "\n\n", sep="")
     
-    cat("DECISION:", decision, "\n")
-    cat("Selected families for Step 2+:", paste(phase2_families, collapse = ", "), "\n\n")
-    cat("RATIONALE:\n", rationale, "\n\n")
+    # Detailed summary by dataset
+    cat("BREAKDOWN BY DATASET:\n")
+    cat(paste(rep("-", 70), collapse=""), "\n", sep="")
+    summary_table <- step1_combined[, .(
+      n_conditions = uniqueN(condition_id),
+      n_families = length(unique(family)),
+      n_rows = .N,
+      expected_rows = uniqueN(condition_id) * length(unique(family)),
+      has_mismatch = .N != (uniqueN(condition_id) * length(unique(family)))
+    ), by = dataset_id]
+    print(summary_table)
+    cat("\n")
     
-    if (file.exists("STEP_1_Family_Selection/results/dataset_all/phase1_selection_table.csv")) {
-      selection_table <- fread("STEP_1_Family_Selection/results/dataset_all/phase1_selection_table.csv")
-      cat("SELECTION FREQUENCY:\n")
-      print(selection_table)
-      cat("\n")
+    # Winners by dataset
+    cat("WINNING FAMILIES BY DATASET:\n")
+    cat(paste(rep("-", 70), collapse=""), "\n", sep="")
+    winners_table <- step1_combined[, is_winner := (family == best_aic)
+    ][is_winner == TRUE, .N, by = .(dataset_id, family)]
+    setorder(winners_table, dataset_id, -N)
+    print(winners_table)
+    cat("\n")
+    
+    ###########################################################################
+    # STEP 1.2: ANALYSIS AND DECISION (on combined data)
+    ###########################################################################
+    
+    cat("\n")
+    cat(paste(rep("=", 80), collapse=""), "\n", sep="")
+    cat("STEP 1.2: ANALYSIS AND DECISION\n")
+    cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
+    
+    phase1_decision_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_decision.RData"
+    
+    if (SKIP_COMPLETED && check_results_exist(phase1_decision_file, "Step 1 decision")) {
+      cat("Skipping Step 1.2 (already completed)\n\n")
+    } else {
+      result_1_2 <- time_phase("Step 1.2: Analysis and Decision", {
+        source_with_path("STEP_1_Family_Selection/phase1_analysis.R", "Step 1.2: Analysis and Decision")
+      })
+      
+      if (!result_1_2$success) {
+        stop("Step 1.2 failed. Cannot continue.")
+      }
     }
     
-    pause_for_review(
-      paste0("Review Step 1 combined results:\n",
-             "  - STEP_1_Family_Selection/results/dataset_all/phase1_summary.txt\n",
-             "  - STEP_1_Family_Selection/results/dataset_all/phase1_*.pdf\n",
-             "  - Individual dataset results in dataset_1/, dataset_2/, dataset_3/\n\n",
-             "If results look good, we'll proceed to Step 2 (transformation validation)."),
-      "Step 1 Complete"
-    )
-  } else {
-    cat("WARNING: Step 1 decision file not found.\n")
-    cat("Later steps may not have copula family information.\n\n")
-  }
-}
+    ## Review Step 1 Results
+    cat("\n")
+    cat("####################################################################\n")
+    cat("### STEP 1 RESULTS SUMMARY\n")
+    cat("####################################################################\n\n")
+    
+    if (file.exists(phase1_decision_file)) {
+      load(phase1_decision_file)
+      
+      cat("DECISION:", decision, "\n")
+      cat("Selected families for Step 2+:", paste(phase2_families, collapse = ", "), "\n\n")
+      cat("RATIONALE:\n", rationale, "\n\n")
+      
+      if (file.exists("STEP_1_Family_Selection/results/dataset_all/phase1_selection_table.csv")) {
+        selection_table <- fread("STEP_1_Family_Selection/results/dataset_all/phase1_selection_table.csv")
+        cat("SELECTION FREQUENCY:\n")
+        print(selection_table)
+        cat("\n")
+      }
+      
+      pause_for_review(
+        paste0("Review Step 1 combined results:\n",
+               "  - STEP_1_Family_Selection/results/dataset_all/phase1_summary.txt\n",
+               "  - STEP_1_Family_Selection/results/dataset_all/phase1_*.pdf\n",
+               "  - Individual dataset results in dataset_1/, dataset_2/, dataset_3/\n\n",
+               "If results look good, we'll proceed to Step 2 (transformation validation)."),
+        "Step 1 Complete"
+      )
+    } else {
+      cat("WARNING: Step 1 decision file not found.\n")
+      cat("Later steps may not have copula family information.\n\n")
+    }
+  } # End of: if (!is.null(step1_combined) && nrow(step1_combined) > 0)
+} # End of: if (should_run_step(1))
 
 # Combine STEP 2 results (if applicable)
 if (should_run_step(2) && length(ALL_DATASET_RESULTS$step2) > 0) {

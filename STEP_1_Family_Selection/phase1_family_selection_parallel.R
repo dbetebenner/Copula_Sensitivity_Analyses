@@ -230,191 +230,290 @@ if (SKIP_COMONOTONIC_VALUE) {
 }
 
 # Define test conditions
-# Two strategies:
-# 1. Strategic subset (datasets 1 & 2): Representative sampling for family selection
-# 2. Exhaustive (dataset 3): All valid combinations for transition analysis
+# Three modes:
+# 1. ALL_DATASET_CONFIGS mode: Generate conditions for ALL datasets (from master_analysis.R)
+# 2. Strategic subset: Representative sampling for family selection (single dataset)
+# 3. Exhaustive: All valid combinations for transition analysis (single dataset)
 
-# Check if we should use exhaustive conditions for this dataset
-# Priority: Global flag (USE_EXHAUSTIVE_ALL_DATASETS) > Dataset-specific (dataset_3)
+# Check if we should use exhaustive conditions
 USE_EXHAUSTIVE_CONDITIONS <- FALSE
-
 if (exists("USE_EXHAUSTIVE_ALL_DATASETS", envir = .GlobalEnv)) {
   USE_EXHAUSTIVE_CONDITIONS <- get("USE_EXHAUSTIVE_ALL_DATASETS", envir = .GlobalEnv)
+}
+
+################################################################################
+### MULTI-DATASET MODE: Generate conditions for ALL datasets
+################################################################################
+
+# Check if ALL_DATASET_CONFIGS exists (set by master_analysis.R for all-dataset processing)
+if (exists("ALL_DATASET_CONFIGS", envir = .GlobalEnv)) {
+  
+  all_dataset_configs <- get("ALL_DATASET_CONFIGS", envir = .GlobalEnv)
+  
+  cat("====================================================================\n")
+  cat("MULTI-DATASET MODE: Generating conditions for ALL datasets\n")
+  cat("====================================================================\n")
+  cat("Datasets:", paste(names(all_dataset_configs), collapse = ", "), "\n")
+  cat("Exhaustive mode:", USE_EXHAUSTIVE_CONDITIONS, "\n\n")
+  
+  # Generate conditions for each dataset
+  CONDITIONS <- list()
+  
+  for (ds_id in names(all_dataset_configs)) {
+    ds_config <- all_dataset_configs[[ds_id]]
+    
+    cat("Generating conditions for:", ds_config$name, "\n")
+    
+    if (USE_EXHAUSTIVE_CONDITIONS) {
+      # Generate exhaustive conditions for this dataset
+      ds_conditions <- generate_exhaustive_conditions(ds_config, max_year_span = 4)
+      
+      # Rename year_span to span for consistency
+      for (i in seq_along(ds_conditions)) {
+        ds_conditions[[i]]$span <- ds_conditions[[i]]$year_span
+      }
+    } else {
+      # Use strategic subset (will be filtered by content area later)
+      ds_conditions <- list(
+        # 1-YEAR SPANS
+        list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "MATHEMATICS", span = 1),
+        list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "READING", span = 1),
+        list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", span = 1),
+        list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 1),
+        list(grade_prior = 6, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 1),
+        list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "READING", span = 1),
+        list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "READING", span = 1),
+        # 2-YEAR SPANS
+        list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 2),
+        list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 2),
+        list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "READING", span = 2),
+        # 3-YEAR SPANS
+        list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 3),
+        list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 3),
+        list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "READING", span = 3),
+        # 4-YEAR SPANS
+        list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "MATHEMATICS", span = 4),
+        list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "MATHEMATICS", span = 4),
+        list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "READING", span = 4)
+      )
+    }
+    
+    # Filter by available content areas for this dataset
+    available_content_areas <- ds_config$content_areas
+    ds_conditions <- ds_conditions[sapply(ds_conditions, function(cond) {
+      cond$content %in% available_content_areas
+    })]
+    
+    # Enrich each condition with dataset metadata
+    for (i in seq_along(ds_conditions)) {
+      cond <- ds_conditions[[i]]
+      
+      # Normalize naming
+      if (!is.null(cond$span) && is.null(cond$year_span)) {
+        cond$year_span <- cond$span
+      }
+      
+      # Calculate year_current
+      year_current <- as.character(as.numeric(cond$year_prior) + cond$year_span)
+      
+      # Add dataset identifiers
+      cond$dataset_id <- ds_config$id
+      cond$dataset_name <- ds_config$name
+      cond$anonymized_state <- ds_config$anonymized_state
+      
+      # Add scaling metadata
+      cond$year_current <- year_current
+      cond$prior_scaling_type <- get_scaling_type(ds_config, cond$year_prior)
+      cond$current_scaling_type <- get_scaling_type(ds_config, year_current)
+      cond$scaling_transition_type <- get_scaling_transition_type(ds_config, cond$year_prior, year_current)
+      
+      # Add transition metadata
+      cond$has_transition <- ds_config$has_transition
+      cond$transition_year <- if (ds_config$has_transition) ds_config$transition_year else NA
+      cond$includes_transition_span <- crosses_transition(ds_config, cond$year_prior, year_current)
+      cond$transition_period <- get_transition_period(ds_config, cond$year_prior, year_current)
+      
+      ds_conditions[[i]] <- cond
+    }
+    
+    cat("  Generated", length(ds_conditions), "conditions\n")
+    
+    # Append to main CONDITIONS list
+    CONDITIONS <- c(CONDITIONS, ds_conditions)
+  }
+  
+  cat("\n✓ Total conditions across all datasets:", length(CONDITIONS), "\n")
+  
+  # Breakdown by dataset
+  cat("\nBreakdown by dataset:\n")
+  for (ds_id in names(all_dataset_configs)) {
+    n_cond <- sum(sapply(CONDITIONS, function(c) c$dataset_id == ds_id))
+    cat("  ", ds_id, ":", n_cond, "conditions\n")
+  }
+  cat("\n")
+  
+  # Skip the single-dataset enrichment/filtering sections below
+  MULTI_DATASET_MODE <- TRUE
+  
+} else {
+  
+  ################################################################################
+  ### SINGLE DATASET MODE: Original behavior
+  ################################################################################
+  
+  MULTI_DATASET_MODE <- FALSE
+  
   if (USE_EXHAUSTIVE_CONDITIONS) {
     cat("====================================================================\n")
     cat("EXHAUSTIVE MODE: ENABLED (Global setting)\n")
     cat("====================================================================\n")
   }
-} else if (exists("current_dataset", envir = .GlobalEnv) && 
-                             !is.null(current_dataset) && 
-           current_dataset$id == "dataset_3") {
-  # Fallback: Dataset 3 uses exhaustive by default (transition analysis)
-  USE_EXHAUSTIVE_CONDITIONS <- TRUE
-}
-
-if (USE_EXHAUSTIVE_CONDITIONS) {
-  cat("Using EXHAUSTIVE conditions for", 
-      if(exists("current_dataset")) current_dataset$name else "all datasets", "\n")
-  cat("  (All valid year/grade/content combinations across 1-4 year spans)\n")
-  cat("  Purpose: Establish copula stability across time spans\n\n")
   
-  # Generate all valid conditions for this dataset
-  CONDITIONS <- generate_exhaustive_conditions(current_dataset, max_year_span = 4)
-  
-  # Rename year_span to span for consistency with parallel version
-  for (i in seq_along(CONDITIONS)) {
-    CONDITIONS[[i]]$span <- CONDITIONS[[i]]$year_span
-  }
-  
-} else {
-  cat("Using STRATEGIC SUBSET conditions\n")
-  cat("  (Representative sampling for copula family selection)\n\n")
-  
-  # Strategic subset conditions
-  # Expanded to include Grade 3 and Grade 7 priors
-  # Grade range: G3→G7 (elementary), G7→G8 (middle school transition)
-  CONDITIONS <- list(
-    # === 1-YEAR SPANS ===
-    # Grade 3 prior (early elementary)
-    list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "MATHEMATICS", span = 1),
-    list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "READING", span = 1),
+  if (USE_EXHAUSTIVE_CONDITIONS) {
+    cat("Using EXHAUSTIVE conditions for", 
+        if(exists("current_dataset")) current_dataset$name else "dataset", "\n")
+    cat("  (All valid year/grade/content combinations across 1-4 year spans)\n")
+    cat("  Purpose: Establish copula stability across time spans\n\n")
     
-    # Grade 4-6 prior (existing)
-    list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", span = 1),
-    list(grade_prior = 4, grade_current = 5, year_prior = "2011", content = "MATHEMATICS", span = 1),
-    list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 1),
-    list(grade_prior = 6, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 1),
-    list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "READING", span = 1),
-    list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "READING", span = 1),
-    list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "WRITING", span = 1),
+    # Generate all valid conditions for this dataset
+    CONDITIONS <- generate_exhaustive_conditions(current_dataset, max_year_span = 4)
     
-    # Grade 7 prior (middle school transition)
-    list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 1),
-    list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "READING", span = 1),
-    
-    # === 2-YEAR SPANS ===
-    # Grade 3 prior
-    list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", span = 2),
-    list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "READING", span = 2),
-    
-    # Grade 4-6 prior (existing)
-    list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 2),
-    list(grade_prior = 4, grade_current = 6, year_prior = "2011", content = "MATHEMATICS", span = 2),
-    list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 2),
-    list(grade_prior = 6, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 2),
-    list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "READING", span = 2),
-    list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "READING", span = 2),
-    list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "WRITING", span = 2),
-    
-    # Grade 7 prior
-    list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "MATHEMATICS", span = 2),
-    list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "READING", span = 2),
-    
-    # === 3-YEAR SPANS ===
-    # Grade 3 prior
-    list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 3),
-    list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "READING", span = 3),
-    
-    # Grade 4-6 prior (existing)
-    list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 3),
-    list(grade_prior = 4, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", span = 3),
-    list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 3),
-    list(grade_prior = 6, grade_current = 9, year_prior = "2010", content = "MATHEMATICS", span = 3),
-    list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "READING", span = 3),
-    list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "READING", span = 3),
-    list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "WRITING", span = 3),
-    
-    # Grade 7 prior
-    list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "MATHEMATICS", span = 3),
-    list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "READING", span = 3),
-    
-    # === 4-YEAR SPANS ===
-    # Grade 3 prior
-    list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", span = 4),
-    list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "READING", span = 4),
-    
-    # Grade 4-6 prior (existing + expanded)
-    list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "MATHEMATICS", span = 4),
-    list(grade_prior = 4, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 4),
-    list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "MATHEMATICS", span = 4),
-    list(grade_prior = 6, grade_current = 10, year_prior = "2009", content = "MATHEMATICS", span = 4),
-    list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "READING", span = 4),
-    list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "READING", span = 4),
-    list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "WRITING", span = 4)
-  )
-}
-
-################################################################################
-### ENRICH CONDITIONS WITH DATASET METADATA
-################################################################################
-
-# Add dataset-specific metadata to each condition using helper functions
-if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) {
-  cat("\n")
-  cat("====================================================================\n")
-  cat("ENRICHING CONDITIONS WITH DATASET METADATA\n")
-  cat("====================================================================\n\n")
-  
-  for (i in seq_along(CONDITIONS)) {
-    cond <- CONDITIONS[[i]]
-    
-    # Normalize naming: parallel version uses 'span', but we need 'year_span' for consistency
-    if (!is.null(cond$span) && is.null(cond$year_span)) {
-      cond$year_span <- cond$span
+    # Rename year_span to span for consistency with parallel version
+    for (i in seq_along(CONDITIONS)) {
+      CONDITIONS[[i]]$span <- CONDITIONS[[i]]$year_span
     }
     
-    # Calculate year_current from year_prior + year_span
-    year_current <- as.character(as.numeric(cond$year_prior) + cond$year_span)
+  } else {
+    cat("Using STRATEGIC SUBSET conditions\n")
+    cat("  (Representative sampling for copula family selection)\n\n")
     
-    # Add dataset identifiers
-    cond$dataset_id <- current_dataset$id
-    cond$dataset_name <- current_dataset$name
-    cond$anonymized_state <- current_dataset$anonymized_state
-    
-    # Add scaling metadata using helper functions from dataset_configs.R
-    cond$year_current <- year_current
-    cond$prior_scaling_type <- get_scaling_type(current_dataset, cond$year_prior)
-    cond$current_scaling_type <- get_scaling_type(current_dataset, year_current)
-    cond$scaling_transition_type <- get_scaling_transition_type(current_dataset, cond$year_prior, year_current)
-    
-    # Add transition metadata
-    cond$has_transition <- current_dataset$has_transition
-    cond$transition_year <- if (current_dataset$has_transition) current_dataset$transition_year else NA
-    cond$includes_transition_span <- crosses_transition(current_dataset, cond$year_prior, year_current)
-    cond$transition_period <- get_transition_period(current_dataset, cond$year_prior, year_current)
-    
-    # Update the condition in the list
-    CONDITIONS[[i]] <- cond
+    # Strategic subset conditions
+    CONDITIONS <- list(
+      # === 1-YEAR SPANS ===
+      list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "MATHEMATICS", span = 1),
+      list(grade_prior = 3, grade_current = 4, year_prior = "2010", content = "READING", span = 1),
+      list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", span = 1),
+      list(grade_prior = 4, grade_current = 5, year_prior = "2011", content = "MATHEMATICS", span = 1),
+      list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 1),
+      list(grade_prior = 6, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 1),
+      list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "READING", span = 1),
+      list(grade_prior = 5, grade_current = 6, year_prior = "2010", content = "READING", span = 1),
+      list(grade_prior = 4, grade_current = 5, year_prior = "2010", content = "WRITING", span = 1),
+      list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 1),
+      list(grade_prior = 7, grade_current = 8, year_prior = "2010", content = "READING", span = 1),
+      # === 2-YEAR SPANS ===
+      list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "MATHEMATICS", span = 2),
+      list(grade_prior = 3, grade_current = 5, year_prior = "2010", content = "READING", span = 2),
+      list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 2),
+      list(grade_prior = 4, grade_current = 6, year_prior = "2011", content = "MATHEMATICS", span = 2),
+      list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 2),
+      list(grade_prior = 6, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 2),
+      list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "READING", span = 2),
+      list(grade_prior = 5, grade_current = 7, year_prior = "2010", content = "READING", span = 2),
+      list(grade_prior = 4, grade_current = 6, year_prior = "2010", content = "WRITING", span = 2),
+      list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "MATHEMATICS", span = 2),
+      list(grade_prior = 7, grade_current = 9, year_prior = "2010", content = "READING", span = 2),
+      # === 3-YEAR SPANS ===
+      list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "MATHEMATICS", span = 3),
+      list(grade_prior = 3, grade_current = 6, year_prior = "2010", content = "READING", span = 3),
+      list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "MATHEMATICS", span = 3),
+      list(grade_prior = 4, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", span = 3),
+      list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 3),
+      list(grade_prior = 6, grade_current = 9, year_prior = "2010", content = "MATHEMATICS", span = 3),
+      list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "READING", span = 3),
+      list(grade_prior = 5, grade_current = 8, year_prior = "2010", content = "READING", span = 3),
+      list(grade_prior = 4, grade_current = 7, year_prior = "2010", content = "WRITING", span = 3),
+      list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "MATHEMATICS", span = 3),
+      list(grade_prior = 7, grade_current = 10, year_prior = "2009", content = "READING", span = 3),
+      # === 4-YEAR SPANS ===
+      list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "MATHEMATICS", span = 4),
+      list(grade_prior = 3, grade_current = 7, year_prior = "2009", content = "READING", span = 4),
+      list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "MATHEMATICS", span = 4),
+      list(grade_prior = 4, grade_current = 8, year_prior = "2010", content = "MATHEMATICS", span = 4),
+      list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "MATHEMATICS", span = 4),
+      list(grade_prior = 6, grade_current = 10, year_prior = "2009", content = "MATHEMATICS", span = 4),
+      list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "READING", span = 4),
+      list(grade_prior = 5, grade_current = 9, year_prior = "2009", content = "READING", span = 4),
+      list(grade_prior = 4, grade_current = 8, year_prior = "2009", content = "WRITING", span = 4)
+    )
   }
-  
-  cat("✓ Conditions enriched with dataset metadata\n")
-  cat("  Dataset:", current_dataset$name, "\n")
-  cat("  Total conditions:", length(CONDITIONS), "\n\n")
 }
 
 ################################################################################
-### FILTER CONDITIONS BY AVAILABLE CONTENT AREAS
+### ENRICH CONDITIONS WITH DATASET METADATA (Single-dataset mode only)
 ################################################################################
 
-# Filter out conditions with content areas not available in current dataset
-if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) {
-  available_content_areas <- current_dataset$content_areas
-  original_count <- length(CONDITIONS)
+# Skip if we're in multi-dataset mode (already enriched above)
+if (!exists("MULTI_DATASET_MODE") || !MULTI_DATASET_MODE) {
   
-  CONDITIONS <- CONDITIONS[sapply(CONDITIONS, function(cond) {
-    cond$content %in% available_content_areas
-  })]
-  
-  filtered_count <- original_count - length(CONDITIONS)
-  if (filtered_count > 0) {
+  # Add dataset-specific metadata to each condition using helper functions
+  if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) {
     cat("\n")
     cat("====================================================================\n")
-    cat("CONTENT AREA FILTERING\n")
-    cat("====================================================================\n")
-    cat("Dataset:", current_dataset$name, "\n")
-    cat("Available content areas:", paste(available_content_areas, collapse = ", "), "\n")
-    cat("Filtered out", filtered_count, "condition(s) with unavailable content areas\n")
-    cat("Remaining conditions:", length(CONDITIONS), "\n\n")
+    cat("ENRICHING CONDITIONS WITH DATASET METADATA\n")
+    cat("====================================================================\n\n")
+    
+    for (i in seq_along(CONDITIONS)) {
+      cond <- CONDITIONS[[i]]
+      
+      # Normalize naming: parallel version uses 'span', but we need 'year_span' for consistency
+      if (!is.null(cond$span) && is.null(cond$year_span)) {
+        cond$year_span <- cond$span
+      }
+      
+      # Calculate year_current from year_prior + year_span
+      year_current <- as.character(as.numeric(cond$year_prior) + cond$year_span)
+      
+      # Add dataset identifiers
+      cond$dataset_id <- current_dataset$id
+      cond$dataset_name <- current_dataset$name
+      cond$anonymized_state <- current_dataset$anonymized_state
+      
+      # Add scaling metadata using helper functions from dataset_configs.R
+      cond$year_current <- year_current
+      cond$prior_scaling_type <- get_scaling_type(current_dataset, cond$year_prior)
+      cond$current_scaling_type <- get_scaling_type(current_dataset, year_current)
+      cond$scaling_transition_type <- get_scaling_transition_type(current_dataset, cond$year_prior, year_current)
+      
+      # Add transition metadata
+      cond$has_transition <- current_dataset$has_transition
+      cond$transition_year <- if (current_dataset$has_transition) current_dataset$transition_year else NA
+      cond$includes_transition_span <- crosses_transition(current_dataset, cond$year_prior, year_current)
+      cond$transition_period <- get_transition_period(current_dataset, cond$year_prior, year_current)
+      
+      # Update the condition in the list
+      CONDITIONS[[i]] <- cond
+    }
+    
+    cat("✓ Conditions enriched with dataset metadata\n")
+    cat("  Dataset:", current_dataset$name, "\n")
+    cat("  Total conditions:", length(CONDITIONS), "\n\n")
+  }
+  
+  ################################################################################
+  ### FILTER CONDITIONS BY AVAILABLE CONTENT AREAS (Single-dataset mode only)
+  ################################################################################
+  
+  # Filter out conditions with content areas not available in current dataset
+  if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) {
+    available_content_areas <- current_dataset$content_areas
+    original_count <- length(CONDITIONS)
+    
+    CONDITIONS <- CONDITIONS[sapply(CONDITIONS, function(cond) {
+      cond$content %in% available_content_areas
+    })]
+    
+    filtered_count <- original_count - length(CONDITIONS)
+    if (filtered_count > 0) {
+      cat("\n")
+      cat("====================================================================\n")
+      cat("CONTENT AREA FILTERING\n")
+      cat("====================================================================\n")
+      cat("Dataset:", current_dataset$name, "\n")
+      cat("Available content areas:", paste(available_content_areas, collapse = ", "), "\n")
+      cat("Filtered out", filtered_count, "condition(s) with unavailable content areas\n")
+      cat("Remaining conditions:", length(CONDITIONS), "\n\n")
+    }
   }
 }
 
@@ -430,50 +529,81 @@ if (exists("TEST_MODE", envir = .GlobalEnv) && get("TEST_MODE", envir = .GlobalE
     n_conditions_test <- get("TEST_N_CONDITIONS_PER_DATASET", envir = .GlobalEnv)
   }
   
-  original_count_test <- length(CONDITIONS)
-  
-  if (original_count_test > n_conditions_test) {
+  # In multi-dataset mode, multiply by number of datasets
+  if (exists("MULTI_DATASET_MODE") && MULTI_DATASET_MODE && 
+      exists("ALL_DATASET_CONFIGS", envir = .GlobalEnv)) {
+    n_datasets <- length(get("ALL_DATASET_CONFIGS", envir = .GlobalEnv))
+    n_conditions_total <- n_conditions_test * n_datasets
     cat("\n")
     cat("====================================================================\n")
-    cat("TEST MODE: LIMITING CONDITIONS\n")
+    cat("TEST MODE: MULTI-DATASET\n")
     cat("====================================================================\n")
-    cat("Original conditions:", original_count_test, "\n")
-    cat("Test subset size:", n_conditions_test, "\n")
+    cat("Conditions per dataset:", n_conditions_test, "\n")
+    cat("Number of datasets:", n_datasets, "\n")
+    cat("Total conditions target:", n_conditions_total, "\n\n")
     
-    # Select diverse conditions across time spans if possible
-    # Strategy: Pick one condition from each time span (1, 2, 3, 4 years)
-    if (n_conditions_test >= 4 && USE_EXHAUSTIVE_CONDITIONS) {
-      # Try to get one from each time span
-      spans_available <- sapply(CONDITIONS, function(c) c$year_span %||% c$span)
-      selected_indices <- c()
-      
-      for (span in 1:4) {
-        span_indices <- which(spans_available == span)
-        if (length(span_indices) > 0) {
-          # Pick first condition from this span
-          selected_indices <- c(selected_indices, span_indices[1])
-          if (length(selected_indices) >= n_conditions_test) break
-        }
+    # Select n conditions per dataset
+    all_dataset_configs <- get("ALL_DATASET_CONFIGS", envir = .GlobalEnv)
+    selected_conditions <- list()
+    
+    for (ds_id in names(all_dataset_configs)) {
+      ds_conditions_idx <- which(sapply(CONDITIONS, function(c) c$dataset_id == ds_id))
+      if (length(ds_conditions_idx) > n_conditions_test) {
+        # Select first n_conditions_test from this dataset
+        ds_conditions_idx <- ds_conditions_idx[1:n_conditions_test]
       }
-      
-      CONDITIONS <- CONDITIONS[selected_indices]
-      cat("Selected conditions:")
-      for (i in seq_along(CONDITIONS)) {
-        cond <- CONDITIONS[[i]]
-        cat(sprintf("\n  %d. G%d->G%d (%s, %s, span=%d)", 
-                   i, cond$grade_prior, cond$grade_current, 
-                   cond$year_prior, cond$content, 
-                   cond$year_span %||% cond$span))
-      }
-    } else {
-      # Just take first n conditions
-      CONDITIONS <- CONDITIONS[1:n_conditions_test]
-      cat("Selected first", n_conditions_test, "condition(s)\n")
+      selected_conditions <- c(selected_conditions, CONDITIONS[ds_conditions_idx])
+      cat("  ", ds_id, ": selected", length(ds_conditions_idx), "of", 
+          sum(sapply(CONDITIONS, function(c) c$dataset_id == ds_id)), "conditions\n")
     }
     
-    cat("\n")
-    cat("Remaining conditions:", length(CONDITIONS), "\n")
+    CONDITIONS <- selected_conditions
+    cat("\nTotal conditions selected:", length(CONDITIONS), "\n")
     cat("====================================================================\n\n")
+    
+  } else {
+    # Single-dataset mode
+    original_count_test <- length(CONDITIONS)
+    
+    if (original_count_test > n_conditions_test) {
+      cat("\n")
+      cat("====================================================================\n")
+      cat("TEST MODE: LIMITING CONDITIONS\n")
+      cat("====================================================================\n")
+      cat("Original conditions:", original_count_test, "\n")
+      cat("Test subset size:", n_conditions_test, "\n")
+      
+      # Select diverse conditions across time spans if possible
+      if (n_conditions_test >= 4 && USE_EXHAUSTIVE_CONDITIONS) {
+        spans_available <- sapply(CONDITIONS, function(c) c$year_span %||% c$span)
+        selected_indices <- c()
+        
+        for (span in 1:4) {
+          span_indices <- which(spans_available == span)
+          if (length(span_indices) > 0) {
+            selected_indices <- c(selected_indices, span_indices[1])
+            if (length(selected_indices) >= n_conditions_test) break
+          }
+        }
+        
+        CONDITIONS <- CONDITIONS[selected_indices]
+        cat("Selected conditions:")
+        for (i in seq_along(CONDITIONS)) {
+          cond <- CONDITIONS[[i]]
+          cat(sprintf("\n  %d. G%d->G%d (%s, %s, span=%d)", 
+                     i, cond$grade_prior, cond$grade_current, 
+                     cond$year_prior, cond$content, 
+                     cond$year_span %||% cond$span))
+        }
+      } else {
+        CONDITIONS <- CONDITIONS[1:n_conditions_test]
+        cat("Selected first", n_conditions_test, "condition(s)\n")
+      }
+      
+      cat("\n")
+      cat("Remaining conditions:", length(CONDITIONS), "\n")
+      cat("====================================================================\n\n")
+    }
   }
 }
 
@@ -607,13 +737,15 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
     current_step_start <- Sys.time()
     
     # Create longitudinal pairs
+    # In multi-dataset mode, filter by dataset_id to get only this condition's dataset
     pairs_full <- create_longitudinal_pairs(
       data = get_state_data(),
       grade_prior = cond$grade_prior,
       grade_current = cond$grade_current,
       year_prior = cond$year_prior,
       content_prior = cond$content,
-      content_current = cond$content
+      content_current = cond$content,
+      dataset_id = cond$dataset_id  # Filter by dataset (NULL if single dataset)
     )
     
     # Check if sufficient data
@@ -651,7 +783,7 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
                                    dataset_id,
                                    "contour_plots",
                                    sprintf("%s_G%d_G%d_%s", 
-                                          cond$year_prior, cond$grade_prior, 
+                                          actual_year_current, cond$grade_prior, 
                                           cond$grade_current, cond$content))
     } else {
       plot_output_dir <- NULL
@@ -1408,21 +1540,68 @@ if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset)) 
   cat("\n⚠ Warning: current_dataset not found, skipping metadata enrichment\n\n")
 }
 
-# Save full results to dataset-specific directory
-if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset$id)) {
-  dataset_results_dir <- paste0("STEP_1_Family_Selection/results/", current_dataset$id)
-  dir.create(dataset_results_dir, showWarnings = FALSE, recursive = TRUE)
-  output_file <- paste0(dataset_results_dir, "/phase1_copula_family_comparison.csv")
+# Save results - different handling for multi-dataset vs single-dataset mode
+if (exists("MULTI_DATASET_MODE") && MULTI_DATASET_MODE) {
+  
+  ###############################################################################
+  # MULTI-DATASET MODE: Save combined results + per-dataset results
+  ###############################################################################
+  
+  cat("====================================================================\n")
+  cat("SAVING RESULTS (MULTI-DATASET MODE)\n")
+  cat("====================================================================\n\n")
+  
+  # Save combined results to dataset_all directory
+  combined_results_dir <- "STEP_1_Family_Selection/results/dataset_all"
+  dir.create(combined_results_dir, showWarnings = FALSE, recursive = TRUE)
+  combined_output_file <- paste0(combined_results_dir, "/phase1_copula_family_comparison_all_datasets.csv")
+  fwrite(results_dt, combined_output_file)
+  cat("✓ Combined results saved to:", combined_output_file, "\n")
+  
+  # Also save per-dataset results for backwards compatibility
+  unique_datasets <- unique(results_dt$dataset_id)
+  for (ds_id in unique_datasets) {
+    ds_results <- results_dt[dataset_id == ds_id]
+    ds_results_dir <- paste0("STEP_1_Family_Selection/results/", ds_id)
+    dir.create(ds_results_dir, showWarnings = FALSE, recursive = TRUE)
+    ds_output_file <- paste0(ds_results_dir, "/phase1_copula_family_comparison.csv")
+    fwrite(ds_results, ds_output_file)
+    cat("✓ Dataset", ds_id, "results saved to:", ds_output_file, "\n")
+  }
+  
+  cat("\nTotal conditions tested (all datasets):", uniqueN(paste(results_dt$dataset_id, results_dt$condition_id)), "\n")
+  cat("Total copula fits:", nrow(results_dt), "\n\n")
+  
+  # Per-dataset summary
+  cat("Conditions per dataset:\n")
+  for (ds_id in unique_datasets) {
+    n_cond <- uniqueN(results_dt[dataset_id == ds_id]$condition_id)
+    n_rows <- nrow(results_dt[dataset_id == ds_id])
+    cat("  ", ds_id, ":", n_cond, "conditions,", n_rows, "rows\n")
+  }
+  cat("\n")
+  
 } else {
-  # Fallback to root results directory
-  dir.create("STEP_1_Family_Selection/results", showWarnings = FALSE, recursive = TRUE)
-  output_file <- "STEP_1_Family_Selection/results/phase1_copula_family_comparison.csv"
+  
+  ###############################################################################
+  # SINGLE-DATASET MODE: Original behavior
+  ###############################################################################
+  
+  if (exists("current_dataset", envir = .GlobalEnv) && !is.null(current_dataset$id)) {
+    dataset_results_dir <- paste0("STEP_1_Family_Selection/results/", current_dataset$id)
+    dir.create(dataset_results_dir, showWarnings = FALSE, recursive = TRUE)
+    output_file <- paste0(dataset_results_dir, "/phase1_copula_family_comparison.csv")
+  } else {
+    # Fallback to root results directory
+    dir.create("STEP_1_Family_Selection/results", showWarnings = FALSE, recursive = TRUE)
+    output_file <- "STEP_1_Family_Selection/results/phase1_copula_family_comparison.csv"
+  }
+  fwrite(results_dt, output_file)
+  
+  cat("Results saved to:", output_file, "\n")
+  cat("Total conditions tested:", uniqueN(results_dt$condition_id), "\n")
+  cat("Total copula fits:", nrow(results_dt), "\n\n")
 }
-fwrite(results_dt, output_file)
-
-cat("Results saved to:", output_file, "\n")
-cat("Total conditions tested:", uniqueN(results_dt$condition_id), "\n")
-cat("Total copula fits:", nrow(results_dt), "\n\n")
 
 # Quick summary
 cat("====================================================================\n")
@@ -1440,6 +1619,16 @@ mean_aic <- results_dt[, .(mean_aic = mean(aic), sd_aic = sd(aic)), by = family]
 setorder(mean_aic, mean_aic)
 print(mean_aic)
 
+# Per-dataset summary if multi-dataset
+if (exists("MULTI_DATASET_MODE") && MULTI_DATASET_MODE) {
+  cat("\n\nFamily selection by dataset:\n")
+  family_by_dataset <- results_dt[, .(best_family = family[which.min(aic)]), 
+                                   by = .(dataset_id, condition_id)]
+  family_by_dataset_summary <- family_by_dataset[, .N, by = .(dataset_id, best_family)]
+  setorder(family_by_dataset_summary, dataset_id, -N)
+  print(family_by_dataset_summary)
+}
+
 cat("\n\nPhase 1 complete! Proceed to phase1_analysis.R for detailed analysis.\n")
 cat("====================================================================\n\n")
 
@@ -1447,39 +1636,67 @@ cat("====================================================================\n\n")
 # ADD RESULTS TO ACCUMULATION LIST (FOR MULTI-DATASET COMBINING)
 ###############################################################################
 
-cat("====================================================================\n")
-cat("ADDING RESULTS TO ACCUMULATION LIST\n")
-cat("====================================================================\n\n")
-
-# Store in global list (accessed by master_analysis.R)
-if (!exists("ALL_DATASET_RESULTS", envir = .GlobalEnv)) {
-  stop("ERROR: ALL_DATASET_RESULTS not found in global environment. Must be created by master_analysis.R")
+# In multi-dataset mode, skip accumulation - results already saved in combined format
+if (exists("MULTI_DATASET_MODE") && MULTI_DATASET_MODE) {
+  
+  cat("====================================================================\n")
+  cat("RESULTS ACCUMULATION (Multi-Dataset Mode)\n")
+  cat("====================================================================\n\n")
+  
+  # Store combined results in ALL_DATASET_RESULTS for later processing
+  if (exists("ALL_DATASET_RESULTS", envir = .GlobalEnv)) {
+    # Store results keyed by dataset_id
+    unique_datasets <- unique(results_dt$dataset_id)
+    for (ds_id in unique_datasets) {
+      ds_results <- results_dt[dataset_id == ds_id]
+      .GlobalEnv$ALL_DATASET_RESULTS$step1[[ds_id]] <- ds_results
+    }
+    cat("✓ Results stored for", length(unique_datasets), "datasets\n")
+    cat("  Datasets:", paste(unique_datasets, collapse = ", "), "\n")
+  }
+  
+  cat("  Total unique conditions:", uniqueN(paste(results_dt$dataset_id, results_dt$condition_id)), "\n")
+  cat("  Total copula families tested:", length(COPULA_FAMILIES), "\n")
+  cat("  Total rows:", nrow(results_dt), "\n")
+  cat("  Condition type:", if (USE_EXHAUSTIVE_CONDITIONS) "EXHAUSTIVE" else "STRATEGIC SUBSET", "\n\n")
+  
+} else {
+  
+  # Single-dataset mode: original accumulation logic
+  cat("====================================================================\n")
+  cat("ADDING RESULTS TO ACCUMULATION LIST\n")
+  cat("====================================================================\n\n")
+  
+  # Store in global list (accessed by master_analysis.R)
+  if (!exists("ALL_DATASET_RESULTS", envir = .GlobalEnv)) {
+    stop("ERROR: ALL_DATASET_RESULTS not found in global environment. Must be created by master_analysis.R")
+  }
+  
+  # Append to step1 results list using dataset_idx
+  if (!exists("dataset_idx", envir = .GlobalEnv)) {
+    stop("ERROR: dataset_idx not found in global environment. Must be set by master_analysis.R")
+  }
+  
+  dataset_idx_char <- as.character(dataset_idx)
+  # Directly assign to .GlobalEnv to avoid <<- operator issues
+  .GlobalEnv$ALL_DATASET_RESULTS$step1[[dataset_idx_char]] <- results_dt
+  
+  cat("✓ Results stored for dataset", dataset_idx, "\n")
+  if (exists("CURRENT_DATASET_NAME")) {
+    cat("  Dataset name:", CURRENT_DATASET_NAME, "\n")
+  }
+  cat("  Dataset ID:", if (exists("current_dataset", envir = .GlobalEnv)) current_dataset$id else "unknown", "\n")
+  cat("  Total unique conditions:", uniqueN(results_dt$condition_id), "\n")
+  cat("  Total copula families tested:", length(COPULA_FAMILIES), "\n")
+  cat("  Expected rows:", uniqueN(results_dt$condition_id), "×", length(COPULA_FAMILIES), "=", 
+      uniqueN(results_dt$condition_id) * length(COPULA_FAMILIES), "\n")
+  cat("  Actual rows:", nrow(results_dt), "\n")
+  if (nrow(results_dt) != uniqueN(results_dt$condition_id) * length(COPULA_FAMILIES)) {
+    cat("  ⚠ WARNING: Row count mismatch!\n")
+  }
+  cat("  Columns:", ncol(results_dt), "\n")
+  cat("  Condition type:", if (USE_EXHAUSTIVE_CONDITIONS) "EXHAUSTIVE" else "STRATEGIC SUBSET", "\n\n")
 }
-
-# Append to step1 results list using dataset_idx
-if (!exists("dataset_idx", envir = .GlobalEnv)) {
-  stop("ERROR: dataset_idx not found in global environment. Must be set by master_analysis.R")
-}
-
-dataset_idx_char <- as.character(dataset_idx)
-# Directly assign to .GlobalEnv to avoid <<- operator issues
-.GlobalEnv$ALL_DATASET_RESULTS$step1[[dataset_idx_char]] <- results_dt
-
-cat("✓ Results stored for dataset", dataset_idx, "\n")
-if (exists("CURRENT_DATASET_NAME")) {
-  cat("  Dataset name:", CURRENT_DATASET_NAME, "\n")
-}
-cat("  Dataset ID:", if (exists("current_dataset", envir = .GlobalEnv)) current_dataset$id else "unknown", "\n")
-cat("  Total unique conditions:", uniqueN(results_dt$condition_id), "\n")
-cat("  Total copula families tested:", length(COPULA_FAMILIES), "\n")
-cat("  Expected rows:", uniqueN(results_dt$condition_id), "×", length(COPULA_FAMILIES), "=", 
-    uniqueN(results_dt$condition_id) * length(COPULA_FAMILIES), "\n")
-cat("  Actual rows:", nrow(results_dt), "\n")
-if (nrow(results_dt) != uniqueN(results_dt$condition_id) * length(COPULA_FAMILIES)) {
-  cat("  ⚠ WARNING: Row count mismatch!\n")
-}
-cat("  Columns:", ncol(results_dt), "\n")
-cat("  Condition type:", if (USE_EXHAUSTIVE_CONDITIONS) "EXHAUSTIVE" else "STRATEGIC SUBSET", "\n\n")
 
 cat("Results will be combined with other datasets after all datasets complete.\n")
 cat("Combined file: STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv\n\n")

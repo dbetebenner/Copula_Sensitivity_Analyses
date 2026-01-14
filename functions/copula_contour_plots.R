@@ -2912,7 +2912,9 @@ generate_condition_plots <- function(pseudo_obs,
         sgpc_stats = NULL,
         compile_pdf = TRUE,
         keep_tex = FALSE,  # Set TRUE for debugging
-        fbox_sep = 1
+        fbox_sep = 1,
+        export_formats = export_formats,
+        export_dpi = export_dpi
       )
     }, error = function(e) {
       warning("LaTeX summary grid generation failed: ", e$message)
@@ -5491,7 +5493,9 @@ generate_summary_grid_latex <- function(output_dir,
                                         sgpc_stats = NULL,
                                         compile_pdf = TRUE,
                                         keep_tex = FALSE,
-                                        fbox_sep = 4) {
+                                        fbox_sep = 4,
+                                        export_formats = c("pdf", "svg", "png"),
+                                        export_dpi = 300) {
   
   # --- Load metadata from JSON if available ---
   json_path <- file.path(output_dir, "PARAMETRIC", toupper(best_family),
@@ -5935,6 +5939,80 @@ generate_summary_grid_latex <- function(output_dir,
     # Remove .tex if not keeping
     if (!keep_tex && compiled && file.exists(tex_path)) {
       file.remove(tex_path)
+    }
+    
+    # --- Convert PDF to SVG and PNG if requested ---
+    if (compiled && file.exists(pdf_path)) {
+      
+      # SVG conversion using pdf2svg
+      if ("svg" %in% export_formats) {
+        svg_path <- file.path(output_dir, "summary_grid.svg")
+        if (Sys.which("pdf2svg") != "") {
+          tryCatch({
+            system2("pdf2svg", 
+                    args = c(pdf_path, svg_path),
+                    stdout = FALSE, stderr = FALSE)
+            if (file.exists(svg_path)) {
+              cat(sprintf("  ✓ SVG converted via pdf2svg: %s\n", svg_path))
+            } else {
+              warning("pdf2svg did not produce output file")
+            }
+          }, error = function(e) {
+            warning("pdf2svg conversion failed: ", e$message)
+          })
+        } else {
+          cat("  ⚠ pdf2svg not found - skipping SVG conversion\n")
+          cat("    Install with: sudo apt install pdf2svg (Linux) or brew install pdf2svg (macOS)\n")
+        }
+      }
+      
+      # PNG conversion using pdftoppm (poppler) or ImageMagick convert as fallback
+      if ("png" %in% export_formats) {
+        png_path <- file.path(output_dir, "summary_grid@2x.png")
+        png_converted <- FALSE
+        
+        # Try pdftoppm first (from poppler-utils) - produces high quality output
+        if (Sys.which("pdftoppm") != "") {
+          tryCatch({
+            # pdftoppm outputs to summary_grid-1.png, we'll rename it
+            tmp_prefix <- file.path(output_dir, "summary_grid_tmp")
+            system2("pdftoppm", 
+                    args = c("-png", "-r", as.character(export_dpi * 2), "-singlefile", 
+                             pdf_path, tmp_prefix),
+                    stdout = FALSE, stderr = FALSE)
+            tmp_png <- paste0(tmp_prefix, ".png")
+            if (file.exists(tmp_png)) {
+              file.rename(tmp_png, png_path)
+              png_converted <- TRUE
+              cat(sprintf("  ✓ PNG converted via pdftoppm (%ddpi): %s\n", export_dpi * 2, png_path))
+            }
+          }, error = function(e) {
+            warning("pdftoppm conversion failed: ", e$message)
+          })
+        }
+        
+        # Fallback to ImageMagick convert
+        if (!png_converted && Sys.which("convert") != "") {
+          tryCatch({
+            system2("convert", 
+                    args = c("-density", as.character(export_dpi * 2), 
+                             pdf_path, "-quality", "95", png_path),
+                    stdout = FALSE, stderr = FALSE)
+            if (file.exists(png_path)) {
+              png_converted <- TRUE
+              cat(sprintf("  ✓ PNG converted via ImageMagick (%ddpi): %s\n", export_dpi * 2, png_path))
+            }
+          }, error = function(e) {
+            warning("ImageMagick convert failed: ", e$message)
+          })
+        }
+        
+        if (!png_converted) {
+          cat("  ⚠ PNG conversion tools not found - skipping PNG conversion\n")
+          cat("    Install pdftoppm: sudo apt install poppler-utils (Linux) or brew install poppler (macOS)\n")
+          cat("    Or ImageMagick: sudo apt install imagemagick (Linux) or brew install imagemagick (macOS)\n")
+        }
+      }
     }
     
     # Print diagnostic summary of field availability
