@@ -660,6 +660,63 @@ gc()
 
 cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
 
+################################################################################
+### HELPER FUNCTIONS (for all steps)
+################################################################################
+
+pause_for_review <- function(message, phase_name) {
+  if (!BATCH_MODE) {
+    cat("\n", paste(rep("=", 70), collapse=""), "\n", sep="")
+    cat("REVIEW CHECKPOINT:", phase_name, "\n")
+    cat(paste(rep("=", 70), collapse=""), "\n\n", sep="")
+    cat(message, "\n\n")
+    cat("Press Enter to continue or Ctrl+C to stop...\n")
+    readline()
+  }
+}
+
+check_results_exist <- function(file_path, description) {
+  if (file.exists(file_path)) {
+    cat("✓ Found existing:", description, "\n")
+    cat("  Location:", file_path, "\n")
+    return(TRUE)
+  }
+  return(FALSE)
+}
+
+time_phase <- function(phase_name, code) {
+  cat("\n", paste(rep("=", 70), collapse=""), "\n", sep="")
+  cat("STARTING:", phase_name, "\n")
+  cat("Time:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
+  cat(paste(rep("=", 70), collapse=""), "\n\n", sep="")
+  
+  start_time <- Sys.time()
+  
+  result <- tryCatch({
+    code
+    list(success = TRUE, error = NULL)
+  }, error = function(e) {
+    cat("\n*** ERROR in", phase_name, "***\n")
+    cat("Message:", e$message, "\n\n")
+    list(success = FALSE, error = e$message)
+  })
+  
+  end_time <- Sys.time()
+  duration <- difftime(end_time, start_time, units = "mins")
+  
+  cat("\n", paste(rep("=", 70), collapse=""), "\n", sep="")
+  if (result$success) {
+    cat("✓ COMPLETED:", phase_name, "\n")
+  } else {
+    cat("✗ FAILED:", phase_name, "\n")
+    cat("Error:", result$error, "\n")
+  }
+  cat("Duration:", round(duration, 2), "minutes\n")
+  cat(paste(rep("=", 70), collapse=""), "\n\n", sep="")
+  
+  return(result)
+}
+
 ############################################################################
 ### STEP 1: COPULA FAMILY SELECTION (ALL DATASETS IN PARALLEL)
 ############################################################################
@@ -783,63 +840,6 @@ for (dataset_idx in seq_along(datasets_to_analyze)) {
   cat("✓ Filtered", format(nrow(dataset_data), big.mark = ","), "rows for", dataset_id, "\n")
   cat("  Workspace object:", WORKSPACE_OBJECT_NAME, "\n")
   cat("  Results suffix:", ifelse(RESULTS_SUFFIX == "", "(none)", RESULTS_SUFFIX), "\n\n")
-
-################################################################################
-### HELPER FUNCTIONS (CONTINUED)
-################################################################################
-
-pause_for_review <- function(message, phase_name) {
-  if (!BATCH_MODE) {
-    cat("\n", paste(rep("=", 70), collapse=""), "\n", sep="")
-    cat("REVIEW CHECKPOINT:", phase_name, "\n")
-    cat(paste(rep("=", 70), collapse=""), "\n\n", sep="")
-    cat(message, "\n\n")
-    cat("Press Enter to continue or Ctrl+C to stop...\n")
-    readline()
-  }
-}
-
-check_results_exist <- function(file_path, description) {
-  if (file.exists(file_path)) {
-    cat("✓ Found existing:", description, "\n")
-    cat("  Location:", file_path, "\n")
-    return(TRUE)
-  }
-  return(FALSE)
-}
-
-time_phase <- function(phase_name, code) {
-  cat("\n", paste(rep("=", 70), collapse=""), "\n", sep="")
-  cat("STARTING:", phase_name, "\n")
-  cat("Time:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
-  cat(paste(rep("=", 70), collapse=""), "\n\n", sep="")
-  
-  start_time <- Sys.time()
-  
-  result <- tryCatch({
-    code
-    list(success = TRUE, error = NULL)
-  }, error = function(e) {
-    cat("\n*** ERROR in", phase_name, "***\n")
-    cat("Message:", e$message, "\n\n")
-    list(success = FALSE, error = e$message)
-  })
-  
-  end_time <- Sys.time()
-  duration <- difftime(end_time, start_time, units = "mins")
-  
-  cat("\n", paste(rep("=", 70), collapse=""), "\n", sep="")
-  if (result$success) {
-    cat("✓ COMPLETED:", phase_name, "\n")
-  } else {
-    cat("✗ FAILED:", phase_name, "\n")
-    cat("Error:", result$error, "\n")
-  }
-  cat("Duration:", round(duration, 2), "minutes\n")
-  cat(paste(rep("=", 70), collapse=""), "\n\n", sep="")
-  
-  return(result)
-}
 
 ################################################################################
 ### STEP 2: TRANSFORMATION METHOD VALIDATION (Per-Dataset)
