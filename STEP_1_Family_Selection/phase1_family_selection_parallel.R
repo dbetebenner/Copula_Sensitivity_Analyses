@@ -156,15 +156,19 @@ cat("\n")
 # Use is_linux (defined above) to determine if FORK cluster is in use
 if (is_linux) {
   # FORK cluster: Workers inherit parent environment via copy-on-write
-  # However, for multi-dataset mode, we need to explicitly export the combined dataset
-  # to ensure workers have access to STATE_DATA_LONG with the DATASET column
+  # STATE_DATA_LONG is already in .GlobalEnv (assigned by master_analysis.R)
+  # FORK workers automatically have access - no explicit export needed for data
+  # Explicitly exporting large objects to FORK clusters can cause hangs on large instances
   cat("Setting up FORK workers...\n")
   
-  # Export data objects from .GlobalEnv (where STATE_DATA_LONG is stored)
-  clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data"), 
-                envir = .GlobalEnv)
+  # Verify STATE_DATA_LONG exists before proceeding
+  if (!exists("STATE_DATA_LONG", envir = .GlobalEnv)) {
+    stop("ERROR: STATE_DATA_LONG not found in .GlobalEnv. Ensure master_analysis.R loads data first.")
+  }
+  cat("  Data verified: STATE_DATA_LONG exists in .GlobalEnv (", 
+      format(nrow(get("STATE_DATA_LONG", envir = .GlobalEnv)), big.mark = ","), " rows)\n", sep = "")
   
-  # Export configuration variables from local environment
+  # Only export small config variables (these are defined in this script, not .GlobalEnv)
   clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
                       "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
                       "BOOTSTRAP_ALL_FAMILIES_VALUE",
@@ -791,7 +795,7 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
                                    dataset_id,
                                    "contour_plots",
                                    sprintf("%s_G%d_G%d_%s", 
-                                          actual_year_current, cond$grade_prior, 
+                                          year_current, cond$grade_prior, 
                                           cond$grade_current, cond$content))
     } else {
       plot_output_dir <- NULL

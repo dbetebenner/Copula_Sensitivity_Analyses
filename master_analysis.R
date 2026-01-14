@@ -745,9 +745,10 @@ if (should_run_step(1)) {
     cat("Skipping Step 1.1 (already completed)\n\n")
   } else {
     result_1_1 <- time_phase("Step 1.1: Family Selection (All Datasets)", {
-      # Pass ALL dataset configs to parallel script
-      # The parallel script will generate conditions for ALL datasets
-      ALL_DATASET_CONFIGS <- DATASET_CONFIGS
+      # Pass ALL dataset configs to parallel script via .GlobalEnv
+      # The parallel script checks exists("ALL_DATASET_CONFIGS", envir = .GlobalEnv)
+      # CRITICAL: Must assign to .GlobalEnv, not local environment
+      assign("ALL_DATASET_CONFIGS", DATASET_CONFIGS, envir = .GlobalEnv)
       
       if (USE_PARALLEL) {
         cat("Using parallel implementation (all datasets in single batch)\n")
