@@ -33,8 +33,15 @@ n_cores_available <- detectCores()
 
 # Determine optimal core usage based on environment
 if (exists("IS_EC2", envir = .GlobalEnv) && IS_EC2) {
-  # EC2 c8g.12xlarge: Use 46 of 48 cores (leave 2 for system)
-  n_cores_use <- min(n_cores_available - 2, 46)
+  # EC2: Scale workers based on available cores
+  # - Small instances (≤48 cores): Use n-2 cores (leave 2 for system)
+  # - Large instances (>48 cores): Use n-4 cores (leave 4 for system overhead)
+  if (n_cores_available <= 48) {
+    n_cores_use <- n_cores_available - 2
+  } else {
+    n_cores_use <- n_cores_available - 4
+  }
+  cat("EC2 detected:", n_cores_available, "cores available, using", n_cores_use, "workers\n")
 } else {
   # Local: Use n-1 cores
   n_cores_use <- n_cores_available - 1
