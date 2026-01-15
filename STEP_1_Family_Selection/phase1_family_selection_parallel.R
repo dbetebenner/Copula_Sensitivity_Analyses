@@ -172,6 +172,13 @@ if (exists("GENERATE_UNCERTAINTY_PLOTS", envir = .GlobalEnv)) {
   GENERATE_UNCERTAINTY_PLOTS_VALUE <- TRUE  # Default ON to match test_contour_plots.R
 }
 
+# Capture GENERATE_CONTOUR_PLOTS for workers (main visualization toggle)
+if (exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv)) {
+  GENERATE_CONTOUR_PLOTS_VALUE <- get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv)
+} else {
+  GENERATE_CONTOUR_PLOTS_VALUE <- TRUE  # Default ON
+}
+
 # Capture N_BOOTSTRAP_UNCERTAINTY for workers
 if (exists("N_BOOTSTRAP_UNCERTAINTY", envir = .GlobalEnv)) {
   N_BOOTSTRAP_UNCERTAINTY_VALUE <- get("N_BOOTSTRAP_UNCERTAINTY", envir = .GlobalEnv)
@@ -247,6 +254,7 @@ if (GENERATE_UNCERTAINTY_PLOTS_VALUE && exists("GENERATE_CONTOUR_PLOTS", envir =
 }
 
 cat("Plot Generation Settings:\n")
+cat("  Generate contour plots:", GENERATE_CONTOUR_PLOTS_VALUE, "\n")
 cat("  Main grid size:", GRID_SIZE_VALUE, "×", GRID_SIZE_VALUE, "\n")
 cat("  Skip comonotonic:", SKIP_COMONOTONIC_VALUE, "\n")
 cat("  Comparison families:", COMPARISON_FAMILIES_VALUE, "\n")
@@ -274,8 +282,8 @@ if (is_linux) {
   
   # Only export small config variables (these are defined in this script, not .GlobalEnv)
   clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
-                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
-                      "BOOTSTRAP_ALL_FAMILIES_VALUE",
+                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "GENERATE_CONTOUR_PLOTS_VALUE",
+                      "N_BOOTSTRAP_UNCERTAINTY_VALUE", "BOOTSTRAP_ALL_FAMILIES_VALUE",
                       "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
                       "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE",
                       "EXPORT_FORMATS_VALUE", "EXPORT_DPI_VALUE", "EXPORT_VERBOSE_VALUE"), 
@@ -304,10 +312,11 @@ if (is_linux) {
   
   # Export configuration variables from local environment
   clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
-                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
-                      "BOOTSTRAP_ALL_FAMILIES_VALUE",
+                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "GENERATE_CONTOUR_PLOTS_VALUE",
+                      "N_BOOTSTRAP_UNCERTAINTY_VALUE", "BOOTSTRAP_ALL_FAMILIES_VALUE",
                       "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
-                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE"), 
+                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE",
+                      "EXPORT_FORMATS_VALUE", "EXPORT_DPI_VALUE", "EXPORT_VERBOSE_VALUE"), 
                 envir = environment())
   
   clusterEvalQ(cl, {
@@ -883,9 +892,9 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
     
     record_step("Step 1 - Data prep", sprintf("n_pairs=%s", format(n_pairs, big.mark = ",")))
     
-    # Check if we should generate contour plots
-    GENERATE_CONTOUR_PLOTS <- exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv) && 
-                             get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv, inherits = FALSE)
+    # Check if we should generate contour plots (use exported _VALUE variable)
+    # This ensures PSOCK workers (macOS) have access - they don't inherit .GlobalEnv
+    GENERATE_CONTOUR_PLOTS <- GENERATE_CONTOUR_PLOTS_VALUE
     
     # Prepare output directory for plots if needed
     if (GENERATE_CONTOUR_PLOTS) {
