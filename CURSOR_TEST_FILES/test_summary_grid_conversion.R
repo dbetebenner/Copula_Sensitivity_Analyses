@@ -9,12 +9,9 @@
 ############################################################################
 
 cat("\n")
-cat("=" %.% paste(rep("=", 70), collapse = ""), "\n")
+cat(paste0(rep("=", 70), collapse = ""), "\n")
 cat("TEST: Summary Grid SVG/PNG Conversion Debug\n")
-cat("=" %.% paste(rep("=", 70), collapse = ""), "\n\n")
-
-# Define string concatenation helper
-`%.%` <- function(a, b) paste0(a, b)
+cat(paste0(rep("=", 70), collapse = ""), "\n\n")
 
 ############################################################################
 # STEP 1: Locate project and source functions
@@ -247,6 +244,6 @@ if (!png_exists && pdftoppm_path != "") {
 }
 
 cat("\n")
-cat("=" %.% paste(rep("=", 70), collapse = ""), "\n")
+cat(paste0(rep("=", 70), collapse = ""), "\n")
 cat("TEST COMPLETE\n")
-cat("=" %.% paste(rep("=", 70), collapse = ""), "\n\n")
+cat(paste0(rep("=", 70), collapse = ""), "\n\n")
