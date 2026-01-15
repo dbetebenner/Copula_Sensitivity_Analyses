@@ -57,8 +57,26 @@ is_linux <- Sys.info()["sysname"] == "Linux"
 if (is_linux) {
   # Linux: Use FORK cluster (fast, memory-efficient)
   cat("Initializing FORK cluster (Linux shared memory)...\n")
-  cl <- makeForkCluster(n_cores_use)
+  cl <- tryCatch({
+    makeForkCluster(n_cores_use)
+  }, error = function(e) {
+    cat("  ✗ FORK cluster creation failed:", e$message, "\n")
+    cat("  Attempting with fewer workers...\n")
+    # Try with fewer workers if initial attempt fails
+    reduced_cores <- min(n_cores_use, 96)
+    tryCatch({
+      makeForkCluster(reduced_cores)
+    }, error = function(e2) {
+      cat("  ✗ Reduced FORK cluster also failed:", e2$message, "\n")
+      NULL
+    })
+  })
+  
+  if (is.null(cl)) {
+    stop("Failed to create FORK cluster. Check system limits (ulimit -u) or try reducing worker count.")
+  }
   cat("  Type: FORK (copy-on-write, no data export needed)\n")
+  cat("  Workers created:", length(cl), "\n")
 } else {
   # macOS and Windows: Use PSOCK cluster
   # macOS note: FORK crashes with "objc_initializeAfterForkError" due to 
@@ -68,8 +86,18 @@ if (is_linux) {
   } else {
     cat("Initializing PSOCK cluster (Windows)...\n")
   }
-  cl <- makeCluster(n_cores_use, type = "PSOCK")
+  cl <- tryCatch({
+    makeCluster(n_cores_use, type = "PSOCK")
+  }, error = function(e) {
+    cat("  ✗ PSOCK cluster creation failed:", e$message, "\n")
+    NULL
+  })
+  
+  if (is.null(cl)) {
+    stop("Failed to create PSOCK cluster. Check system resources.")
+  }
   cat("  Type: PSOCK (socket-based, requires data export)\n")
+  cat("  Workers created:", length(cl), "\n")
 }
 
 cat("Available cores:", n_cores_available, "\n")
