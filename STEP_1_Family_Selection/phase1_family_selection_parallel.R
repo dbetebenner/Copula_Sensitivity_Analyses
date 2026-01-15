@@ -214,6 +214,27 @@ if (exists("COMPARISON_FAMILIES", envir = .GlobalEnv)) {
   COMPARISON_FAMILIES_VALUE <- "all"  # Default: all families
 }
 
+# Capture EXPORT_FORMATS for workers (multi-format export: pdf, svg, png)
+if (exists("EXPORT_FORMATS", envir = .GlobalEnv)) {
+  EXPORT_FORMATS_VALUE <- get("EXPORT_FORMATS", envir = .GlobalEnv)
+} else {
+  EXPORT_FORMATS_VALUE <- c("pdf", "svg", "png")  # Default: all formats
+}
+
+# Capture EXPORT_DPI for workers (resolution for raster outputs)
+if (exists("EXPORT_DPI", envir = .GlobalEnv)) {
+  EXPORT_DPI_VALUE <- get("EXPORT_DPI", envir = .GlobalEnv)
+} else {
+  EXPORT_DPI_VALUE <- 300  # Default: publication quality
+}
+
+# Capture EXPORT_VERBOSE for workers (print export messages)
+if (exists("EXPORT_VERBOSE", envir = .GlobalEnv)) {
+  EXPORT_VERBOSE_VALUE <- get("EXPORT_VERBOSE", envir = .GlobalEnv)
+} else {
+  EXPORT_VERBOSE_VALUE <- FALSE  # Default: quiet in batch mode
+}
+
 if (GENERATE_UNCERTAINTY_PLOTS_VALUE && exists("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv) && 
     get("GENERATE_CONTOUR_PLOTS", envir = .GlobalEnv)) {
   cat("Uncertainty Plots: ENABLED\n")
@@ -229,6 +250,10 @@ cat("Plot Generation Settings:\n")
 cat("  Main grid size:", GRID_SIZE_VALUE, "×", GRID_SIZE_VALUE, "\n")
 cat("  Skip comonotonic:", SKIP_COMONOTONIC_VALUE, "\n")
 cat("  Comparison families:", COMPARISON_FAMILIES_VALUE, "\n")
+cat("Export Settings:\n")
+cat("  Formats:", paste(EXPORT_FORMATS_VALUE, collapse = ", "), "\n")
+cat("  DPI:", EXPORT_DPI_VALUE, "(raster @2x =", EXPORT_DPI_VALUE * 2, ")\n")
+cat("  Verbose:", EXPORT_VERBOSE_VALUE, "\n")
 cat("\n")
 
 # Export setup differs by cluster type
@@ -252,7 +277,8 @@ if (is_linux) {
                       "GENERATE_UNCERTAINTY_PLOTS_VALUE", "N_BOOTSTRAP_UNCERTAINTY_VALUE",
                       "BOOTSTRAP_ALL_FAMILIES_VALUE",
                       "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
-                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE"), 
+                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE",
+                      "EXPORT_FORMATS_VALUE", "EXPORT_DPI_VALUE", "EXPORT_VERBOSE_VALUE"), 
                 envir = environment())
   
   clusterEvalQ(cl, {
@@ -1157,16 +1183,16 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
             empirical_copulas = empirical_copulas,
             save_plots = TRUE,
             grid_size = GRID_SIZE_VALUE,  # Configurable resolution (fast=150, full=300)
-            export_formats = EXPORT_FORMATS,
-            export_dpi = EXPORT_DPI,
-            export_verbose = EXPORT_VERBOSE
+            export_formats = EXPORT_FORMATS_VALUE,
+            export_dpi = EXPORT_DPI_VALUE,
+            export_verbose = EXPORT_VERBOSE_VALUE
           )
         }, error = function(e) {
           warning(sprintf("Failed to generate plots for condition %d: %s", i, e$message))
         })
         
         record_step("Step 4 - Plot gen", 
-                    sprintf("grid=%d, formats=%s", GRID_SIZE_VALUE, paste(EXPORT_FORMATS, collapse=",")))
+                    sprintf("grid=%d, formats=%s", GRID_SIZE_VALUE, paste(EXPORT_FORMATS_VALUE, collapse=",")))
       }
     }
     
