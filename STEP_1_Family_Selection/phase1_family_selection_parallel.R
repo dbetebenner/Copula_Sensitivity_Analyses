@@ -31,20 +31,64 @@ cat("====================================================================\n")
 # Detect cores and set up cluster
 n_cores_available <- detectCores()
 
+# ============================================================================
+# ESTIMATE NUMBER OF CONDITIONS (before cluster creation)
+# This allows us to create only as many workers as needed
+# ============================================================================
+n_conditions_expected <- NA
+
+# Check if TEST_MODE is active and estimate condition count
+if (exists("TEST_MODE", envir = .GlobalEnv) && get("TEST_MODE", envir = .GlobalEnv)) {
+  # Get conditions per dataset (default 1)
+  n_per_dataset <- 1
+  if (exists("TEST_N_CONDITIONS_PER_DATASET", envir = .GlobalEnv)) {
+    n_per_dataset <- get("TEST_N_CONDITIONS_PER_DATASET", envir = .GlobalEnv)
+  }
+  
+  # Check if multi-dataset mode
+  if (exists("ALL_DATASET_CONFIGS", envir = .GlobalEnv)) {
+    n_datasets <- length(get("ALL_DATASET_CONFIGS", envir = .GlobalEnv))
+    n_conditions_expected <- n_per_dataset * n_datasets
+    cat("TEST_MODE: Expecting", n_conditions_expected, "conditions (", 
+        n_per_dataset, "per dataset ×", n_datasets, "datasets)\n")
+  } else if (exists("DATASETS_TO_RUN", envir = .GlobalEnv)) {
+    n_datasets <- length(get("DATASETS_TO_RUN", envir = .GlobalEnv))
+    n_conditions_expected <- n_per_dataset * n_datasets
+    cat("TEST_MODE: Expecting", n_conditions_expected, "conditions (", 
+        n_per_dataset, "per dataset ×", n_datasets, "datasets)\n")
+  } else {
+    # Single dataset mode
+    n_conditions_expected <- n_per_dataset
+    cat("TEST_MODE: Expecting", n_conditions_expected, "conditions\n")
+  }
+}
+
 # Determine optimal core usage based on environment
 if (exists("IS_EC2", envir = .GlobalEnv) && IS_EC2) {
   # EC2: Scale workers based on available cores
   # - Small instances (≤48 cores): Use n-2 cores (leave 2 for system)
   # - Large instances (>48 cores): Use n-4 cores (leave 4 for system overhead)
   if (n_cores_available <= 48) {
-    n_cores_use <- n_cores_available - 2
+    n_cores_max <- n_cores_available - 2
   } else {
-    n_cores_use <- n_cores_available - 4
+    n_cores_max <- n_cores_available - 4
   }
-  cat("EC2 detected:", n_cores_available, "cores available, using", n_cores_use, "workers\n")
+  cat("EC2 detected:", n_cores_available, "cores available, max workers:", n_cores_max, "\n")
 } else {
-  # Local: Use n-1 cores
-  n_cores_use <- n_cores_available - 1
+  # Local: Use n-1 cores max
+  n_cores_max <- n_cores_available - 1
+}
+
+# OPTIMIZATION: Use min(available cores, expected conditions)
+# This prevents creating idle workers when processing fewer conditions than cores
+if (!is.na(n_conditions_expected) && n_conditions_expected < n_cores_max) {
+  n_cores_use <- n_conditions_expected
+  cat("Optimized: Creating", n_cores_use, "workers (matched to", n_conditions_expected, "conditions)\n")
+} else {
+  n_cores_use <- n_cores_max
+  if (!is.na(n_conditions_expected)) {
+    cat("Using", n_cores_use, "workers for", n_conditions_expected, "conditions\n")
+  }
 }
 
 # Detect OS for cluster type selection
