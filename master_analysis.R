@@ -367,6 +367,10 @@ if (!exists("EC2_MODE")) EC2_MODE <- FALSE
 if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- TRUE
 if (!exists("USE_PARALLEL")) USE_PARALLEL <- FALSE
 
+# Checkpoint/Resume: Skip already-completed conditions
+# Critical for spot instance resilience - allows resuming after interruption
+if (!exists("SKIP_COMPLETED_CONDITIONS")) SKIP_COMPLETED_CONDITIONS <- TRUE
+
 # Enhanced EC2 detection
 IS_EC2 <- grepl("ec2", Sys.info()["nodename"], ignore.case = TRUE) ||
           file.exists("/home/ec2-user") ||
@@ -392,8 +396,10 @@ if (IS_EC2) {
   EC2_MODE <- TRUE
   SKIP_COMPLETED <- FALSE
   USE_PARALLEL <- TRUE
+  SKIP_COMPLETED_CONDITIONS <- TRUE  # Critical for spot instance resilience
   cat("  Batch mode: TRUE (no pauses)\n")
   cat("  Cores:", parallel::detectCores(), "\n")
+  cat("  Skip completed conditions: TRUE (resume capability)\n")
   cat("====================================================================\n\n")
 } else {
   # Local machine - check if sufficient resources for parallel processing
@@ -514,7 +520,8 @@ source_all_functions <- function() {
     "copula_contour_plots.R",
     "copula_diagnostics.R",
     "transformation_diagnostics.R",
-    "sgpc_engine.R"  # SGPc calculation engine
+    "sgpc_engine.R",          # SGPc calculation engine
+    "checkpoint_utils.R"      # Checkpoint/resume for spot instances
   )
   
   for (func_file in function_files) {
@@ -560,6 +567,7 @@ cat("  Steps to run:", ifelse(is.null(STEPS_TO_RUN), "ALL (1, 2, 3, 4)",
 cat("  Batch mode:", BATCH_MODE, "\n")
 cat("  EC2 mode:", EC2_MODE, "\n")
 cat("  Skip completed:", SKIP_COMPLETED, "\n")
+cat("  Skip completed conditions:", SKIP_COMPLETED_CONDITIONS, "\n")
 cat("  Bootstrap iterations:", N_BOOTSTRAP_PHASE2, "\n")
 cat("  Log file:", LOG_FILE, "\n\n")
 
@@ -737,6 +745,15 @@ if (should_run_step(1)) {
   cat("Hypothesis: t-copula will dominate due to heavy tails\n")
   cat("Processing: ALL conditions from ALL datasets in single parallel batch\n")
   cat("Estimated time: 30-60 minutes (parallel across all datasets)\n\n")
+  
+  # Show checkpoint status before processing
+  if (SKIP_COMPLETED_CONDITIONS) {
+    cat("Checking for previously completed conditions...\n")
+    print_checkpoint_summary("STEP_1_Family_Selection/results")
+  }
+  
+  # Export checkpoint setting to .GlobalEnv for parallel script access
+  assign("SKIP_COMPLETED_CONDITIONS", SKIP_COMPLETED_CONDITIONS, envir = .GlobalEnv)
   
   ## Step 1.1: Family Selection (All Datasets)
   phase1_results_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv"

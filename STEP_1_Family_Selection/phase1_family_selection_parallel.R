@@ -733,6 +733,56 @@ if (exists("TEST_MODE", envir = .GlobalEnv) && get("TEST_MODE", envir = .GlobalE
   }
 }
 
+################################################################################
+### CHECKPOINT/RESUME: FILTER ALREADY-COMPLETED CONDITIONS
+################################################################################
+
+# Ensure checkpoint functions are available (in case running standalone)
+if (!exists("get_completed_conditions") && file.exists("functions/checkpoint_utils.R")) {
+  source("functions/checkpoint_utils.R")
+}
+
+# Check for SKIP_COMPLETED_CONDITIONS setting (for spot instance resilience)
+SKIP_COMPLETED_CONDITIONS_VALUE <- FALSE
+if (exists("SKIP_COMPLETED_CONDITIONS", envir = .GlobalEnv)) {
+  SKIP_COMPLETED_CONDITIONS_VALUE <- get("SKIP_COMPLETED_CONDITIONS", envir = .GlobalEnv)
+}
+
+if (SKIP_COMPLETED_CONDITIONS_VALUE && length(CONDITIONS) > 0 && 
+    exists("get_completed_conditions")) {
+  cat("\n")
+  cat("====================================================================\n")
+  cat("CHECKPOINT/RESUME: FILTERING COMPLETED CONDITIONS\n")
+  cat("====================================================================\n")
+  
+  # Get completed conditions
+  completed_conditions <- get_completed_conditions("STEP_1_Family_Selection/results")
+  
+  if (nrow(completed_conditions) > 0) {
+    original_count <- length(CONDITIONS)
+    
+    # Use get_remaining_conditions to filter
+    CONDITIONS <- get_remaining_conditions(CONDITIONS, completed_conditions)
+    
+    skipped_count <- original_count - length(CONDITIONS)
+    
+    cat("Previously completed:", skipped_count, "conditions\n")
+    cat("Remaining to process:", length(CONDITIONS), "conditions\n")
+    
+    if (length(CONDITIONS) == 0) {
+      cat("\nAll conditions already completed! Nothing to process.\n")
+      cat("====================================================================\n\n")
+    } else {
+      cat("\nResuming from checkpoint...\n")
+      cat("====================================================================\n\n")
+    }
+  } else {
+    cat("No previously completed conditions found.\n")
+    cat("Starting fresh analysis...\n")
+    cat("====================================================================\n\n")
+  }
+}
+
 cat("Total conditions to test:", length(CONDITIONS), "\n")
 cat("Copula families:", paste(COPULA_FAMILIES, collapse = ", "), "\n")
 cat("Total fits:", length(CONDITIONS) * length(COPULA_FAMILIES), "\n\n")
@@ -1373,7 +1423,24 @@ cat("Copula families:", paste(COPULA_FAMILIES, collapse = ", "), "\n", file = pr
 cat("Workers:", n_cores_use, "\n", file = progress_file, append = TRUE)
 cat(paste(rep("=", 70), collapse=""), "\n\n", file = progress_file, append = TRUE)
 
-cat("Starting parallel processing of", length(CONDITIONS), "conditions...\n")
+# Check if there are any conditions to process (handles checkpoint/resume case)
+SKIP_PROCESSING <- (length(CONDITIONS) == 0)
+
+if (SKIP_PROCESSING) {
+  cat("\n")
+  cat("====================================================================\n")
+  cat("NO CONDITIONS TO PROCESS\n")
+  cat("====================================================================\n")
+  cat("All conditions have already been completed (checkpoint/resume).\n")
+  cat("Skipping parallel processing.\n")
+  cat("====================================================================\n\n")
+  
+  # Initialize empty results
+  all_condition_results <- list()
+  duration <- 0
+  
+} else {
+  cat("Starting parallel processing of", length(CONDITIONS), "conditions...\n")
 cat("Progress will be shown as conditions complete.\n")
 cat("Monitor progress: tail -f", progress_file, "\n\n")
 
@@ -1427,6 +1494,8 @@ cat("Average time per condition:", round(duration / length(CONDITIONS), 2), "min
 stopCluster(cl)
 cat("Cluster stopped.\n\n")
 
+}  # End of else block (SKIP_PROCESSING check)
+
 ################################################################################
 ### AGGREGATE RESULTS
 ################################################################################
@@ -1435,22 +1504,32 @@ cat("====================================================================\n")
 cat("AGGREGATING RESULTS\n")
 cat("====================================================================\n\n")
 
-# Count successes and failures
-n_success <- sum(sapply(all_condition_results, function(x) x$success))
-n_failed <- length(all_condition_results) - n_success
-
-cat("Successful conditions:", n_success, "\n")
-cat("Failed conditions:", n_failed, "\n\n")
-
-if (n_failed > 0) {
-  cat("Failed conditions:\n")
-  for (result in all_condition_results) {
-    if (!result$success) {
-      cat("  Condition", result$condition_id, ":", result$error, "\n")
+# Handle checkpoint/resume case where no new conditions were processed
+if (SKIP_PROCESSING || length(all_condition_results) == 0) {
+  cat("No new conditions were processed in this run.\n")
+  cat("All results from previous runs are preserved.\n\n")
+  
+  # Load existing results from CSV files if they exist
+  all_results <- list()
+  
+} else {
+  # Count successes and failures
+  n_success <- sum(sapply(all_condition_results, function(x) x$success))
+  n_failed <- length(all_condition_results) - n_success
+  
+  cat("Successful conditions:", n_success, "\n")
+  cat("Failed conditions:", n_failed, "\n\n")
+  
+  if (n_failed > 0) {
+    cat("Failed conditions:\n")
+    for (result in all_condition_results) {
+      if (!result$success) {
+        cat("  Condition", result$condition_id, ":", result$error, "\n")
+      }
     }
+    cat("\n")
   }
-  cat("\n")
-}
+}  # End of else block (SKIP_PROCESSING check for aggregation)
 
 ################################################################################
 ### GENERATE RUN SUMMARY REPORT
