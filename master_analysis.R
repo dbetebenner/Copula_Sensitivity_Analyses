@@ -134,7 +134,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- 1  # Default: Run Step 1 only (safest for testing)
+STEPS_TO_RUN <- NULL  # Run ALL steps (1, 2, 3, 4) - full production run
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -327,8 +327,8 @@ if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- TRUE
 # ============================================================================
 # >>> CURRENT SETTINGS (EDIT THESE FOR YOUR RUN) <<<
 # ============================================================================
-TEST_MODE <- TRUE                        # Full production run
-TEST_N_CONDITIONS_PER_DATASET <- 1       # Conditions per dataset in test mode
+TEST_MODE <- FALSE                       # Full production run (all conditions)
+TEST_N_CONDITIONS_PER_DATASET <- 2       # Conditions per dataset in test mode (unused when TEST_MODE=FALSE)
 # ============================================================================
 #
 if (!exists("TEST_MODE")) TEST_MODE <- FALSE
