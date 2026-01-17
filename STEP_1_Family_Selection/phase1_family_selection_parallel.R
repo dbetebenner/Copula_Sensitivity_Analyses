@@ -107,7 +107,7 @@ if (is_linux) {
     cat("  ✗ FORK cluster creation failed:", e$message, "\n")
     cat("  Attempting with fewer workers...\n")
     # Try with fewer workers if initial attempt fails
-    reduced_cores <- min(n_cores_use, 96)
+    reduced_cores <- min(n_cores_use, 128)
     tryCatch({
       makeForkCluster(reduced_cores)
     }, error = function(e2) {
