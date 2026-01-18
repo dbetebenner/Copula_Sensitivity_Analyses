@@ -367,6 +367,11 @@ if (!exists("EC2_MODE")) EC2_MODE <- FALSE
 if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- TRUE
 if (!exists("USE_PARALLEL")) USE_PARALLEL <- FALSE
 
+# Mirai parallelization: Use mirai package instead of parallel package
+# mirai bypasses R's 128 connection limit, enabling 188+ workers on large instances
+# Set to FALSE to use traditional parallel package (FORK/PSOCK clusters)
+if (!exists("USE_MIRAI")) USE_MIRAI <- TRUE
+
 # Checkpoint/Resume: Skip already-completed conditions
 # Critical for spot instance resilience - allows resuming after interruption
 if (!exists("SKIP_COMPLETED_CONDITIONS")) SKIP_COMPLETED_CONDITIONS <- TRUE
@@ -396,9 +401,11 @@ if (IS_EC2) {
   EC2_MODE <- TRUE
   SKIP_COMPLETED <- FALSE
   USE_PARALLEL <- TRUE
+  USE_MIRAI <- TRUE  # Use mirai for scalable parallelization (bypasses 128 connection limit)
   SKIP_COMPLETED_CONDITIONS <- TRUE  # Critical for spot instance resilience
   cat("  Batch mode: TRUE (no pauses)\n")
   cat("  Cores:", parallel::detectCores(), "\n")
+  cat("  Use mirai: TRUE (scalable parallelization)\n")
   cat("  Skip completed conditions: TRUE (resume capability)\n")
   cat("====================================================================\n\n")
 } else {
@@ -752,8 +759,9 @@ if (should_run_step(1)) {
     print_checkpoint_summary("STEP_1_Family_Selection/results")
   }
   
-  # Export checkpoint setting to .GlobalEnv for parallel script access
+  # Export settings to .GlobalEnv for parallel script access
   assign("SKIP_COMPLETED_CONDITIONS", SKIP_COMPLETED_CONDITIONS, envir = .GlobalEnv)
+  assign("USE_MIRAI", USE_MIRAI, envir = .GlobalEnv)
   
   ## Step 1.1: Family Selection (All Datasets)
   phase1_results_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv"

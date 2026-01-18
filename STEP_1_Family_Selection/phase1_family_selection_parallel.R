@@ -1,6 +1,6 @@
 ############################################################################
 ### PHASE 1: COPULA FAMILY SELECTION STUDY (PARALLEL VERSION)
-### Parallelized across 42 conditions using parallel package
+### Parallelized across conditions using mirai or parallel package
 ###
 ### Objective: Identify which copula family consistently provides best fit
 ###           for longitudinal educational assessment data
@@ -10,10 +10,10 @@
 ###             observations increases.
 ###
 ### Parallelization Strategy:
-###   - Uses parallel package (base R, no extra dependencies)
-###   - Each condition processed independently on separate cores
-###   - Expected speedup: 14-15x on c6i.4xlarge (16 cores)
-###   - Target runtime: 6-8 minutes (vs 90-120 minutes sequential)
+###   - mirai (preferred): Uses NNG sockets, scales to 188+ workers
+###   - parallel (fallback): Uses FORK/PSOCK, limited to ~96 workers
+###   - Each condition processed independently on separate workers
+###   - Expected speedup: proportional to worker count
 ############################################################################
 
 require(data.table)
@@ -24,9 +24,30 @@ require(parallel)
 # Null-coalescing operator (for compatibility)
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-cat("====================================================================\n")
-cat("PHASE 1: COPULA FAMILY SELECTION STUDY (PARALLEL)\n")
-cat("====================================================================\n")
+# Detect USE_MIRAI setting from master_analysis.R
+USE_MIRAI_VALUE <- FALSE
+if (exists("USE_MIRAI", envir = .GlobalEnv)) {
+  USE_MIRAI_VALUE <- get("USE_MIRAI", envir = .GlobalEnv)
+}
+
+# Load mirai if enabled
+if (USE_MIRAI_VALUE) {
+  if (!requireNamespace("mirai", quietly = TRUE)) {
+    cat("Installing mirai package...\n")
+    install.packages("mirai", repos = "https://cloud.r-project.org")
+  }
+  require(mirai)
+  cat("====================================================================\n")
+  cat("PHASE 1: COPULA FAMILY SELECTION STUDY (MIRAI PARALLEL)\n")
+  cat("====================================================================\n")
+  cat("Using mirai package for scalable parallelization\n")
+  cat("mirai version:", as.character(packageVersion("mirai")), "\n")
+} else {
+  cat("====================================================================\n")
+  cat("PHASE 1: COPULA FAMILY SELECTION STUDY (PARALLEL)\n")
+  cat("====================================================================\n")
+  cat("Using parallel package (FORK/PSOCK clusters)\n")
+}
 
 # Detect cores and set up cluster
 n_cores_available <- detectCores()
@@ -91,61 +112,102 @@ if (!is.na(n_conditions_expected) && n_conditions_expected < n_cores_max) {
   }
 }
 
-# Detect OS for cluster type selection
+# Detect OS for cluster type selection (used by parallel package fallback)
 # - Linux: FORK (faster, memory-efficient via copy-on-write)
 # - macOS: PSOCK (FORK crashes due to Objective-C runtime fork() issues)
 # - Windows: PSOCK (FORK not available)
 is_macos <- Sys.info()["sysname"] == "Darwin"
 is_linux <- Sys.info()["sysname"] == "Linux"
 
-if (is_linux) {
-  # Linux: Use FORK cluster (fast, memory-efficient)
-  cat("Initializing FORK cluster (Linux shared memory)...\n")
-  cl <- tryCatch({
-    makeForkCluster(n_cores_use)
+################################################################################
+### WORKER INITIALIZATION (MIRAI or PARALLEL)
+################################################################################
+
+if (USE_MIRAI_VALUE) {
+  # ============================================================================
+  # MIRAI: Scalable parallelization via NNG sockets
+  # Bypasses R's 128 connection limit, enabling 188+ workers
+  # ============================================================================
+  cat("Initializing mirai daemons...\n")
+  
+  # Create daemons (persistent background workers)
+  daemons_result <- tryCatch({
+    daemons(n_cores_use)
+    status <- status()
+    list(success = TRUE, n_daemons = status$daemons)
   }, error = function(e) {
-    cat("  ✗ FORK cluster creation failed:", e$message, "\n")
-    cat("  Attempting with fewer workers...\n")
-    # Try with fewer workers if initial attempt fails
-    reduced_cores <- min(n_cores_use, 128)
-    tryCatch({
-      makeForkCluster(reduced_cores)
-    }, error = function(e2) {
-      cat("  ✗ Reduced FORK cluster also failed:", e2$message, "\n")
+    cat("  ✗ mirai daemon creation failed:", e$message, "\n")
+    list(success = FALSE, error = e$message)
+  })
+  
+  if (!daemons_result$success) {
+    stop("Failed to create mirai daemons: ", daemons_result$error)
+  }
+  
+  n_workers_actual <- daemons_result$n_daemons
+  cat("  Type: mirai (NNG sockets, cross-platform)\n")
+  cat("  Daemons created:", n_workers_actual, "\n")
+  
+  # cl is not used with mirai, but set to NULL for compatibility checks
+  cl <- NULL
+  
+} else {
+  # ============================================================================
+  # PARALLEL PACKAGE: Traditional FORK/PSOCK clusters
+  # Limited to ~96 workers due to R's 128 connection limit
+  # ============================================================================
+  
+  if (is_linux) {
+    # Linux: Use FORK cluster (fast, memory-efficient)
+    cat("Initializing FORK cluster (Linux shared memory)...\n")
+    cl <- tryCatch({
+      makeForkCluster(n_cores_use)
+    }, error = function(e) {
+      cat("  ✗ FORK cluster creation failed:", e$message, "\n")
+      cat("  Attempting with fewer workers...\n")
+      # Try with fewer workers if initial attempt fails
+      reduced_cores <- min(n_cores_use, 96)
+      tryCatch({
+        makeForkCluster(reduced_cores)
+      }, error = function(e2) {
+        cat("  ✗ Reduced FORK cluster also failed:", e2$message, "\n")
+        NULL
+      })
+    })
+    
+    if (is.null(cl)) {
+      stop("Failed to create FORK cluster. Check system limits (ulimit -u) or try reducing worker count.")
+    }
+    cat("  Type: FORK (copy-on-write, no data export needed)\n")
+    cat("  Workers created:", length(cl), "\n")
+    n_workers_actual <- length(cl)
+  } else {
+    # macOS and Windows: Use PSOCK cluster
+    # macOS note: FORK crashes with "objc_initializeAfterForkError" due to 
+    # Objective-C runtime not being fork-safe after certain frameworks load
+    if (is_macos) {
+      cat("Initializing PSOCK cluster (macOS - FORK not safe)...\n")
+    } else {
+      cat("Initializing PSOCK cluster (Windows)...\n")
+    }
+    cl <- tryCatch({
+      makeCluster(n_cores_use, type = "PSOCK")
+    }, error = function(e) {
+      cat("  ✗ PSOCK cluster creation failed:", e$message, "\n")
       NULL
     })
-  })
-  
-  if (is.null(cl)) {
-    stop("Failed to create FORK cluster. Check system limits (ulimit -u) or try reducing worker count.")
+    
+    if (is.null(cl)) {
+      stop("Failed to create PSOCK cluster. Check system resources.")
+    }
+    cat("  Type: PSOCK (socket-based, requires data export)\n")
+    cat("  Workers created:", length(cl), "\n")
+    n_workers_actual <- length(cl)
   }
-  cat("  Type: FORK (copy-on-write, no data export needed)\n")
-  cat("  Workers created:", length(cl), "\n")
-} else {
-  # macOS and Windows: Use PSOCK cluster
-  # macOS note: FORK crashes with "objc_initializeAfterForkError" due to 
-  # Objective-C runtime not being fork-safe after certain frameworks load
-  if (is_macos) {
-    cat("Initializing PSOCK cluster (macOS - FORK not safe)...\n")
-  } else {
-    cat("Initializing PSOCK cluster (Windows)...\n")
-  }
-  cl <- tryCatch({
-    makeCluster(n_cores_use, type = "PSOCK")
-  }, error = function(e) {
-    cat("  ✗ PSOCK cluster creation failed:", e$message, "\n")
-    NULL
-  })
-  
-  if (is.null(cl)) {
-    stop("Failed to create PSOCK cluster. Check system resources.")
-  }
-  cat("  Type: PSOCK (socket-based, requires data export)\n")
-  cat("  Workers created:", length(cl), "\n")
 }
 
 cat("Available cores:", n_cores_available, "\n")
-cat("Using cores:", n_cores_use, "\n\n")
+cat("Using workers:", n_workers_actual, "\n\n")
 
 # Capture N_BOOTSTRAP_GOF for workers
 if (exists("N_BOOTSTRAP_GOF", envir = .GlobalEnv)) {
@@ -264,13 +326,30 @@ cat("  DPI:", EXPORT_DPI_VALUE, "(raster @2x =", EXPORT_DPI_VALUE * 2, ")\n")
 cat("  Verbose:", EXPORT_VERBOSE_VALUE, "\n")
 cat("\n")
 
-# Export setup differs by cluster type
-# Use is_linux (defined above) to determine if FORK cluster is in use
-if (is_linux) {
+# Export setup differs by parallelization method
+if (USE_MIRAI_VALUE) {
+  # ============================================================================
+  # MIRAI: Data passed directly to mirai_map, no clusterExport needed
+  # ============================================================================
+  cat("Setting up mirai daemons...\n")
+  
+  # Verify STATE_DATA_LONG exists before proceeding
+  if (!exists("STATE_DATA_LONG", envir = .GlobalEnv)) {
+    stop("ERROR: STATE_DATA_LONG not found in .GlobalEnv. Ensure master_analysis.R loads data first.")
+  }
+  cat("  Data verified: STATE_DATA_LONG exists in .GlobalEnv (", 
+      format(nrow(get("STATE_DATA_LONG", envir = .GlobalEnv)), big.mark = ","), " rows)\n", sep = "")
+  
+  # Store reference to data for mirai_map
+  STATE_DATA_LONG <- get("STATE_DATA_LONG", envir = .GlobalEnv)
+  
+  cat("  mirai handles data passing automatically via serialization\n")
+  cat("  No explicit clusterExport required\n")
+  
+} else if (is_linux) {
+  # ============================================================================
   # FORK cluster: Workers inherit parent environment via copy-on-write
-  # STATE_DATA_LONG is already in .GlobalEnv (assigned by master_analysis.R)
-  # FORK workers automatically have access - no explicit export needed for data
-  # Explicitly exporting large objects to FORK clusters can cause hangs on large instances
+  # ============================================================================
   cat("Setting up FORK workers...\n")
   
   # Verify STATE_DATA_LONG exists before proceeding
@@ -303,7 +382,9 @@ if (is_linux) {
   })
   
 } else {
+  # ============================================================================
   # PSOCK cluster (macOS, Windows): Must explicitly export data and configuration
+  # ============================================================================
   cat("Exporting data and functions to PSOCK workers...\n")
   
   # Export data objects from .GlobalEnv (where STATE_DATA_LONG is stored)
@@ -333,7 +414,7 @@ if (is_linux) {
   })
 }
 
-cat("Cluster initialized successfully.\n\n")
+cat("Workers initialized successfully.\n\n")
 
 ################################################################################
 ### CONFIGURATION
@@ -1439,60 +1520,144 @@ if (SKIP_PROCESSING) {
   all_condition_results <- list()
   duration <- 0
   
+  # Clean up workers even when skipping
+  if (USE_MIRAI_VALUE) {
+    daemons(0)
+    cat("Mirai daemons stopped.\n\n")
+  } else if (!is.null(cl)) {
+    stopCluster(cl)
+    cat("Cluster stopped.\n\n")
+  }
+  
 } else {
   cat("Starting parallel processing of", length(CONDITIONS), "conditions...\n")
-cat("Progress will be shown as conditions complete.\n")
-cat("Monitor progress: tail -f", progress_file, "\n\n")
-
-start_time <- Sys.time()
-
-# Store total conditions for progress messages
-total_conditions <- length(CONDITIONS)
-
-# Export process_condition function to cluster
-# N_BOOTSTRAP_GOF_VALUE and CALCULATE_SGPC_VALUE already exported earlier, but include here for clarity
-clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES", "N_BOOTSTRAP_GOF_VALUE", 
-                    "CALCULATE_SGPC_VALUE", "progress_file", "total_conditions"), 
-              envir = environment())
-
-# Run parallel processing
-all_condition_results <- parLapply(
-  cl = cl,
-  X = seq_along(CONDITIONS),
-  fun = function(i) {
-    process_condition(i, CONDITIONS[[i]], COPULA_FAMILIES, progress_file, total_conditions)
+  cat("Progress will be shown as conditions complete.\n")
+  cat("Monitor progress: tail -f", progress_file, "\n\n")
+  
+  start_time <- Sys.time()
+  
+  # Store total conditions for progress messages
+  total_conditions <- length(CONDITIONS)
+  
+  if (USE_MIRAI_VALUE) {
+    # ==========================================================================
+    # MIRAI: Use mirai_map for parallel processing
+    # ==========================================================================
+    cat("Using mirai_map for parallel execution...\n")
+    
+    # Get STATE_DATA_LONG for passing to daemons
+    STATE_DATA_LONG_LOCAL <- get("STATE_DATA_LONG", envir = .GlobalEnv)
+    
+    # Run parallel processing with mirai_map
+    # Each daemon receives the condition and all required objects
+    mirai_results <- mirai_map(
+      .x = seq_along(CONDITIONS),
+      .f = function(i, CONDITIONS, COPULA_FAMILIES, progress_file, total_conditions,
+                    STATE_DATA_LONG, N_BOOTSTRAP_GOF_VALUE, CALCULATE_SGPC_VALUE,
+                    GENERATE_UNCERTAINTY_PLOTS_VALUE, GENERATE_CONTOUR_PLOTS_VALUE,
+                    N_BOOTSTRAP_UNCERTAINTY_VALUE, BOOTSTRAP_ALL_FAMILIES_VALUE,
+                    GRID_SIZE_VALUE, UNCERTAINTY_GRID_SIZE_VALUE,
+                    SKIP_COMONOTONIC_VALUE, COMPARISON_FAMILIES_VALUE,
+                    EXPORT_FORMATS_VALUE, EXPORT_DPI_VALUE, EXPORT_VERBOSE_VALUE) {
+        
+        # Load required packages in daemon
+        require(data.table)
+        require(splines2)
+        require(copula)
+        
+        # Source required functions
+        source("functions/longitudinal_pairs.R")
+        source("functions/ispline_ecdf.R")
+        source("functions/copula_bootstrap.R")
+        source("functions/sgpc_engine.R")
+        source("functions/copula_contour_plots.R")
+        
+        # Assign STATE_DATA_LONG to daemon's global environment
+        assign("STATE_DATA_LONG", STATE_DATA_LONG, envir = .GlobalEnv)
+        
+        # Call process_condition
+        process_condition(i, CONDITIONS[[i]], COPULA_FAMILIES, progress_file, total_conditions)
+      },
+      # Pass all required objects to daemons
+      CONDITIONS = CONDITIONS,
+      COPULA_FAMILIES = COPULA_FAMILIES,
+      progress_file = progress_file,
+      total_conditions = total_conditions,
+      STATE_DATA_LONG = STATE_DATA_LONG_LOCAL,
+      N_BOOTSTRAP_GOF_VALUE = N_BOOTSTRAP_GOF_VALUE,
+      CALCULATE_SGPC_VALUE = CALCULATE_SGPC_VALUE,
+      GENERATE_UNCERTAINTY_PLOTS_VALUE = GENERATE_UNCERTAINTY_PLOTS_VALUE,
+      GENERATE_CONTOUR_PLOTS_VALUE = GENERATE_CONTOUR_PLOTS_VALUE,
+      N_BOOTSTRAP_UNCERTAINTY_VALUE = N_BOOTSTRAP_UNCERTAINTY_VALUE,
+      BOOTSTRAP_ALL_FAMILIES_VALUE = BOOTSTRAP_ALL_FAMILIES_VALUE,
+      GRID_SIZE_VALUE = GRID_SIZE_VALUE,
+      UNCERTAINTY_GRID_SIZE_VALUE = UNCERTAINTY_GRID_SIZE_VALUE,
+      SKIP_COMONOTONIC_VALUE = SKIP_COMONOTONIC_VALUE,
+      COMPARISON_FAMILIES_VALUE = COMPARISON_FAMILIES_VALUE,
+      EXPORT_FORMATS_VALUE = EXPORT_FORMATS_VALUE,
+      EXPORT_DPI_VALUE = EXPORT_DPI_VALUE,
+      EXPORT_VERBOSE_VALUE = EXPORT_VERBOSE_VALUE
+    )
+    
+    # Collect results (blocking call - waits for all to complete)
+    all_condition_results <- mirai_results[]
+    
+  } else {
+    # ==========================================================================
+    # PARALLEL PACKAGE: Use parLapply for parallel processing
+    # ==========================================================================
+    cat("Using parLapply for parallel execution...\n")
+    
+    # Export process_condition function to cluster
+    # N_BOOTSTRAP_GOF_VALUE and CALCULATE_SGPC_VALUE already exported earlier, but include here for clarity
+    clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES", "N_BOOTSTRAP_GOF_VALUE", 
+                        "CALCULATE_SGPC_VALUE", "progress_file", "total_conditions"), 
+                  envir = environment())
+    
+    # Run parallel processing
+    all_condition_results <- parLapply(
+      cl = cl,
+      X = seq_along(CONDITIONS),
+      fun = function(i) {
+        process_condition(i, CONDITIONS[[i]], COPULA_FAMILIES, progress_file, total_conditions)
+      }
+    )
   }
-)
-
-end_time <- Sys.time()
-duration <- difftime(end_time, start_time, units = "mins")
-
-# Write final summary to progress file
-cat("\n", paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
-cat("ANALYSIS COMPLETE\n", file = progress_file, append = TRUE)
-cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
-cat("Finished:", format(end_time, "%Y-%m-%d %H:%M:%S"), "\n", file = progress_file, append = TRUE)
-cat("Total time:", round(duration, 2), "minutes\n", file = progress_file, append = TRUE)
-cat("Average per condition:", round(duration / total_conditions, 2), "minutes\n", file = progress_file, append = TRUE)
-
-# Count results
-n_success <- sum(sapply(all_condition_results, function(x) x$success))
-n_failed <- total_conditions - n_success
-cat("Successful:", n_success, "/", total_conditions, "\n", file = progress_file, append = TRUE)
-if (n_failed > 0) {
-  cat("Failed:", n_failed, "\n", file = progress_file, append = TRUE)
-}
-cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
-
-cat("\n====================================================================\n")
-cat("PARALLEL PROCESSING COMPLETE\n")
-cat("====================================================================\n")
-cat("Total time:", round(duration, 2), "minutes\n")
-cat("Average time per condition:", round(duration / length(CONDITIONS), 2), "minutes\n\n")
-
-# Stop cluster
-stopCluster(cl)
-cat("Cluster stopped.\n\n")
+  
+  end_time <- Sys.time()
+  duration <- difftime(end_time, start_time, units = "mins")
+  
+  # Write final summary to progress file
+  cat("\n", paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
+  cat("ANALYSIS COMPLETE\n", file = progress_file, append = TRUE)
+  cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
+  cat("Finished:", format(end_time, "%Y-%m-%d %H:%M:%S"), "\n", file = progress_file, append = TRUE)
+  cat("Total time:", round(duration, 2), "minutes\n", file = progress_file, append = TRUE)
+  cat("Average per condition:", round(duration / total_conditions, 2), "minutes\n", file = progress_file, append = TRUE)
+  
+  # Count results
+  n_success <- sum(sapply(all_condition_results, function(x) x$success))
+  n_failed <- total_conditions - n_success
+  cat("Successful:", n_success, "/", total_conditions, "\n", file = progress_file, append = TRUE)
+  if (n_failed > 0) {
+    cat("Failed:", n_failed, "\n", file = progress_file, append = TRUE)
+  }
+  cat(paste(rep("=", 70), collapse=""), "\n", file = progress_file, append = TRUE)
+  
+  cat("\n====================================================================\n")
+  cat("PARALLEL PROCESSING COMPLETE\n")
+  cat("====================================================================\n")
+  cat("Total time:", round(duration, 2), "minutes\n")
+  cat("Average time per condition:", round(duration / length(CONDITIONS), 2), "minutes\n\n")
+  
+  # Stop workers
+  if (USE_MIRAI_VALUE) {
+    daemons(0)
+    cat("Mirai daemons stopped.\n\n")
+  } else {
+    stopCluster(cl)
+    cat("Cluster stopped.\n\n")
+  }
 
 }  # End of else block (SKIP_PROCESSING check)
 
