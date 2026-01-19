@@ -130,9 +130,16 @@ if (USE_MIRAI_VALUE) {
   # ============================================================================
   cat("Initializing mirai daemons...\n")
   
+  # CRITICAL: Capture project root for daemon initialization
+  # Daemons start in home directory, need absolute paths
+  PROJECT_ROOT <- normalizePath(getwd(), mustWork = TRUE)
+  cat("  Project root:", PROJECT_ROOT, "\n")
+  
   # Create daemons (persistent background workers)
+  # output=TRUE: Show daemon output for debugging
+  # retry=FALSE: Don't mask errors by retrying failed tasks
   daemons_result <- tryCatch({
-    daemons(n_cores_use)
+    daemons(n_cores_use, output = TRUE, retry = FALSE)
     status <- status()
     list(success = TRUE, n_daemons = status$daemons)
   }, error = function(e) {
@@ -329,22 +336,110 @@ cat("\n")
 # Export setup differs by parallelization method
 if (USE_MIRAI_VALUE) {
   # ============================================================================
-  # MIRAI: Data passed directly to mirai_map, no clusterExport needed
+  # MIRAI: Use everywhere() to initialize daemons ONCE with packages, 
+  # functions, and config values. Data is loaded PER-TASK to avoid loading
+  # the combined 3.74 GB dataset when each task only needs one dataset.
   # ============================================================================
-  cat("Setting up mirai daemons...\n")
+  cat("Setting up mirai daemons with everywhere()...\n")
   
-  # Verify STATE_DATA_LONG exists before proceeding
-  if (!exists("STATE_DATA_LONG", envir = .GlobalEnv)) {
-    stop("ERROR: STATE_DATA_LONG not found in .GlobalEnv. Ensure master_analysis.R loads data first.")
+  # -------------------------------------------------------------------------
+  # OPTIMIZATION: Instead of loading combined data, each task loads ONLY
+  # the specific dataset it needs. This is much more efficient:
+  # - Dataset 1: ~2.3 GB (14M rows)
+  # - Dataset 2: ~600 MB (3.7M rows)  
+  # - Dataset 3: ~600 MB (3.6M rows)
+  # - Dataset 4: ~250 MB (1.6M rows)
+  # vs. Combined: ~3.74 GB (23M rows)
+  # -------------------------------------------------------------------------
+  
+  # Get DATASETS config for daemon use
+  if (!exists("DATASETS", envir = .GlobalEnv)) {
+    stop("ERROR: DATASETS not found in .GlobalEnv. Ensure dataset_configs.R is sourced first.")
   }
-  cat("  Data verified: STATE_DATA_LONG exists in .GlobalEnv (", 
-      format(nrow(get("STATE_DATA_LONG", envir = .GlobalEnv)), big.mark = ","), " rows)\n", sep = "")
+  DATASETS_CONFIG <- get("DATASETS", envir = .GlobalEnv)
   
-  # Store reference to data for mirai_map
-  STATE_DATA_LONG <- get("STATE_DATA_LONG", envir = .GlobalEnv)
+  # Get USE_SGP_DATA and IS_EC2 flags
+  USE_SGP_DATA_VALUE <- if (exists("USE_SGP_DATA", envir = .GlobalEnv)) get("USE_SGP_DATA", envir = .GlobalEnv) else FALSE
+  IS_EC2_VALUE <- if (exists("IS_EC2", envir = .GlobalEnv)) get("IS_EC2", envir = .GlobalEnv) else FALSE
   
-  cat("  mirai handles data passing automatically via serialization\n")
-  cat("  No explicit clusterExport required\n")
+  cat("  Data loading mode: PER-TASK (each task loads only its dataset)\n")
+  cat("  USE_SGP_DATA:", USE_SGP_DATA_VALUE, "\n")
+  cat("  IS_EC2:", IS_EC2_VALUE, "\n")
+  cat("  Datasets available:", paste(names(DATASETS_CONFIG), collapse = ", "), "\n")
+  
+  # -------------------------------------------------------------------------
+  # STEP 1: Load packages and source function files ONCE per daemon
+  # -------------------------------------------------------------------------
+  cat("  Initializing packages and functions on all daemons...\n")
+  
+  init_packages <- everywhere({
+    # Debug: Log daemon startup
+    cat("[DAEMON] Starting initialization at", format(Sys.time(), "%H:%M:%S"), "\n")
+    cat("[DAEMON] Working directory:", getwd(), "\n")
+    cat("[DAEMON] PROJECT_ROOT:", PROJECT_ROOT, "\n")
+    
+    # Set working directory
+    tryCatch({
+      setwd(PROJECT_ROOT)
+      cat("[DAEMON] Changed to PROJECT_ROOT successfully\n")
+    }, error = function(e) {
+      cat("[DAEMON ERROR] setwd failed:", conditionMessage(e), "\n")
+      stop(e)
+    })
+    
+    # Load packages
+    tryCatch({
+      suppressPackageStartupMessages({
+        library(data.table)
+        library(splines2)
+        library(copula)
+      })
+      cat("[DAEMON] Packages loaded successfully\n")
+    }, error = function(e) {
+      cat("[DAEMON ERROR] Package loading failed:", conditionMessage(e), "\n")
+      stop(e)
+    })
+    
+    # Source all required function files using absolute paths
+    func_files <- c("longitudinal_pairs.R", "ispline_ecdf.R", "copula_bootstrap.R", 
+                    "sgpc_engine.R", "copula_contour_plots.R")
+    for (ff in func_files) {
+      tryCatch({
+        source(file.path(PROJECT_ROOT, "functions", ff))
+        cat("[DAEMON] Sourced:", ff, "\n")
+      }, error = function(e) {
+        cat("[DAEMON ERROR] Failed to source", ff, ":", conditionMessage(e), "\n")
+        stop(e)
+      })
+    }
+    
+    cat("[DAEMON] Package initialization complete\n")
+    TRUE  # Return success indicator
+  }, PROJECT_ROOT = PROJECT_ROOT)
+  
+  # Wait for package initialization to complete
+  cat("  Waiting for daemon package initialization...\n")
+  init_packages_results <- init_packages[]
+  
+  # Check results
+  n_success <- sum(sapply(init_packages_results, function(x) isTRUE(x) || identical(x, TRUE)))
+  n_fail <- length(init_packages_results) - n_success
+  
+  if (n_fail > 0) {
+    cat("  WARNING: Some daemons failed package initialization (", n_fail, "/", length(init_packages_results), ")\n")
+    # Show failed results
+    for (i in seq_along(init_packages_results)) {
+      if (!isTRUE(init_packages_results[[i]])) {
+        cat("    Daemon", i, ":", as.character(init_packages_results[[i]]), "\n")
+      }
+    }
+  } else {
+    cat("  ✓ Packages and functions loaded on all", length(init_packages_results), "daemons\n")
+  }
+  
+  # NOTE: Data export (STATE_DATA_LONG, process_condition, config values) is done
+  # later, just before mirai_map(), after process_condition is defined.
+  cat("  Package initialization complete. Data export deferred until process_condition is defined.\n")
   
 } else if (is_linux) {
   # ============================================================================
@@ -1545,62 +1640,180 @@ if (SKIP_PROCESSING) {
     # ==========================================================================
     cat("Using mirai_map for parallel execution...\n")
     
-    # Get STATE_DATA_LONG for passing to daemons
-    STATE_DATA_LONG_LOCAL <- get("STATE_DATA_LONG", envir = .GlobalEnv)
+    # -------------------------------------------------------------------------
+    # Export process_condition, config values, and DATASETS config to daemons
+    # NOTE: Data is NOT loaded here - each task loads only the dataset it needs
+    # This is much more efficient than loading the combined 3.74 GB dataset
+    # -------------------------------------------------------------------------
+    cat("  Exporting config and DATASETS to all daemons...\n")
+    cat("    (Data will be loaded PER-TASK - only the specific dataset needed)\n")
+    
+    init_data <- everywhere({
+      # Debug: Log config export phase
+      cat("[DAEMON] Starting config initialization at", format(Sys.time(), "%H:%M:%S"), "\n")
+      
+      # Verify required functions are available
+      if (!exists("process_condition")) {
+        cat("[DAEMON ERROR] process_condition not found in daemon environment\n")
+        stop("process_condition not available")
+      }
+      cat("[DAEMON] process_condition function available\n")
+      
+      # Verify DATASETS config is available
+      if (!exists("DATASETS_CONFIG")) {
+        cat("[DAEMON ERROR] DATASETS_CONFIG not found in daemon environment\n")
+        stop("DATASETS_CONFIG not available")
+      }
+      cat("[DAEMON] DATASETS_CONFIG available with", length(DATASETS_CONFIG), "datasets\n")
+      
+      # Verify config values are available
+      config_vars <- c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE", 
+                       "GENERATE_UNCERTAINTY_PLOTS_VALUE", "GENERATE_CONTOUR_PLOTS_VALUE",
+                       "N_BOOTSTRAP_UNCERTAINTY_VALUE", "BOOTSTRAP_ALL_FAMILIES_VALUE",
+                       "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
+                       "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE",
+                       "EXPORT_FORMATS_VALUE", "EXPORT_DPI_VALUE", "EXPORT_VERBOSE_VALUE")
+      for (cv in config_vars) {
+        if (!exists(cv)) {
+          cat("[DAEMON ERROR] Config variable not found:", cv, "\n")
+        }
+      }
+      cat("[DAEMON] All config variables verified\n")
+      cat("[DAEMON] Config initialization complete (data loaded per-task)\n")
+      
+      TRUE  # Return success indicator
+    },
+    # Pass DATASETS config (small) instead of combined data (3.74 GB)
+    DATASETS_CONFIG = DATASETS_CONFIG,
+    USE_SGP_DATA_VALUE = USE_SGP_DATA_VALUE,
+    IS_EC2_VALUE = IS_EC2_VALUE,
+    # Pass functions and config values (all small objects)
+    process_condition = process_condition,
+    WORKSPACE_OBJECT_NAME = WORKSPACE_OBJECT_NAME,
+    N_BOOTSTRAP_GOF_VALUE = N_BOOTSTRAP_GOF_VALUE,
+    CALCULATE_SGPC_VALUE = CALCULATE_SGPC_VALUE,
+    GENERATE_UNCERTAINTY_PLOTS_VALUE = GENERATE_UNCERTAINTY_PLOTS_VALUE,
+    GENERATE_CONTOUR_PLOTS_VALUE = GENERATE_CONTOUR_PLOTS_VALUE,
+    N_BOOTSTRAP_UNCERTAINTY_VALUE = N_BOOTSTRAP_UNCERTAINTY_VALUE,
+    BOOTSTRAP_ALL_FAMILIES_VALUE = BOOTSTRAP_ALL_FAMILIES_VALUE,
+    GRID_SIZE_VALUE = GRID_SIZE_VALUE,
+    UNCERTAINTY_GRID_SIZE_VALUE = UNCERTAINTY_GRID_SIZE_VALUE,
+    SKIP_COMONOTONIC_VALUE = SKIP_COMONOTONIC_VALUE,
+    COMPARISON_FAMILIES_VALUE = COMPARISON_FAMILIES_VALUE,
+    EXPORT_FORMATS_VALUE = EXPORT_FORMATS_VALUE,
+    EXPORT_DPI_VALUE = EXPORT_DPI_VALUE,
+    EXPORT_VERBOSE_VALUE = EXPORT_VERBOSE_VALUE
+    )
+    
+    # Wait for config export to complete
+    cat("  Waiting for daemon config initialization...\n")
+    init_data_results <- init_data[]
+    
+    # Check results with detailed error reporting
+    n_success <- sum(sapply(init_data_results, function(x) isTRUE(x) || identical(x, TRUE)))
+    n_fail <- length(init_data_results) - n_success
+    
+    if (n_fail > 0) {
+      cat("  WARNING: Some daemons failed config initialization (", n_fail, "/", length(init_data_results), ")\n")
+      for (i in seq_along(init_data_results)) {
+        if (!isTRUE(init_data_results[[i]])) {
+          cat("    Daemon", i, "result:", "\n")
+          if (is_mirai_error(init_data_results[[i]])) {
+            cat("      MIRAI ERROR:", as.character(init_data_results[[i]]), "\n")
+          } else {
+            cat("      Value:", as.character(init_data_results[[i]]), "\n")
+          }
+        }
+      }
+    } else {
+      cat("  ✓ Config exported to all", length(init_data_results), "daemons\n")
+      cat("  ✓ process_condition function available on all daemons\n")
+      cat("  ✓ DATASETS_CONFIG available (data loaded per-task)\n")
+    }
+    
+    cat("  Daemon initialization complete. Starting mirai_map()...\n")
+    
+    # Use absolute path for progress file (daemons may have different cwd)
+    progress_file_abs <- normalizePath(progress_file, mustWork = FALSE)
     
     # Run parallel processing with mirai_map
-    # Each daemon receives the condition and all required objects
+    # Each task loads ONLY the specific dataset it needs (not the combined 3.74 GB)
+    # NOTE: Use .args to pass arguments to the function (mirai_map syntax)
     mirai_results <- mirai_map(
       .x = seq_along(CONDITIONS),
-      .f = function(i, CONDITIONS, COPULA_FAMILIES, progress_file, total_conditions,
-                    STATE_DATA_LONG, N_BOOTSTRAP_GOF_VALUE, CALCULATE_SGPC_VALUE,
-                    GENERATE_UNCERTAINTY_PLOTS_VALUE, GENERATE_CONTOUR_PLOTS_VALUE,
-                    N_BOOTSTRAP_UNCERTAINTY_VALUE, BOOTSTRAP_ALL_FAMILIES_VALUE,
-                    GRID_SIZE_VALUE, UNCERTAINTY_GRID_SIZE_VALUE,
-                    SKIP_COMONOTONIC_VALUE, COMPARISON_FAMILIES_VALUE,
-                    EXPORT_FORMATS_VALUE, EXPORT_DPI_VALUE, EXPORT_VERBOSE_VALUE) {
+      .f = function(i, CONDITIONS, COPULA_FAMILIES, progress_file, total_conditions) {
+        # Get the condition and its dataset_id
+        cond <- CONDITIONS[[i]]
+        dataset_id <- cond$dataset_id
         
-        # Load required packages in daemon
-        require(data.table)
-        require(splines2)
-        require(copula)
+        # Load ONLY the specific dataset needed for this condition
+        # This is MUCH more efficient than loading all 4 datasets combined
+        if (!is.null(dataset_id) && exists("DATASETS_CONFIG") && dataset_id %in% names(DATASETS_CONFIG)) {
+          ds_config <- DATASETS_CONFIG[[dataset_id]]
+          
+          # Determine the file path based on USE_SGP_DATA and IS_EC2
+          if (USE_SGP_DATA_VALUE && !is.null(ds_config$local_path_sgp)) {
+            ds_path <- if (IS_EC2_VALUE) ds_config$ec2_path_sgp else ds_config$local_path_sgp
+            ds_object_name <- ds_config$rdata_object_name_sgp
+          } else {
+            ds_path <- if (IS_EC2_VALUE) ds_config$ec2_path else ds_config$local_path
+            ds_object_name <- ds_config$rdata_object_name
+          }
+          
+          # Load the dataset if not already loaded or if it's a different dataset
+          current_dataset_id <- if (exists(".LOADED_DATASET_ID")) .LOADED_DATASET_ID else NULL
+          
+          if (is.null(current_dataset_id) || current_dataset_id != dataset_id) {
+            cat("[TASK", i, "] Loading dataset:", dataset_id, "from", ds_path, "\n")
+            tryCatch({
+              load(ds_path)
+              ds_data <- get(ds_object_name)
+              if (!inherits(ds_data, "data.table")) {
+                ds_data <- as.data.table(ds_data)
+              }
+              # Assign to global for get_state_data() and downstream functions
+              assign("STATE_DATA_LONG", ds_data, envir = .GlobalEnv)
+              assign(".LOADED_DATASET_ID", dataset_id, envir = .GlobalEnv)
+              cat("[TASK", i, "] Loaded", format(nrow(ds_data), big.mark = ","), "rows\n")
+            }, error = function(e) {
+              cat("[TASK", i, " ERROR] Failed to load dataset:", conditionMessage(e), "\n")
+              stop(e)
+            })
+          }
+        }
         
-        # Source required functions
-        source("functions/longitudinal_pairs.R")
-        source("functions/ispline_ecdf.R")
-        source("functions/copula_bootstrap.R")
-        source("functions/sgpc_engine.R")
-        source("functions/copula_contour_plots.R")
-        
-        # Assign STATE_DATA_LONG to daemon's global environment
-        assign("STATE_DATA_LONG", STATE_DATA_LONG, envir = .GlobalEnv)
-        
-        # Call process_condition
-        process_condition(i, CONDITIONS[[i]], COPULA_FAMILIES, progress_file, total_conditions)
+        # process_condition and all dependencies are already in .GlobalEnv
+        process_condition(i, cond, COPULA_FAMILIES, progress_file, total_conditions)
       },
-      # Pass all required objects to daemons
-      CONDITIONS = CONDITIONS,
-      COPULA_FAMILIES = COPULA_FAMILIES,
-      progress_file = progress_file,
-      total_conditions = total_conditions,
-      STATE_DATA_LONG = STATE_DATA_LONG_LOCAL,
-      N_BOOTSTRAP_GOF_VALUE = N_BOOTSTRAP_GOF_VALUE,
-      CALCULATE_SGPC_VALUE = CALCULATE_SGPC_VALUE,
-      GENERATE_UNCERTAINTY_PLOTS_VALUE = GENERATE_UNCERTAINTY_PLOTS_VALUE,
-      GENERATE_CONTOUR_PLOTS_VALUE = GENERATE_CONTOUR_PLOTS_VALUE,
-      N_BOOTSTRAP_UNCERTAINTY_VALUE = N_BOOTSTRAP_UNCERTAINTY_VALUE,
-      BOOTSTRAP_ALL_FAMILIES_VALUE = BOOTSTRAP_ALL_FAMILIES_VALUE,
-      GRID_SIZE_VALUE = GRID_SIZE_VALUE,
-      UNCERTAINTY_GRID_SIZE_VALUE = UNCERTAINTY_GRID_SIZE_VALUE,
-      SKIP_COMONOTONIC_VALUE = SKIP_COMONOTONIC_VALUE,
-      COMPARISON_FAMILIES_VALUE = COMPARISON_FAMILIES_VALUE,
-      EXPORT_FORMATS_VALUE = EXPORT_FORMATS_VALUE,
-      EXPORT_DPI_VALUE = EXPORT_DPI_VALUE,
-      EXPORT_VERBOSE_VALUE = EXPORT_VERBOSE_VALUE
+      .args = list(
+        CONDITIONS = CONDITIONS,
+        COPULA_FAMILIES = COPULA_FAMILIES,
+        progress_file = progress_file_abs,
+        total_conditions = total_conditions
+      )
     )
     
     # Collect results (blocking call - waits for all to complete)
     all_condition_results <- mirai_results[]
+    
+    # =========================================================================
+    # Check for mirai errors in results
+    # =========================================================================
+    error_indices <- which(sapply(all_condition_results, is_mirai_error))
+    if (length(error_indices) > 0) {
+      cat("\n")
+      cat("====================================================================\n")
+      cat("WARNING: MIRAI ERRORS DETECTED\n")
+      cat("====================================================================\n")
+      cat("Errors in conditions:", paste(error_indices, collapse = ", "), "\n\n")
+      
+      for (idx in error_indices) {
+        cat("--- Condition", idx, "---\n")
+        err <- all_condition_results[[idx]]
+        cat("  Error:", as.character(err), "\n")
+      }
+      cat("====================================================================\n\n")
+    }
     
   } else {
     # ==========================================================================
