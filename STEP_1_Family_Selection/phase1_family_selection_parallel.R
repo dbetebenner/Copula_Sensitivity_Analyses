@@ -395,6 +395,19 @@ if (USE_MIRAI_VALUE) {
         library(copula)
       })
       cat("[DAEMON] Packages loaded successfully\n")
+      
+      # CRITICAL FOR EC2: Force single-threaded execution to prevent oversubscription
+      # With 188+ daemons, allowing multi-threading per daemon causes CPU thrashing
+      data.table::setDTthreads(1)
+      Sys.setenv(
+        OMP_NUM_THREADS = "1",
+        MKL_NUM_THREADS = "1",
+        OPENBLAS_NUM_THREADS = "1",
+        VECLIB_MAXIMUM_THREADS = "1",
+        NUMEXPR_NUM_THREADS = "1"
+      )
+      cat("[DAEMON] Thread management: Single-threaded mode enabled (prevents oversubscription)\n")
+      
     }, error = function(e) {
       cat("[DAEMON ERROR] Package loading failed:", conditionMessage(e), "\n")
       stop(e)
@@ -402,10 +415,16 @@ if (USE_MIRAI_VALUE) {
     
     # Source all required function files using absolute paths
     func_files <- c("longitudinal_pairs.R", "ispline_ecdf.R", "copula_bootstrap.R", 
-                    "sgpc_engine.R", "copula_contour_plots.R")
+                    "sgpc_engine.R", "copula_contour_plots.R", "dataset_configs.R")
     for (ff in func_files) {
       tryCatch({
-        source(file.path(PROJECT_ROOT, "functions", ff))
+        # For dataset_configs.R, use project root, not functions/ subdirectory
+        file_path <- if (ff == "dataset_configs.R") {
+          file.path(PROJECT_ROOT, ff)
+        } else {
+          file.path(PROJECT_ROOT, "functions", ff)
+        }
+        source(file_path)
         cat("[DAEMON] Sourced:", ff, "\n")
       }, error = function(e) {
         cat("[DAEMON ERROR] Failed to source", ff, ":", conditionMessage(e), "\n")
@@ -1542,6 +1561,7 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
     # === END PROGRESS TRACKING ===
     
     # Return list with success status
+    # NOTE: Return file path instead of student-level data to avoid serialization overhead
     return(list(
       condition_id = i,
       success = TRUE,
@@ -1549,7 +1569,9 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
       best_family = copula_fits$best_family,
       empirical_tau = copula_fits$empirical_tau,
       results = family_results,
-      sgpc_results = sgpc_results  # May be NULL if SGPc calculation disabled
+      sgpc_file = if (!is.null(plot_output_dir)) {
+        file.path(plot_output_dir, "sgpc_results", "sgpc_values.rds")
+      } else NULL
     ))
     
   }, error = function(e) {
@@ -1659,6 +1681,13 @@ if (SKIP_PROCESSING) {
       }
       cat("[DAEMON] process_condition function available\n")
       
+      # Verify get_state_data is available
+      if (!exists("get_state_data")) {
+        cat("[DAEMON ERROR] get_state_data not found in daemon environment\n")
+        stop("get_state_data not available")
+      }
+      cat("[DAEMON] get_state_data function available\n")
+      
       # Verify DATASETS config is available
       if (!exists("DATASETS_CONFIG")) {
         cat("[DAEMON ERROR] DATASETS_CONFIG not found in daemon environment\n")
@@ -1689,6 +1718,7 @@ if (SKIP_PROCESSING) {
     IS_EC2_VALUE = IS_EC2_VALUE,
     # Pass functions and config values (all small objects)
     process_condition = process_condition,
+    get_state_data = get_state_data,
     WORKSPACE_OBJECT_NAME = WORKSPACE_OBJECT_NAME,
     N_BOOTSTRAP_GOF_VALUE = N_BOOTSTRAP_GOF_VALUE,
     CALCULATE_SGPC_VALUE = CALCULATE_SGPC_VALUE,

@@ -5922,6 +5922,8 @@ generate_summary_grid_latex <- function(output_dir,
         warning("System pdflatex compilation failed: ", e$message)
       })
     }
+
+    Sys.sleep(0.5)  # Wait 500ms for file system to settle and write the PDF file
     
     if (!compiled) {
       warning("Could not compile PDF. Install tinytex: install.packages('tinytex'); tinytex::install_tinytex()")
