@@ -166,16 +166,16 @@ export_plot_multi_format <- function(
           )
         }
       } else if (fmt == "png") {
-        # Calculate pixel dimensions: inches * dpi * scale
-        width_px <- width * png_res * png_scale / png_res  # Simplifies to: width * png_scale
-        height_px <- height * png_res * png_scale / png_res  # Simplifies to: height * png_scale
+        # For units = "in", scale resolution not dimensions
+        # This ensures png_scale=2 produces 2x resolution, not 4x (scale²)
+        res_out <- png_res * png_scale
         
         ragg::agg_png(
           filename = output_paths$png,
-          width = width_px,
-          height = height_px,
+          width = width,         # Keep in inches (not scaled)
+          height = height,       # Keep in inches (not scaled)
           units = "in",
-          res = png_res * png_scale,
+          res = res_out,         # Scale via DPI only
           background = bg_setting,
           ...
         )

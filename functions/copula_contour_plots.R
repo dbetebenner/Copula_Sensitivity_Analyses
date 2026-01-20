@@ -5497,6 +5497,24 @@ generate_summary_grid_latex <- function(output_dir,
                                         export_formats = c("pdf", "svg", "png"),
                                         export_dpi = 300) {
   
+  # [NEW] Normalize output_dir to absolute path to prevent relative-path bugs after setwd()
+  # This ensures file.exists() checks work correctly even after changing working directory
+  output_dir <- normalizePath(output_dir, winslash = "/", mustWork = FALSE)
+  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  output_dir <- normalizePath(output_dir, winslash = "/", mustWork = TRUE)
+  
+  # [NEW] Debug logging for daemon environments (especially useful on EC2)
+  if (getOption("copula.debug_summary_grid", FALSE)) {
+    cat("\n=== [DEBUG] Summary Grid Conversion ===\n")
+    cat(sprintf("  Working dir: %s\n", getwd()))
+    cat(sprintf("  Output dir (normalized): %s\n", output_dir))
+    cat(sprintf("  Export formats: %s\n", paste(export_formats, collapse = ", ")))
+    cat(sprintf("  pdf2svg path: %s\n", Sys.which("pdf2svg")))
+    cat(sprintf("  pdftoppm path: %s\n", Sys.which("pdftoppm")))
+    cat(sprintf("  convert path: %s\n", Sys.which("convert")))
+    cat("========================================\n\n")
+  }
+  
   # --- Load metadata from JSON if available ---
   json_path <- file.path(output_dir, "PARAMETRIC", toupper(best_family),
                          sprintf("comparison_empirical_vs_%s_summary.json", best_family))
@@ -5886,6 +5904,8 @@ generate_summary_grid_latex <- function(output_dir,
   cat(sprintf("  LaTeX source written: %s\n", tex_path))
   
   # --- Compile to PDF ---
+  # IMPORTANT: output_dir has been normalized to absolute path above.
+  # This ensures file.exists() checks work correctly after setwd() calls below.
   if (compile_pdf) {
     pdf_path <- file.path(output_dir, "summary_grid.pdf")
     
@@ -5913,17 +5933,19 @@ generate_summary_grid_latex <- function(output_dir,
         setwd(output_dir)
         on.exit(setwd(old_wd), add = TRUE)
         
-        system2("pdflatex", 
-                args = c("-interaction=nonstopmode", "summary_grid.tex"),
-                stdout = FALSE, stderr = FALSE)
-        compiled <- TRUE
-        cat(sprintf("  ✓ PDF compiled via system pdflatex: %s\n", pdf_path))
+        status <- system2("pdflatex", 
+                          args = c("-interaction=nonstopmode", "summary_grid.tex"),
+                          stdout = FALSE, stderr = FALSE)
+        compiled <- identical(status, 0L)
+        if (compiled) {
+          cat(sprintf("  ✓ PDF compiled via system pdflatex: %s\n", pdf_path))
+        } else {
+          warning(sprintf("pdflatex exited with status %s", status))
+        }
       }, error = function(e) {
         warning("System pdflatex compilation failed: ", e$message)
       })
     }
-
-    Sys.sleep(0.5)  # Wait 500ms for file system to settle and write the PDF file
     
     if (!compiled) {
       warning("Could not compile PDF. Install tinytex: install.packages('tinytex'); tinytex::install_tinytex()")
@@ -5951,13 +5973,13 @@ generate_summary_grid_latex <- function(output_dir,
         svg_path <- file.path(output_dir, "summary_grid.svg")
         if (Sys.which("pdf2svg") != "") {
           tryCatch({
-            system2("pdf2svg", 
-                    args = c(pdf_path, svg_path),
-                    stdout = FALSE, stderr = FALSE)
-            if (file.exists(svg_path)) {
+            status <- system2("pdf2svg", 
+                              args = c(pdf_path, svg_path),
+                              stdout = FALSE, stderr = FALSE)
+            if (identical(status, 0L) && file.exists(svg_path)) {
               cat(sprintf("  ✓ SVG converted via pdf2svg: %s\n", svg_path))
             } else {
-              warning("pdf2svg did not produce output file")
+              warning(sprintf("pdf2svg failed (exit: %s) or did not produce output", status))
             }
           }, error = function(e) {
             warning("pdf2svg conversion failed: ", e$message)
@@ -5978,10 +6000,13 @@ generate_summary_grid_latex <- function(output_dir,
           tryCatch({
             # pdftoppm outputs to summary_grid-1.png, we'll rename it
             tmp_prefix <- file.path(output_dir, "summary_grid_tmp")
-            system2("pdftoppm", 
-                    args = c("-png", "-r", as.character(export_dpi * 2), "-singlefile", 
-                             pdf_path, tmp_prefix),
-                    stdout = FALSE, stderr = FALSE)
+            status <- system2("pdftoppm", 
+                              args = c("-png", "-r", as.character(export_dpi * 2), "-singlefile", 
+                                       pdf_path, tmp_prefix),
+                              stdout = FALSE, stderr = FALSE)
+            if (!identical(status, 0L)) {
+              warning(sprintf("pdftoppm exited with status %s", status))
+            }
             tmp_png <- paste0(tmp_prefix, ".png")
             if (file.exists(tmp_png)) {
               file.rename(tmp_png, png_path)
@@ -5996,10 +6021,13 @@ generate_summary_grid_latex <- function(output_dir,
         # Fallback to ImageMagick convert
         if (!png_converted && Sys.which("convert") != "") {
           tryCatch({
-            system2("convert", 
-                    args = c("-density", as.character(export_dpi * 2), 
-                             pdf_path, "-quality", "95", png_path),
-                    stdout = FALSE, stderr = FALSE)
+            status <- system2("convert", 
+                              args = c("-density", as.character(export_dpi * 2), 
+                                       pdf_path, "-quality", "95", png_path),
+                              stdout = FALSE, stderr = FALSE)
+            if (!identical(status, 0L)) {
+              warning(sprintf("ImageMagick convert exited with status %s", status))
+            }
             if (file.exists(png_path)) {
               png_converted <- TRUE
               cat(sprintf("  ✓ PNG converted via ImageMagick (%ddpi): %s\n", export_dpi * 2, png_path))

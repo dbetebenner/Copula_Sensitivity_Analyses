@@ -170,31 +170,33 @@ if (!exists("PERFORMANCE_MODE")) PERFORMANCE_MODE <- "fast"
 # Apply performance mode presets
 if (PERFORMANCE_MODE == "fast") {
   # === FAST MODE: Optimized for bulk processing ===
-  GRID_SIZE <- 150                         # vs 300 (4x fewer grid points)
-  UNCERTAINTY_GRID_SIZE <- 100             # vs 300 (9x fewer for uncertainty)
+  GRID_SIZE <- 150                         # vs 200 (2.25x fewer grid points)
+  UNCERTAINTY_GRID_SIZE <- 100             # vs 100 (same - already optimal)
   EXPORT_FORMATS <- c("pdf")               # vs pdf,svg,png (3x less I/O)
   SKIP_COMONOTONIC <- TRUE                 # Skip comonotonic (never selected)
-  N_BOOTSTRAP_UNCERTAINTY <- 50            # vs 100 (2x faster bootstrap)
+  N_BOOTSTRAP_UNCERTAINTY <- 50            # vs 50 (2x faster than original 100)
   BOOTSTRAP_ALL_FAMILIES <- FALSE          # Best family only (5x faster uncertainty)
   GENERATE_UNCERTAINTY_PLOTS <- TRUE       # Keep uncertainty for best family
   COMPARISON_FAMILIES <- "top3"            # Only generate full comparisons for top 3 by AIC
   
 } else if (PERFORMANCE_MODE == "full") {
-  # === FULL MODE: Publication quality ===
-  GRID_SIZE <- 300                         # High resolution
-  UNCERTAINTY_GRID_SIZE <- 300             # Full resolution uncertainty
-  EXPORT_FORMATS <- c("pdf", "svg", "png") # All formats
-  SKIP_COMONOTONIC <- FALSE                # Include comonotonic
-  N_BOOTSTRAP_UNCERTAINTY <- 100           # Full bootstrap
-  BOOTSTRAP_ALL_FAMILIES <- TRUE           # All 5 parametric families
-  GENERATE_UNCERTAINTY_PLOTS <- TRUE       # Full uncertainty analysis
-  COMPARISON_FAMILIES <- "all"             # All families
+  # === FULL MODE: EC2-Optimized for 180+ parallel workers ===
+  # Balanced configuration: maintains quality while achieving ~3-4x speedup
+  # per condition, enabling ~3-hour runtime for 966 conditions on EC2
+  GRID_SIZE <- 200                         # High quality (vs 300: 2.25x fewer points)
+  UNCERTAINTY_GRID_SIZE <- 100             # Smooth uncertainty bands (vs 300: 9x fewer points)
+  EXPORT_FORMATS <- c("pdf", "svg", "png") # All formats for publication
+  SKIP_COMONOTONIC <- FALSE                # Include comonotonic for completeness
+  N_BOOTSTRAP_UNCERTAINTY <- 50            # Good uncertainty estimates (vs 100: 2x faster)
+  BOOTSTRAP_ALL_FAMILIES <- TRUE           # All 5 parametric families (comprehensive analysis)
+  GENERATE_UNCERTAINTY_PLOTS <- TRUE       # Full uncertainty visualization
+  COMPARISON_FAMILIES <- "all"             # All families for comparative analysis
   
 } else {
   # === CUSTOM MODE: Use individual settings ===
   # Set these manually when PERFORMANCE_MODE <- "custom"
   if (!exists("GRID_SIZE")) GRID_SIZE <- 200
-  if (!exists("UNCERTAINTY_GRID_SIZE")) UNCERTAINTY_GRID_SIZE <- 150
+  if (!exists("UNCERTAINTY_GRID_SIZE")) UNCERTAINTY_GRID_SIZE <- 100
   if (!exists("SKIP_COMONOTONIC")) SKIP_COMONOTONIC <- TRUE
   if (!exists("COMPARISON_FAMILIES")) COMPARISON_FAMILIES <- "top3"
 }
@@ -253,17 +255,21 @@ GENERATE_CONTOUR_PLOTS <- TRUE
 
 # Generate bootstrap uncertainty bands on parametric copula plots
 # This adds significant time per condition depending on settings:
-#   - Fast mode (50 samples, best only): ~5-10 min additional
-#   - Full mode (100 samples, all families): ~20-30 min additional
+#   - Fast mode (50 samples, best only): ~5-10 min additional per condition
+#   - Full mode EC2-optimized (50 samples, all families): ~10-15 min additional per condition
+#   - Original full mode (100 samples, all families): ~20-30 min additional per condition
 if (!exists("GENERATE_UNCERTAINTY_PLOTS")) GENERATE_UNCERTAINTY_PLOTS <- TRUE
 
-# Number of bootstrap samples for uncertainty quantification
-# 25 = very fast, 50 = fast (recommended for bulk), 100 = balanced, 200 = high precision
-if (!exists("N_BOOTSTRAP_UNCERTAINTY")) N_BOOTSTRAP_UNCERTAINTY <- 100
+# Number of bootstrap samples for uncertainty quantification (visualization only, not statistical tests)
+# 25 = very fast, slightly grainy bands
+# 50 = fast, smooth bands (EC2-optimized: 2x speedup vs 100, imperceptible quality loss)
+# 100 = original default, very smooth bands
+# 200 = high precision (overkill for visualization)
+if (!exists("N_BOOTSTRAP_UNCERTAINTY")) N_BOOTSTRAP_UNCERTAINTY <- 50
 
 # Bootstrap all families or just the best?
-# TRUE = all 5 parametric families (gaussian, t, clayton, gumbel, frank)
-# FALSE = best family only (5x faster uncertainty plots)
+# TRUE = all 5 parametric families (gaussian, t, clayton, gumbel, frank) - comprehensive comparison
+# FALSE = best family only (5x faster uncertainty plots) - use for quick exploratory runs
 if (!exists("BOOTSTRAP_ALL_FAMILIES")) BOOTSTRAP_ALL_FAMILIES <- TRUE
 
 # Grid size for uncertainty overlay plots (can be lower than main grid)

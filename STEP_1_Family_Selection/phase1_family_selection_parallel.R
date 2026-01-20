@@ -141,7 +141,11 @@ if (USE_MIRAI_VALUE) {
   daemons_result <- tryCatch({
     daemons(n_cores_use, output = TRUE, retry = FALSE)
     status <- status()
-    list(success = TRUE, n_daemons = status$daemons)
+    list(
+      success = TRUE, 
+      n_daemons = status$connections,  # Count of connected daemons
+      daemon_url = status$daemons       # Connection URL (for debugging)
+    )
   }, error = function(e) {
     cat("  ✗ mirai daemon creation failed:", e$message, "\n")
     list(success = FALSE, error = e$message)
@@ -154,6 +158,7 @@ if (USE_MIRAI_VALUE) {
   n_workers_actual <- daemons_result$n_daemons
   cat("  Type: mirai (NNG sockets, cross-platform)\n")
   cat("  Daemons created:", n_workers_actual, "\n")
+  cat("  Connection URL:", daemons_result$daemon_url, "\n")
   
   # cl is not used with mirai, but set to NULL for compatibility checks
   cl <- NULL
