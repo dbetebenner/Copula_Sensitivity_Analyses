@@ -333,8 +333,8 @@ if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- TRUE
 # ============================================================================
 # >>> CURRENT SETTINGS (EDIT THESE FOR YOUR RUN) <<<
 # ============================================================================
-TEST_MODE <- TRUE                        # Test mode: limited conditions for validation
-TEST_N_CONDITIONS_PER_DATASET <- 1       # 1 condition per dataset (4 total with 4 datasets)
+TEST_MODE <- FALSE                       # PRODUCTION MODE: Full analysis (966 conditions)
+TEST_N_CONDITIONS_PER_DATASET <- 1       # Only used if TEST_MODE=TRUE
 # ============================================================================
 #
 if (!exists("TEST_MODE")) TEST_MODE <- FALSE
