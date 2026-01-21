@@ -687,6 +687,10 @@ bootstrap_parameter_stability <- function(U_prior,
   }
   
   # Run bootstrap
+  # NOTE: This function uses legacy parallel package (FORK/PSOCK) for internal parallelization.
+  # This is intentional - these functions are called within already-parallel contexts
+  # (e.g., from mirai workers) and use a small cluster for sub-task parallelization.
+  # Migration to nested mirai is not necessary and could cause conflicts.
   # Using PSOCK clusters (socket-based) instead of fork-based mclapply
   # This is safe with BLAS operations on macOS (Accelerate framework is not fork-safe)
   if (parallel && require(parallel)) {

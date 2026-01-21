@@ -593,6 +593,10 @@ bootstrap_copula_estimation <- function(pairs_data,
   }
   
   # Run bootstrap iterations (parallel or sequential)
+  # NOTE: This function uses legacy parallel package (FORK/PSOCK) for internal parallelization.
+  # This is intentional - these functions are called within already-parallel contexts
+  # (e.g., from mirai workers) and use a small cluster for sub-task parallelization.
+  # Migration to nested mirai is not necessary and could cause conflicts.
   if (use_parallel && n_cores > 1) {
     # Parallel execution using PSOCK socket cluster (safe with BLAS on macOS)
     cat("  Creating PSOCK cluster with", n_cores, "workers...\n")

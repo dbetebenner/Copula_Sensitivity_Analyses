@@ -24,30 +24,14 @@ require(parallel)
 # Null-coalescing operator (for compatibility)
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-# Detect USE_MIRAI setting from master_analysis.R
-USE_MIRAI_VALUE <- FALSE
-if (exists("USE_MIRAI", envir = .GlobalEnv)) {
-  USE_MIRAI_VALUE <- get("USE_MIRAI", envir = .GlobalEnv)
-}
+# Load mirai (required dependency for parallel processing)
+library(mirai)
 
-# Load mirai if enabled
-if (USE_MIRAI_VALUE) {
-  if (!requireNamespace("mirai", quietly = TRUE)) {
-    cat("Installing mirai package...\n")
-    install.packages("mirai", repos = "https://cloud.r-project.org")
-  }
-  require(mirai)
-  cat("====================================================================\n")
-  cat("PHASE 1: COPULA FAMILY SELECTION STUDY (MIRAI PARALLEL)\n")
-  cat("====================================================================\n")
-  cat("Using mirai package for scalable parallelization\n")
-  cat("mirai version:", as.character(packageVersion("mirai")), "\n")
-} else {
-  cat("====================================================================\n")
-  cat("PHASE 1: COPULA FAMILY SELECTION STUDY (PARALLEL)\n")
-  cat("====================================================================\n")
-  cat("Using parallel package (FORK/PSOCK clusters)\n")
-}
+cat("====================================================================\n")
+cat("PHASE 1: COPULA FAMILY SELECTION STUDY (MIRAI PARALLEL)\n")
+cat("====================================================================\n")
+cat("Using mirai package for scalable, cross-platform parallelization\n")
+cat("mirai version:", as.character(packageVersion("mirai")), "\n")
 
 # Detect cores and set up cluster
 n_cores_available <- detectCores()
@@ -112,111 +96,41 @@ if (!is.na(n_conditions_expected) && n_conditions_expected < n_cores_max) {
   }
 }
 
-# Detect OS for cluster type selection (used by parallel package fallback)
-# - Linux: FORK (faster, memory-efficient via copy-on-write)
-# - macOS: PSOCK (FORK crashes due to Objective-C runtime fork() issues)
-# - Windows: PSOCK (FORK not available)
-is_macos <- Sys.info()["sysname"] == "Darwin"
-is_linux <- Sys.info()["sysname"] == "Linux"
-
 ################################################################################
-### WORKER INITIALIZATION (MIRAI or PARALLEL)
+### WORKER INITIALIZATION
 ################################################################################
 
-if (USE_MIRAI_VALUE) {
-  # ============================================================================
-  # MIRAI: Scalable parallelization via NNG sockets
-  # Bypasses R's 128 connection limit, enabling 188+ workers
-  # ============================================================================
-  cat("Initializing mirai daemons...\n")
-  
-  # CRITICAL: Capture project root for daemon initialization
-  # Daemons start in home directory, need absolute paths
-  PROJECT_ROOT <- normalizePath(getwd(), mustWork = TRUE)
-  cat("  Project root:", PROJECT_ROOT, "\n")
-  
-  # Create daemons (persistent background workers)
-  # output=TRUE: Show daemon output for debugging
-  # retry=FALSE: Don't mask errors by retrying failed tasks
-  daemons_result <- tryCatch({
-    daemons(n_cores_use, output = TRUE, retry = FALSE)
-    status <- status()
-    list(
-      success = TRUE, 
-      n_daemons = status$connections,  # Count of connected daemons
-      daemon_url = status$daemons       # Connection URL (for debugging)
-    )
-  }, error = function(e) {
-    cat("  ✗ mirai daemon creation failed:", e$message, "\n")
-    list(success = FALSE, error = e$message)
-  })
-  
-  if (!daemons_result$success) {
-    stop("Failed to create mirai daemons: ", daemons_result$error)
-  }
-  
-  n_workers_actual <- daemons_result$n_daemons
-  cat("  Type: mirai (NNG sockets, cross-platform)\n")
-  cat("  Daemons created:", n_workers_actual, "\n")
-  cat("  Connection URL:", daemons_result$daemon_url, "\n")
-  
-  # cl is not used with mirai, but set to NULL for compatibility checks
-  cl <- NULL
-  
-} else {
-  # ============================================================================
-  # PARALLEL PACKAGE: Traditional FORK/PSOCK clusters
-  # Limited to ~96 workers due to R's 128 connection limit
-  # ============================================================================
-  
-  if (is_linux) {
-    # Linux: Use FORK cluster (fast, memory-efficient)
-    cat("Initializing FORK cluster (Linux shared memory)...\n")
-    cl <- tryCatch({
-      makeForkCluster(n_cores_use)
-    }, error = function(e) {
-      cat("  ✗ FORK cluster creation failed:", e$message, "\n")
-      cat("  Attempting with fewer workers...\n")
-      # Try with fewer workers if initial attempt fails
-      reduced_cores <- min(n_cores_use, 96)
-      tryCatch({
-        makeForkCluster(reduced_cores)
-      }, error = function(e2) {
-        cat("  ✗ Reduced FORK cluster also failed:", e2$message, "\n")
-        NULL
-      })
-    })
-    
-    if (is.null(cl)) {
-      stop("Failed to create FORK cluster. Check system limits (ulimit -u) or try reducing worker count.")
-    }
-    cat("  Type: FORK (copy-on-write, no data export needed)\n")
-    cat("  Workers created:", length(cl), "\n")
-    n_workers_actual <- length(cl)
-  } else {
-    # macOS and Windows: Use PSOCK cluster
-    # macOS note: FORK crashes with "objc_initializeAfterForkError" due to 
-    # Objective-C runtime not being fork-safe after certain frameworks load
-    if (is_macos) {
-      cat("Initializing PSOCK cluster (macOS - FORK not safe)...\n")
-    } else {
-      cat("Initializing PSOCK cluster (Windows)...\n")
-    }
-    cl <- tryCatch({
-      makeCluster(n_cores_use, type = "PSOCK")
-    }, error = function(e) {
-      cat("  ✗ PSOCK cluster creation failed:", e$message, "\n")
-      NULL
-    })
-    
-    if (is.null(cl)) {
-      stop("Failed to create PSOCK cluster. Check system resources.")
-    }
-    cat("  Type: PSOCK (socket-based, requires data export)\n")
-    cat("  Workers created:", length(cl), "\n")
-    n_workers_actual <- length(cl)
-  }
+cat("Initializing mirai daemons...\n")
+
+# CRITICAL: Capture project root for daemon initialization
+# Daemons start in home directory, need absolute paths
+PROJECT_ROOT <- normalizePath(getwd(), mustWork = TRUE)
+cat("  Project root:", PROJECT_ROOT, "\n")
+
+# Create daemons (persistent background workers)
+# output=TRUE: Show daemon output for debugging
+# retry=FALSE: Don't mask errors by retrying failed tasks
+daemons_result <- tryCatch({
+  daemons(n_cores_use, output = TRUE, retry = FALSE)
+  status <- status()
+  list(
+    success = TRUE, 
+    n_daemons = status$connections,  # Count of connected daemons
+    daemon_url = status$daemons       # Connection URL (for debugging)
+  )
+}, error = function(e) {
+  cat("  ✗ mirai daemon creation failed:", e$message, "\n")
+  list(success = FALSE, error = e$message)
+})
+
+if (!daemons_result$success) {
+  stop("Failed to create mirai daemons: ", daemons_result$error)
 }
+
+n_workers_actual <- daemons_result$n_daemons
+cat("  Type: mirai (NNG sockets, cross-platform)\n")
+cat("  Daemons created:", n_workers_actual, "\n")
+cat("  Connection URL:", daemons_result$daemon_url, "\n\n")
 
 cat("Available cores:", n_cores_available, "\n")
 cat("Using workers:", n_workers_actual, "\n\n")
@@ -338,46 +252,43 @@ cat("  DPI:", EXPORT_DPI_VALUE, "(raster @2x =", EXPORT_DPI_VALUE * 2, ")\n")
 cat("  Verbose:", EXPORT_VERBOSE_VALUE, "\n")
 cat("\n")
 
-# Export setup differs by parallelization method
-if (USE_MIRAI_VALUE) {
-  # ============================================================================
-  # MIRAI: Use everywhere() to initialize daemons ONCE with packages, 
-  # functions, and config values. Data is loaded PER-TASK to avoid loading
-  # the combined 3.74 GB dataset when each task only needs one dataset.
-  # ============================================================================
-  cat("Setting up mirai daemons with everywhere()...\n")
-  
-  # -------------------------------------------------------------------------
-  # OPTIMIZATION: Instead of loading combined data, each task loads ONLY
-  # the specific dataset it needs. This is much more efficient:
-  # - Dataset 1: ~2.3 GB (14M rows)
-  # - Dataset 2: ~600 MB (3.7M rows)  
-  # - Dataset 3: ~600 MB (3.6M rows)
-  # - Dataset 4: ~250 MB (1.6M rows)
-  # vs. Combined: ~3.74 GB (23M rows)
-  # -------------------------------------------------------------------------
-  
-  # Get DATASETS config for daemon use
-  if (!exists("DATASETS", envir = .GlobalEnv)) {
-    stop("ERROR: DATASETS not found in .GlobalEnv. Ensure dataset_configs.R is sourced first.")
-  }
-  DATASETS_CONFIG <- get("DATASETS", envir = .GlobalEnv)
-  
-  # Get USE_SGP_DATA and IS_EC2 flags
-  USE_SGP_DATA_VALUE <- if (exists("USE_SGP_DATA", envir = .GlobalEnv)) get("USE_SGP_DATA", envir = .GlobalEnv) else FALSE
-  IS_EC2_VALUE <- if (exists("IS_EC2", envir = .GlobalEnv)) get("IS_EC2", envir = .GlobalEnv) else FALSE
-  
-  cat("  Data loading mode: PER-TASK (each task loads only its dataset)\n")
-  cat("  USE_SGP_DATA:", USE_SGP_DATA_VALUE, "\n")
-  cat("  IS_EC2:", IS_EC2_VALUE, "\n")
-  cat("  Datasets available:", paste(names(DATASETS_CONFIG), collapse = ", "), "\n")
-  
-  # -------------------------------------------------------------------------
-  # STEP 1: Load packages and source function files ONCE per daemon
-  # -------------------------------------------------------------------------
-  cat("  Initializing packages and functions on all daemons...\n")
-  
-  init_packages <- everywhere({
+################################################################################
+### DAEMON INITIALIZATION
+################################################################################
+
+cat("Setting up mirai daemons with everywhere()...\n")
+
+# -------------------------------------------------------------------------
+# OPTIMIZATION: Instead of loading combined data, each task loads ONLY
+# the specific dataset it needs. This is much more efficient:
+# - Dataset 1: ~2.3 GB (14M rows)
+# - Dataset 2: ~600 MB (3.7M rows)
+# - Dataset 3: ~600 MB (3.6M rows)
+# - Dataset 4: ~250 MB (1.6M rows)
+# vs. Combined: ~3.74 GB (23M rows)
+# -------------------------------------------------------------------------
+
+# Get DATASETS config for daemon use
+if (!exists("DATASETS", envir = .GlobalEnv)) {
+  stop("ERROR: DATASETS not found in .GlobalEnv. Ensure dataset_configs.R is sourced first.")
+}
+DATASETS_CONFIG <- get("DATASETS", envir = .GlobalEnv)
+
+# Get USE_SGP_DATA and IS_EC2 flags
+USE_SGP_DATA_VALUE <- if (exists("USE_SGP_DATA", envir = .GlobalEnv)) get("USE_SGP_DATA", envir = .GlobalEnv) else FALSE
+IS_EC2_VALUE <- if (exists("IS_EC2", envir = .GlobalEnv)) get("IS_EC2", envir = .GlobalEnv) else FALSE
+
+cat("  Data loading mode: PER-TASK (each task loads only its dataset)\n")
+cat("  USE_SGP_DATA:", USE_SGP_DATA_VALUE, "\n")
+cat("  IS_EC2:", IS_EC2_VALUE, "\n")
+cat("  Datasets available:", paste(names(DATASETS_CONFIG), collapse = ", "), "\n")
+
+# -------------------------------------------------------------------------
+# STEP 1: Load packages and source function files ONCE per daemon
+# -------------------------------------------------------------------------
+cat("  Initializing packages and functions on all daemons...\n")
+
+init_packages <- everywhere({
     # Debug: Log daemon startup
     cat("[DAEMON] Starting initialization at", format(Sys.time(), "%H:%M:%S"), "\n")
     cat("[DAEMON] Working directory:", getwd(), "\n")
@@ -440,100 +351,32 @@ if (USE_MIRAI_VALUE) {
     cat("[DAEMON] Package initialization complete\n")
     TRUE  # Return success indicator
   }, PROJECT_ROOT = PROJECT_ROOT)
-  
-  # Wait for package initialization to complete
-  cat("  Waiting for daemon package initialization...\n")
-  init_packages_results <- init_packages[]
-  
-  # Check results
-  n_success <- sum(sapply(init_packages_results, function(x) isTRUE(x) || identical(x, TRUE)))
-  n_fail <- length(init_packages_results) - n_success
-  
-  if (n_fail > 0) {
-    cat("  WARNING: Some daemons failed package initialization (", n_fail, "/", length(init_packages_results), ")\n")
-    # Show failed results
-    for (i in seq_along(init_packages_results)) {
-      if (!isTRUE(init_packages_results[[i]])) {
-        cat("    Daemon", i, ":", as.character(init_packages_results[[i]]), "\n")
-      }
+
+# Wait for package initialization to complete
+cat("  Waiting for daemon package initialization...\n")
+init_packages_results <- init_packages[]
+
+# Check results
+n_success <- sum(sapply(init_packages_results, function(x) isTRUE(x) || identical(x, TRUE)))
+n_fail <- length(init_packages_results) - n_success
+
+if (n_fail > 0) {
+  cat("  WARNING: Some daemons failed package initialization (", n_fail, "/", length(init_packages_results), ")\n")
+  # Show failed results
+  for (i in seq_along(init_packages_results)) {
+    if (!isTRUE(init_packages_results[[i]])) {
+      cat("    Daemon", i, ":", as.character(init_packages_results[[i]]), "\n")
     }
-  } else {
-    cat("  ✓ Packages and functions loaded on all", length(init_packages_results), "daemons\n")
   }
-  
-  # NOTE: Data export (STATE_DATA_LONG, process_condition, config values) is done
-  # later, just before mirai_map(), after process_condition is defined.
-  cat("  Package initialization complete. Data export deferred until process_condition is defined.\n")
-  
-} else if (is_linux) {
-  # ============================================================================
-  # FORK cluster: Workers inherit parent environment via copy-on-write
-  # ============================================================================
-  cat("Setting up FORK workers...\n")
-  
-  # Verify STATE_DATA_LONG exists before proceeding
-  if (!exists("STATE_DATA_LONG", envir = .GlobalEnv)) {
-    stop("ERROR: STATE_DATA_LONG not found in .GlobalEnv. Ensure master_analysis.R loads data first.")
-  }
-  cat("  Data verified: STATE_DATA_LONG exists in .GlobalEnv (", 
-      format(nrow(get("STATE_DATA_LONG", envir = .GlobalEnv)), big.mark = ","), " rows)\n", sep = "")
-  
-  # Only export small config variables (these are defined in this script, not .GlobalEnv)
-  clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
-                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "GENERATE_CONTOUR_PLOTS_VALUE",
-                      "N_BOOTSTRAP_UNCERTAINTY_VALUE", "BOOTSTRAP_ALL_FAMILIES_VALUE",
-                      "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
-                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE",
-                      "EXPORT_FORMATS_VALUE", "EXPORT_DPI_VALUE", "EXPORT_VERBOSE_VALUE"), 
-                envir = environment())
-  
-  clusterEvalQ(cl, {
-    require(data.table)
-    require(splines2)
-    require(copula)
-  })
-  
-  clusterEvalQ(cl, {
-    source("functions/longitudinal_pairs.R")
-    source("functions/ispline_ecdf.R")
-    source("functions/copula_bootstrap.R")
-    source("functions/sgpc_engine.R")
-  })
-  
 } else {
-  # ============================================================================
-  # PSOCK cluster (macOS, Windows): Must explicitly export data and configuration
-  # ============================================================================
-  cat("Exporting data and functions to PSOCK workers...\n")
-  
-  # Export data objects from .GlobalEnv (where STATE_DATA_LONG is stored)
-  clusterExport(cl, c("STATE_DATA_LONG", "WORKSPACE_OBJECT_NAME", "get_state_data"), 
-                envir = .GlobalEnv)
-  
-  # Export configuration variables from local environment
-  clusterExport(cl, c("N_BOOTSTRAP_GOF_VALUE", "CALCULATE_SGPC_VALUE",
-                      "GENERATE_UNCERTAINTY_PLOTS_VALUE", "GENERATE_CONTOUR_PLOTS_VALUE",
-                      "N_BOOTSTRAP_UNCERTAINTY_VALUE", "BOOTSTRAP_ALL_FAMILIES_VALUE",
-                      "GRID_SIZE_VALUE", "UNCERTAINTY_GRID_SIZE_VALUE",
-                      "SKIP_COMONOTONIC_VALUE", "COMPARISON_FAMILIES_VALUE",
-                      "EXPORT_FORMATS_VALUE", "EXPORT_DPI_VALUE", "EXPORT_VERBOSE_VALUE"), 
-                envir = environment())
-  
-  clusterEvalQ(cl, {
-    require(data.table)
-    require(splines2)
-    require(copula)
-  })
-  
-  clusterEvalQ(cl, {
-    source("functions/longitudinal_pairs.R")
-    source("functions/ispline_ecdf.R")
-    source("functions/copula_bootstrap.R")
-    source("functions/sgpc_engine.R")
-  })
+  cat("  ✓ Packages and functions loaded on all", length(init_packages_results), "daemons\n")
 }
 
-cat("Workers initialized successfully.\n\n")
+# NOTE: Data export (STATE_DATA_LONG, process_condition, config values) is done
+# later, just before mirai_map(), after process_condition is defined.
+cat("  Package initialization complete. Data export deferred until process_condition is defined.\n\n")
+
+cat("Daemons initialized successfully.\n\n")
 
 ################################################################################
 ### CONFIGURATION
@@ -1643,13 +1486,8 @@ if (SKIP_PROCESSING) {
   duration <- 0
   
   # Clean up workers even when skipping
-  if (USE_MIRAI_VALUE) {
-    daemons(0)
-    cat("Mirai daemons stopped.\n\n")
-  } else if (!is.null(cl)) {
-    stopCluster(cl)
-    cat("Cluster stopped.\n\n")
-  }
+  daemons(0)
+  cat("Mirai daemons stopped.\n\n")
   
 } else {
   cat("Starting parallel processing of", length(CONDITIONS), "conditions...\n")
@@ -1661,11 +1499,10 @@ if (SKIP_PROCESSING) {
   # Store total conditions for progress messages
   total_conditions <- length(CONDITIONS)
   
-  if (USE_MIRAI_VALUE) {
-    # ==========================================================================
-    # MIRAI: Use mirai_map for parallel processing
-    # ==========================================================================
-    cat("Using mirai_map for parallel execution...\n")
+  # ==========================================================================
+  # PARALLEL EXECUTION: Use mirai_map
+  # ==========================================================================
+  cat("Using mirai_map for parallel execution...\n")
     
     # -------------------------------------------------------------------------
     # Export process_condition, config values, and DATASETS config to daemons
@@ -1849,28 +1686,6 @@ if (SKIP_PROCESSING) {
       }
       cat("====================================================================\n\n")
     }
-    
-  } else {
-    # ==========================================================================
-    # PARALLEL PACKAGE: Use parLapply for parallel processing
-    # ==========================================================================
-    cat("Using parLapply for parallel execution...\n")
-    
-    # Export process_condition function to cluster
-    # N_BOOTSTRAP_GOF_VALUE and CALCULATE_SGPC_VALUE already exported earlier, but include here for clarity
-    clusterExport(cl, c("process_condition", "CONDITIONS", "COPULA_FAMILIES", "N_BOOTSTRAP_GOF_VALUE", 
-                        "CALCULATE_SGPC_VALUE", "progress_file", "total_conditions"), 
-                  envir = environment())
-    
-    # Run parallel processing
-    all_condition_results <- parLapply(
-      cl = cl,
-      X = seq_along(CONDITIONS),
-      fun = function(i) {
-        process_condition(i, CONDITIONS[[i]], COPULA_FAMILIES, progress_file, total_conditions)
-      }
-    )
-  }
   
   end_time <- Sys.time()
   duration <- difftime(end_time, start_time, units = "mins")
@@ -1899,13 +1714,8 @@ if (SKIP_PROCESSING) {
   cat("Average time per condition:", round(duration / length(CONDITIONS), 2), "minutes\n\n")
   
   # Stop workers
-  if (USE_MIRAI_VALUE) {
-    daemons(0)
-    cat("Mirai daemons stopped.\n\n")
-  } else {
-    stopCluster(cl)
-    cat("Cluster stopped.\n\n")
-  }
+  daemons(0)
+  cat("Mirai daemons stopped.\n\n")
 
 }  # End of else block (SKIP_PROCESSING check)
 

@@ -3,6 +3,25 @@
 ### Question: Does cohort effect matter? Do copulas differ across years?
 ############################################################################
 
+################################################################################
+# NOTE: This is a legacy experiment file using parallel package (FORK/PSOCK).
+# 
+# TODO: Migrate to mirai for consistency with STEP_1 implementation.
+# See STEP_1_Family_Selection/phase1_family_selection_parallel.R for reference.
+#
+# Current implementation uses:
+#   - makeCluster/makeForkCluster for worker initialization
+#   - clusterExport for data/function export  
+#   - parLapply for parallel execution
+#   - stopCluster for cleanup
+#
+# Mirai equivalent pattern:
+#   - daemons() for worker initialization
+#   - everywhere() for setup/export
+#   - mirai_map() for parallel execution
+#   - daemons(0) for cleanup
+################################################################################
+
 # Load libraries and functions
 require(data.table)
 require(splines2)

@@ -134,7 +134,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- NULL  # Run ALL steps (1, 2, 3, 4) - full production run
+STEPS_TO_RUN <- c(1)  # Run only STEP_1 (Copula Family Selection)
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -373,11 +373,6 @@ if (!exists("EC2_MODE")) EC2_MODE <- FALSE
 if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- TRUE
 if (!exists("USE_PARALLEL")) USE_PARALLEL <- FALSE
 
-# Mirai parallelization: Use mirai package instead of parallel package
-# mirai bypasses R's 128 connection limit, enabling 188+ workers on large instances
-# Set to FALSE to use traditional parallel package (FORK/PSOCK clusters)
-if (!exists("USE_MIRAI")) USE_MIRAI <- TRUE
-
 # Checkpoint/Resume: Skip already-completed conditions
 # Critical for spot instance resilience - allows resuming after interruption
 if (!exists("SKIP_COMPLETED_CONDITIONS")) SKIP_COMPLETED_CONDITIONS <- TRUE
@@ -407,11 +402,10 @@ if (IS_EC2) {
   EC2_MODE <- TRUE
   SKIP_COMPLETED <- FALSE
   USE_PARALLEL <- TRUE
-  USE_MIRAI <- TRUE  # Use mirai for scalable parallelization (bypasses 128 connection limit)
   SKIP_COMPLETED_CONDITIONS <- TRUE  # Critical for spot instance resilience
   cat("  Batch mode: TRUE (no pauses)\n")
   cat("  Cores:", parallel::detectCores(), "\n")
-  cat("  Use mirai: TRUE (scalable parallelization)\n")
+  cat("  Parallelization: mirai (scalable, cross-platform)\n")
   cat("  Skip completed conditions: TRUE (resume capability)\n")
   cat("====================================================================\n\n")
 } else {
@@ -614,70 +608,20 @@ cat("Results accumulation lists initialized\n\n")
 # The combined dataset has a DATASET column to identify the source dataset.
 ############################################################################
 
+# Mirai daemons load datasets on-demand per task (see phase1_family_selection_parallel.R)
+# No upfront data loading needed - saves ~60 seconds startup and ~3.74 GB host RAM
 cat(paste(rep("=", 80), collapse=""), "\n", sep="")
-cat("LOADING ALL DATASETS UPFRONT\n")
+cat("DATA LOADING: Deferred to mirai workers\n")
 cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
+cat("Mirai workers will load specific datasets on-demand per task.\n")
+cat("This approach:\n")
+cat("  - Saves host startup time (~60 seconds)\n")
+cat("  - Saves host memory (~3.74 GB)\n")
+cat("  - Loads only what each worker needs\n")
+cat("  - Workers cache loaded datasets for efficiency\n\n")
 
-ALL_DATASETS_LIST <- list()
-DATASET_CONFIGS <- list()  # Store configs for all datasets
-
-for (ds_idx in seq_along(datasets_to_analyze)) {
-  ds_id <- datasets_to_analyze[ds_idx]
-  ds_config <- DATASETS[[ds_id]]
-  
-  cat("Loading dataset", ds_idx, "of", length(datasets_to_analyze), ":", ds_config$name, "\n")
-  
-  # Determine path (SGP data if enabled and available)
-  if (USE_SGP_DATA && !is.null(ds_config$local_path_sgp)) {
-    ds_path <- if (IS_EC2) ds_config$ec2_path_sgp else ds_config$local_path_sgp
-    ds_object_name <- ds_config$rdata_object_name_sgp
-    cat("  Using SGP data file\n")
-  } else {
-    ds_path <- if (IS_EC2) ds_config$ec2_path else ds_config$local_path
-    ds_object_name <- ds_config$rdata_object_name
-  }
-  
-  cat("  Path:", ds_path, "\n")
-  
-  # Load the .Rdata file
-  load(ds_path)
-  
-  if (!exists(ds_object_name)) {
-    stop("ERROR: Data object '", ds_object_name, "' not found in ", ds_path)
-  }
-  
-  ds_data <- get(ds_object_name)
-  
-  # Ensure it's a data.table
-  if (!inherits(ds_data, "data.table")) {
-    ds_data <- as.data.table(ds_data)
-  }
-  
-  # Add DATASET column to identify source
-  ds_data[, DATASET := ds_id]
-  
-  cat("  Loaded", format(nrow(ds_data), big.mark = ","), "rows\n")
-  
-  ALL_DATASETS_LIST[[ds_id]] <- ds_data
-  DATASET_CONFIGS[[ds_id]] <- ds_config
-  
-  # Clean up the loaded object to free memory
-  rm(list = ds_object_name)
-}
-
-# Combine all datasets into one
-cat("\nCombining all datasets...\n")
-ALL_DATASETS_COMBINED <- rbindlist(ALL_DATASETS_LIST, fill = TRUE, use.names = TRUE)
-cat("✓ Combined dataset:", format(nrow(ALL_DATASETS_COMBINED), big.mark = ","), "rows\n")
-cat("  Datasets included:", paste(names(ALL_DATASETS_LIST), collapse = ", "), "\n")
-cat("  Memory usage: ~", round(object.size(ALL_DATASETS_COMBINED) / 1024^3, 2), "GB\n\n")
-
-# Assign to workspace for worker access
-assign(WORKSPACE_OBJECT_NAME, ALL_DATASETS_COMBINED)
-
-# Clean up individual datasets to free memory (combined version is in STATE_DATA_LONG)
-rm(ALL_DATASETS_LIST)
-gc()
+# Keep DATASET_CONFIGS for worker reference
+DATASET_CONFIGS <- DATASETS
 
 cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
 
@@ -767,7 +711,6 @@ if (should_run_step(1)) {
   
   # Export settings to .GlobalEnv for parallel script access
   assign("SKIP_COMPLETED_CONDITIONS", SKIP_COMPLETED_CONDITIONS, envir = .GlobalEnv)
-  assign("USE_MIRAI", USE_MIRAI, envir = .GlobalEnv)
   
   ## Step 1.1: Family Selection (All Datasets)
   phase1_results_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv"
