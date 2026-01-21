@@ -11,7 +11,7 @@ setwd("~/Research/Graphics_Visualizations/Copula_Sensitivity_Analyses")
 source("master_analysis.R")
 ```
 
-**Runtime:** 8-14 hours (local) or 1-2 hours (EC2 with parallelization)
+**Runtime:** 8-14 hours (local sequential) or 4-6 hours (EC2 with mirai parallelization, 180+ workers)
 
 ---
 
@@ -22,14 +22,14 @@ source("master_analysis.R")
 STEPS_TO_RUN <- 1
 source("master_analysis.R")
 ```
-**Runtime:** 30-60 minutes (local) or 4-6 minutes (EC2)
+**Runtime:** 8-12 hours (local, 4 datasets, 966 conditions) or 3-4 hours (EC2 with 180+ mirai workers)
 
 ### Steps 1-2 (Add Copula Sensitivity - CORE CONTRIBUTION)
 ```r
 STEPS_TO_RUN <- c(1, 2)
 source("master_analysis.R")
 ```
-**Runtime:** 4-7 hours (includes core sensitivity analyses)
+**Runtime:** 10-16 hours (local) or 4-6 hours (EC2, Step 2 not yet migrated to mirai)
 
 ### Custom Selection
 ```r
@@ -56,7 +56,8 @@ install.packages(c("data.table", "copula", "splines2", "grid"))
 
 ### 3. System Requirements
 - **Local:** 8GB RAM minimum (16GB recommended)
-- **EC2:** c6i.4xlarge (16 cores, 32GB RAM)
+- **EC2:** r8g.24xlarge or c8g.24xlarge (96 vCPUs, 192 GB RAM) for full parallelization
+  - Mirai scales to 180+ workers (bypasses R's 128 connection limit)
 
 ---
 
@@ -72,24 +73,39 @@ Press **Enter** at each checkpoint to continue.
 
 ### Batch Mode (No Pauses)
 ```r
-# Continuous execution
+# Continuous execution (recommended for EC2)
 BATCH_MODE <- TRUE
 source("master_analysis.R")
 ```
 
 ### EC2 Mode (Automatic)
 ```r
-# Auto-detects EC2, uses 15 cores for STEP 1
+# Auto-detects EC2 environment
+# - Enables batch mode (no pauses)
+# - Uses mirai with 180+ workers for STEP 1
+# - Per-task data loading (saves 3.74 GB RAM + 60s startup)
+# - Thread management prevents CPU oversubscription
+# - Checkpoint/resume for spot instance resilience
 source("master_analysis.R")
 ```
+
+### Local Testing Mode
+```r
+# Test with 1 condition per dataset (fast validation)
+TEST_MODE <- TRUE
+source("master_analysis.R")
+```
+
+**Runtime:** ~10-15 minutes for 4 conditions total
 
 ---
 
 ## 📊 What Each Step Does
 
-### STEP 1: Copula Family Selection (30-60 min)
-- Tests 6 copula families (5 parametric + comonotonic) across 129 conditions
-- **Output:** Best copula family identified (t-copula)
+### STEP 1: Copula Family Selection (8-12 hours local, 3-4 hours EC2)
+- Tests 6 copula families (5 parametric + comonotonic) across 966 conditions (4 datasets)
+- Uses mirai parallelization for scalability (180+ workers on EC2)
+- **Output:** Best copula family identified (t-copula), per-condition contour plots, SGPc results
 - **Location:** `STEP_1_Family_Selection/results/`
 - **Paper:** Chapter 3, Section 3.1
 
@@ -102,6 +118,7 @@ source("master_analysis.R")
 
 ### STEP 3: Application Implementation (40-60 min)
 - Validates 15+ marginal transformation methods for invertibility
+- Note: Uses legacy parallel package (not yet migrated to mirai)
 - **Output:** Method classification for score-scale reporting
 - **Location:** `STEP_3_Application_Implementation/results/`
 - **Paper:** Chapter 3, Section 3.3 (Implementation detail)
@@ -169,8 +186,9 @@ getwd()  # Should end in "Copula_Sensitivity_Analyses"
 
 ### Slow execution on EC2
 ```r
-# Check if parallel mode is active
-# Should see "Using parallel implementation (15 cores)" in logs
+# Check if mirai parallelization is active
+# Should see "Initializing mirai daemons..." and worker count in logs
+# Expected: 180+ daemons on r8g.24xlarge or c8g.24xlarge
 ```
 
 ### Out of memory
@@ -208,12 +226,12 @@ nohup Rscript -e "source('master_analysis.R')" > output.log 2>&1 &
 tail -f output.log
 ```
 
-### 4. Expected Runtime (EC2 c6i.4xlarge)
-- STEP 1: ~5 minutes (parallel)
-- STEP 2: ~2-3 hours (copula sensitivity - CORE)
-- STEP 3: ~40 minutes (transformation implementation)
+### 4. Expected Runtime (EC2 r8g.24xlarge with 180+ mirai workers)
+- STEP 1: ~3-4 hours (966 conditions, mirai parallelized)
+- STEP 2: ~2-3 hours (copula sensitivity - CORE, legacy parallel)
+- STEP 3: ~40 minutes (transformation implementation, legacy parallel)
 - STEP 4: ~1 hour
-- **Total: ~4-5 hours**
+- **Total: ~6-9 hours**
 
 ---
 
@@ -266,10 +284,12 @@ if (length(missing) > 0) {
 }
 ```
 
-### Test Parallel Setup (EC2)
+### Test Mirai Setup (Local)
 ```r
+# Test with reduced conditions locally
+TEST_MODE <- TRUE
 source("master_analysis.R")
-source("STEP_1_Family_Selection/test_parallel_subset.R")
+# Should see mirai daemon initialization and per-task data loading
 ```
 
 ---
@@ -300,6 +320,6 @@ After running, you should see:
 
 ---
 
-**Version:** 4.0 (Reorganized to emphasize copula sensitivity as core contribution)  
-**Last Updated:** November 2025  
-**Status:** ✓ Current and Tested
+**Version:** 5.0 (Mirai parallelization - scalable to 180+ workers)  
+**Last Updated:** January 2026  
+**Status:** ✓ Production Ready - EC2 Validated

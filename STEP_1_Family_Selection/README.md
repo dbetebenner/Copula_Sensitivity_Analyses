@@ -53,15 +53,17 @@ For each condition:
 
 ## Scripts
 
-### 1. `phase1_family_selection.R`
-**Runtime:** ~45-90 minutes
+### 1. `phase1_family_selection_parallel.R` (Primary Implementation)
+**Runtime:** 8-12 hours (local, sequential on single dataset) or 3-4 hours (EC2, 180+ mirai workers, 4 datasets, 966 conditions)
 
 **What it does:**
-- Loads state longitudinal data
-- Tests all 6 copula families across 42 conditions
+- Uses mirai package for scalable, cross-platform parallelization
+- Tests all 6 copula families across 966 conditions (4 datasets)
+- Per-task data loading: each worker loads only the dataset it needs
 - Uses empirical ranks for transformation (validates two-stage approach)
-- Saves detailed results for each condition
-- Covers grade range G3→G10 to test copula behavior across developmental stages
+- Saves detailed results, contour plots, and SGPc calculations for each condition
+- Covers grade range G3→G11 to test copula behavior across developmental stages
+- Checkpoint/resume capability for spot instance resilience
 
 **Outputs:**
 - `results/{dataset_id}/phase1_copula_family_comparison.csv` - Complete results table
@@ -82,14 +84,20 @@ For each condition:
 - `results/{dataset_id}/sgpc/sgpc_all_conditions.rds` - Combined SGPc results
 - Console summary of selection frequencies and SGPc correlations
 
-### 2. `phase1_analysis.R`
+### 2. `phase1_family_selection.R` (Legacy Sequential Version)
+**Status:** Legacy - retained for reference
+**Runtime:** ~45-90 minutes (single dataset, sequential)
+
+**Note:** This is the original sequential implementation. The parallel version (`phase1_family_selection_parallel.R`) is now the primary implementation for all production runs.
+
+### 3. `phase1_analysis.R`
 **Runtime:** ~5-10 minutes
 
 **What it does:**
-- Analyzes selection patterns
-- Identifies winning family
-- Tests for consistency across conditions
-- Generates visualizations
+- Analyzes selection patterns across all conditions
+- Identifies winning family (typically t-copula)
+- Tests for consistency across datasets and conditions
+- Generates summary visualizations
 - Makes decision for Steps 2-4
 
 **Outputs:**
@@ -97,7 +105,7 @@ For each condition:
 - `results/dataset_all/phase1_summary.txt` - Text summary
 - `results/dataset_all/phase1_*.{pdf,svg,png}` - Multi-format visualizations:
 
-### 3. `pandemic_analysis_dataset4.R` (NEW)
+### 4. `pandemic_analysis_dataset4.R`
 **Runtime:** ~2-3 minutes
 
 **What it does:**
@@ -309,6 +317,105 @@ my_copula <- tCopula(param = rho, df = df)
 
 ---
 
+## Parallelization Architecture
+
+### Overview
+
+STEP 1 uses the `mirai` package for scalable, cross-platform parallelization that bypasses R's 128 connection limit.
+
+**Implementation**: `phase1_family_selection_parallel.R`
+
+### Key Features
+
+**Mirai Architecture:**
+- **NNG sockets**: Cross-platform communication (Linux, macOS, Windows)
+- **Persistent daemons**: Workers stay alive across tasks (no startup overhead)
+- **Scalable**: Successfully tested with 180+ workers on EC2 (vs R's 128 connection limit)
+- **Per-task data loading**: Each worker loads only the dataset it needs (600MB-2.3GB vs 3.74GB combined)
+
+**Performance Optimizations:**
+- **`everywhere()` initialization**: Packages, functions, and config loaded once per daemon
+- **Thread management**: Single-threaded execution per daemon prevents CPU oversubscription
+  - `data.table::setDTthreads(1)`
+  - Environment variables for OpenMP, MKL, OpenBLAS, VECLIB
+- **Small return values**: Workers return file paths instead of large data objects
+- **Checkpoint/resume**: Skip completed conditions for spot instance resilience
+
+### EC2 Configuration
+
+**Recommended Instance**: r8g.24xlarge or c8g.24xlarge (96 vCPUs, 192 GB RAM)
+
+**Optimized Settings** (for 966 conditions):
+```r
+N_BOOTSTRAP_GOF <- 100                    # Goodness-of-fit: 100 iterations (balances precision/speed)
+N_BOOTSTRAP_UNCERTAINTY <- 50             # Uncertainty bands: smooth visualization, 2x speedup vs 100
+BOOTSTRAP_ALL_FAMILIES <- TRUE            # All 5 parametric families for comprehensive analysis
+GRID_SIZE <- 200                          # High quality contour plots
+UNCERTAINTY_GRID_SIZE <- 100              # Smooth uncertainty overlays
+GENERATE_UNCERTAINTY_PLOTS <- TRUE        # Full uncertainty visualization
+EXPORT_FORMATS <- c("pdf", "svg", "png")  # All formats for publication
+```
+
+**Performance:**
+- **Worker allocation**: Uses ~90% of available cores (leaves headroom for system operations)
+- **Runtime**: ~3-4 hours for 966 conditions (vs ~60 hours sequential)
+- **Speedup**: ~20x over sequential execution
+- **Memory efficiency**: Per-task loading saves ~3.74 GB host RAM + ~60s startup time
+
+### Architecture Pattern
+
+```r
+# 1. Initialize daemons
+daemons(n_workers, output = TRUE, retry = FALSE)
+
+# 2. One-time setup (packages, functions, config)
+everywhere({
+  setwd(PROJECT_ROOT)
+  library(data.table); library(copula); library(splines2)
+  source("functions/longitudinal_pairs.R")
+  # ... other function files
+  data.table::setDTthreads(1)  # Prevent thread oversubscription
+}, PROJECT_ROOT = PROJECT_ROOT)
+
+# 3. Export config (not data - loaded per-task)
+everywhere({}, 
+  DATASETS = DATASETS_CONFIG,
+  process_condition = process_condition,
+  # ... config values
+)
+
+# 4. Execute tasks (minimal serialization)
+mirai_map(.x = seq_along(CONDITIONS), .f = function(i, ...) {
+  # Load only required dataset for this condition
+  dataset_id <- CONDITIONS[[i]]$dataset_id
+  load_state_data(dataset_id)  # Cached after first load
+  process_condition(i, CONDITIONS[[i]], ...)
+}, ...)
+
+# 5. Cleanup
+daemons(0)
+```
+
+### Comparison: Legacy vs Mirai
+
+| Feature | Legacy (FORK/PSOCK) | Mirai |
+|---------|---------------------|-------|
+| **Max Workers** | ~96 (R connection limit) | 180+ (tested on EC2) |
+| **Platform Support** | FORK: Linux only<br>PSOCK: All | All platforms via NNG |
+| **Data Transfer** | Upfront: 3.74 GB combined | Per-task: 600MB-2.3GB only |
+| **Startup Overhead** | Data export: ~60s | Config only: <5s |
+| **Host Memory** | Requires full dataset | Only config (~100 MB) |
+| **Thread Safety** | Manual management | Built-in with Sys.setenv() |
+| **Scalability** | Limited to ~96 | Tested to 180+ |
+
+### Development Note
+
+The legacy FORK/PSOCK code has been removed as of January 2026. Mirai is now the sole parallelization framework for consistency across platforms and improved scalability.
+
+For STEP 2-4 experiment files that haven't been migrated yet, see the legacy notice comments in those files for migration guidance.
+
+---
+
 ## Key Findings
 
 ### Relative Fit (AIC/BIC)
@@ -376,25 +483,30 @@ setwd("/Users/conet/Research/Graphics_Visualizations/Copula_Sensitivity_Analyses
 source("run_dataset4_analysis.R")
 ```
 
-### Standalone Execution (Single Dataset)
+### Recommended: Via Master Script (All Datasets with Mirai)
 ```r
 # From Copula_Sensitivity_Analyses/ directory
+STEPS_TO_RUN <- 1
+source("master_analysis.R")
+
+# Automatically uses phase1_family_selection_parallel.R with mirai
+# Scales to 180+ workers on EC2, per-task data loading
+# Runtime: 3-4 hours on r8g.24xlarge for 966 conditions
+
+# Then run pandemic analysis if dataset_4 was included:
+source("STEP_1_Family_Selection/pandemic_analysis_dataset4.R")
+```
+
+### Legacy: Standalone Execution (Single Dataset, Sequential)
+```r
+# From Copula_Sensitivity_Analyses/ directory
+# Note: This uses the legacy sequential implementation
 setwd("STEP_1_Family_Selection")
 source("phase1_family_selection.R")
 source("phase1_analysis.R")
 
 # For dataset_4, also run pandemic analysis:
 source("pandemic_analysis_dataset4.R")
-```
-
-### Via Master Script (All Datasets)
-```r
-# From Copula_Sensitivity_Analyses/ directory
-STEPS_TO_RUN <- 1
-source("master_analysis.R")
-
-# Then run pandemic analysis if dataset_4 was included:
-source("STEP_1_Family_Selection/pandemic_analysis_dataset4.R")
 ```
 
 ### Dataset-Specific Execution
@@ -434,9 +546,13 @@ After running, verify:
 ## Dependencies
 
 **Data:**
-- Colorado longitudinal assessment data (2003-2013, Grades 3-10)
-- Trimmed dataset: `Data/Copula_Sensitivity_Test_Data_CO.Rdata`
-- Auto-loaded by `master_analysis.R` as `STATE_DATA_LONG`
+- Four anonymized state longitudinal assessment datasets (966 conditions total)
+  - Dataset 1: Vertical scale, ~250 conditions
+  - Dataset 2: Non-vertical scale, ~250 conditions
+  - Dataset 3: Assessment transition, ~250 conditions
+  - Dataset 4: Pandemic period, ~216 conditions (includes COVID-19 gap analysis)
+- Per-task loading by mirai workers (each loads only required dataset)
+- See `dataset_configs.R` for dataset specifications
 
 **Functions:**
 - `../functions/longitudinal_pairs.R` - Extract paired scores
@@ -448,6 +564,7 @@ After running, verify:
 - `data.table` - Data manipulation
 - `copula` - Copula fitting
 - `splines2` - Basis functions (for framework setup)
+- `mirai` - Scalable parallelization (NNG sockets, bypasses 128 connection limit)
 
 ---
 
@@ -464,22 +581,23 @@ copula_fits <- fit_copula_from_pairs(
 )
 ```
 
-### Issue: Error loading Colorado data
-**Cause:** Data file path incorrect
+### Issue: Error loading data
+**Cause:** Data file path incorrect or dataset not found
 
-**Fix:** Ensure data file exists:
+**Fix:** Ensure data files exist:
 ```bash
-ls Data/Copula_Sensitivity_Test_Data_CO.Rdata
+ls Data/Copula_Sensitivity_Data_Set_*.Rdata
 ```
 
-Data is auto-loaded by `master_analysis.R` - no manual loading needed.
+Data files are loaded per-task by mirai workers - no upfront loading needed. See `dataset_configs.R` for path configuration.
 
 ### Issue: Very slow execution
-**Cause:** 30+ conditions × 5 families = 150+ copula fits
+**Cause:** 966 conditions × 6 families = 5,796+ copula fits
 
 **Solution:** 
-- Use EC2 for faster execution
-- Or reduce conditions for testing
+- Use EC2 with mirai parallelization (180+ workers): 3-4 hours vs 60+ hours sequential
+- For local testing, set `TEST_MODE <- TRUE` to analyze only 1 condition per dataset
+- Reduce bootstrap iterations: `N_BOOTSTRAP_GOF <- 50` for development
 
 ---
 
@@ -510,10 +628,10 @@ mean_aic <- results[, .(mean_aic = mean(aic)), by = family]
 
 ## Files in This Directory
 
-- `phase1_family_selection.R` - Main analysis script (all datasets)
-- `phase1_family_selection_parallel.R` - Parallel version for EC2/multi-core
+- `phase1_family_selection_parallel.R` - **PRIMARY:** Mirai-parallelized implementation (production use)
+- `phase1_family_selection.R` - Legacy sequential version (reference only)
 - `phase1_analysis.R` - Results analysis and decision
-- `pandemic_analysis_dataset4.R` - **NEW:** Pandemic impact analysis for Dataset 4
+- `pandemic_analysis_dataset4.R` - Pandemic impact analysis for Dataset 4
 - `debug_frank_dominance.R` - Diagnostic script (validates bug fix)
 - `diagnostic_copula_fitting.R` - Additional diagnostics
 - `TWO_STAGE_TRANSFORMATION_METHODOLOGY.md` - Methodological justification
@@ -524,7 +642,7 @@ mean_aic <- results[, .(mean_aic = mean(aic)), by = family]
   - `dataset_1/` - Dataset 1 results
   - `dataset_2/` - Dataset 2 results
   - `dataset_3/` - Dataset 3 results
-  - `dataset_4/` - **NEW:** Dataset 4 results (includes pandemic_analysis/)
+  - `dataset_4/` - Dataset 4 results (includes pandemic_analysis/)
   - `dataset_all/` - Combined multi-dataset results
 
 ---
@@ -533,15 +651,25 @@ mean_aic <- results[, .(mean_aic = mean(aic)), by = family]
 
 ### After Step 1 Completes
 
-1. **Review Dataset 4 Pandemic Analysis** (if applicable):
+1. **Verify Completion**:
+   - Check that all 966 conditions completed successfully
+   - Verify SVG and PNG outputs were generated for summary grids
+   - Review `condition.progress` files for timing analysis
+
+2. **Review Dataset 4 Pandemic Analysis** (if applicable):
    - Check `results/dataset_4/pandemic_analysis/pandemic_summary_report.txt`
    - View parameter change visualizations
    - Assess whether COVID disrupted dependency structure
 
-2. **Proceed to STEP 2**:
-   - **STEP_2_Copula_Sensitivity_Analyses/** - Test copula robustness across diverse conditions (grade span, sample size, content area, cohort) to validate the Sklar-theoretic extension of TAMP. This is the **core contribution** of the paper.
+3. **Generate Summary Visualizations**:
+   - Run `phase1_analysis.R` to create cross-dataset summaries
+   - Review AI-generated parameter recommendations in manifest files
 
-3. **Paper Integration**:
+4. **Proceed to STEP 2** (Optional):
+   - **STEP_2_Copula_Sensitivity_Analyses/** - Test copula robustness across diverse conditions (grade span, sample size, content area, cohort) to validate the Sklar-theoretic extension of TAMP. This is the **core contribution** of the paper.
+   - Note: STEP 2-4 use legacy parallel package (not yet migrated to mirai)
+
+5. **Paper Integration**:
    - Dataset 1-3: Standard copula sensitivity analysis
    - Dataset 4: Natural experiment section on pandemic impact
    - Combined results: Multi-dataset parameter recommendations

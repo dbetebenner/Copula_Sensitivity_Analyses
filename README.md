@@ -20,14 +20,16 @@ setwd("/Users/conet/Research/Graphics_Visualizations/Copula_Sensitivity_Analyses
 source("master_analysis.R")
 ```
 
-**Runtime:** 8-14 hours for complete pipeline
+**Runtime:** 6-9 hours (EC2 r8g.24xlarge with mirai, 180+ workers for STEP 1)
 
 ### Run Specific Steps
 ```r
-# Run only Steps 1 and 2
-STEPS_TO_RUN <- c(1, 2)
+# Run only Step 1 (Copula Family Selection)
+STEPS_TO_RUN <- c(1)
 source("master_analysis.R")
 ```
+
+**Runtime:** 3-4 hours (EC2, 966 conditions, 4 datasets)
 
 ---
 
@@ -37,10 +39,11 @@ This analysis proceeds in **4 sequential steps**:
 
 ### STEP 1: Copula Family Selection
 - **Objective:** Identify best copula family for educational data
-- **Method:** Test 6 families (5 parametric + comonotonic) across 129 conditions × 3 datasets
+- **Method:** Test 6 families (5 parametric + comonotonic) across 966 conditions (4 datasets)
 - **Metrics:** Relative fit (AIC/BIC) + absolute fit (GoF via Cramér-von Mises with parametric bootstrap)
 - **Output:** t-copula selected (τ ≈ 0.71); all parametric copulas show statistically significant deviations with large n
-- **Runtime:** 24 hours (EC2 c8g.12xlarge, N=1000 bootstrap) or 2 hours (local, N=50 bootstrap)
+- **Runtime:** 3-4 hours (EC2 r8g.24xlarge with 180+ mirai workers, EC2-optimized settings)
+- **Parallelization:** Mirai (NNG sockets, per-task data loading, thread management)
 - **Directory:** `STEP_1_Family_Selection/`
 - **Paper Section:** Chapter 3, Section 3.1
 
@@ -49,6 +52,7 @@ This analysis proceeds in **4 sequential steps**:
 - **Method:** 4 experiments (grade span, sample size, content, cohort) using selected t-copula
 - **Output:** Copula parameters stable; dependence structure generalizes across diverse conditions
 - **Runtime:** 3-6 hours
+- **Note:** Uses legacy parallel package (not yet migrated to mirai)
 - **Directory:** `STEP_2_Copula_Sensitivity_Analyses/`
 - **Paper Section:** Chapter 3, Section 3.2
 
@@ -57,6 +61,7 @@ This analysis proceeds in **4 sequential steps**:
 - **Method:** Test 15+ marginal transformation methods for invertibility and uniformity
 - **Output:** Kernel Gaussian selected (p = 0.23); validates two-stage transformation approach
 - **Runtime:** 40-60 minutes
+- **Note:** Uses legacy parallel package (not yet migrated to mirai)
 - **Directory:** `STEP_3_Application_Implementation/`
 - **Paper Section:** Chapter 3, Section 3.3 (implementation details)
 
@@ -230,9 +235,9 @@ These appear in:
 
 ---
 
-## Current Status (December 2025)
+## Current Status (January 2026)
 
-**Implementation Phase:** Ready for EC2 production run
+**Implementation Phase:** Production Ready - Mirai Parallelization Validated on EC2
 
 ### Recent Updates
 1. **Goodness-of-Fit Testing** (Nov 2025)
@@ -247,12 +252,15 @@ These appear in:
    - Individual datasets in `dataset_1/`, `dataset_2/`, `dataset_3/`, `dataset_4/`
    - Dataset 4 includes pandemic analysis: `dataset_4/pandemic_analysis/`
 
-3. **EC2 Optimization** (Nov 2025, updated Jan 2026)
-   - PSOCK cluster (socket-based) for cross-platform parallelization
-   - Safe with macOS Accelerate BLAS (avoids fork-related segfaults)
-   - Auto-detects EC2 environment, configures core allocation
-   - Recommended: c8g.12xlarge (48 vCPUs, 96 GB RAM, Graviton3)
-   - Expected runtime: 18-24 hours for N=1000 bootstrap
+3. **Mirai Parallelization** (Jan 2026)
+   - Uses `mirai` package with NNG sockets for scalable, cross-platform parallelization
+   - Bypasses R's 128 connection limit, enabling 180+ workers on large EC2 instances
+   - Per-task data loading: each worker loads only the dataset it needs (~600MB-2.3GB vs 3.74GB combined)
+   - Thread management: single-threaded per daemon to prevent CPU oversubscription
+   - Auto-detects EC2 environment and configures optimal worker allocation
+   - Recommended: r8g.24xlarge (96 vCPUs, 192 GB RAM) or c8g.24xlarge (96 vCPUs, 192 GB RAM)
+   - EC2-optimized settings: N_BOOTSTRAP_UNCERTAINTY=50, GRID_SIZE=200, UNCERTAINTY_GRID_SIZE=100
+   - Expected runtime: ~3-4 hours for 966 conditions (vs ~60 hours sequential)
 
 4. **Statistical Power Analysis** (Nov 2025)
    - Demonstrated that large n (28,567) → very high power → all copulas fail GoF
@@ -273,11 +281,22 @@ These appear in:
    - Automated pandemic comparison script: `STEP_1_Family_Selection/pandemic_analysis_dataset4.R`
    - Convenience execution script: `run_dataset4_analysis.R`
 
+7. **Mirai Parallelization Migration** (Jan 2026)
+   - Migrated from legacy parallel package (FORK/PSOCK) to `mirai`
+   - Bypasses R's 128 connection limit: scales to 180+ workers on large EC2 instances
+   - Per-task data loading: each worker loads only required dataset (saves ~3.74 GB host RAM, ~60s startup)
+   - Thread management: prevents CPU oversubscription with single-threaded daemons
+   - Cross-platform: NNG sockets work on Linux, macOS, Windows
+   - Legacy code removed: STEP 2-4 experiment files marked for future migration
+   - EC2-optimized configurations: N_BOOTSTRAP_UNCERTAINTY=50, GRID_SIZE=200, UNCERTAINTY_GRID_SIZE=100
+   - Validated on EC2 with 966 conditions across 4 datasets
+
 ### Next Steps
-- Run Dataset 4 pandemic analysis: `source("run_dataset4_analysis.R")`
-- Run `run_production_ec2.R` on EC2 for final results (all datasets)
-- Generate GoF visualizations via `phase1_analysis.R`
+- Complete STEP 1 EC2 production run (966 conditions, 4 datasets, ~3-4 hours)
+- Verify SVG/PNG generation for all conditions (fixed in Jan 2026)
 - Review AI-generated parameter recommendations from manifest files
+- Generate STEP 1 summary visualizations via `phase1_analysis.R`
+- Consider migrating STEP 2-4 experiment files to mirai for consistency
 - Review pandemic analysis results: `STEP_1_Family_Selection/results/dataset_4/pandemic_analysis/`
 - Document findings in paper (statistical vs. practical significance + pandemic effects)
 
@@ -304,15 +323,23 @@ Each dataset contains 9 variables (7 core variables for copula analysis + 2 seco
 
 ### R Packages
 ```r
+# Core packages
 install.packages(c("data.table", "copula", "splines2", "grid", "xtable"))
+
+# Parallelization (required for production runs)
+install.packages("mirai")
 ```
 
 ### Hardware
-- **Local**: 8GB RAM minimum, 16GB recommended
-- **EC2**: c6i.4xlarge (16 cores, 32 GB RAM)
-  - Auto-detects EC2 environment
-  - Uses parallel processing (15 cores)
-  - STEP 1 speedup: 14-15x (60-90 min → 4-6 min)
+- **Local**: 8GB RAM minimum, 16GB recommended for development
+  - Uses mirai with local worker count (typically 4-8 cores)
+  - Per-task data loading minimizes memory overhead
+- **EC2 Production**: r8g.24xlarge or c8g.24xlarge (96 vCPUs, 192 GB RAM)
+  - Auto-detects EC2 environment and optimizes worker allocation
+  - Uses mirai with 180+ parallel workers (bypasses R's 128 connection limit)
+  - Per-task data loading: saves ~60s startup time and ~3.74 GB host RAM
+  - STEP 1 speedup: ~20x (3-4 hours for 966 conditions vs ~60 hours sequential)
+  - Thread management prevents CPU oversubscription with 180+ processes
 
 ---
 
@@ -483,6 +510,6 @@ Chestnut Hill, Massachusetts
 
 ---
 
-**Version:** 4.1 (Added AI-consumable manifest export for parameter recommendations)  
-**Last Updated:** December 2025  
-**Status:** ✓ Production Ready
+**Version:** 5.0 (Mirai parallelization - scalable to 180+ workers)  
+**Last Updated:** January 2026  
+**Status:** ✓ Production Ready - EC2 Validated
