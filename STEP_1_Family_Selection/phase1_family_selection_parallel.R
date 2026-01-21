@@ -1408,9 +1408,8 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
     cat(complete_msg, file = progress_file, append = TRUE)
     # === END PROGRESS TRACKING ===
     
-    # Return list with success status
-    # NOTE: Return file path instead of student-level data to avoid serialization overhead
-    return(list(
+    # Build return list (extract needed values before cleanup)
+    result_list <- list(
       condition_id = i,
       success = TRUE,
       n_pairs = n_pairs,
@@ -1420,7 +1419,21 @@ process_condition <- function(i, cond, copula_families, progress_file, total_con
       sgpc_file = if (!is.null(plot_output_dir)) {
         file.path(plot_output_dir, "sgpc_results", "sgpc_values.rds")
       } else NULL
-    ))
+    )
+    
+    # === MEMORY CLEANUP ===
+    # Explicitly remove large temporary objects to prevent memory accumulation
+    # Critical for 180+ parallel workers to avoid OOM on 754GB instance
+    rm(pairs_full, framework_prior, framework_current)
+    if (exists("bootstrap_results")) rm(bootstrap_results)
+    if (exists("sgpc_results")) rm(sgpc_results)
+    if (exists("copula_fits")) rm(copula_fits)
+    gc(verbose = FALSE, reset = TRUE, full = TRUE)
+    # === END MEMORY CLEANUP ===
+    
+    # Return list with success status
+    # NOTE: Return file path instead of student-level data to avoid serialization overhead
+    return(result_list)
     
   }, error = function(e) {
     
@@ -1653,6 +1666,14 @@ if (SKIP_PROCESSING) {
             })
           }
         }
+        
+        # === PERIODIC GARBAGE COLLECTION ===
+        # Force GC every 5 conditions to prevent memory accumulation
+        # Helps stabilize memory usage across 180+ parallel workers
+        if (i %% 5 == 0) {
+          gc(verbose = FALSE, reset = TRUE)
+        }
+        # === END PERIODIC GC ===
         
         # process_condition and all dependencies are already in .GlobalEnv
         process_condition(i, cond, COPULA_FAMILIES, progress_file, total_conditions)

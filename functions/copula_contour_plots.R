@@ -2359,6 +2359,13 @@ generate_condition_plots <- function(pseudo_obs,
   }
   # === END NEW ===
   
+  # === MEMORY CLEANUP: Empirical Plots ===
+  # Remove temporary grid objects from empirical copula section
+  # Helps prevent memory accumulation with 180+ parallel workers
+  rm(list = ls(pattern = "^empirical_grid_|^raw_grid_|^bern_grid_"))
+  invisible(gc(reset = TRUE))
+  # === END MEMORY CLEANUP ===
+  
   # === ENRICH COPULA RESULTS WITH COMPARATIVE METRICS ===
   # Calculate delta_aic and aic_weight for all families before plotting
   # This allows the comparison plots to show relative fit statistics
@@ -2458,6 +2465,13 @@ generate_condition_plots <- function(pseudo_obs,
       }
     }
   }
+  
+  # === MEMORY CLEANUP: Parametric Plots ===
+  # Remove plot objects from parametric loop to prevent accumulation
+  # Critical for 180+ parallel workers processing 966 conditions
+  rm(list = ls(pattern = "^parametric_grid_"))
+  invisible(gc(reset = TRUE))
+  # === END MEMORY CLEANUP ===
   
   # 4. Create comparison plots (empirical vs each parametric family)
   # Now includes SGPc comparison panel and exports summary files
@@ -6079,4 +6093,10 @@ generate_summary_grid_latex <- function(output_dir,
   } else {
     invisible(tex_path)
   }
+  
+  # === FINAL MEMORY CLEANUP ===
+  # Force garbage collection at end of plot generation
+  # Critical for memory management with 180+ parallel workers
+  invisible(gc(full = TRUE, reset = TRUE))
+  # === END FINAL CLEANUP ===
 }
