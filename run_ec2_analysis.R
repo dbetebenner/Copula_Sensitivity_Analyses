@@ -113,7 +113,7 @@ if (RUN_MODE == "test_plots") {
   BATCH_MODE <- TRUE                  # No interactive prompts
   EC2_MODE <- TRUE                    # Force EC2 optimizations
   SKIP_COMPLETED <- FALSE             # Process all conditions
-  USE_EXHAUSTIVE_ALL_DATASETS <- FALSE  # Strategic subset (~42 conditions/dataset)
+  USE_EXHAUSTIVE_ALL_DATASETS <- FALSE  # Strategic subset (~16 conditions/dataset)
   
   # For exhaustive analysis (all year/grade combinations), uncomment:
   # USE_EXHAUSTIVE_ALL_DATASETS <- TRUE  # ~250-300 conditions/dataset

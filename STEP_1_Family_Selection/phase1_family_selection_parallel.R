@@ -521,6 +521,16 @@ if (exists("ALL_DATASET_CONFIGS", envir = .GlobalEnv)) {
   }
   cat("\n")
   
+  # === RANDOMIZE CONDITION ORDER ===
+  # Shuffle conditions to distribute dataset load evenly across workers
+  # This prevents all workers from hitting the largest dataset simultaneously at startup
+  # Use set.seed() for reproducibility (remove seed for true randomization each run)
+  set.seed(42)
+  CONDITIONS <- sample(CONDITIONS)
+  cat("✓ Conditions randomized to distribute dataset load across workers\n")
+  cat("  (This prevents memory spikes from all workers loading dataset_1 simultaneously)\n\n")
+  # === END RANDOMIZATION ===
+  
   # Skip the single-dataset enrichment/filtering sections below
   MULTI_DATASET_MODE <- TRUE
   

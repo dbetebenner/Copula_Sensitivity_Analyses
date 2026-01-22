@@ -13,12 +13,12 @@ DATASETS_TO_RUN <- NULL  # Runs ALL 4 datasets
 ```
 
 **Datasets that will be analyzed:**
-1. ✅ `dataset_1` - Dataset 1 (Vertical Scale) - ~42 conditions
-2. ✅ `dataset_2` - Dataset 2 (Non-Vertical Scale) - ~42 conditions
-3. ✅ `dataset_3` - Dataset 3 (Assessment Transition) - ~85 conditions (exhaustive)
-4. ✅ `dataset_4` - **Dataset 4 (Pandemic Analysis)** - ~45 conditions
+1. ✅ `dataset_1` - Dataset 1 (Vertical Scale) - 510 conditions (exhaustive)
+2. ✅ `dataset_2` - Dataset 2 (Non-Vertical Scale) - 194 conditions (exhaustive)
+3. ✅ `dataset_3` - Dataset 3 (Assessment Transition) - 80 conditions (exhaustive)
+4. ✅ `dataset_4` - **Dataset 4 (Pandemic Analysis)** - 182 conditions (exhaustive)
 
-**Total: ~214 conditions across all 4 datasets**
+**Total: 966 conditions across all 4 datasets**
 
 ### Steps (Line 63)
 ```r
@@ -30,7 +30,7 @@ STEPS_TO_RUN <- 1  # Only STEP 1: Copula Family Selection
 - Generate contour plots for each condition
 - Calculate goodness-of-fit statistics
 - Generate SGPc (copula-based Student Growth Percentiles) if enabled
-- Produce ~214 × 6 = **~1,284 copula fits**
+- Produce 966 × 6 = **5,796 copula fits**
 
 ### Other Key Settings
 
@@ -226,10 +226,10 @@ After execution completes, verify:
 
 ### Per Dataset
 - [ ] `phase1_copula_family_comparison.csv` exists and has correct row count
-  - Dataset 1: ~252 rows (42 conditions × 6 families)
-  - Dataset 2: ~252 rows
-  - Dataset 3: ~510 rows (85 conditions × 6 families)
-  - Dataset 4: ~270 rows (45 conditions × 6 families)
+  - Dataset 1: 3,060 rows (510 conditions × 6 families)
+  - Dataset 2: 1,164 rows (194 conditions × 6 families)
+  - Dataset 3: 480 rows (80 conditions × 6 families)
+  - Dataset 4: 1,092 rows (182 conditions × 6 families)
 - [ ] `contour_plots/` has subdirectories for each condition
 - [ ] `sgpc/sgpc_all_conditions.rds` exists
 
@@ -251,16 +251,16 @@ After execution completes, verify:
 ```r
 # Check dataset 1
 d1 <- fread("STEP_1_Family_Selection/results/dataset_1/phase1_copula_family_comparison.csv")
-nrow(d1) / 6  # Should be ~42
+nrow(d1) / 6  # Should be 510
 
 # Check dataset 4
 d4 <- fread("STEP_1_Family_Selection/results/dataset_4/phase1_copula_family_comparison.csv")
-nrow(d4) / 6  # Should be ~45
+nrow(d4) / 6  # Should be 182
 length(unique(d4[grepl("^2019_", condition_id), condition_id]))  # Should be 8 (pandemic)
 
 # Check combined
 dall <- fread("STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv")
-nrow(dall) / 6  # Should be ~214
+nrow(dall) / 6  # Should be 966
 table(dall$dataset_id)  # Should show all 4 datasets
 
 # Check t-copula dominance
@@ -302,7 +302,7 @@ ls -lh Data/Copula_Sensitivity_Data_Set_*.Rdata
 ✅ **Configuration Verified:**
 - All 4 datasets will be analyzed (dataset_1, dataset_2, dataset_3, dataset_4)
 - STEP 1 only (copula family selection)
-- ~214 conditions, ~1,284 copula fits total
+- 966 conditions, 5,796 copula fits total
 - Multi-format plot export enabled
 - SGPc calculation enabled
 - Goodness-of-fit testing with 100 bootstraps
@@ -315,7 +315,7 @@ source("master_analysis.R")
 ✅ **Expected Outputs:**
 - 4 dataset-specific results directories
 - 1 combined results directory (dataset_all)
-- ~214 condition subdirectories with contour plots
+- 966 condition subdirectories with contour plots
 - Multi-dataset parameter recommendations
 
 ✅ **Follow-up:**

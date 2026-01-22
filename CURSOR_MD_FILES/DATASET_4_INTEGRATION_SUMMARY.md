@@ -251,11 +251,11 @@ STEP_1_Family_Selection/results/dataset_all/
 ```
 
 **Total conditions across all datasets:**
-- Dataset 1: ~42 conditions
-- Dataset 2: ~42 conditions  
-- Dataset 3: ~85 conditions (exhaustive)
-- Dataset 4: ~45 conditions
-- **Total: ~214 conditions**
+- Dataset 1: 510 conditions (exhaustive)
+- Dataset 2: 194 conditions (exhaustive)
+- Dataset 3: 80 conditions (exhaustive)
+- Dataset 4: 182 conditions (exhaustive)
+- **Total: 966 conditions**
 
 ### Paper Sections
 

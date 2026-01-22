@@ -15,13 +15,17 @@ This is critical for applications like TIMSS where you have:
 ## What Changes
 
 ### Strategic Subset (Default)
-- **~42 conditions** per dataset
+- **~16 conditions** per dataset
 - Representative sampling across grades, years, content
 - Fast: ~6-8 minutes on EC2
 - **Different cohorts** at each time span
 
 ### Exhaustive Analysis (New)
-- **~250-300 conditions** per dataset
+- **966 total conditions** across 4 datasets:
+  - Dataset 1: 510 conditions
+  - Dataset 2: 194 conditions
+  - Dataset 3: 80 conditions
+  - Dataset 4: 182 conditions
 - **ALL valid year/grade/content combinations**
 - **Same-cohort tracking** (e.g., 2005 G3→G4, 2005 G3→G5, 2005 G3→G6, 2005 G3→G7)
 - Slower: ~2-4 hours per dataset on EC2
@@ -43,8 +47,8 @@ TEST_N_CONDITIONS_PER_DATASET <- 1   # Default: 1
 ### How It Works:
 
 1. **Exhaustive Mode OFF** (default)
-   - Dataset 1, 2, 4: Strategic subset (~42 conditions)
-   - Dataset 3: Exhaustive (transition analysis)
+   - All datasets: Strategic subset (~16 conditions/dataset, ~64 total)
+   - Quick validation and family selection
 
 2. **Exhaustive Mode ON**
    - ALL datasets: Exhaustive conditions (~250-300 each)

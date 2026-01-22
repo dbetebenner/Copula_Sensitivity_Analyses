@@ -15,10 +15,10 @@
 Tests 6 copula families (5 parametric: Gaussian, t, Clayton, Gumbel, Frank + comonotonic) across multiple datasets:
 
 **Dataset Coverage:**
-- **Dataset 1 (Vertical Scale):** ~42 conditions, G3→G10, MATH/READ/WRITE
-- **Dataset 2 (Non-Vertical Scale):** ~42 conditions, G3→G10, MATH/READ
-- **Dataset 3 (Assessment Transition):** Exhaustive conditions, G3→G8, ELA/MATH/READ
-- **Dataset 4 (Pandemic Analysis):** ~45 conditions, G3→G8 + G11, MATH/READ
+- **Dataset 1 (Vertical Scale):** 510 conditions (exhaustive), G3→G10, MATH/READ/WRITE
+- **Dataset 2 (Non-Vertical Scale):** 194 conditions (exhaustive), G3→G10, MATH/READ
+- **Dataset 3 (Assessment Transition):** 80 conditions (exhaustive), G3→G8, ELA/MATH/READ
+- **Dataset 4 (Pandemic Analysis):** 182 conditions (exhaustive), G3→G8 + G11, MATH/READ
   - **10 pandemic pairs** (2019-2021 spanning COVID gap)
   - **10 pre-pandemic baselines** (2017-2019 / 2016-2019)
   - **25 strategic subset** (pre/post-pandemic coverage)
@@ -547,10 +547,10 @@ After running, verify:
 
 **Data:**
 - Four anonymized state longitudinal assessment datasets (966 conditions total)
-  - Dataset 1: Vertical scale, ~250 conditions
-  - Dataset 2: Non-vertical scale, ~250 conditions
-  - Dataset 3: Assessment transition, ~250 conditions
-  - Dataset 4: Pandemic period, ~216 conditions (includes COVID-19 gap analysis)
+  - Dataset 1: Vertical scale, 510 conditions (exhaustive)
+  - Dataset 2: Non-vertical scale, 194 conditions (exhaustive)
+  - Dataset 3: Assessment transition, 80 conditions (exhaustive)
+  - Dataset 4: Pandemic period, 182 conditions (exhaustive, includes COVID-19 gap analysis)
 - Per-task loading by mirai workers (each loads only required dataset)
 - See `dataset_configs.R` for dataset specifications
 
