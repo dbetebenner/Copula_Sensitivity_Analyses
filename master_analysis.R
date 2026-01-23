@@ -333,7 +333,7 @@ if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- TRUE
 # ============================================================================
 # >>> CURRENT SETTINGS (EDIT THESE FOR YOUR RUN) <<<
 # ============================================================================
-TEST_MODE <- TRUE                      # PRODUCTION MODE: Full analysis (966 conditions)
+TEST_MODE <- FALSE                     # PRODUCTION MODE: Full analysis (966 conditions)
 TEST_N_CONDITIONS_PER_DATASET <- 1       # Only used if TEST_MODE=TRUE
 # ============================================================================
 #

@@ -2067,7 +2067,10 @@ cat("====================================================================\n")
 cat("QUICK SUMMARY\n")
 cat("====================================================================\n\n")
 
-family_selection <- results_dt[aic == min(aic), .N, by = .(family)]
+# Find best family per condition (min AIC within each condition), then count selections
+best_families <- results_dt[, .(best_family = family[which.min(aic)]), by = condition_id]
+family_selection <- best_families[, .N, by = best_family]
+setnames(family_selection, "best_family", "family")
 setorder(family_selection, -N)
 
 cat("Family selection frequency (by AIC):\n")
