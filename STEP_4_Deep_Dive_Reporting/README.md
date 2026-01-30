@@ -287,8 +287,8 @@ After running, verify:
 ```r
 # Check what's available
 file.exists("../STEP_1_Family_Selection/results/phase1_decision.RData")
-file.exists("../STEP_2_Transformation_Validation/results/exp5_*.RData")
-dir.exists("../STEP_3_Sensitivity_Analyses/results/")
+file.exists("../STEP_3_Application_Implementation/results/exp5_*.RData")
+dir.exists("../STEP_2_Copula_Sensitivity_Analyses/results/")
 
 # If missing, run previous steps
 STEPS_TO_RUN <- 1:3
@@ -371,4 +371,3 @@ After STEP_4 completes:
 
 **Paper location:**
 `~/Research/Papers/Betebenner_Braun/Paper_1/A_Sklar_Theoretic_Extension_of_TAMP.tex`
-

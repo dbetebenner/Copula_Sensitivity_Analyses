@@ -128,7 +128,7 @@ if (needs_csem_smoothing(pairs_full$SCALE_SCORE_PRIOR)$needs_csem) {
 Run the test script to verify all methods work correctly:
 
 ```r
-source("STEP_2_Transformation_Validation/test_enhancements.R")
+source("STEP_3_Application_Implementation/test_enhancements.R")
 ```
 
 This will test:

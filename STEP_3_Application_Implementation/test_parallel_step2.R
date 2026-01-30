@@ -30,7 +30,7 @@ cat("====================================================================\n\n")
 original_wd <- getwd()
 
 # Change to STEP_2 directory
-setwd("STEP_2_Transformation_Validation")
+setwd("STEP_3_Application_Implementation")
 
 # Source the parallel script
 # It will automatically use the global N_CORES if available
@@ -44,7 +44,7 @@ cat("TEST COMPLETE\n")
 cat("====================================================================\n\n")
 
 # Verify results
-results_file <- "STEP_2_Transformation_Validation/results/exp5_transformation_validation_summary.csv"
+results_file <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv"
 
 if (file.exists(results_file)) {
   results <- fread(results_file)

@@ -110,9 +110,9 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
 # ============================================================================
-# >>> CURRENT DATASET SELECTION (dataset_1 and dataset_2 already complete) <<<
+# >>> CURRENT DATASET SELECTION (dataset_4 preferred for Step 2 speed) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- c("dataset_4", "dataset_3", "dataset_2", "dataset_1")  # Smallest first for early issue detection
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -134,7 +134,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- c(1)  # Run only STEP_1 (Copula Family Selection)
+STEPS_TO_RUN <- c(2)  # Run only STEP_1 (Copula Family Selection)
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -450,6 +450,41 @@ if (EC2_MODE) {
   N_CORES <- 1
 }
 
+############################################################################
+### STEP 2 SPECIFIC CONFIGURATION
+############################################################################
+
+# STEP 2 Parallelization (separate from STEP 1)
+# STEP_1 mirai works fine and uses USE_PARALLEL flag
+# STEP_2 needs its own flag until parallel implementation is debugged
+# Set to FALSE until parallel implementation is fixed
+if (!exists("USE_PARALLEL_STEP2")) USE_PARALLEL_STEP2 <- FALSE
+
+# Select which STEP 2 experiments to run
+# Options:
+#   NULL = run all 4 experiments (default)
+#   c("exp_1_grade_span") = run only experiment 1
+#   c("exp_2_sample_size") = run only experiment 2
+#   c("exp_3_content_area") = run only experiment 3
+#   c("exp_4_cohort") = run only experiment 4
+#   c("exp_1_grade_span", "exp_3_content_area") = run experiments 1 and 3
+#
+# Examples:
+#   EXPERIMENT_TO_RUN_STEP2 <- NULL                        # All experiments
+#   EXPERIMENT_TO_RUN_STEP2 <- c("exp_1_grade_span")      # Test experiment 1 only
+#   EXPERIMENT_TO_RUN_STEP2 <- c("exp_2_sample_size")     # Test experiment 2 only
+if (!exists("EXPERIMENT_TO_RUN_STEP2")) EXPERIMENT_TO_RUN_STEP2 <- NULL
+
+if (!is.null(EXPERIMENT_TO_RUN_STEP2)) {
+  cat("STEP 2 Configuration:\n")
+  cat("  Selected experiments:", paste(EXPERIMENT_TO_RUN_STEP2, collapse = ", "), "\n")
+  cat("  Parallel mode:", USE_PARALLEL_STEP2, "\n\n")
+} else {
+  cat("STEP 2 Configuration:\n")
+  cat("  Running all experiments (1-4)\n")
+  cat("  Parallel mode:", USE_PARALLEL_STEP2, "\n\n")
+}
+
 # Generic workspace object name (data gets assigned to this name regardless of source)
 WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG"
 
@@ -598,14 +633,19 @@ ALL_DATASET_RESULTS <- list(
 cat("Results accumulation lists initialized\n\n")
 
 ############################################################################
-### LOAD ALL DATASETS UPFRONT (For efficient parallel processing)
+### DATASET LOADING STRATEGY (Per-Task On-Demand Loading)
 ############################################################################
 # 
-# This section loads ALL datasets before starting parallel processing.
-# This enables running Step 1 across ALL conditions from ALL datasets
-# in a single parallel batch, maximizing CPU utilization on large instances.
+# CURRENT IMPLEMENTATION: Datasets are NOT loaded upfront in the host process.
+# Instead, mirai workers load datasets on-demand per task (see below).
 #
-# The combined dataset has a DATASET column to identify the source dataset.
+# This approach was changed from the original "load all upfront" strategy to:
+# - Reduce host memory pressure (~3.74 GB saved)
+# - Enable Step 2 per-dataset processing without combined dataset resident
+# - Allow workers to load only what they need
+#
+# For Step 1 (all datasets): Workers load specific datasets as needed
+# For Step 2-4 (per-dataset): Host loads one dataset at a time in loop below
 ############################################################################
 
 # Mirai daemons load datasets on-demand per task (see phase1_family_selection_parallel.R)
@@ -807,32 +847,63 @@ for (dataset_idx in seq_along(datasets_to_analyze)) {
   
   cat("Filtering combined data for:", CURRENT_DATASET_NAME, "\n")
   
-  # Filter the combined dataset to just this dataset
+  # Filter the combined dataset to just this dataset if available,
+  # otherwise load the dataset file directly for Steps 2-4.
+  # 
+  # NOTE: As of current implementation (lines 611-621), ALL_DATASETS_COMBINED
+  # is NEVER created - data loading is deferred to mirai workers. This means
+  # for Step 2-only runs, the else branch below will ALWAYS be taken,
+  # loading data directly from disk into host memory for the per-dataset loop.
+  # This is correct and avoids keeping ~3.74GB resident in host memory.
+  if (exists("ALL_DATASETS_COMBINED")) {
+    dataset_data <- ALL_DATASETS_COMBINED[DATASET == dataset_id]
+  } else {
+    cat("Combined dataset not found. Loading dataset file directly.\n")
+    if (!file.exists(CURRENT_DATA_PATH)) {
+      stop("ERROR: Data file not found: ", CURRENT_DATA_PATH)
+    }
+    load(CURRENT_DATA_PATH)
+    if (!exists(CURRENT_RDATA_OBJECT)) {
+      stop("ERROR: Expected object '", CURRENT_RDATA_OBJECT, "' not found in ", CURRENT_DATA_PATH)
+    }
+    dataset_data <- get(CURRENT_RDATA_OBJECT)
+    data.table::setDT(dataset_data)
+    if (!"DATASET" %in% names(dataset_data)) {
+      dataset_data[, DATASET := dataset_id]
+    }
+  }
+
   # STATE_DATA_LONG will contain just this dataset's data for Steps 2-4
-  dataset_data <- ALL_DATASETS_COMBINED[DATASET == dataset_id]
   assign(WORKSPACE_OBJECT_NAME, dataset_data)
   
-  cat("✓ Filtered", format(nrow(dataset_data), big.mark = ","), "rows for", dataset_id, "\n")
+  # Validate that data was loaded successfully
+  if (!exists(WORKSPACE_OBJECT_NAME)) {
+    stop("CRITICAL ERROR: Failed to load dataset for ", dataset_id)
+  }
+  
+  cat("✓ Dataset loaded and validated\n")
   cat("  Workspace object:", WORKSPACE_OBJECT_NAME, "\n")
+  cat("  Rows:", format(nrow(dataset_data), big.mark = ","), "\n")
+  cat("  Columns:", ncol(dataset_data), "\n")
+  cat("  Memory:", format(object.size(dataset_data), units = "MB"), "\n")
   cat("  Results suffix:", ifelse(RESULTS_SUFFIX == "", "(none)", RESULTS_SUFFIX), "\n\n")
 
 ################################################################################
-### STEP 2: TRANSFORMATION METHOD VALIDATION (Per-Dataset)
+### STEP 3: APPLICATION IMPLEMENTATION (Per-Dataset)
 ################################################################################
 # Note: Step 1 has already been processed for ALL datasets above.
 # Steps 2-4 are processed per-dataset in this loop.
 ################################################################################
 
-if (should_run_step(2)) {
+if (should_run_step(3)) {
   
   cat("\n")
   cat("####################################################################\n")
-  cat("### STEP 2: TRANSFORMATION METHOD VALIDATION\n")
+  cat("### STEP 3: APPLICATION IMPLEMENTATION\n")
   cat("####################################################################\n\n")
   
-  cat("Paper Section: Methodology → Marginal Score Distribution Estimation\n")
+  cat("Paper Section: Application → Implementation\n")
   cat("Objective: Validate transformation methods for copula pseudo-observations\n")
-  cat("THIS IS THE METHODOLOGICAL CENTERPIECE\n")
   if (USE_PARALLEL) {
     cat("Estimated time: 4-6 minutes (parallel)\n\n")
   } else {
@@ -842,10 +913,10 @@ if (should_run_step(2)) {
   exp5_validation_results <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv"
   exp5_full_results <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData"
   
-  if (SKIP_COMPLETED && check_results_exist(exp5_validation_results, "Step 2 validation")) {
-    cat("Skipping Step 2 validation (already completed)\n\n")
+  if (SKIP_COMPLETED && check_results_exist(exp5_validation_results, "Step 3 validation")) {
+    cat("Skipping Step 3 validation (already completed)\n\n")
   } else {
-    result_2_1 <- time_phase("Step 2.1: Transformation Validation", {
+    result_3_1 <- time_phase("Step 3.1: Transformation Validation", {
       # Use parallel version if enabled (EC2 or high-performance local)
       if (USE_PARALLEL) {
         cat("Using parallel implementation (", N_CORES, " cores)\n", sep = "")
@@ -856,8 +927,8 @@ if (should_run_step(2)) {
       }
     })
     
-    if (!result_2_1$success) {
-      cat("\n*** WARNING: Step 2 validation failed ***\n")
+    if (!result_3_1$success) {
+      cat("\n*** WARNING: Step 3 validation failed ***\n")
       cat("This is critical for methodological justification.\n")
       cat("Recommend stopping to investigate.\n\n")
       
@@ -865,7 +936,7 @@ if (should_run_step(2)) {
         cat("Continue anyway? (y/n): ")
         response <- readline()
         if (tolower(response) != "y") {
-          stop("Stopping due to Step 2 failure.")
+          stop("Stopping due to Step 3 failure.")
         }
       }
     }
@@ -875,21 +946,21 @@ if (should_run_step(2)) {
   exp5_figures_dir <- "STEP_3_Application_Implementation/results/figures/exp5_transformation_validation"
   
   if (SKIP_COMPLETED && dir.exists(exp5_figures_dir) && length(list.files(exp5_figures_dir)) > 0) {
-    cat("✓ Skipping Step 2 visualizations (already exist)\n\n")
+    cat("✓ Skipping Step 3 visualizations (already exist)\n\n")
   } else {
-    result_2_2 <- time_phase("Step 2.2: Visualization Generation", {
+    result_3_2 <- time_phase("Step 3.2: Visualization Generation", {
       source("STEP_3_Application_Implementation/exp_5_visualizations.R")
     })
     
-    if (!result_2_2$success) {
-      cat("Warning: Step 2 visualizations failed but continuing.\n\n")
+    if (!result_3_2$success) {
+      cat("Warning: Step 3 visualizations failed but continuing.\n\n")
     }
   }
   
-  ## Review Step 2 Results
+  ## Review Step 3 Results
   cat("\n")
   cat("####################################################################\n")
-  cat("### STEP 2 RESULTS SUMMARY\n")
+  cat("### STEP 3 RESULTS SUMMARY\n")
   cat("####################################################################\n\n")
   
   if (file.exists(exp5_validation_results)) {
@@ -939,134 +1010,188 @@ if (should_run_step(2)) {
     cat("\n")
     
     pause_for_review(
-      paste0("Review Step 2 results (Copula Sensitivity):\n",
-             "  - STEP_2_Copula_Sensitivity_Analyses/results/\n\n",
-             "Note: Step 2 is now copula sensitivity analyses (CORE CONTRIBUTION)\n\n",
+      paste0("Review Step 3 results (Application Implementation):\n",
+             "  - STEP_3_Application_Implementation/results/\n\n",
              "Verify:\n",
              "  ✓ At least one method classified as ACCEPTABLE\n",
              "  ✓ I-spline (4 knots) = UNACCEPTABLE/MARGINAL\n\n",
-             "If validation passed, we'll proceed to Step 3 (sensitivity analyses)."),
-      "Step 2 Complete"
+             "If validation passed, we'll proceed to Step 4 (deep dive reporting)."),
+      "Step 3 Complete"
     )
   } else {
-    cat("⚠ WARNING: Step 2 results not found!\n")
+    cat("⚠ WARNING: Step 3 results not found!\n")
     cat("Cannot validate transformation methods.\n\n")
   }
   
 } else {
   cat("\n####################################################################\n")
-  cat("### STEP 2: SKIPPED (not in STEPS_TO_RUN)\n")
+  cat("### STEP 3: SKIPPED (not in STEPS_TO_RUN)\n")
   cat("####################################################################\n\n")
 }
 
 ################################################################################
-### STEP 3: SENSITIVITY ANALYSES
+### STEP 2: SGPc SENSITIVITY ANALYSIS (RE-IMAGINED JANUARY 2026)
+################################################################################
+###
+### NEW FOCUS: Assess practical impact of copula choice on SGPc values
+### 
+### Previous STEP_2 tested parameter stability (grade span, sample size, etc.)
+### but Phase 1 already comprehensively analyzed this across 966 conditions.
+###
+### New STEP_2 computes multiple SGPc variants (empirical, best-fit, canonical,
+### mis-specified, TAMP comonotonic) to demonstrate practical consequences of
+### Sklar-theoretic extension.
+###
+### See: STEP_2_SGPc_Sensitivity/README.md for details
+### Deprecated experiments in: STEP_2_Copula_Sensitivity_Analyses/deprecated/
+###
 ################################################################################
 
-if (should_run_step(3)) {
+if (should_run_step(2)) {
+
+  if (!exists("SKIP_COMPLETED_STEP2")) SKIP_COMPLETED_STEP2 <- FALSE
+  if (!exists("USE_PARALLEL_STEP2")) USE_PARALLEL_STEP2 <- FALSE
   
   cat("\n")
   cat("####################################################################\n")
-  cat("### STEP 3: SENSITIVITY ANALYSES\n")
+  cat("### STEP 2: SGPc SENSITIVITY ANALYSIS\n")
   cat("####################################################################\n\n")
   
-  cat("Paper Section: Application → Sensitivity Analyses\n")
-  cat("Objective: Test copula parameter stability across conditions\n")
-  if (USE_PARALLEL) {
-    cat("Estimated time: 30-60 minutes (parallel)\n\n")
-  } else {
-    cat("Estimated time: 3-6 hours (sequential)\n\n")
+  cat("Paper Section: Application → SGPc Sensitivity (Sklar-Theoretic Extension)\n")
+  cat("Objective: Quantify practical impact of copula choice on SGPcs\n")
+  cat("Mode:", if (USE_PARALLEL_STEP2) "PARALLEL (mirai)" else "SEQUENTIAL", "\n")
+  cat("Estimated time:", if (USE_PARALLEL_STEP2) "60-120 minutes" else "3-6 hours", "\n\n")
+  
+  cat("NOTE: Parameter stability (grade span, sample size, content area, cohort)\n")
+  cat("      already analyzed in Phase 1 across 966 conditions.\n")
+  cat("      Old experiments archived in: STEP_2_Copula_Sensitivity_Analyses/deprecated/\n\n")
+  
+  ############################################################################
+  ### VALIDATE PHASE 1 OUTPUTS EXIST
+  ############################################################################
+  
+  manifest_file <- "STEP_1_Family_Selection/results/dataset_all/analysis_manifest.json"
+  if (!file.exists(manifest_file)) {
+    stop("Phase 1 manifest not found: ", manifest_file, "\n",
+         "       Run Phase 1 analysis first:\n",
+         "       source('STEP_1_Family_Selection/phase1_analysis.R')")
   }
   
-  # Define which experiments to run
-  EXPERIMENTS_TO_RUN <- list(
-    list(num = 1, name = "exp_1_grade_span", label = "Grade Span Sensitivity"),
-    list(num = 2, name = "exp_2_sample_size", label = "Sample Size Effects"),
-    list(num = 3, name = "exp_3_content_area", label = "Content Area Comparison"),
-    list(num = 4, name = "exp_4_cohort", label = "Cohort Effects")
+  cat("✓ Phase 1 outputs validated\n")
+  cat("  Manifest:", manifest_file, "\n\n")
+  
+  ############################################################################
+  ### STEP 2.1: COMPUTE ALL SGPc VARIANTS
+  ############################################################################
+  
+  variants_complete <- file.exists(
+    file.path("STEP_2_SGPc_Sensitivity/results", 
+              paste0("sgpc_all_variants_", dataset_id, ".rds"))
   )
   
-  experiment_results <- list()
-  
-  for (exp in EXPERIMENTS_TO_RUN) {
+  if (SKIP_COMPLETED_STEP2 && variants_complete) {
+    cat("✓ Skipping Step 2.1 (SGPc variants already computed)\n\n")
+  } else {
+    cat("Running Step 2.1: Computing SGPc variants...\n\n")
     
-    # Select parallel vs sequential script
-    if (USE_PARALLEL && exp$name != "exp_2_sample_size") {
-      # Use parallel version (except Exp 2 which has limited parallelization benefit)
-      exp_file <- file.path("STEP_2_Copula_Sensitivity_Analyses", 
-                           paste0(exp$name, "_parallel.R"))
-      
-      # Fall back to sequential if parallel doesn't exist
-      if (!file.exists(exp_file)) {
-        exp_file <- file.path("STEP_2_Copula_Sensitivity_Analyses", 
-                             paste0(exp$name, ".R"))
-        cat("Note: Parallel version not found, using sequential version\n")
-      }
-    } else {
-      exp_file <- file.path("STEP_2_Copula_Sensitivity_Analyses", 
-                           paste0(exp$name, ".R"))
-    }
-    
-    exp_results_marker <- file.path("STEP_2_Copula_Sensitivity_Analyses/results", exp$name)
-    
-    if (!file.exists(exp_file)) {
-      cat("Warning: Experiment file not found:", exp_file, "\n")
-      cat("  Skipping", exp$name, "\n\n")
-      next
-    }
-    
-    # Check if results exist
-    if (SKIP_COMPLETED && dir.exists(exp_results_marker)) {
-      cat("✓ Skipping", exp$label, "(results exist)\n\n")
-      experiment_results[[exp$name]] <- list(
-        success = TRUE,
-        skipped = TRUE
-      )
-      next
-    }
-    
-    # Run experiment
-    result <- time_phase(paste("Step 3.", exp$num, ":", exp$label), {
-      source(exp_file)
+    result_2_1 <- time_phase("Step 2.1: Compute SGPc Variants", {
+      # Set environment variables for the computation script
+      assign("USE_PARALLEL", USE_PARALLEL_STEP2, envir = .GlobalEnv)
+      assign("DATASETS_TO_PROCESS", dataset_id, envir = .GlobalEnv)
+      source("STEP_2_SGPc_Sensitivity/sgpc_compute_all_variants.R")
     })
     
-    experiment_results[[exp$name]] <- result
-    
-    if (!result$success) {
-      cat("Warning:", exp$name, "failed but continuing with other experiments\n\n")
-    }
-    
-    # Brief pause between experiments (unless batch mode)
-    if (!BATCH_MODE && exp$num < length(EXPERIMENTS_TO_RUN)) {
-      cat("Proceeding to next experiment in 5 seconds...\n")
-      Sys.sleep(5)
+    if (!result_2_1$success) {
+      cat("ERROR in Step 2.1: SGPc variant computation failed\n\n")
+      stop("Cannot proceed with Step 2 without variant computations")
     }
   }
   
-  ## Step 3 Summary
+  ############################################################################
+  ### STEP 2.2: AGGREGATE ANALYSIS
+  ############################################################################
+  
+  aggregate_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/sgpc_key_comparisons.csv")
+  
+  if (SKIP_COMPLETED_STEP2 && aggregate_complete) {
+    cat("✓ Skipping Step 2.2 (aggregate analysis already done)\n\n")
+  } else {
+    cat("Running Step 2.2: Aggregate analysis...\n\n")
+    
+    result_2_2 <- time_phase("Step 2.2: Aggregate Analysis", {
+      source("STEP_2_SGPc_Sensitivity/sgpc_aggregate_analysis.R")
+    })
+    
+    if (!result_2_2$success) {
+      cat("Warning: Aggregate analysis failed\n\n")
+    }
+  }
+  
+  ############################################################################
+  ### STEP 2.3: VISUALIZATIONS
+  ############################################################################
+  
+  vis_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/visualizations/scatter_emp_vs_best.pdf")
+  
+  if (SKIP_COMPLETED_STEP2 && vis_complete) {
+    cat("✓ Skipping Step 2.3 (visualizations already created)\n\n")
+  } else {
+    cat("Running Step 2.3: Creating visualizations...\n\n")
+    
+    result_2_3 <- time_phase("Step 2.3: Visualizations", {
+      source("STEP_2_SGPc_Sensitivity/sgpc_visualizations.R")
+    })
+    
+    if (!result_2_3$success) {
+      cat("Warning: Visualization creation failed\n\n")
+    }
+  }
+  
+  ############################################################################
+  ### STEP 2.4: GENERATE REPORT
+  ############################################################################
+  
+  report_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/SGPC_SENSITIVITY_REPORT.md")
+  
+  if (SKIP_COMPLETED_STEP2 && report_complete) {
+    cat("✓ Skipping Step 2.4 (report already generated)\n\n")
+  } else {
+    cat("Running Step 2.4: Generating narrative report...\n\n")
+    
+    result_2_4 <- time_phase("Step 2.4: Generate Report", {
+      source("STEP_2_SGPc_Sensitivity/sgpc_generate_report.R")
+    })
+    
+    if (!result_2_4$success) {
+      cat("Warning: Report generation failed\n\n")
+    }
+  }
+  
+  ## Step 2 Summary
   cat("\n")
   cat("####################################################################\n")
-  cat("### STEP 3 EXPERIMENTS SUMMARY\n")
+  cat("### STEP 2: SGPc SENSITIVITY COMPLETE\n")
   cat("####################################################################\n\n")
   
-  for (exp_name in names(experiment_results)) {
-    result <- experiment_results[[exp_name]]
-    status <- if (result$success) "✓ COMPLETED" else "✗ FAILED"
-    if (!is.null(result$skipped) && result$skipped) status <- "○ SKIPPED"
-    cat(sprintf("%-30s %s\n", exp_name, status))
-  }
-  cat("\n")
+  cat("Results saved in: STEP_2_SGPc_Sensitivity/results/\n")
+  cat("  - Per-dataset SGPc variants: sgpc_all_variants_{dataset_id}.rds\n")
+  cat("  - Summary statistics: sgpc_key_comparisons.csv\n")
+  cat("  - Manifest: sgpc_sensitivity_manifest.json\n")
+  cat("  - Report: SGPC_SENSITIVITY_REPORT.md\n")
+  cat("  - Visualizations: visualizations/*.{pdf,svg,png}\n\n")
   
   pause_for_review(
-    paste0("Review Step 2 experiment results (Copula Sensitivity - CORE):\n",
-           "  - STEP_2_Copula_Sensitivity_Analyses/results/\n\n",
-           "If experiments completed successfully, we'll proceed to Step 3 (application implementation)."),
-    "Step 3 Complete"
+    paste0("Review Step 2 SGPc sensitivity results:\n",
+           "  - STEP_2_SGPc_Sensitivity/results/SGPC_SENSITIVITY_REPORT.md\n",
+           "  - STEP_2_SGPc_Sensitivity/results/visualizations/\n\n",
+           "Key outputs: Quantified impact of copula choice on SGPcs.\n",
+           "If analysis completed successfully, we'll proceed to Step 3."),
+    "Step 2 Complete"
   )
   
 } else {
   cat("\n####################################################################\n")
-  cat("### STEP 3: SKIPPED (not in STEPS_TO_RUN)\n")
+  cat("### STEP 2: SKIPPED (not in STEPS_TO_RUN)\n")
   cat("####################################################################\n\n")
 }
 
@@ -1426,7 +1551,7 @@ if (should_run_step(1)) {
                "  - STEP_1_Family_Selection/results/dataset_all/phase1_summary.txt\n",
                "  - STEP_1_Family_Selection/results/dataset_all/phase1_*.pdf\n",
                "  - Individual dataset results in dataset_1/, dataset_2/, dataset_3/\n\n",
-               "If results look good, we'll proceed to Step 2 (transformation validation)."),
+               "If results look good, we'll proceed to Step 2 (copula sensitivity analyses)."),
         "Step 1 Complete"
       )
     } else {
@@ -1440,8 +1565,8 @@ if (should_run_step(1)) {
 if (should_run_step(2) && length(ALL_DATASET_RESULTS$step2) > 0) {
   cat("Combining STEP 2 results from", length(ALL_DATASET_RESULTS$step2), "datasets...\n")
   step2_combined <- rbindlist(ALL_DATASET_RESULTS$step2, fill = TRUE)
-  output_file <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_all_datasets.csv"
-  dir.create("STEP_3_Application_Implementation/results", showWarnings = FALSE, recursive = TRUE)
+  output_file <- "STEP_2_Copula_Sensitivity_Analyses/results/sensitivity_analyses_all_datasets.csv"
+  dir.create("STEP_2_Copula_Sensitivity_Analyses/results", showWarnings = FALSE, recursive = TRUE)
   fwrite(step2_combined, output_file)
   cat("✓ Combined STEP 2 results saved to:", output_file, "\n\n")
 }
@@ -1450,8 +1575,8 @@ if (should_run_step(2) && length(ALL_DATASET_RESULTS$step2) > 0) {
 if (should_run_step(3) && length(ALL_DATASET_RESULTS$step3) > 0) {
   cat("Combining STEP 3 results from", length(ALL_DATASET_RESULTS$step3), "datasets...\n")
   step3_combined <- rbindlist(ALL_DATASET_RESULTS$step3, fill = TRUE)
-  output_file <- "STEP_2_Copula_Sensitivity_Analyses/results/sensitivity_analyses_all_datasets.csv"
-  dir.create("STEP_2_Copula_Sensitivity_Analyses/results", showWarnings = FALSE, recursive = TRUE)
+  output_file <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_all_datasets.csv"
+  dir.create("STEP_3_Application_Implementation/results", showWarnings = FALSE, recursive = TRUE)
   fwrite(step3_combined, output_file)
   cat("✓ Combined STEP 3 results saved to:", output_file, "\n\n")
 }

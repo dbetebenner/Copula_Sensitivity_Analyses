@@ -271,14 +271,14 @@ clusterEvalQ(cl, {
   source("functions/transformation_diagnostics.R")
   
   # Source new enhancement methods
-  if (file.exists("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")) {
-    source("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")
+  if (file.exists("STEP_3_Application_Implementation/methods/bernstein_cdf.R")) {
+    source("STEP_3_Application_Implementation/methods/bernstein_cdf.R")
   } else {
     source("methods/bernstein_cdf.R")
   }
   
-  if (file.exists("STEP_2_Transformation_Validation/methods/csem_aware_smoother.R")) {
-    source("STEP_2_Transformation_Validation/methods/csem_aware_smoother.R")
+  if (file.exists("STEP_3_Application_Implementation/methods/csem_aware_smoother.R")) {
+    source("STEP_3_Application_Implementation/methods/csem_aware_smoother.R")
   } else {
     source("methods/csem_aware_smoother.R")
   }
@@ -675,7 +675,7 @@ summary_table <- rbindlist(lapply(names(all_results), function(method_name) {
 }))
 
 # Save summary table (use full path from project root)
-results_dir <- "STEP_2_Transformation_Validation/results"
+results_dir <- "STEP_3_Application_Implementation/results"
 if (!dir.exists(results_dir)) dir.create(results_dir, recursive = TRUE)
 
 fwrite(summary_table, file.path(results_dir, "exp5_transformation_validation_summary.csv"))

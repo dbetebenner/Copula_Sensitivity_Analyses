@@ -5180,6 +5180,282 @@ export_analysis_manifest <- function(results_dt,
     }
   }
   
+  # --- COMPREHENSIVE META-ANALYSIS ENHANCEMENTS (Option B) ---
+  cat("\n=== COMPREHENSIVE META-ANALYSIS ===\n")
+  
+  # Helper function: Calculate stability metrics
+  calc_stability <- function(values, param_name = "parameter") {
+    n <- length(values[!is.na(values)])
+    if (n < 2) {
+      return(list(
+        n = n,
+        mean = if (n > 0) mean(values, na.rm = TRUE) else NA,
+        median = if (n > 0) median(values, na.rm = TRUE) else NA,
+        sd = NA,
+        cv = NA,
+        iqr = NA,
+        mad = NA,
+        ci_lower = NA,
+        ci_upper = NA,
+        stability = "INSUFFICIENT_DATA"
+      ))
+    }
+    
+    mean_val <- mean(values, na.rm = TRUE)
+    median_val <- median(values, na.rm = TRUE)
+    sd_val <- sd(values, na.rm = TRUE)
+    cv_val <- if (abs(mean_val) > 1e-10) sd_val / abs(mean_val) else NA
+    iqr_val <- IQR(values, na.rm = TRUE)
+    mad_val <- mad(values, na.rm = TRUE)
+    
+    # Bootstrap confidence interval (95%)
+    if (n >= 10) {
+      boot_samples <- replicate(1000, {
+        sample_vals <- sample(values[!is.na(values)], replace = TRUE)
+        median(sample_vals)
+      })
+      ci <- quantile(boot_samples, c(0.025, 0.975))
+      ci_lower <- ci[1]
+      ci_upper <- ci[2]
+    } else {
+      ci_lower <- NA
+      ci_upper <- NA
+    }
+    
+    # Stability classification
+    stability <- if (is.na(cv_val)) {
+      "UNKNOWN"
+    } else if (cv_val < 0.10) {
+      "HIGH"
+    } else if (cv_val < 0.20) {
+      "MEDIUM"
+    } else {
+      "LOW"
+    }
+    
+    list(
+      n = n,
+      mean = round(mean_val, 4),
+      median = round(median_val, 4),
+      sd = round(sd_val, 4),
+      cv = round(cv_val, 4),
+      iqr = round(iqr_val, 4),
+      mad = round(mad_val, 4),
+      ci_lower = round(ci_lower, 4),
+      ci_upper = round(ci_upper, 4),
+      stability = stability
+    )
+  }
+  
+  # 1. CROSS-STRATIFIED RECOMMENDATIONS (year_span × content_area)
+  cat("1. Computing cross-stratified recommendations...\n")
+  cross_strat_recommendations <- list()
+  
+  for (span in year_spans) {
+    for (content in content_areas) {
+      t_fits <- results_dt[family == "t" & year_span == span & content_area == content]
+      
+      if (nrow(t_fits) >= 2) {  # Need at least 2 for meaningful statistics
+        has_named_params <- "correlation_rho" %in% names(t_fits)
+        
+        tau_values <- t_fits$tau[!is.na(t_fits$tau)]
+        if (has_named_params) {
+          rho_values <- t_fits$correlation_rho[!is.na(t_fits$correlation_rho)]
+          df_values <- t_fits$degrees_freedom[!is.na(t_fits$degrees_freedom)]
+        } else {
+          rho_values <- t_fits$parameter_1[!is.na(t_fits$parameter_1)]
+          df_values <- t_fits$parameter_2[!is.na(t_fits$parameter_2)]
+        }
+        
+        tau_stats <- calc_stability(tau_values, "tau")
+        rho_stats <- calc_stability(rho_values, "rho")
+        df_stats <- calc_stability(df_values, "df")
+        
+        # Overall stability: worst of the three
+        overall_stability <- if (tau_stats$stability == "LOW" || rho_stats$stability == "LOW" || df_stats$stability == "LOW") {
+          "LOW"
+        } else if (tau_stats$stability == "MEDIUM" || rho_stats$stability == "MEDIUM" || df_stats$stability == "MEDIUM") {
+          "MEDIUM"
+        } else {
+          tau_stats$stability
+        }
+        
+        stratum_key <- paste0("year_", span, "_", tolower(gsub(" ", "_", content)))
+        cross_strat_recommendations[[stratum_key]] <- list(
+          year_span = span,
+          content_area = content,
+          n_conditions = nrow(t_fits),
+          recommended_family = "t",
+          tau = tau_stats,
+          rho = rho_stats,
+          df = df_stats,
+          overall_stability = overall_stability,
+          use_case = sprintf("Canonical copula for %d-year %s progressions", span, content)
+        )
+      }
+    }
+  }
+  
+  # 2. GRADE-LEVEL EFFECTS ANALYSIS
+  cat("2. Analyzing grade-level effects...\n")
+  grade_level_analysis <- list()
+  
+  # Define grade bands
+  best_fits_extended <- results_dt[!is.na(delta_aic_vs_best) & delta_aic_vs_best == 0]
+  best_fits_extended[, grade_band := fcase(
+    grade_current <= 5, "elementary",
+    grade_current <= 8, "middle",
+    grade_current <= 12, "high",
+    default = "other"
+  )]
+  
+  for (band in c("elementary", "middle", "high")) {
+    band_data <- best_fits_extended[grade_band == band]
+    if (nrow(band_data) >= 5) {
+      tau_stats <- calc_stability(band_data$tau, "tau")
+      
+      grade_level_analysis[[band]] <- list(
+        grade_band = band,
+        n_conditions = nrow(band_data),
+        tau = tau_stats,
+        grade_range = paste0("G", min(band_data$grade_current, na.rm = TRUE), 
+                            "-G", max(band_data$grade_current, na.rm = TRUE))
+      )
+    }
+  }
+  
+  # 3. STATISTICAL SIGNIFICANCE TESTS
+  cat("3. Performing statistical significance tests...\n")
+  statistical_tests <- list()
+  
+  # Test 1: Does tau differ by content area?
+  if (length(unique(best_fits_extended$content_area)) > 1 && nrow(best_fits_extended) > 10) {
+    tryCatch({
+      # Kruskal-Wallis test (non-parametric ANOVA)
+      kw_test <- kruskal.test(tau ~ content_area, data = best_fits_extended)
+      statistical_tests$content_area_effect <- list(
+        test = "Kruskal-Wallis",
+        hypothesis = "H0: Kendall's tau does not differ across content areas",
+        statistic = round(kw_test$statistic, 3),
+        p_value = round(kw_test$p.value, 6),
+        significant = kw_test$p.value < 0.05,
+        interpretation = if (kw_test$p.value < 0.05) {
+          "Content area has a statistically significant effect on dependence strength"
+        } else {
+          "No significant difference in tau across content areas"
+        }
+      )
+    }, error = function(e) {
+      statistical_tests$content_area_effect <- list(error = e$message)
+    })
+  }
+  
+  # Test 2: Does tau decline with year_span?
+  if (length(unique(best_fits_extended$year_span)) > 1 && nrow(best_fits_extended) > 10) {
+    tryCatch({
+      cor_test <- cor.test(best_fits_extended$year_span, best_fits_extended$tau, 
+                          method = "spearman")
+      statistical_tests$year_span_trend <- list(
+        test = "Spearman correlation",
+        hypothesis = "H0: No monotonic relationship between year_span and tau",
+        correlation = round(cor_test$estimate, 3),
+        p_value = round(cor_test$p.value, 6),
+        significant = cor_test$p.value < 0.05,
+        interpretation = if (cor_test$p.value < 0.05 && cor_test$estimate < 0) {
+          "Kendall's tau significantly decreases with longer time spans"
+        } else if (cor_test$p.value < 0.05 && cor_test$estimate > 0) {
+          "Kendall's tau significantly increases with longer time spans (unexpected)"
+        } else {
+          "No significant monotonic trend in tau with year span"
+        }
+      )
+    }, error = function(e) {
+      statistical_tests$year_span_trend <- list(error = e$message)
+    })
+  }
+  
+  # Test 3: Grade-level effect (if enough data)
+  if (length(unique(best_fits_extended$grade_band)) > 1 && nrow(best_fits_extended) > 10) {
+    tryCatch({
+      kw_grade <- kruskal.test(tau ~ grade_band, data = best_fits_extended)
+      statistical_tests$grade_level_effect <- list(
+        test = "Kruskal-Wallis",
+        hypothesis = "H0: Kendall's tau does not differ across grade bands",
+        statistic = round(kw_grade$statistic, 3),
+        p_value = round(kw_grade$p.value, 6),
+        significant = kw_grade$p.value < 0.05,
+        interpretation = if (kw_grade$p.value < 0.05) {
+          "Grade level (elementary/middle/high) has a significant effect on dependence"
+        } else {
+          "No significant difference in tau across grade levels"
+        }
+      )
+    }, error = function(e) {
+      statistical_tests$grade_level_effect <- list(error = e$message)
+    })
+  }
+  
+  # 4. EFFECT SIZE QUANTIFICATION
+  cat("4. Quantifying effect sizes...\n")
+  effect_sizes <- list()
+  
+  # Effect size for content area (eta-squared)
+  if ("content_area_effect" %in% names(statistical_tests) && 
+      statistical_tests$content_area_effect$significant) {
+    tryCatch({
+      # Calculate eta-squared (proportion of variance explained)
+      grand_mean <- mean(best_fits_extended$tau, na.rm = TRUE)
+      ss_between <- sum(best_fits_extended[, .(
+        n = .N,
+        mean_tau = mean(tau, na.rm = TRUE)
+      ), by = content_area][, n * (mean_tau - grand_mean)^2])
+      ss_total <- sum((best_fits_extended$tau - grand_mean)^2, na.rm = TRUE)
+      eta_squared <- ss_between / ss_total
+      
+      effect_sizes$content_area <- list(
+        measure = "eta_squared",
+        value = round(eta_squared, 4),
+        interpretation = if (eta_squared < 0.01) {
+          "negligible"
+        } else if (eta_squared < 0.06) {
+          "small"
+        } else if (eta_squared < 0.14) {
+          "medium"
+        } else {
+          "large"
+        }
+      )
+    }, error = function(e) {
+      effect_sizes$content_area <- list(error = e$message)
+    })
+  }
+  
+  # 5. FALLBACK HIERARCHY SPECIFICATION
+  cat("5. Defining fallback hierarchy for sparse strata...\n")
+  fallback_hierarchy <- list(
+    description = "Hierarchical lookup strategy for canonical copula parameters when specific strata have insufficient data",
+    min_n_preferred = 10,
+    min_n_acceptable = 5,
+    hierarchy = list(
+      level_1 = list(
+        description = "Most specific: year_span × content_area × grade_band",
+        keys = names(cross_strat_recommendations)
+      ),
+      level_2 = list(
+        description = "Moderate: year_span × content_area",
+        keys = names(cross_strat_recommendations)
+      ),
+      level_3 = list(
+        description = "General: year_span only",
+        keys = names(param_recommendations)
+      ),
+      level_4 = list(
+        description = "Fallback: Global median across all conditions",
+        note = "Use only when no stratum-specific match exists"
+      )
+    )
+  )
+  
   # --- Family Selection Summary ---
   family_summary <- results_dt[, .(
     n_conditions = .N,
@@ -5225,14 +5501,27 @@ export_analysis_manifest <- function(results_dt,
     metadata = metadata,
     parameter_recommendations = list(
       by_year_span = param_recommendations,
-      by_content_area = content_recommendations
+      by_content_area = content_recommendations,
+      cross_stratified = cross_strat_recommendations  # NEW: Comprehensive cross-strat
     ),
+    grade_level_analysis = grade_level_analysis,  # NEW
+    statistical_tests = statistical_tests,  # NEW
+    effect_sizes = effect_sizes,  # NEW
+    fallback_hierarchy = fallback_hierarchy,  # NEW
     family_selection_summary = family_selection,
     conditions_index = conditions_index,
     usage_guide = list(
       description = "Use this manifest to select copula parameters for new datasets (e.g., TIMSS)",
-      example = "For 4-year span Mathematics: use parameter_recommendations.by_year_span.year_span_4",
-      r_code = "params <- manifest$parameter_recommendations$by_year_span$year_span_4; tCopula(params$rho$median, df = params$df$median)"
+      example_basic = "For 4-year span Mathematics: use parameter_recommendations.by_year_span.year_span_4",
+      example_advanced = "For specific strata: use parameter_recommendations.cross_stratified.year_1_mathematics",
+      r_code_basic = "params <- manifest$parameter_recommendations$by_year_span$year_span_4; tCopula(params$rho$median, df = params$df$median)",
+      r_code_advanced = "params <- manifest$parameter_recommendations$cross_stratified$year_1_mathematics; tCopula(params$rho$median, df = params$df$median)",
+      stability_interpretation = list(
+        HIGH = "CV < 10%: Highly stable, single canonical copula recommended",
+        MEDIUM = "CV 10-20%: Moderately stable, consider parameter uncertainty",
+        LOW = "CV > 20%: High variability, finer stratification may be needed",
+        INSUFFICIENT_DATA = "n < 2: Not enough data for stability assessment"
+      )
     )
   )
   
@@ -5241,13 +5530,135 @@ export_analysis_manifest <- function(results_dt,
   
   tryCatch({
     write_json(manifest, manifest_path, pretty = TRUE, auto_unbox = TRUE)
-    cat(sprintf("Analysis manifest written to: %s\n", manifest_path))
+    cat(sprintf("\nAnalysis manifest written to: %s\n", manifest_path))
     cat(sprintf("  - %d conditions across %d datasets\n", n_conditions, n_datasets))
     cat(sprintf("  - %d families tested\n", n_families))
     cat(sprintf("  - Parameter recommendations for %d year spans\n", length(param_recommendations)))
+    cat(sprintf("  - %d cross-stratified recommendations\n", length(cross_strat_recommendations)))
+    cat(sprintf("  - %d statistical tests performed\n", length(statistical_tests)))
   }, error = function(e) {
     warning("Failed to write manifest JSON: ", e$message)
   })
+  
+  # --- Export Canonical Lookup Table (CSV) ---
+  cat("\n6. Exporting canonical copula lookup table (CSV)...\n")
+  
+  # Build flat table for easy R/Python lookup
+  canonical_rows <- list()
+  
+  for (stratum_id in names(cross_strat_recommendations)) {
+    rec <- cross_strat_recommendations[[stratum_id]]
+    canonical_rows[[length(canonical_rows) + 1]] <- data.table(
+      stratum_id = stratum_id,
+      year_span = rec$year_span,
+      content_area = rec$content_area,
+      n_conditions = rec$n_conditions,
+      best_family = rec$recommended_family,
+      
+      # Tau statistics
+      tau_median = rec$tau$median,
+      tau_mean = rec$tau$mean,
+      tau_sd = rec$tau$sd,
+      tau_cv = rec$tau$cv,
+      tau_iqr = rec$tau$iqr,
+      tau_mad = rec$tau$mad,
+      tau_ci_lower = rec$tau$ci_lower,
+      tau_ci_upper = rec$tau$ci_upper,
+      tau_stability = rec$tau$stability,
+      
+      # Rho statistics
+      rho_median = rec$rho$median,
+      rho_mean = rec$rho$mean,
+      rho_sd = rec$rho$sd,
+      rho_cv = rec$rho$cv,
+      rho_iqr = rec$rho$iqr,
+      rho_mad = rec$rho$mad,
+      rho_ci_lower = rec$rho$ci_lower,
+      rho_ci_upper = rec$rho$ci_upper,
+      rho_stability = rec$rho$stability,
+      
+      # Degrees of freedom statistics
+      df_median = rec$df$median,
+      df_mean = rec$df$mean,
+      df_sd = rec$df$sd,
+      df_cv = rec$df$cv,
+      df_iqr = rec$df$iqr,
+      df_mad = rec$df$mad,
+      df_ci_lower = rec$df$ci_lower,
+      df_ci_upper = rec$df$ci_upper,
+      df_stability = rec$df$stability,
+      
+      # Overall assessment
+      overall_stability = rec$overall_stability,
+      use_case = rec$use_case
+    )
+  }
+  
+  if (length(canonical_rows) > 0) {
+    canonical_table <- rbindlist(canonical_rows)
+    setorder(canonical_table, year_span, content_area)
+    
+    csv_path <- file.path(output_dir, "canonical_copula_parameters.csv")
+    fwrite(canonical_table, csv_path)
+    cat(sprintf("Canonical lookup table written to: %s\n", csv_path))
+    cat(sprintf("  - %d strata with sufficient data (n >= 2)\n", nrow(canonical_table)))
+    cat(sprintf("  - HIGH stability strata: %d\n", sum(canonical_table$overall_stability == "HIGH")))
+    cat(sprintf("  - MEDIUM stability strata: %d\n", sum(canonical_table$overall_stability == "MEDIUM")))
+    cat(sprintf("  - LOW stability strata: %d\n", sum(canonical_table$overall_stability == "LOW")))
+  }
+  
+  # --- Export Grade-Level Analysis Table (CSV) ---
+  if (length(grade_level_analysis) > 0) {
+    grade_rows <- list()
+    for (band in names(grade_level_analysis)) {
+      rec <- grade_level_analysis[[band]]
+      grade_rows[[length(grade_rows) + 1]] <- data.table(
+        grade_band = rec$grade_band,
+        grade_range = rec$grade_range,
+        n_conditions = rec$n_conditions,
+        tau_median = rec$tau$median,
+        tau_mean = rec$tau$mean,
+        tau_sd = rec$tau$sd,
+        tau_cv = rec$tau$cv,
+        tau_stability = rec$tau$stability
+      )
+    }
+    
+    if (length(grade_rows) > 0) {
+      grade_table <- rbindlist(grade_rows)
+      grade_csv_path <- file.path(output_dir, "grade_level_analysis.csv")
+      fwrite(grade_table, grade_csv_path)
+      cat(sprintf("Grade-level analysis written to: %s\n", grade_csv_path))
+    }
+  }
+  
+  # --- Export Statistical Tests Summary (CSV) ---
+  if (length(statistical_tests) > 0) {
+    test_rows <- list()
+    for (test_name in names(statistical_tests)) {
+      test <- statistical_tests[[test_name]]
+      if (!"error" %in% names(test)) {
+        test_rows[[length(test_rows) + 1]] <- data.table(
+          test_name = test_name,
+          test_type = test$test,
+          hypothesis = test$hypothesis,
+          statistic = if ("statistic" %in% names(test)) test$statistic else if ("correlation" %in% names(test)) test$correlation else NA,
+          p_value = test$p_value,
+          significant = test$significant,
+          interpretation = test$interpretation
+        )
+      }
+    }
+    
+    if (length(test_rows) > 0) {
+      test_table <- rbindlist(test_rows, fill = TRUE)
+      test_csv_path <- file.path(output_dir, "statistical_tests.csv")
+      fwrite(test_table, test_csv_path)
+      cat(sprintf("Statistical tests summary written to: %s\n", test_csv_path))
+    }
+  }
+  
+  cat("\n=== COMPREHENSIVE META-ANALYSIS COMPLETE ===\n\n")
   
   # Return manifest object for further processing (e.g., markdown export)
   # Using return() instead of invisible() to ensure tryCatch captures it

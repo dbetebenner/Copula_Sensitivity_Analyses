@@ -35,12 +35,15 @@ require(ggbeeswarm)
 ################################################################################
 
 # Source multi-format export utilities
+# Handle running from project root or STEP_1_Family_Selection directory
 if (file.exists("functions/export_plot_utils.R")) {
   source("functions/export_plot_utils.R")
-  cat("✓ Loaded export_plot_utils.R\n")
+  cat("✓ Loaded export_plot_utils.R (from project root)\n")
 } else if (file.exists("../functions/export_plot_utils.R")) {
   source("../functions/export_plot_utils.R")
-  cat("✓ Loaded export_plot_utils.R\n")
+  cat("✓ Loaded export_plot_utils.R (from STEP_1)\n")
+} else {
+  cat("⚠ export_plot_utils.R not found - using fallback plotting\n")
 }
 
 # Multi-format export configuration
@@ -94,10 +97,18 @@ cat("PHASE 1: FAMILY SELECTION ANALYSIS\n")
 cat("====================================================================\n\n")
 
 # Load Phase 1 combined results (from all datasets)
-results_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv"
-
-if (!file.exists(results_file)) {
-  stop("Phase 1 combined results not found! This file should be created after combining all dataset results.")
+# Handle both cases: running from project root or from STEP_1_Family_Selection directory
+if (file.exists("STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv")) {
+  # Running from project root
+  results_file <- "STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv"
+} else if (file.exists("results/dataset_all/phase1_copula_family_comparison_all_datasets.csv")) {
+  # Running from STEP_1_Family_Selection directory
+  results_file <- "results/dataset_all/phase1_copula_family_comparison_all_datasets.csv"
+} else {
+  stop("Phase 1 combined results not found!\n",
+       "Expected location (from project root): STEP_1_Family_Selection/results/dataset_all/phase1_copula_family_comparison_all_datasets.csv\n",
+       "Expected location (from STEP_1): results/dataset_all/phase1_copula_family_comparison_all_datasets.csv\n",
+       "Make sure you've run the EC2 analysis and synced the results.")
 }
 
 results <- fread(results_file)
@@ -128,8 +139,12 @@ results[, aic_weight := {
 cat("Delta AIC range:", range(results$delta_aic_vs_best), "\n")
 cat("AIC weight range:", range(results$aic_weight), "\n\n")
 
-# Output directory for combined results
-output_dir <- "STEP_1_Family_Selection/results/dataset_all"
+# Output directory for combined results (match the results_file location)
+if (file.exists("STEP_1_Family_Selection/results/dataset_all")) {
+  output_dir <- "STEP_1_Family_Selection/results/dataset_all"
+} else {
+  output_dir <- "results/dataset_all"
+}
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
 ################################################################################
@@ -1343,6 +1358,133 @@ if (length(missing_cols) > 0) {
 }
 
 ################################################################################
+### NEW VISUALIZATION: PARAMETER STABILITY HEATMAP
+################################################################################
+
+cat("\n====================================================================\n")
+cat("CREATING PARAMETER STABILITY VISUALIZATION\n")
+cat("====================================================================\n\n")
+
+# Check if canonical_copula_parameters.csv exists
+canonical_csv <- file.path(output_dir, "canonical_copula_parameters.csv")
+if (file.exists(canonical_csv)) {
+  canonical_dt <- fread(canonical_csv)
+  
+  if (nrow(canonical_dt) > 0) {
+    # Create stability heatmap showing CV for tau, rho, df across strata
+    # Melt data for ggplot
+    stability_data <- canonical_dt[, .(
+      stratum_id = stratum_id,
+      year_span = year_span,
+      content_area = content_area,
+      tau_cv = tau_cv,
+      rho_cv = rho_cv,
+      df_cv = df_cv,
+      overall_stability = overall_stability
+    )]
+    
+    # Melt for faceted plot
+    stability_long <- melt(stability_data, 
+                          id.vars = c("stratum_id", "year_span", "content_area", "overall_stability"),
+                          measure.vars = c("tau_cv", "rho_cv", "df_cv"),
+                          variable.name = "parameter",
+                          value.name = "cv")
+    
+    # Clean parameter names
+    stability_long[, parameter := factor(parameter, 
+                                         levels = c("tau_cv", "rho_cv", "df_cv"),
+                                         labels = c("τ (Kendall)", "ρ (Correlation)", "ν (Degrees of Freedom)"))]
+    
+    # Create combined label for y-axis
+    stability_long[, stratum_label := sprintf("%d-yr %s", year_span, 
+                                              gsub("MATHEMATICS", "Math", 
+                                                  gsub("ELA", "ELA", content_area)))]
+    
+    # Order by year_span then content_area
+    stability_long[, stratum_order := paste0(sprintf("%02d", year_span), "_", content_area)]
+    setorder(stability_long, -stratum_order)  # Reverse for top-to-bottom plotting
+    
+    # Create heatmap
+    p_stability <- ggplot(stability_long, aes(x = parameter, y = stratum_label, fill = cv)) +
+      geom_tile(color = "white", linewidth = 0.5) +
+      geom_text(aes(label = sprintf("%.2f", cv)), 
+               size = 3, color = "white", fontface = "bold") +
+      scale_fill_gradient2(
+        low = "darkgreen", 
+        mid = "orange", 
+        high = "darkred",
+        midpoint = 0.15,
+        limits = c(0, max(stability_long$cv, na.rm = TRUE)),
+        breaks = c(0, 0.10, 0.20, 0.30),
+        labels = c("0.00\n(HIGH)", "0.10", "0.20\n(LOW)", "0.30+"),
+        name = "Coefficient\nof Variation"
+      ) +
+      labs(
+        title = "Parameter Stability Across Cross-Stratified Canonical Copulas",
+        subtitle = "Lower CV indicates more stable parameters within stratum (GREEN = stable, RED = variable)",
+        x = "Parameter",
+        y = "Stratum (Year Span × Content Area)"
+      ) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 0, hjust = 0.5, size = 10),
+        axis.text.y = element_text(size = 9),
+        plot.title = element_text(size = 13, face = "bold"),
+        plot.subtitle = element_text(size = 10, color = "gray30"),
+        legend.position = "right",
+        panel.grid = element_blank(),
+        plot.background = element_rect(fill = "transparent", color = NA),
+        panel.background = element_rect(fill = "transparent", color = NA)
+      )
+    
+    # Save
+    save_phase1_plot(
+      plot_obj = p_stability,
+      base_filename = file.path(output_dir, "phase1_parameter_stability_heatmap"),
+      width = 10,
+      height = 8
+    )
+    
+    cat("Created:", file.path(output_dir, "phase1_parameter_stability_heatmap.{pdf,svg,png}"), "\n\n")
+    
+    # Create CV distribution plot
+    p_cv_dist <- ggplot(stability_long, aes(x = cv, fill = parameter)) +
+      geom_histogram(bins = 20, alpha = 0.7, position = "identity", color = "white") +
+      geom_vline(xintercept = 0.10, linetype = "dashed", color = "darkgreen", linewidth = 1) +
+      geom_vline(xintercept = 0.20, linetype = "dashed", color = "orange", linewidth = 1) +
+      annotate("text", x = 0.10, y = Inf, label = "HIGH\nstability", 
+              vjust = 1.2, hjust = -0.1, size = 3, color = "darkgreen", fontface = "bold") +
+      annotate("text", x = 0.20, y = Inf, label = "MEDIUM\nstability", 
+              vjust = 1.2, hjust = -0.1, size = 3, color = "orange", fontface = "bold") +
+      scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"),
+                       name = "Parameter") +
+      labs(
+        title = "Distribution of Parameter Stability (Coefficient of Variation)",
+        subtitle = sprintf("Across %d strata (year_span × content_area)", uniqueN(stability_long$stratum_id)),
+        x = "Coefficient of Variation (CV)",
+        y = "Count of Strata"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(size = 13, face = "bold"),
+        plot.subtitle = element_text(size = 10, color = "gray30"),
+        legend.position = "bottom",
+        plot.background = element_rect(fill = "transparent", color = NA),
+        panel.background = element_rect(fill = "transparent", color = NA)
+      )
+    
+    save_phase1_plot(
+      plot_obj = p_cv_dist,
+      base_filename = file.path(output_dir, "phase1_cv_distribution"),
+      width = 10,
+      height = 7
+    )
+    
+    cat("Created:", file.path(output_dir, "phase1_cv_distribution.{pdf,svg,png}"), "\n\n")
+  }
+}
+
+################################################################################
 ### DECISION CRITERIA FOR PHASE 2
 ################################################################################
 
@@ -1472,9 +1614,13 @@ for (path in manifest_source_paths) {
 }
 
 if (manifest_sourced && exists("export_analysis_manifest")) {
-  # Export the analysis manifest (JSON + MD)
+  # Export the comprehensive analysis manifest (JSON + MD + CSVs)
+  cat("\n====================================================================\n")
+  cat("EXPORTING COMPREHENSIVE META-ANALYSIS RESULTS\n")
+  cat("====================================================================\n\n")
+  
   tryCatch({
-    export_analysis_manifest(
+    manifest_obj <- export_analysis_manifest(
       results_dt = results,
       output_dir = output_dir,
       manifest_filename = "analysis_manifest.json",
@@ -1489,11 +1635,136 @@ if (manifest_sourced && exists("export_analysis_manifest")) {
       )
     }
     
-    cat("\nManifest files created for AI-assisted parameter selection:\n")
-    cat("  - analysis_manifest.json: Structured data for programmatic access\n")
-    cat("  - analysis_manifest.md: Human-readable parameter recommendations\n")
+    cat("\n=== COMPREHENSIVE META-ANALYSIS OUTPUT FILES ===\n")
+    cat("Manifest files created for AI-assisted parameter selection:\n")
+    cat("  1. analysis_manifest.json: Complete structured data\n")
+    cat("  2. analysis_manifest.md: Human-readable recommendations\n")
+    cat("  3. canonical_copula_parameters.csv: Flat lookup table\n")
+    cat("  4. grade_level_analysis.csv: Grade band effects\n")
+    cat("  5. statistical_tests.csv: Hypothesis test results\n\n")
+    
+    # --- DISPLAY KEY RESULTS FROM COMPREHENSIVE ANALYSIS ---
+    if (!is.null(manifest_obj)) {
+      cat("====================================================================\n")
+      cat("COMPREHENSIVE META-ANALYSIS SUMMARY\n")
+      cat("====================================================================\n\n")
+      
+      # Display cross-stratified recommendations with stability
+      if ("cross_stratified" %in% names(manifest_obj$parameter_recommendations)) {
+        cat("CROSS-STRATIFIED PARAMETER STABILITY:\n")
+        cat("--------------------------------------\n")
+        
+        cross_strat <- manifest_obj$parameter_recommendations$cross_stratified
+        
+        # Create summary table
+        stab_summary <- data.table(
+          Stratum = names(cross_strat),
+          N = sapply(cross_strat, function(x) x$n_conditions),
+          Tau_CV = sapply(cross_strat, function(x) x$tau$cv),
+          Rho_CV = sapply(cross_strat, function(x) x$rho$cv),
+          DF_CV = sapply(cross_strat, function(x) x$df$cv),
+          Stability = sapply(cross_strat, function(x) x$overall_stability)
+        )
+        
+        # Sort by stability (HIGH > MEDIUM > LOW)
+        stab_summary[, stab_order := fcase(
+          Stability == "HIGH", 1,
+          Stability == "MEDIUM", 2,
+          Stability == "LOW", 3,
+          default = 4
+        )]
+        setorder(stab_summary, stab_order, Stratum)
+        stab_summary[, stab_order := NULL]
+        
+        print(stab_summary)
+        cat("\n")
+        
+        # Stability distribution
+        stab_counts <- table(stab_summary$Stability)
+        cat("Stability Distribution:\n")
+        for (s in names(stab_counts)) {
+          cat(sprintf("  %s: %d strata (%.1f%%)\n", 
+                     s, stab_counts[s], 
+                     100 * stab_counts[s] / sum(stab_counts)))
+        }
+        cat("\n")
+      }
+      
+      # Display statistical test results
+      if ("statistical_tests" %in% names(manifest_obj) && length(manifest_obj$statistical_tests) > 0) {
+        cat("STATISTICAL SIGNIFICANCE TESTS:\n")
+        cat("-------------------------------\n")
+        
+        for (test_name in names(manifest_obj$statistical_tests)) {
+          test <- manifest_obj$statistical_tests[[test_name]]
+          if (!"error" %in% names(test)) {
+            cat(sprintf("\n%s:\n", gsub("_", " ", toupper(test_name))))
+            cat(sprintf("  Test: %s\n", test$test))
+            cat(sprintf("  H0: %s\n", test$hypothesis))
+            if ("statistic" %in% names(test)) {
+              cat(sprintf("  Statistic: %.3f\n", test$statistic))
+            }
+            if ("correlation" %in% names(test)) {
+              cat(sprintf("  Correlation: %.3f\n", test$correlation))
+            }
+            cat(sprintf("  p-value: %.6f %s\n", test$p_value, 
+                       if (test$significant) "***" else "(ns)"))
+            cat(sprintf("  Result: %s\n", test$interpretation))
+          }
+        }
+        cat("\n")
+      }
+      
+      # Display effect sizes
+      if ("effect_sizes" %in% names(manifest_obj) && length(manifest_obj$effect_sizes) > 0) {
+        cat("EFFECT SIZE QUANTIFICATION:\n")
+        cat("---------------------------\n")
+        
+        for (factor_name in names(manifest_obj$effect_sizes)) {
+          effect <- manifest_obj$effect_sizes[[factor_name]]
+          if (!"error" %in% names(effect)) {
+            cat(sprintf("\n%s:\n", gsub("_", " ", toupper(factor_name))))
+            cat(sprintf("  Measure: %s\n", effect$measure))
+            cat(sprintf("  Value: %.4f\n", effect$value))
+            cat(sprintf("  Interpretation: %s effect\n", effect$interpretation))
+          }
+        }
+        cat("\n")
+      }
+      
+      # Display grade-level analysis
+      if ("grade_level_analysis" %in% names(manifest_obj) && length(manifest_obj$grade_level_analysis) > 0) {
+        cat("GRADE-LEVEL EFFECTS:\n")
+        cat("--------------------\n")
+        
+        grade_summary <- data.table(
+          Grade_Band = names(manifest_obj$grade_level_analysis),
+          Grade_Range = sapply(manifest_obj$grade_level_analysis, function(x) x$grade_range),
+          N = sapply(manifest_obj$grade_level_analysis, function(x) x$n_conditions),
+          Tau_Median = sapply(manifest_obj$grade_level_analysis, function(x) x$tau$median),
+          Tau_CV = sapply(manifest_obj$grade_level_analysis, function(x) x$tau$cv),
+          Stability = sapply(manifest_obj$grade_level_analysis, function(x) x$tau$stability)
+        )
+        
+        print(grade_summary)
+        cat("\n")
+      }
+      
+      # Fallback hierarchy reminder
+      cat("CANONICAL COPULA LOOKUP STRATEGY:\n")
+      cat("---------------------------------\n")
+      cat("For new conditions, use the following hierarchy:\n")
+      cat("  1. Try: year_span × content_area (cross_stratified)\n")
+      cat("  2. If n < 10, fall back to: year_span only\n")
+      cat("  3. If still n < 5, use: global median\n")
+      cat("\nRecommended minimum sample size:\n")
+      cat("  - Preferred: n >= 10 (reliable estimates)\n")
+      cat("  - Acceptable: n >= 5 (use with caution)\n")
+      cat("  - Insufficient: n < 5 (fall back to broader stratum)\n\n")
+    }
+    
   }, error = function(e) {
-    cat("Warning: Could not export analysis manifest:", e$message, "\n")
+    cat("Warning: Could not export comprehensive analysis manifest:", e$message, "\n")
   })
 } else {
   cat("Note: export_analysis_manifest function not available.\n")
@@ -1545,9 +1816,67 @@ cat("  - phase1_absolute_relative_fit: Absolute (GoF) and relative (ΔAIC) fit\n
 cat("  - phase1_copula_selection_by_condition: Family selection patterns with rho/tau/lambda dots\n")
 cat("  - phase1_t_copula_phase_diagram: t-copula df vs tail dependence landscape\n")
 cat("  - phase1_aic_by_span: Mean AIC trends by year span\n")
+cat("  - phase1_parameter_stability_heatmap: CV across strata (NEW)\n")
+cat("  - phase1_cv_distribution: Stability metric distributions (NEW)\n")
 cat("\nNote: Removed redundant plots - information consolidated:\n")
 cat("      • selection_frequency, delta_aic_distributions, aic_weights → absolute_relative_fit\n")
 cat("      • heatmap, mosaic plots, tail_dependence → copula_selection_by_condition\n\n")
+
+cat("COMPREHENSIVE META-ANALYSIS RESULTS\n")
+cat("-----------------------------------\n")
+
+# Load and report canonical table if it exists
+canonical_csv <- file.path(output_dir, "canonical_copula_parameters.csv")
+if (file.exists(canonical_csv)) {
+  canonical_dt <- fread(canonical_csv)
+  
+  cat(sprintf("Cross-stratified canonical copulas: %d strata\n", nrow(canonical_dt)))
+  cat(sprintf("  HIGH stability (CV < 10%%): %d strata\n", 
+             sum(canonical_dt$overall_stability == "HIGH", na.rm = TRUE)))
+  cat(sprintf("  MEDIUM stability (CV 10-20%%): %d strata\n", 
+             sum(canonical_dt$overall_stability == "MEDIUM", na.rm = TRUE)))
+  cat(sprintf("  LOW stability (CV > 20%%): %d strata\n", 
+             sum(canonical_dt$overall_stability == "LOW", na.rm = TRUE)))
+  cat("\n")
+  
+  cat("Sample canonical copula parameters:\n")
+  cat("-----------------------------------\n")
+  sample_strata <- canonical_dt[order(-n_conditions)][1:min(5, nrow(canonical_dt))]
+  for (i in 1:nrow(sample_strata)) {
+    row <- sample_strata[i]
+    cat(sprintf("\n%s (%d-year %s, n=%d, %s stability):\n",
+               row$stratum_id, row$year_span, row$content_area, 
+               row$n_conditions, row$overall_stability))
+    cat(sprintf("  τ: %.3f (CV=%.2f%%, 95%% CI: [%.3f, %.3f])\n",
+               row$tau_median, row$tau_cv * 100, row$tau_ci_lower, row$tau_ci_upper))
+    cat(sprintf("  ρ: %.3f (CV=%.2f%%, 95%% CI: [%.3f, %.3f])\n",
+               row$rho_median, row$rho_cv * 100, row$rho_ci_lower, row$rho_ci_upper))
+    cat(sprintf("  ν: %.1f (CV=%.2f%%, 95%% CI: [%.1f, %.1f])\n",
+               row$df_median, row$df_cv * 100, row$df_ci_lower, row$df_ci_upper))
+  }
+  cat("\n")
+}
+
+# Report statistical tests if file exists
+stat_tests_csv <- file.path(output_dir, "statistical_tests.csv")
+if (file.exists(stat_tests_csv)) {
+  stat_tests_dt <- fread(stat_tests_csv)
+  
+  cat("STATISTICAL HYPOTHESIS TESTS\n")
+  cat("----------------------------\n")
+  for (i in 1:nrow(stat_tests_dt)) {
+    row <- stat_tests_dt[i]
+    cat(sprintf("\n%s:\n", row$test_name))
+    cat(sprintf("  Test: %s\n", row$test_type))
+    cat(sprintf("  H0: %s\n", row$hypothesis))
+    cat(sprintf("  p-value: %.6f %s\n", row$p_value, 
+               if (row$significant) "*** (significant)" else "(not significant)"))
+    cat(sprintf("  Result: %s\n", row$interpretation))
+  }
+  cat("\n")
+}
+
+cat("\n")
 
 cat("T-COPULA VS GAUSSIAN BY GRADE SPAN\n")
 cat("-----------------------------------\n")
@@ -1591,6 +1920,167 @@ if (decision == "SINGLE_WINNER") {
 sink()
 
 cat("Saved:", summary_file, "\n\n")
+
+################################################################################
+### CREATE CANONICAL COPULA LOOKUP HELPER FUNCTIONS
+################################################################################
+
+cat("====================================================================\n")
+cat("CREATING CANONICAL COPULA LOOKUP UTILITIES\n")
+cat("====================================================================\n\n")
+
+# Create R helper script for easy canonical copula lookup
+helper_script <- file.path(output_dir, "lookup_canonical_copula.R")
+
+cat("# Canonical Copula Lookup Helper Functions\n", file = helper_script)
+cat("# Auto-generated by phase1_analysis.R\n", file = helper_script, append = TRUE)
+cat(sprintf("# Generated: %s\n\n", format(Sys.time(), "%Y-%m-%d %H:%M:%S")), 
+    file = helper_script, append = TRUE)
+
+cat("require(data.table)\nrequire(copula)\n\n", file = helper_script, append = TRUE)
+
+cat("# Load canonical copula parameters\n", file = helper_script, append = TRUE)
+cat("CANONICAL_DIR <- dirname(normalizePath(\"", helper_script, "\", mustWork = FALSE))\n",
+    file = helper_script, append = TRUE)
+cat("canonical_params <- fread(file.path(CANONICAL_DIR, \"canonical_copula_parameters.csv\"))\n\n",
+    file = helper_script, append = TRUE)
+
+# Write lookup function
+cat("
+#' Lookup Canonical Copula Parameters
+#'
+#' @param year_span Integer: years between assessments (1, 2, 3, or 4)
+#' @param content_area Character: \"MATHEMATICS\", \"ELA\", \"READING\", or \"WRITING\"
+#' @param min_n Minimum sample size required (default: 10)
+#' @param fallback_to_year_span Logical: fall back to year_span-only if cross-strat has n < min_n?
+#' @return data.table with canonical parameters, or NULL if not found
+#'
+#' @examples
+#' # Lookup 1-year Mathematics canonical copula
+#' params <- lookup_canonical(year_span = 1, content_area = \"MATHEMATICS\")
+#' 
+#' # Create t-copula from canonical parameters
+#' if (!is.null(params)) {
+#'   cop <- tCopula(param = params$rho_median, df = params$df_median, dispstr = \"un\")
+#' }
+lookup_canonical <- function(year_span, 
+                             content_area, 
+                             min_n = 10,
+                             fallback_to_year_span = TRUE) {
+  
+  # Try cross-stratified lookup first
+  match <- canonical_params[
+    year_span == year_span & 
+    content_area == toupper(content_area)
+  ]
+  
+  if (nrow(match) > 0 && match$n_conditions >= min_n) {
+    cat(sprintf(\"Found canonical copula: %d-year %s (n=%d, %s stability)\\n\",
+               year_span, content_area, match$n_conditions, match$overall_stability))
+    return(match)
+  }
+  
+  # Fall back to year_span only if requested
+  if (fallback_to_year_span) {
+    year_matches <- canonical_params[year_span == year_span]
+    if (nrow(year_matches) > 0) {
+      # Take the one with highest n
+      best_match <- year_matches[order(-n_conditions)][1]
+      if (best_match$n_conditions >= min_n) {
+        warning(sprintf(
+          \"No sufficient %s data for %d-year. Using %s data (n=%d).\\n\",
+          content_area, year_span, best_match$content_area, best_match$n_conditions
+        ))
+        return(best_match)
+      }
+    }
+  }
+  
+  warning(sprintf(
+    \"No canonical copula found for year_span=%d, content_area=%s with n>=%d\\n\",
+    year_span, content_area, min_n
+  ))
+  return(NULL)
+}
+
+#' Create t-Copula from Canonical Parameters
+#'
+#' @param year_span Integer: years between assessments
+#' @param content_area Character: content area name
+#' @param use_ci Logical: use lower CI bound for conservative estimate? (default: FALSE uses median)
+#' @return tCopula object, or NULL if lookup failed
+create_canonical_copula <- function(year_span, content_area, use_ci = FALSE) {
+  params <- lookup_canonical(year_span, content_area)
+  
+  if (is.null(params)) {
+    return(NULL)
+  }
+  
+  # Use median or conservative (lower CI) estimate
+  rho <- if (use_ci && !is.na(params$rho_ci_lower)) {
+    params$rho_ci_lower
+  } else {
+    params$rho_median
+  }
+  
+  df <- if (use_ci && !is.na(params$df_ci_lower)) {
+    params$df_ci_lower
+  } else {
+    params$df_median
+  }
+  
+  cop <- tCopula(param = rho, df = df, dispstr = \"un\")
+  
+  cat(sprintf(\"Created t-copula: ρ=%.3f, ν=%.1f\\n\", rho, df))
+  cat(sprintf(\"Expected Kendall's τ ≈ %.3f (empirical median)\\n\", params$tau_median))
+  cat(sprintf(\"Parameter stability: %s (CV: τ=%.2f%%, ρ=%.2f%%, ν=%.2f%%)\\n\",
+             params$overall_stability, 
+             params$tau_cv * 100, params$rho_cv * 100, params$df_cv * 100))
+  
+  return(cop)
+}
+
+#' Show All Available Canonical Copulas
+#'
+#' @param stability_filter Character: \"HIGH\", \"MEDIUM\", \"LOW\", or \"ALL\" (default)
+show_available_canonicals <- function(stability_filter = \"ALL\") {
+  if (stability_filter != \"ALL\") {
+    filtered <- canonical_params[overall_stability == stability_filter]
+  } else {
+    filtered <- canonical_params
+  }
+  
+  summary_table <- filtered[, .(
+    Year_Span = year_span,
+    Content_Area = content_area,
+    N = n_conditions,
+    Tau = sprintf(\"%.3f (±%.3f)\", tau_median, tau_sd),
+    Rho = sprintf(\"%.3f (±%.3f)\", rho_median, rho_sd),
+    DF = sprintf(\"%.1f (±%.1f)\", df_median, df_sd),
+    Stability = overall_stability
+  )]
+  
+  setorder(summary_table, Year_Span, Content_Area)
+  
+  cat(sprintf(\"\\n=== Available Canonical Copulas (%s stability) ===\\n\", stability_filter))
+  print(summary_table)
+  cat(\"\\n\")
+  
+  invisible(summary_table)
+}
+
+cat(\"\\n=== CANONICAL COPULA LOOKUP FUNCTIONS LOADED ===\\n\")
+cat(\"Available functions:\\n\")
+cat(\"  - lookup_canonical(year_span, content_area): Get parameters\\n\")
+cat(\"  - create_canonical_copula(year_span, content_area): Create copula object\\n\")
+cat(\"  - show_available_canonicals(stability_filter): List all canonicals\\n\")
+cat(\"\\nExample usage:\\n\")
+cat(\"  cop <- create_canonical_copula(year_span = 1, content_area = \\\"MATHEMATICS\\\")\\n\")
+cat(\"  show_available_canonicals(\\\"HIGH\\\")\\n\\n\")
+", file = helper_script, append = TRUE)
+
+cat("Created R helper script:", helper_script, "\n")
+cat("  Usage: source(\"", helper_script, "\") to load lookup functions\n\n", sep = "")
 
 cat("====================================================================\n")
 cat("PHASE 1 ANALYSIS COMPLETE!\n")

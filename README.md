@@ -29,7 +29,7 @@ STEPS_TO_RUN <- c(1)
 source("master_analysis.R")
 ```
 
-**Runtime:** 3-4 hours (EC2, 966 conditions, 4 datasets)
+**Runtime:** 38.0 hours on EC2 m8g-metal.48xl (Graviton 4, 192cpu and 752gb memory) from 01/21/26 to 01/22/26 (966 conditions, 4 datasets)
 
 ---
 

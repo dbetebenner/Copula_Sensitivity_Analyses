@@ -98,7 +98,7 @@ New experiment to test computational performance and robustness:
 
 #### Usage
 ```r
-source("STEP_2_Transformation_Validation/exp_6_operational_fitness.R")
+source("STEP_3_Application_Implementation/exp_6_operational_fitness.R")
 ```
 
 **Outputs**:
@@ -255,7 +255,7 @@ After implementation, verify:
 ### Immediate (Testing)
 1. **Test Experiment 5** with real data:
    ```r
-   source("STEP_2_Transformation_Validation/exp_5_transformation_validation.R")
+   source("STEP_3_Application_Implementation/exp_5_transformation_validation.R")
    ```
    - Verify Bernstein method runs successfully
    - Check tail calibration and stability diagnostics compute correctly
@@ -263,7 +263,7 @@ After implementation, verify:
 
 2. **Test Experiment 6**:
    ```r
-   source("STEP_2_Transformation_Validation/exp_6_operational_fitness.R")
+   source("STEP_3_Application_Implementation/exp_6_operational_fitness.R")
    ```
    - Verify performance metrics compute correctly
    - Check grading system works
@@ -333,7 +333,7 @@ After implementation, verify:
 ## Recommendations for Future Work
 
 ### Phase 7: Stress Testing (Not Implemented Yet)
-Create `STEP_3_Sensitivity_Analyses/exp_5_stress_tests.R`:
+Create `STEP_2_Copula_Sensitivity_Analyses/exp_5_stress_tests.R`:
 1. Heaping stress: Coarsen continuous data to test robustness
 2. Boundary inflation: Inject ceiling/floor effects
 3. Sample size sensitivity: Test on subsamples

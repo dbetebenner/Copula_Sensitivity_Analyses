@@ -2,7 +2,7 @@
 ### TEST SCRIPT FOR STEP 2 ENHANCEMENTS
 ### Quick validation that new components work correctly
 ### 
-### USAGE: source("STEP_2_Transformation_Validation/test_enhancements.R")
+### USAGE: source("STEP_3_Application_Implementation/test_enhancements.R")
 ###        (from workspace root)
 ################################################################################
 
@@ -14,15 +14,15 @@ cat("====================================================================\n\n")
 if (file.exists("functions/transformation_diagnostics.R")) {
   # We're in workspace root
   source("functions/transformation_diagnostics.R")
-  source("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")
-  source("STEP_2_Transformation_Validation/methods/csem_aware_smoother.R")
+  source("STEP_3_Application_Implementation/methods/bernstein_cdf.R")
+  source("STEP_3_Application_Implementation/methods/csem_aware_smoother.R")
 } else if (file.exists("../functions/transformation_diagnostics.R")) {
-  # We're in STEP_2_Transformation_Validation directory
+  # We're in STEP_3_Application_Implementation directory
   source("../functions/transformation_diagnostics.R")
   source("methods/bernstein_cdf.R")
   source("methods/csem_aware_smoother.R")
 } else {
-  stop("Cannot find functions directory. Please run from workspace root or STEP_2_Transformation_Validation directory.")
+  stop("Cannot find functions directory. Please run from workspace root or STEP_3_Application_Implementation directory.")
 }
 
 cat("  ✓ Functions loaded\n\n")

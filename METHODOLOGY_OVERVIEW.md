@@ -74,7 +74,7 @@ t-copula selected in 95% of conditions via AIC."
 ---
 
 ### STEP 2: Transformation Validation
-**Directory:** `STEP_2_Transformation_Validation/`  
+**Directory:** `STEP_3_Application_Implementation/`  
 **Runtime:** 40-60 minutes
 
 #### Maps to Paper Sections:
@@ -94,19 +94,19 @@ QQ-plots against Uniform(0,1) as well as apply a Kolmogorov-Smirnov test.
 
 **Table:** Transformation method validation
 ```r
-results <- fread("STEP_2_Transformation_Validation/results/exp5_transformation_validation_summary.csv")
+results <- fread("STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv")
 ```
 
 **Figure:** Uniformity forest plot
 ```
-File: STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/uniformity_forest_plot.pdf
+File: STEP_3_Application_Implementation/results/figures/exp5_transformation_validation/uniformity_forest_plot.pdf
 Caption: "K-S test p-values for 15 transformation methods. Kernel Gaussian (p=0.23) 
 balances uniformity with practical utility."
 ```
 
 **Figure:** Trade-off space
 ```
-File: STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/tradeoff_space.pdf
+File: STEP_3_Application_Implementation/results/figures/exp5_transformation_validation/tradeoff_space.pdf
 Caption: "Transformation method trade-off: uniformity vs. copula selection correctness. 
 Top-right quadrant methods (Kernel, I-spline 49 knots) are acceptable."
 ```
@@ -126,7 +126,7 @@ Top-right quadrant methods (Kernel, I-spline 49 knots) are acceptable."
 ---
 
 ### STEP 3: Sensitivity Analyses
-**Directory:** `STEP_3_Sensitivity_Analyses/`  
+**Directory:** `STEP_2_Copula_Sensitivity_Analyses/`  
 **Runtime:** 3-6 hours
 
 #### Maps to Paper Sections:
@@ -169,10 +169,10 @@ of data and demonstrating temporal stability.
 **Table:** Sensitivity analysis summary
 ```r
 # Combine all experiments
-exp1 <- fread("STEP_3_Sensitivity_Analyses/results/exp_1_grade_span/grade_span_comparison.csv")
-exp2 <- fread("STEP_3_Sensitivity_Analyses/results/exp_2_sample_size/sample_size_effects.csv")
-exp3 <- fread("STEP_3_Sensitivity_Analyses/results/exp_3_content_area/content_area_comparison.csv")
-exp4 <- fread("STEP_3_Sensitivity_Analyses/results/exp_4_cohort/cohort_effects.csv")
+exp1 <- fread("STEP_2_Copula_Sensitivity_Analyses/results/exp_1_grade_span/grade_span_comparison.csv")
+exp2 <- fread("STEP_2_Copula_Sensitivity_Analyses/results/exp_2_sample_size/sample_size_effects.csv")
+exp3 <- fread("STEP_2_Copula_Sensitivity_Analyses/results/exp_3_content_area/content_area_comparison.csv")
+exp4 <- fread("STEP_2_Copula_Sensitivity_Analyses/results/exp_4_cohort/cohort_effects.csv")
 ```
 
 **Figure:** 2×2 sensitivity panel
@@ -335,8 +335,8 @@ Tables saved to: `STEP_4_Deep_Dive_Reporting/results/tables/*.tex`
 ```bash
 # Copy publication figures
 cp STEP_1_Family_Selection/results/*.pdf ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
-cp STEP_2_Transformation_Validation/results/figures/*.pdf ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
-cp STEP_3_Sensitivity_Analyses/results/*/*.pdf ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
+cp STEP_3_Application_Implementation/results/figures/*.pdf ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
+cp STEP_2_Copula_Sensitivity_Analyses/results/*/*.pdf ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
 cp STEP_4_Deep_Dive_Reporting/results/figures/*.pdf ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
 ```
 
@@ -367,12 +367,12 @@ Transformation method validation
 |------------|---------------|
 | Copula selection table | `STEP_1_Family_Selection/results/phase1_selection_table.csv` |
 | Selection frequency figure | `STEP_1_Family_Selection/results/phase1_selection_frequency.pdf` |
-| Transformation validation table | `STEP_2_Transformation_Validation/results/exp5_*.csv` |
-| Uniformity forest plot | `STEP_2_Transformation_Validation/results/figures/.../uniformity_forest_plot.pdf` |
-| Grade span sensitivity | `STEP_3_Sensitivity_Analyses/results/exp_1_grade_span/*.csv` |
-| Sample size effects | `STEP_3_Sensitivity_Analyses/results/exp_2_sample_size/*.csv` |
-| Content area comparison | `STEP_3_Sensitivity_Analyses/results/exp_3_content_area/*.csv` |
-| Cohort effects | `STEP_3_Sensitivity_Analyses/results/exp_4_cohort/*.csv` |
+| Transformation validation table | `STEP_3_Application_Implementation/results/exp5_*.csv` |
+| Uniformity forest plot | `STEP_3_Application_Implementation/results/figures/.../uniformity_forest_plot.pdf` |
+| Grade span sensitivity | `STEP_2_Copula_Sensitivity_Analyses/results/exp_1_grade_span/*.csv` |
+| Sample size effects | `STEP_2_Copula_Sensitivity_Analyses/results/exp_2_sample_size/*.csv` |
+| Content area comparison | `STEP_2_Copula_Sensitivity_Analyses/results/exp_3_content_area/*.csv` |
+| Cohort effects | `STEP_2_Copula_Sensitivity_Analyses/results/exp_4_cohort/*.csv` |
 | t-Copula parameters | `STEP_4_Deep_Dive_Reporting/results/t_copula_*.csv` |
 | Comprehensive report | `STEP_4_Deep_Dive_Reporting/results/comprehensive_report.pdf` |
 | LaTeX tables | `STEP_4_Deep_Dive_Reporting/results/tables/*.tex` |
@@ -408,11 +408,11 @@ Copula_Sensitivity_Analyses/
 │   ├── README.md
 │   └── results/
 │
-├── STEP_2_Transformation_Validation/  ← Which smoothing?
+├── STEP_3_Application_Implementation/  ← Which smoothing?
 │   ├── README.md
 │   └── results/
 │
-├── STEP_3_Sensitivity_Analyses/       ← Robustness?
+├── STEP_2_Copula_Sensitivity_Analyses/       ← Robustness?
 │   ├── README.md
 │   └── results/
 │

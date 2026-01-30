@@ -3,7 +3,7 @@
 ### Tests computational performance and inversion accuracy of transformation
 ### methods that pass statistical validation
 ###
-### USAGE: source("STEP_2_Transformation_Validation/exp_6_operational_fitness.R")
+### USAGE: source("STEP_3_Application_Implementation/exp_6_operational_fitness.R")
 ###        (from workspace root)
 ############################################################################
 
@@ -16,11 +16,11 @@ if (file.exists("functions/transformation_diagnostics.R")) {
   source("functions/transformation_diagnostics.R")
   source("functions/ispline_ecdf.R")
 } else if (file.exists("../functions/transformation_diagnostics.R")) {
-  # We're in STEP_2_Transformation_Validation directory
+  # We're in STEP_3_Application_Implementation directory
   source("../functions/transformation_diagnostics.R")
   source("../functions/ispline_ecdf.R")
 } else {
-  stop("Cannot find functions directory. Please run from workspace root or STEP_2_Transformation_Validation directory.")
+  stop("Cannot find functions directory. Please run from workspace root or STEP_3_Application_Implementation directory.")
 }
 
 cat("====================================================================\n")
@@ -402,8 +402,8 @@ if (interactive() || !exists("SKIP_EXP6_EXECUTION")) {
   
   # Bernstein CDF
   cat("  Bernstein CDF...\n")
-  if (file.exists("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")) {
-    source("STEP_2_Transformation_Validation/methods/bernstein_cdf.R")
+  if (file.exists("STEP_3_Application_Implementation/methods/bernstein_cdf.R")) {
+    source("STEP_3_Application_Implementation/methods/bernstein_cdf.R")
   } else {
     source("methods/bernstein_cdf.R")
   }

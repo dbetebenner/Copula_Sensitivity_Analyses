@@ -162,8 +162,8 @@ source("master_analysis.R")
 | Step | Results Directory | Key Files |
 |------|-------------------|-----------|
 | 1 | `STEP_1_Family_Selection/results/` | `phase1_decision.RData`, `phase1_*.pdf` |
-| 2 | `STEP_2_Transformation_Validation/results/` | `exp5_transformation_validation_summary.csv` |
-| 3 | `STEP_3_Sensitivity_Analyses/results/` | `exp_*/` subdirectories with CSV and PDFs |
+| 2 | `STEP_2_Copula_Sensitivity_Analyses/results/` | `exp_*/` subdirectories with CSV and PDFs |
+| 3 | `STEP_3_Application_Implementation/results/` | `exp5_transformation_validation_summary.csv` |
 | 4 | `STEP_4_Deep_Dive_Reporting/results/` | `tables/*.tex`, `figures/*.pdf` |
 
 ---

@@ -92,9 +92,9 @@ The following 5 methods are SUITABLE for Phase 2:
 
 OUTPUT FILES:
 -------------
-STEP_2_Transformation_Validation/results/exp5_transformation_validation_summary.csv     (Quick reference)
-STEP_2_Transformation_Validation/results/exp5_transformation_validation_full.RData      (Complete results)
-STEP_2_Transformation_Validation/results/figures/exp5_transformation_validation/*.pdf           (20+ figures)
+STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv     (Quick reference)
+STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData      (Complete results)
+STEP_3_Application_Implementation/results/figures/exp5_transformation_validation/*.pdf           (20+ figures)
 
 ====================================================================
 WHAT TO CHECK

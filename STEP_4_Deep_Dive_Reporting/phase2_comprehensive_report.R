@@ -79,7 +79,7 @@ if (file.exists("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RD
 }
 
 # Check for experiment results (look for any CSV files matching experiment pattern)
-exp_files <- list.files("STEP_3_Sensitivity_Analyses/results", pattern = "exp_.*_summary\\.csv$", full.names = TRUE, recursive = TRUE)
+exp_files <- list.files("STEP_2_Copula_Sensitivity_Analyses/results", pattern = "exp_.*_summary\\.csv$", full.names = TRUE, recursive = TRUE)
 
 if (length(exp_files) > 0) {
   cat("Loading experiment summaries...\n")
@@ -389,4 +389,3 @@ cat("  3. Use tables for manuscript/presentation\n")
 cat("  4. Consider additional sensitivity analyses if needed\n\n")
 
 cat("====================================================================\n\n")
-

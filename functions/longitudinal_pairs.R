@@ -137,6 +137,79 @@ create_longitudinal_pairs <- function(data,
   return(pairs)
 }
 
+#' Resolve a valid year_prior for a given grade span and content area
+#'
+#' Uses the data to find a year_prior where both prior and current years
+#' exist for the requested grades/content. Falls back to the latest valid
+#' prior year if the provided year is unavailable.
+resolve_year_prior <- function(data,
+                               grade_prior,
+                               grade_current,
+                               content_prior = "MATHEMATICS",
+                               content_current = NULL,
+                               year_prior = NULL,
+                               dataset_id = NULL) {
+  require(data.table)
+
+  if (is.null(content_current)) {
+    content_current <- content_prior
+  }
+
+  if (!is.null(dataset_id) && "DATASET" %in% names(data)) {
+    data <- data[DATASET == dataset_id]
+  }
+
+  grade_span <- grade_current - grade_prior
+
+  years_prior <- data[GRADE == grade_prior & CONTENT_AREA == content_prior, unique(YEAR)]
+  years_current <- data[GRADE == grade_current & CONTENT_AREA == content_current, unique(YEAR)]
+
+  if (length(years_prior) == 0 || length(years_current) == 0) {
+    return(NA_character_)
+  }
+
+  years_prior_num <- as.numeric(as.character(years_prior))
+  years_current_num <- as.numeric(as.character(years_current))
+  
+  # Remove any NA values from year conversion
+  years_prior_num <- years_prior_num[!is.na(years_prior_num)]
+  years_current_num <- years_current_num[!is.na(years_current_num)]
+  
+  if (length(years_prior_num) == 0 || length(years_current_num) == 0) {
+    warning(sprintf("No valid numeric years found for grade %d -> %d, content %s -> %s",
+                   grade_prior, grade_current, content_prior, content_current))
+    return(NA_character_)
+  }
+
+  valid_prior <- years_prior_num[years_prior_num + grade_span %in% years_current_num]
+  if (length(valid_prior) == 0) {
+    warning(sprintf("No valid year_prior found where year_prior + %d exists for grade %d -> %d",
+                   grade_span, grade_prior, grade_current))
+    return(NA_character_)
+  }
+
+  if (!is.null(year_prior)) {
+    year_prior_num <- as.numeric(as.character(year_prior))
+    if (!is.na(year_prior_num) && year_prior_num %in% valid_prior) {
+      return(as.character(year_prior_num))
+    } else if (!is.na(year_prior_num)) {
+      warning(sprintf("Requested year_prior %d not valid. Valid years: %s. Using max: %d",
+                     year_prior_num, 
+                     paste(sort(valid_prior), collapse = ", "),
+                     max(valid_prior)))
+    }
+  }
+
+  # Final safety check before return
+  best_year <- max(valid_prior, na.rm = TRUE)
+  if (is.infinite(best_year) || is.na(best_year)) {
+    warning("Could not determine valid year_prior (got -Inf or NA)")
+    return(NA_character_)
+  }
+  
+  return(as.character(best_year))
+}
+
 
 #' Create Multiple Longitudinal Pair Sets
 #' 
