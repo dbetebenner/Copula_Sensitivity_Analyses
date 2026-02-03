@@ -2362,7 +2362,11 @@ generate_condition_plots <- function(pseudo_obs,
   # === MEMORY CLEANUP: Empirical Plots ===
   # Remove temporary grid objects from empirical copula section
   # Helps prevent memory accumulation with 180+ parallel workers
-  rm(list = ls(pattern = "^empirical_grid_|^raw_grid_|^bern_grid_"))
+  # NOTE: Keep empirical_grid_cdf - it's needed for bootstrap uncertainty plots later
+  # Only remove raw_grid_* and bern_grid_* which are fully consumed by this point
+  rm(list = ls(pattern = "^raw_grid_|^bern_grid_"))
+  # Remove empirical_grid_pdf but NOT empirical_grid_cdf (needed for uncertainty plots)
+  if (exists("empirical_grid_pdf")) rm(empirical_grid_pdf)
   invisible(gc(reset = TRUE))
   # === END MEMORY CLEANUP ===
   
@@ -2883,8 +2887,14 @@ generate_condition_plots <- function(pseudo_obs,
     }
     
     cat("  - Bootstrap uncertainty plots complete!\n")
+    # Now we can clean up empirical_grid_cdf as it's no longer needed
+    if (exists("empirical_grid_cdf")) rm(empirical_grid_cdf)
+    invisible(gc(reset = TRUE))
   } else {
     cat("  - No bootstrap results provided, skipping uncertainty plots\n")
+    # Clean up empirical_grid_cdf even if bootstrap was skipped
+    if (exists("empirical_grid_cdf")) rm(empirical_grid_cdf)
+    invisible(gc(reset = TRUE))
   }
   
   # 5. Plot original bivariate density

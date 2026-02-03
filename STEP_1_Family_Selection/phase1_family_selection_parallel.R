@@ -697,11 +697,81 @@ if (!exists("MULTI_DATASET_MODE") || !MULTI_DATASET_MODE) {
 }
 
 ################################################################################
-### TEST MODE: LIMIT CONDITIONS FOR VALIDATION
+### QUICK TEST MODE: MINIMAL CONDITIONS FOR FAST LOCAL VALIDATION
 ################################################################################
 
-# If TEST_MODE is enabled, limit to small subset for validation
-if (exists("TEST_MODE", envir = .GlobalEnv) && get("TEST_MODE", envir = .GlobalEnv)) {
+# QUICK_TEST_MODE takes precedence over TEST_MODE - provides fastest possible validation
+# by selecting a minimal number of conditions from the smallest dataset
+if (exists("QUICK_TEST_MODE", envir = .GlobalEnv) && get("QUICK_TEST_MODE", envir = .GlobalEnv)) {
+  
+  n_quick_test <- 1  # Default
+  if (exists("QUICK_TEST_N_CONDITIONS", envir = .GlobalEnv)) {
+    n_quick_test <- get("QUICK_TEST_N_CONDITIONS", envir = .GlobalEnv)
+  }
+  
+  prefer_smallest <- TRUE  # Default
+  if (exists("QUICK_TEST_PREFER_SMALLEST", envir = .GlobalEnv)) {
+    prefer_smallest <- get("QUICK_TEST_PREFER_SMALLEST", envir = .GlobalEnv)
+  }
+  
+  cat("\n")
+  cat("====================================================================\n")
+  cat("QUICK TEST MODE: FAST LOCAL VALIDATION\n")
+  cat("====================================================================\n")
+  cat("Target conditions:", n_quick_test, "\n")
+  cat("Prefer smallest dataset:", prefer_smallest, "\n")
+  
+  if (prefer_smallest && exists("MULTI_DATASET_MODE") && MULTI_DATASET_MODE) {
+    # Filter to smallest dataset (dataset_4) first
+    # Dataset sizes: dataset_1 (~14M), dataset_2, dataset_3, dataset_4 (~1.6M)
+    smallest_dataset <- "dataset_4"
+    
+    # Get conditions from smallest dataset
+    ds4_conditions_idx <- which(sapply(CONDITIONS, function(c) c$dataset_id == smallest_dataset))
+    
+    if (length(ds4_conditions_idx) > 0) {
+      cat("Filtering to", smallest_dataset, "(smallest, ~1.6M rows)...\n")
+      cat("  Available conditions from", smallest_dataset, ":", length(ds4_conditions_idx), "\n")
+      
+      # Take first n_quick_test conditions from this dataset
+      n_to_select <- min(n_quick_test, length(ds4_conditions_idx))
+      selected_idx <- ds4_conditions_idx[seq_len(n_to_select)]
+      CONDITIONS <- CONDITIONS[selected_idx]
+      
+      cat("  Selected:", length(CONDITIONS), "condition(s)\n")
+    } else {
+      # Fallback: just take first n conditions from randomized pool
+      cat("WARNING: No conditions found for", smallest_dataset, ", using first", n_quick_test, "from pool\n")
+      CONDITIONS <- CONDITIONS[seq_len(min(n_quick_test, length(CONDITIONS)))]
+    }
+  } else {
+    # Single dataset mode or no preference - just take first n conditions
+    cat("Selecting first", n_quick_test, "condition(s) from pool...\n")
+    CONDITIONS <- CONDITIONS[seq_len(min(n_quick_test, length(CONDITIONS)))]
+  }
+  
+  # Display selected conditions
+  cat("\nSelected conditions for quick test:\n")
+  for (i in seq_along(CONDITIONS)) {
+    cond <- CONDITIONS[[i]]
+    cat(sprintf("  %d. %s: G%d->G%d (%s, %s, span=%d)\n", 
+               i, 
+               cond$dataset_id %||% "unknown",
+               cond$grade_prior, cond$grade_current, 
+               cond$year_prior, cond$content, 
+               cond$year_span %||% cond$span))
+  }
+  cat("\n")
+  cat("Total conditions:", length(CONDITIONS), "\n")
+  cat("====================================================================\n\n")
+  
+  # Skip TEST_MODE filtering since QUICK_TEST_MODE takes precedence
+  
+} else if (exists("TEST_MODE", envir = .GlobalEnv) && get("TEST_MODE", envir = .GlobalEnv)) {
+  
+################################################################################
+### TEST MODE: LIMIT CONDITIONS FOR VALIDATION (per-dataset)
+################################################################################
   
   n_conditions_test <- 1  # Default
   if (exists("TEST_N_CONDITIONS_PER_DATASET", envir = .GlobalEnv)) {

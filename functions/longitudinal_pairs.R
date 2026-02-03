@@ -61,9 +61,28 @@ create_longitudinal_pairs <- function(data,
                      .(ID, SCALE_SCORE_PRIOR = SCALE_SCORE)]
   
   # Extract current grade data
-  # Build column selection dynamically to include SGP columns if present
+  # Build column selection dynamically to include SGP columns and grouping variables
   base_cols <- c("ID", "SCALE_SCORE")
+  group_cols <- character(0)
   sgp_cols <- character(0)
+  
+  # CRITICAL: Check for grouping variables (SCHOOL_NUMBER, DISTRICT_NUMBER)
+  # These are REQUIRED for group-level aggregation in Step 2 publication figures
+  if ("SCHOOL_NUMBER" %in% names(data)) {
+    group_cols <- c(group_cols, "SCHOOL_NUMBER")
+  } else {
+    stop("CRITICAL ERROR: SCHOOL_NUMBER column not found in data.\n",
+         "  This column is REQUIRED for Step 2 group-level analyses.\n",
+         "  Check your data source and ensure SCHOOL_NUMBER is present.")
+  }
+  
+  if ("DISTRICT_NUMBER" %in% names(data)) {
+    group_cols <- c(group_cols, "DISTRICT_NUMBER")
+  } else {
+    stop("CRITICAL ERROR: DISTRICT_NUMBER column not found in data.\n",
+         "  This column is REQUIRED for Step 2 group-level analyses.\n",
+         "  Check your data source and ensure DISTRICT_NUMBER is present.")
+  }
   
   # Check for span-specific SGP columns (new naming convention: SGP_ORDER_1_SPAN_N_YEAR)
   span_suffix <- paste0("_SPAN_", year_span, "_YEAR")
@@ -87,7 +106,7 @@ create_longitudinal_pairs <- function(data,
     }
   }
   
-  all_cols <- c(base_cols, sgp_cols)
+  all_cols <- c(base_cols, group_cols, sgp_cols)
   
   data_current <- data[GRADE == grade_current & 
                        YEAR == year_current & 
@@ -123,6 +142,15 @@ create_longitudinal_pairs <- function(data,
   cat("  Matched pairs: N =", nrow(pairs), "\n")
   cat("  Grade span:", grade_current - grade_prior, "years\n")
   cat("  Time span:", as.numeric(year_current) - as.numeric(year_prior), "years\n")
+  
+  # Report grouping variables
+  if (length(group_cols) > 0) {
+    cat("  Grouping variables included:", paste(group_cols, collapse = ", "), "\n")
+    for (col in group_cols) {
+      n_valid <- sum(!is.na(pairs[[col]]))
+      cat(sprintf("    %s: %d valid (%.1f%%)\n", col, n_valid, 100 * n_valid / nrow(pairs)))
+    }
+  }
   
   # Report SGP columns if present
   if (length(sgp_cols) > 0) {

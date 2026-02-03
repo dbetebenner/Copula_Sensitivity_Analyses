@@ -107,7 +107,7 @@ cat("\nCreating scatter plots...\n")
 p_emp_best <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_best)], 
                      aes(x = sgpc_emp, y = sgpc_best)) +
   geom_hex(bins = 50) +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", size = 1) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
   scale_fill_viridis_c(trans = "log10") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
@@ -127,7 +127,7 @@ save_plot(p_emp_best, "scatter_emp_vs_best", width = 8, height = 8)
 p_emp_avg <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_avg)], 
                     aes(x = sgpc_emp, y = sgpc_avg)) +
   geom_hex(bins = 50) +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", size = 1) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
   scale_fill_viridis_c(trans = "log10") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
@@ -147,7 +147,7 @@ save_plot(p_emp_avg, "scatter_emp_vs_canonical", width = 8, height = 8)
 p_emp_gaussian <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_gaussian)], 
                          aes(x = sgpc_emp, y = sgpc_gaussian)) +
   geom_hex(bins = 50) +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", size = 1) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
   scale_fill_viridis_c(trans = "log10") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
@@ -167,7 +167,7 @@ save_plot(p_emp_gaussian, "scatter_emp_vs_gaussian", width = 8, height = 8)
 p_emp_comon <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_comonotonic)], 
                       aes(x = sgpc_emp, y = sgpc_comonotonic)) +
   geom_hex(bins = 50) +
-  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", size = 1) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
   scale_fill_viridis_c(trans = "log10") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
@@ -211,7 +211,7 @@ diff_long[, comparison := factor(comparison,
 
 p_diff_hist <- ggplot(diff_long[!is.na(difference)], aes(x = difference)) +
   geom_histogram(bins = 100, fill = "steelblue", color = "white", alpha = 0.7) +
-  geom_vline(xintercept = 0, color = "red", linetype = "dashed", size = 1) +
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
   facet_wrap(~ comparison, scales = "free_y", ncol = 2) +
   labs(
     title = "Distribution of SGPc Differences (Empirical - Other Variants)",
@@ -343,13 +343,13 @@ ba_data_best <- all_data[!is.na(sgpc_emp) & !is.na(sgpc_best), .(
 
 p_ba_best <- ggplot(ba_data_best, aes(x = mean, y = diff)) +
   geom_hex(bins = 50) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed", size = 1) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
   geom_hline(yintercept = mean(ba_data_best$diff, na.rm = TRUE), 
-             color = "blue", linetype = "solid", size = 1) +
+             color = "blue", linetype = "solid", linewidth = 1) +
   geom_hline(yintercept = mean(ba_data_best$diff, na.rm = TRUE) + 1.96 * sd(ba_data_best$diff, na.rm = TRUE),
-             color = "blue", linetype = "dotted", size = 0.8) +
+             color = "blue", linetype = "dotted", linewidth = 0.8) +
   geom_hline(yintercept = mean(ba_data_best$diff, na.rm = TRUE) - 1.96 * sd(ba_data_best$diff, na.rm = TRUE),
-             color = "blue", linetype = "dotted", size = 0.8) +
+             color = "blue", linetype = "dotted", linewidth = 0.8) +
   scale_fill_viridis_c(trans = "log10") +
   labs(
     title = "Bland-Altman Plot: Empirical vs Best-Fit Parametric",

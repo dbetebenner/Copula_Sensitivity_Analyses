@@ -134,7 +134,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- c(2)  # Run only STEP_1 (Copula Family Selection)
+STEPS_TO_RUN <- c(1)  # Run only STEP_1 (Copula Family Selection)
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -335,12 +335,34 @@ if (!exists("USE_EXHAUSTIVE_ALL_DATASETS")) USE_EXHAUSTIVE_ALL_DATASETS <- TRUE
 # ============================================================================
 TEST_MODE <- FALSE                     # PRODUCTION MODE: Full analysis (966 conditions)
 TEST_N_CONDITIONS_PER_DATASET <- 1       # Only used if TEST_MODE=TRUE
+
+# --- QUICK TEST MODE (for fast local validation) ---
+# When enabled, overrides TEST_MODE and runs a minimal number of conditions
+# from the smallest dataset for rapid pipeline validation
+QUICK_TEST_MODE <- TRUE                    # Enable single-condition quick test
+QUICK_TEST_N_CONDITIONS <- 1               # Total conditions to run (not per-dataset)
+QUICK_TEST_PREFER_SMALLEST <- TRUE         # Prefer dataset_4 (smallest, ~1.6M rows)
 # ============================================================================
 #
 if (!exists("TEST_MODE")) TEST_MODE <- FALSE
 if (!exists("TEST_N_CONDITIONS_PER_DATASET")) TEST_N_CONDITIONS_PER_DATASET <- 2
+if (!exists("QUICK_TEST_MODE")) QUICK_TEST_MODE <- FALSE
+if (!exists("QUICK_TEST_N_CONDITIONS")) QUICK_TEST_N_CONDITIONS <- 1
+if (!exists("QUICK_TEST_PREFER_SMALLEST")) QUICK_TEST_PREFER_SMALLEST <- TRUE
 
-if (USE_EXHAUSTIVE_ALL_DATASETS) {
+# Display mode information
+if (QUICK_TEST_MODE) {
+  cat("====================================================================\n")
+  cat("QUICK TEST MODE: ENABLED (Fast Local Validation)\n")
+  cat("====================================================================\n")
+  cat("  Total conditions:", QUICK_TEST_N_CONDITIONS, "\n")
+  cat("  Prefer smallest dataset:", QUICK_TEST_PREFER_SMALLEST, "\n")
+  if (QUICK_TEST_PREFER_SMALLEST) {
+    cat("  Target dataset: dataset_4 (~1.6M rows, fastest)\n")
+  }
+  cat("  This mode overrides TEST_MODE for rapid pipeline validation\n")
+  cat("====================================================================\n\n")
+} else if (USE_EXHAUSTIVE_ALL_DATASETS) {
   cat("====================================================================\n")
   cat("EXHAUSTIVE SAME-COHORT ANALYSIS: ENABLED\n")
   cat("====================================================================\n")
@@ -370,12 +392,12 @@ if (USE_EXHAUSTIVE_ALL_DATASETS) {
 # Default settings (only set if not already defined by calling script)
 if (!exists("BATCH_MODE")) BATCH_MODE <- FALSE
 if (!exists("EC2_MODE")) EC2_MODE <- FALSE
-if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- TRUE
+if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- FALSE
 if (!exists("USE_PARALLEL")) USE_PARALLEL <- FALSE
 
 # Checkpoint/Resume: Skip already-completed conditions
 # Critical for spot instance resilience - allows resuming after interruption
-if (!exists("SKIP_COMPLETED_CONDITIONS")) SKIP_COMPLETED_CONDITIONS <- TRUE
+if (!exists("SKIP_COMPLETED_CONDITIONS")) SKIP_COMPLETED_CONDITIONS <- FALSE
 
 # Enhanced EC2 detection
 IS_EC2 <- grepl("ec2", Sys.info()["nodename"], ignore.case = TRUE) ||
@@ -1167,6 +1189,27 @@ if (should_run_step(2)) {
     }
   }
   
+  ## Step 2.5: Generate Publication Figure (NEW)
+  if (file.exists("STEP_2_SGPc_Sensitivity/create_publication_figure.R")) {
+    cat("Running Step 2.5: Creating publication figure...\n\n")
+    
+    result_2_5 <- time_phase("Step 2.5: Publication Figure", {
+      tryCatch({
+        source("STEP_2_SGPc_Sensitivity/create_publication_figure.R")
+        TRUE
+      }, error = function(e) {
+        cat(sprintf("ERROR: %s\n", e$message))
+        FALSE
+      })
+    })
+    
+    if (!result_2_5$success || !isTRUE(result_2_5$result)) {
+      cat("Warning: Publication figure generation encountered issues\n\n")
+    }
+  } else {
+    cat("Skipping Step 2.5: create_publication_figure.R not found\n\n")
+  }
+  
   ## Step 2 Summary
   cat("\n")
   cat("####################################################################\n")
@@ -1178,12 +1221,14 @@ if (should_run_step(2)) {
   cat("  - Summary statistics: sgpc_key_comparisons.csv\n")
   cat("  - Manifest: sgpc_sensitivity_manifest.json\n")
   cat("  - Report: SGPC_SENSITIVITY_REPORT.md\n")
-  cat("  - Visualizations: visualizations/*.{pdf,svg,png}\n\n")
+  cat("  - Visualizations: visualizations/*.{pdf,svg,png}\n")
+  cat("  - Publication figure: visualizations/sgpc_summary_grid.{pdf,svg,png}\n\n")
   
   pause_for_review(
     paste0("Review Step 2 SGPc sensitivity results:\n",
            "  - STEP_2_SGPc_Sensitivity/results/SGPC_SENSITIVITY_REPORT.md\n",
-           "  - STEP_2_SGPc_Sensitivity/results/visualizations/\n\n",
+           "  - STEP_2_SGPc_Sensitivity/results/visualizations/\n",
+           "  - STEP_2_SGPc_Sensitivity/results/visualizations/sgpc_summary_grid.pdf (Publication Figure)\n\n",
            "Key outputs: Quantified impact of copula choice on SGPcs.\n",
            "If analysis completed successfully, we'll proceed to Step 3."),
     "Step 2 Complete"

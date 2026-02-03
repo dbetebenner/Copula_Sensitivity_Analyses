@@ -1390,10 +1390,13 @@ if (file.exists(canonical_csv)) {
                           variable.name = "parameter",
                           value.name = "cv")
     
-    # Clean parameter names
+    # Clean parameter names - use plotmath strings for Greek letters
+    # These will be parsed by scale_x_discrete(labels = label_parsed) for proper rendering
     stability_long[, parameter := factor(parameter, 
                                          levels = c("tau_cv", "rho_cv", "df_cv"),
-                                         labels = c("τ (Kendall)", "ρ (Correlation)", "ν (Degrees of Freedom)"))]
+                                         labels = c("tau ~ '(Kendall)'", 
+                                                    "rho ~ '(Correlation)'", 
+                                                    "nu ~ '(Degrees of Freedom)'"))]
     
     # Create combined label for y-axis
     stability_long[, stratum_label := sprintf("%d-yr %s", year_span, 
@@ -1419,6 +1422,7 @@ if (file.exists(canonical_csv)) {
         labels = c("0.00\n(HIGH)", "0.10", "0.20\n(LOW)", "0.30+"),
         name = "Coefficient\nof Variation"
       ) +
+      scale_x_discrete(labels = scales::label_parse()) +  # Parse plotmath strings for Greek letters
       labs(
         title = "Parameter Stability Across Cross-Stratified Canonical Copulas",
         subtitle = "Lower CV indicates more stable parameters within stratum (GREEN = stable, RED = variable)",
@@ -1457,7 +1461,8 @@ if (file.exists(canonical_csv)) {
       annotate("text", x = 0.20, y = Inf, label = "MEDIUM\nstability", 
               vjust = 1.2, hjust = -0.1, size = 3, color = "orange", fontface = "bold") +
       scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"),
-                       name = "Parameter") +
+                       name = "Parameter",
+                       labels = scales::label_parse()) +  # Parse plotmath strings for Greek letters
       labs(
         title = "Distribution of Parameter Stability (Coefficient of Variation)",
         subtitle = sprintf("Across %d strata (year_span × content_area)", uniqueN(stability_long$stratum_id)),

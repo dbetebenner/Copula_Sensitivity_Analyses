@@ -132,6 +132,7 @@ compute_sgpc_variants <- function(
   }
   
   # Initialize result data.table
+  # Include SCHOOL_NUMBER and DISTRICT_NUMBER for group-level aggregation (Panel B)
   result <- data.table(
     condition_id = condition_id,
     year_span = cond_meta$year_span,
@@ -139,6 +140,8 @@ compute_sgpc_variants <- function(
     grade_prior = cond_meta$grade_prior,
     grade_current = cond_meta$grade_current,
     ID = pairs$ID,
+    SCHOOL_NUMBER = if ("SCHOOL_NUMBER" %in% names(pairs)) pairs$SCHOOL_NUMBER else NA_character_,
+    DISTRICT_NUMBER = if ("DISTRICT_NUMBER" %in% names(pairs)) pairs$DISTRICT_NUMBER else NA_character_,
     SCALE_SCORE_PRIOR = pairs$SCALE_SCORE_PRIOR,
     SCALE_SCORE_CURRENT = pairs$SCALE_SCORE_CURRENT,
     u = u,
