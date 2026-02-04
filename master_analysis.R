@@ -110,9 +110,9 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
 # ============================================================================
-# >>> CURRENT DATASET SELECTION (dataset_4 preferred for Step 2 speed) <<<
+# >>> CURRENT DATASET SELECTION (EC2: Run all datasets) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # Run all 4 datasets
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -134,7 +134,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- c(1)  # Run only STEP_1 (Copula Family Selection)
+STEPS_TO_RUN <- c(1)  # EC2: Run all steps (1-4)
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -339,7 +339,7 @@ TEST_N_CONDITIONS_PER_DATASET <- 1       # Only used if TEST_MODE=TRUE
 # --- QUICK TEST MODE (for fast local validation) ---
 # When enabled, overrides TEST_MODE and runs a minimal number of conditions
 # from the smallest dataset for rapid pipeline validation
-QUICK_TEST_MODE <- TRUE                    # Enable single-condition quick test
+QUICK_TEST_MODE <- FALSE                   # DISABLED for EC2 production run
 QUICK_TEST_N_CONDITIONS <- 1               # Total conditions to run (not per-dataset)
 QUICK_TEST_PREFER_SMALLEST <- TRUE         # Prefer dataset_4 (smallest, ~1.6M rows)
 # ============================================================================
@@ -392,12 +392,12 @@ if (QUICK_TEST_MODE) {
 # Default settings (only set if not already defined by calling script)
 if (!exists("BATCH_MODE")) BATCH_MODE <- FALSE
 if (!exists("EC2_MODE")) EC2_MODE <- FALSE
-if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- FALSE
+if (!exists("SKIP_COMPLETED")) SKIP_COMPLETED <- TRUE
 if (!exists("USE_PARALLEL")) USE_PARALLEL <- FALSE
 
 # Checkpoint/Resume: Skip already-completed conditions
 # Critical for spot instance resilience - allows resuming after interruption
-if (!exists("SKIP_COMPLETED_CONDITIONS")) SKIP_COMPLETED_CONDITIONS <- FALSE
+if (!exists("SKIP_COMPLETED_CONDITIONS")) SKIP_COMPLETED_CONDITIONS <- TRUE
 
 # Enhanced EC2 detection
 IS_EC2 <- grepl("ec2", Sys.info()["nodename"], ignore.case = TRUE) ||
