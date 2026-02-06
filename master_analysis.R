@@ -134,7 +134,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
 #   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
 
-STEPS_TO_RUN <- c(1)  # EC2: Run all steps (1-4)
+STEPS_TO_RUN <- c(2)  # EC2: Run STEP_2 for all datasets with parallelization
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -476,10 +476,10 @@ if (EC2_MODE) {
 ### STEP 2 SPECIFIC CONFIGURATION
 ############################################################################
 
-# STEP 2 Parallelization (separate from STEP 1)
 # STEP_1 mirai works fine and uses USE_PARALLEL flag
-# STEP_2 needs its own flag until parallel implementation is debugged
-# Set to FALSE until parallel implementation is fixed
+# STEP_2 Parallelization (separate from STEP 1)
+# STEP_2 uses same mirai implementation as STEP_1 (successfully tested)
+# Set to FALSE for local sequential testing, TRUE for EC2 parallel production
 if (!exists("USE_PARALLEL_STEP2")) USE_PARALLEL_STEP2 <- FALSE
 
 # Select which STEP 2 experiments to run

@@ -131,7 +131,9 @@ LOCAL_PATH=$(eval echo "$LOCAL_PATH")
 ################################################################################
 
 # Base flags
-RSYNC_FLAGS="-avz --progress --stats"
+# -W (whole-file): Prevents rsync from hanging on large binary files
+# --timeout=60: Kill stalled transfers after 60 seconds
+RSYNC_FLAGS="-avzW --progress --stats --timeout=60"
 
 # Add dry run flag if requested
 if [ "$DRY_RUN" = true ]; then
@@ -174,8 +176,8 @@ echo ""
 # Execute rsync
 ################################################################################
 
-# Run rsync
-rsync $RSYNC_FLAGS -e "ssh -i $KEY_PATH" "$SOURCE" "$DEST"
+# Run rsync with SSH keepalive to prevent connection timeouts
+rsync $RSYNC_FLAGS -e "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i $KEY_PATH" "$SOURCE" "$DEST"
 
 # Check exit status
 if [ $? -eq 0 ]; then
