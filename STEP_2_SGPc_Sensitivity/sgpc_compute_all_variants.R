@@ -76,12 +76,17 @@ compute_sgpc_variants <- function(
   canonical_params
 ) {
   
-  cat("Processing condition:", condition_id, "...")
+  # Start timing
+  start_time <- Sys.time()
+  cat("\n[", format(start_time, "%H:%M:%S"), "] START:", condition_id)
   
   # Parse condition metadata
+  cat(" -> Parsing...")
   cond_meta <- parse_condition_id(condition_id)
   
   # Create longitudinal pairs
+  cat(" -> Creating pairs...")
+  pair_start <- Sys.time()
   # CRITICAL: Explicitly pass year_current to prevent incorrect calculation
   pairs <- tryCatch({
     create_longitudinal_pairs(
@@ -94,22 +99,27 @@ compute_sgpc_variants <- function(
       content_current = cond_meta$content_area
     )
   }, error = function(e) {
-    cat(" ERROR creating pairs:", e$message, "\n")
+    cat("\n    ERROR creating pairs:", e$message, "\n")
     return(NULL)
   })
   
   if (is.null(pairs) || nrow(pairs) < 10) {
-    cat(" insufficient data (n=", ifelse(is.null(pairs), 0, nrow(pairs)), ")\n")
+    cat("\n    SKIP: insufficient data (n=", ifelse(is.null(pairs), 0, nrow(pairs)), ")\n")
     return(NULL)
   }
   
+  pair_time <- as.numeric(difftime(Sys.time(), pair_start, units = "secs"))
+  cat(sprintf(" OK (n=%s, %.1fs)", format(nrow(pairs), big.mark = ","), pair_time))
+  
   # Get pseudo-observations
+  cat("\n    -> Pseudo-obs...")
+  pobs_start <- Sys.time()
   # CRITICAL: Use Phase 1's pseudo-observations for consistency with copula fitting
   # These are the EXACT same u,v values used to fit all Phase 1 copulas
   if (!is.null(phase1_results$pseudo_observations) && 
       nrow(phase1_results$pseudo_observations) == nrow(pairs)) {
     # Use Phase 1's pre-computed pseudo-observations
-    cat(" [using Phase 1 pseudo-observations]")
+    cat(" Phase1")
     pobs <- phase1_results$pseudo_observations
     # Handle different storage formats (matrix or data.frame/data.table)
     if (is.matrix(pobs)) {
@@ -123,13 +133,16 @@ compute_sgpc_variants <- function(
     # Fallback: compute pseudo-observations from scale scores
     # (This should rarely happen if Phase 1 completed successfully)
     if (!is.null(phase1_results$pseudo_observations)) {
-      cat(" [WARNING: Phase 1 pobs dimension mismatch, recomputing]")
+      cat(" WARN:mismatch,recompute")
     } else {
-      cat(" [computing pseudo-observations from scale scores]")
+      cat(" compute")
     }
     u <- rank(pairs$SCALE_SCORE_PRIOR, na.last = "keep") / (nrow(pairs) + 1)
     v <- rank(pairs$SCALE_SCORE_CURRENT, na.last = "keep") / (nrow(pairs) + 1)
   }
+  
+  pobs_time <- as.numeric(difftime(Sys.time(), pobs_start, units = "secs"))
+  cat(sprintf(" (%.1fs)", pobs_time))
   
   # Initialize result data.table
   # Include SCHOOL_NUMBER and DISTRICT_NUMBER for group-level aggregation (Panel B)
@@ -149,6 +162,8 @@ compute_sgpc_variants <- function(
   )
   
   # 1. Empirical Bernstein copula (if available from Phase 1)
+  cat("\n    -> SGPc_emp...")
+  sgpc_start <- Sys.time()
   if (!is.null(phase1_results$empirical_copula)) {
     result[, sgpc_emp := sgpc_engine(u, v, phase1_results$empirical_copula, scale = "percentile")]
   } else {
@@ -164,15 +179,21 @@ compute_sgpc_variants <- function(
       result[, sgpc_emp := NA_integer_]
     }
   }
+  cat(sprintf(" %.1fs", as.numeric(difftime(Sys.time(), sgpc_start, units = "secs"))))
   
   # 2. Best-fitting parametric copula from Phase 1
+  cat(" -> SGPc_best...")
+  sgpc_start <- Sys.time()
   if (!is.null(phase1_results$best_fit_copula)) {
     result[, sgpc_best := sgpc_engine(u, v, phase1_results$best_fit_copula, scale = "percentile")]
   } else {
     result[, sgpc_best := NA_integer_]
   }
+  cat(sprintf(" %.1fs", as.numeric(difftime(Sys.time(), sgpc_start, units = "secs"))))
   
   # 3. Canonical averaged copula
+  cat(" -> SGPc_avg...")
+  sgpc_start <- Sys.time()
   canonical_cop <- tryCatch({
     create_canonical_copula(cond_meta$year_span, cond_meta$content_area, canonical_params)
   }, error = function(e) NULL)
@@ -182,8 +203,11 @@ compute_sgpc_variants <- function(
   } else {
     result[, sgpc_avg := NA_integer_]
   }
+  cat(sprintf(" %.1fs", as.numeric(difftime(Sys.time(), sgpc_start, units = "secs"))))
   
   # 4. Mis-specified copulas
+  cat(" -> Misspec...")
+  sgpc_start <- Sys.time()
   # Gaussian (no tail dependence)
   gaussian_cop <- normalCopula(param = cor(u, v, method = "kendall", use = "complete.obs") * sin(pi/2))
   result[, sgpc_gaussian := sgpc_engine(u, v, gaussian_cop, scale = "percentile")]
@@ -198,11 +222,16 @@ compute_sgpc_variants <- function(
   frank_param <- iTau(frankCopula(), tau)
   frank_cop <- frankCopula(param = frank_param)
   result[, sgpc_frank := sgpc_engine(u, v, frank_cop, scale = "percentile")]
+  cat(sprintf(" %.1fs", as.numeric(difftime(Sys.time(), sgpc_start, units = "secs"))))
   
   # 5. Comonotonic (TAMP assumption)
+  cat(" -> SGPc_como...")
+  sgpc_start <- Sys.time()
   result[, sgpc_comonotonic := sgpc_engine(u, v, "comonotonic", scale = "percentile")]
+  cat(sprintf(" %.1fs", as.numeric(difftime(Sys.time(), sgpc_start, units = "secs"))))
   
   # 6. Traditional SGP (extract from pairs data if available)
+  cat(" -> SGP_trad...")
   # The pairs data includes SGP columns like SGP_ORDER_1_SPAN_N_YEAR
   sgp_col_name <- paste0("SGP_ORDER_1_SPAN_", cond_meta$year_span, "_YEAR")
   
@@ -217,8 +246,12 @@ compute_sgpc_variants <- function(
       result[, sgp_traditional := NA_integer_]
     }
   }
+  cat(" OK")
   
-  cat(" done (n=", nrow(result), ")\n")
+  # Total timing
+  total_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  cat(sprintf("\n    COMPLETE: %.1f seconds total (n=%s)\n", 
+              total_time, format(nrow(result), big.mark = ",")))
   
   return(result)
 }
@@ -389,29 +422,59 @@ for (dataset_id in DATASETS_TO_PROCESS) {
   } else {
     # Sequential execution
     cat("Using sequential processing\n")
+    cat("====================================================================\n\n")
+    
+    dataset_start <- Sys.time()
+    n_success <- 0
+    n_skipped <- 0
+    n_errors <- 0
     
     for (i in seq_along(conditions)) {
       cond_id <- conditions[i]
+      
+      # Progress header every 10 conditions
+      if (i %% 10 == 1 || i == 1) {
+        elapsed <- as.numeric(difftime(Sys.time(), dataset_start, units = "mins"))
+        remaining_est <- if (i > 1) elapsed / (i - 1) * (length(conditions) - i + 1) else NA
+        cat(sprintf("\n--- Batch %d-%d (%.1f%% complete, %.1f min elapsed, ~%.1f min remaining) ---\n",
+                    i, min(i + 9, length(conditions)),
+                    100 * (i - 1) / length(conditions),
+                    elapsed,
+                    if (is.na(remaining_est)) 0 else remaining_est))
+      }
       
       # Get Phase 1 results for this condition
       phase1_results <- phase1_batch[[cond_id]]
       
       # Compute variants
-      cond_result <- compute_sgpc_variants(
-        condition_id = cond_id,
-        dataset_data = STATE_DATA_LONG,
-        phase1_results = phase1_results,
-        canonical_params = canonical_params
-      )
+      cond_result <- tryCatch({
+        compute_sgpc_variants(
+          condition_id = cond_id,
+          dataset_data = STATE_DATA_LONG,
+          phase1_results = phase1_results,
+          canonical_params = canonical_params
+        )
+      }, error = function(e) {
+        cat(sprintf("\n    ERROR in %s: %s\n", cond_id, e$message))
+        n_errors <<- n_errors + 1
+        return(NULL)
+      })
       
       if (!is.null(cond_result)) {
         all_results[[cond_id]] <- cond_result
-      }
-      
-      if (i %% 10 == 0) {
-        cat(sprintf("  Processed: %d/%d (%.1f%%)\n", i, length(conditions), 100 * i / length(conditions)))
+        n_success <- n_success + 1
+      } else {
+        n_skipped <- n_skipped + 1
       }
     }
+    
+    cat("\n====================================================================\n")
+    cat(sprintf("SEQUENTIAL PROCESSING COMPLETE: %d/%d successful (%.1f%%), %d skipped, %d errors\n",
+                n_success, length(conditions), 100 * n_success / length(conditions),
+                n_skipped, n_errors))
+    cat(sprintf("Total time: %.1f minutes\n", 
+                as.numeric(difftime(Sys.time(), dataset_start, units = "mins"))))
+    cat("====================================================================\n\n")
   }
   
   # Combine all results

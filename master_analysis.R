@@ -110,9 +110,9 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
 # ============================================================================
-# >>> CURRENT DATASET SELECTION (EC2: Run all datasets) <<<
+# >>> CURRENT DATASET SELECTION (Local parallel test: dataset_4 only) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # Run all 4 datasets
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"  # Test parallel on smallest dataset
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -479,8 +479,8 @@ if (EC2_MODE) {
 # STEP_1 mirai works fine and uses USE_PARALLEL flag
 # STEP_2 Parallelization (separate from STEP 1)
 # STEP_2 uses same mirai implementation as STEP_1 (successfully tested)
-# Set to FALSE for local sequential testing, TRUE for EC2 parallel production
-if (!exists("USE_PARALLEL_STEP2")) USE_PARALLEL_STEP2 <- FALSE
+# Set to TRUE for parallel processing across all conditions
+if (!exists("USE_PARALLEL_STEP2")) USE_PARALLEL_STEP2 <- TRUE
 
 # Select which STEP 2 experiments to run
 # Options:
