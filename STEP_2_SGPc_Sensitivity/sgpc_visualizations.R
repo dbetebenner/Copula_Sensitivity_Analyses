@@ -18,6 +18,7 @@ require(data.table)
 require(ggplot2)
 require(gridExtra)
 require(wesanderson)
+require(hexbin)
 
 # Load export utilities if available
 if (file.exists("functions/export_plot_utils.R")) {

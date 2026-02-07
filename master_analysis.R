@@ -112,7 +112,7 @@ if (file.exists("dataset_configs_local.R")) {
 # ============================================================================
 # >>> CURRENT DATASET SELECTION (Testing: dataset_4 only) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"  # Test with smallest dataset (182 conditions)
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_3"
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
