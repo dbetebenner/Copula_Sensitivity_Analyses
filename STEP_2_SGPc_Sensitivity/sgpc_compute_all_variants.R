@@ -481,9 +481,15 @@ for (dataset_id in DATASETS_TO_PROCESS) {
   if (length(all_results) > 0) {
     dataset_results <- rbindlist(all_results, fill = TRUE)
     
-    # Save results
+    # Save results - ensure directory exists
+    output_dir <- "STEP_2_SGPc_Sensitivity/results"
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+      cat("\nCreated output directory:", output_dir, "\n")
+    }
+    
     output_file <- file.path(
-      "STEP_2_SGPc_Sensitivity/results",
+      output_dir,
       paste0("sgpc_all_variants_", dataset_id, ".rds")
     )
     saveRDS(dataset_results, output_file)
