@@ -110,9 +110,9 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
 # ============================================================================
-# >>> CURRENT DATASET SELECTION (Local parallel test: dataset_4 only) <<<
+# >>> CURRENT DATASET SELECTION (EC2 Production: All datasets) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"  # Test parallel on smallest dataset
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # Run all 4 datasets (966 conditions total)
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
