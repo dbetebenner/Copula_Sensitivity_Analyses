@@ -110,9 +110,9 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
 # ============================================================================
-# >>> CURRENT DATASET SELECTION (EC2 Production: All datasets) <<<
+# >>> CURRENT DATASET SELECTION (Testing: dataset_4 only) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL  # Run all 4 datasets (966 conditions total)
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"  # Test with smallest dataset (182 conditions)
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -1117,6 +1117,9 @@ if (should_run_step(2)) {
     cat("Running Step 2.1: Computing SGPc variants...\n\n")
     
     result_2_1 <- time_phase("Step 2.1: Compute SGPc Variants", {
+      # Export dataset configurations to global env (for lazy loading)
+      assign("DATASETS", DATASETS, envir = .GlobalEnv)
+      assign("IS_EC2", IS_EC2, envir = .GlobalEnv)
       # Set environment variables for the computation script
       assign("USE_PARALLEL", USE_PARALLEL_STEP2, envir = .GlobalEnv)
       assign("DATASETS_TO_PROCESS", dataset_id, envir = .GlobalEnv)

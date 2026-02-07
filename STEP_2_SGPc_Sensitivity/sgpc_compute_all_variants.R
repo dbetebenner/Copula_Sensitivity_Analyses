@@ -65,15 +65,17 @@ cat("  Datasets to process:", paste(DATASETS_TO_PROCESS, collapse = ", "), "\n\n
 #' Compute all SGPc variants for a single condition
 #'
 #' @param condition_id String identifier
-#' @param dataset_data data.table with STATE_DATA_LONG
+#' @param dataset_id String dataset identifier (e.g., "dataset_1")
 #' @param phase1_results List with empirical_copula, best_fit_copula, etc.
 #' @param canonical_params data.table from Phase 1
+#' @param dataset_config Optional dataset configuration for lazy loading
 #' @return data.table with all SGPc variants (traditional_sgp extracted from pairs data)
 compute_sgpc_variants <- function(
   condition_id,
-  dataset_data,
+  dataset_id,
   phase1_results,
-  canonical_params
+  canonical_params,
+  dataset_config = NULL
 ) {
   
   # Start timing
@@ -83,6 +85,45 @@ compute_sgpc_variants <- function(
   # Parse condition metadata
   cat(" -> Parsing...")
   cond_meta <- parse_condition_id(condition_id)
+  
+  # === LAZY DATA LOADING (like STEP_1) ===
+  # Load dataset from disk if not already in memory
+  if (!exists("STATE_DATA_LONG") || 
+      !exists(".LOADED_DATASET_ID") || 
+      .LOADED_DATASET_ID != dataset_id) {
+    
+    # Get dataset configuration
+    if (is.null(dataset_config) && exists("DATASETS_CONFIG")) {
+      dataset_config <- DATASETS_CONFIG[[dataset_id]]
+    }
+    
+    if (!is.null(dataset_config)) {
+      # Determine file path (EC2 vs local, SGP vs base)
+      ds_path <- if (exists("IS_EC2") && IS_EC2) {
+        dataset_config$ec2_path
+      } else {
+        dataset_config$local_path
+      }
+      
+      cat("\n[WORKER] Loading dataset:", dataset_id, "from", ds_path, "\n")
+      load(ds_path)
+      ds_data <- get(dataset_config$rdata_object_name)
+      
+      if (!inherits(ds_data, "data.table")) {
+        ds_data <- as.data.table(ds_data)
+      }
+      
+      # Cache in global environment
+      assign("STATE_DATA_LONG", ds_data, envir = .GlobalEnv)
+      assign(".LOADED_DATASET_ID", dataset_id, envir = .GlobalEnv)
+      cat("[WORKER] Loaded", format(nrow(ds_data), big.mark = ","), "rows\n")
+    } else {
+      stop("Cannot load dataset: ", dataset_id, " - no config available")
+    }
+  }
+  
+  dataset_data <- STATE_DATA_LONG
+  # === END LAZY LOADING ===
   
   # Create longitudinal pairs
   cat(" -> Creating pairs...")
@@ -316,7 +357,6 @@ for (dataset_id in DATASETS_TO_PROCESS) {
   cat("\nComputing SGPc variants...\n")
   
   if (USE_PARALLEL) {
-    # Parallel execution with mirai
     cat("Using parallel processing with", N_CORES, "cores\n")
     
     if (!requireNamespace("mirai", quietly = TRUE)) {
@@ -325,11 +365,18 @@ for (dataset_id in DATASETS_TO_PROCESS) {
     
     require(mirai)
     
-    # Create mirai daemons
-    daemons(n = N_CORES, dispatcher = FALSE)
+    # Reduce worker count to leave memory headroom
+    # STEP_1 uses n-4 for large instances; we'll use n-5 for extra safety
+    n_workers <- N_CORES - 5
+    cat("Creating", n_workers, "workers (leaving 5 cores for system/GC)\n")
     
-    # Load necessary functions and data on all workers
-    cat("Initializing workers with functions...\n")
+    # Create mirai daemons
+    daemons(n = n_workers, dispatcher = FALSE)
+    
+    # Initialize workers with packages and functions
+    cat("Initializing workers...\n")
+    PROJECT_ROOT <- normalizePath(getwd(), mustWork = TRUE)
+    
     init_workers <- everywhere({
       # Load packages
       suppressPackageStartupMessages({
@@ -337,13 +384,16 @@ for (dataset_id in DATASETS_TO_PROCESS) {
         library(copula)
       })
       
+      # Change to project root for relative paths
+      setwd(PROJECT_ROOT)
+      
       # Source all necessary function files
       source("functions/longitudinal_pairs.R")
       source("functions/sgpc_engine.R")
       source("STEP_2_SGPc_Sensitivity/phase1_data_loader.R")
       
       TRUE  # Return success
-    })
+    }, PROJECT_ROOT = PROJECT_ROOT)
     
     # Wait for initialization to complete
     init_results <- init_workers[]
@@ -352,8 +402,23 @@ for (dataset_id in DATASETS_TO_PROCESS) {
     }
     cat("Workers initialized successfully\n")
     
-    # Export compute_sgpc_variants function and data to workers
-    cat("Exporting function and data to workers...\n")
+    # Export compute_sgpc_variants and configs to workers
+    cat("Exporting functions and configs...\n")
+    
+    # Get dataset configs from global env
+    if (exists("DATASETS", envir = .GlobalEnv)) {
+      DATASETS_CONFIG <- get("DATASETS", envir = .GlobalEnv)
+    } else {
+      stop("DATASETS configuration not found in global environment")
+    }
+    
+    # Check IS_EC2 flag
+    IS_EC2_VALUE <- if (exists("IS_EC2", envir = .GlobalEnv)) {
+      get("IS_EC2", envir = .GlobalEnv)
+    } else {
+      FALSE
+    }
+    
     export_data <- everywhere({
       # Verify compute_sgpc_variants is available
       if (!exists("compute_sgpc_variants")) {
@@ -361,7 +426,9 @@ for (dataset_id in DATASETS_TO_PROCESS) {
         stop("compute_sgpc_variants not available")
       }
       TRUE
-    }, compute_sgpc_variants = compute_sgpc_variants)
+    }, compute_sgpc_variants = compute_sgpc_variants,
+       DATASETS_CONFIG = DATASETS_CONFIG,
+       IS_EC2 = IS_EC2_VALUE)
     
     # Wait for export
     export_results <- export_data[]
@@ -370,36 +437,53 @@ for (dataset_id in DATASETS_TO_PROCESS) {
     }
     cat("Export complete\n")
     
-    # Process conditions in parallel
-    mirai_jobs <- list()
-    for (i in seq_along(conditions)) {
-      cond_id <- conditions[i]
-      phase1_results <- phase1_batch[[cond_id]]
-      
-      mirai_jobs[[i]] <- mirai({
+    # Use mirai_map for memory-efficient parallel processing
+    cat("Starting mirai_map processing...\n")
+    
+    mirai_results <- mirai_map(
+      .x = seq_along(conditions),
+      .f = function(i, conditions, phase1_batch, canonical_params, dataset_id) {
+        cond_id <- conditions[i]
+        phase1_results <- phase1_batch[[cond_id]]
+        
+        # Periodic garbage collection (every 5 conditions)
+        if (i %% 5 == 0) {
+          gc(verbose = FALSE, reset = TRUE)
+        }
+        
+        # Call compute_sgpc_variants with dataset_id (not data)
         compute_sgpc_variants(
           condition_id = cond_id,
-          dataset_data = dataset_data,
+          dataset_id = dataset_id,
           phase1_results = phase1_results,
-          canonical_params = canonical_params
+          canonical_params = canonical_params,
+          dataset_config = DATASETS_CONFIG[[dataset_id]]
         )
-      }, cond_id = cond_id, 
-         dataset_data = STATE_DATA_LONG,
-         phase1_results = phase1_results,
-         canonical_params = canonical_params)
-    }
+      },
+      .args = list(
+        conditions = conditions,
+        phase1_batch = phase1_batch,
+        canonical_params = canonical_params,
+        dataset_id = dataset_id
+      )
+    )
     
-    # Collect results
+    # Collect results (blocking)
+    cat("Collecting results...\n")
+    all_condition_results <- mirai_results[]
+    
+    # Process results
     n_success <- 0
     n_errors <- 0
-    for (i in seq_along(conditions)) {
+    
+    for (i in seq_along(all_condition_results)) {
+      result <- all_condition_results[[i]]
       cond_id <- conditions[i]
-      result <- mirai_jobs[[i]][]
       
       if (inherits(result, "miraiError") || inherits(result, "errorValue")) {
         n_errors <- n_errors + 1
         if (n_errors <= 3) {  # Only print first 3 errors
-          cat(sprintf("\n  ERROR in condition %s: %s\n", cond_id, 
+          cat(sprintf("\n  ERROR in condition %s: %s\n", cond_id,
                      if (inherits(result, "errorValue")) result$data else as.character(result)))
         }
       } else if (!is.null(result)) {
@@ -408,12 +492,13 @@ for (dataset_id in DATASETS_TO_PROCESS) {
       }
       
       if (i %% 10 == 0) {
-        cat(sprintf("  Processed: %d/%d (%.1f%%) - Success: %d, Errors: %d\n", 
-                    i, length(conditions), 100 * i / length(conditions), n_success, n_errors))
+        cat(sprintf("  Processed: %d/%d (%.1f%%) - Success: %d, Errors: %d\n",
+                    i, length(conditions), 100 * i / length(conditions), 
+                    n_success, n_errors))
       }
     }
     
-    cat(sprintf("\nCollection complete: %d successful, %d errors out of %d total\n", 
+    cat(sprintf("\nCollection complete: %d successful, %d errors out of %d total\n",
                 n_success, n_errors, length(conditions)))
     
     # Stop daemons
@@ -450,7 +535,7 @@ for (dataset_id in DATASETS_TO_PROCESS) {
       cond_result <- tryCatch({
         compute_sgpc_variants(
           condition_id = cond_id,
-          dataset_data = STATE_DATA_LONG,
+          dataset_id = dataset_id,
           phase1_results = phase1_results,
           canonical_params = canonical_params
         )

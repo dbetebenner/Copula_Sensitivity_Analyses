@@ -17,6 +17,7 @@
 require(data.table)
 require(ggplot2)
 require(gridExtra)
+require(wesanderson)
 
 # Load export utilities if available
 if (file.exists("functions/export_plot_utils.R")) {
@@ -103,12 +104,15 @@ save_plot <- function(plot_obj, base_filename, width = 10, height = 7) {
 
 cat("\nCreating scatter plots...\n")
 
+# Zissou1 continuous palette (matching STEP_1 contour plots)
+zissou1_colors <- colorRampPalette(wes_palette("Zissou1"))(50)
+
 # Empirical vs Best-fit
 p_emp_best <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_best)], 
                      aes(x = sgpc_emp, y = sgpc_best)) +
   geom_hex(bins = 50) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
-  scale_fill_viridis_c(trans = "log10") +
+  scale_fill_gradientn(colors = zissou1_colors, trans = "log10", name = "Count") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
     title = "Empirical vs Best-Fit Parametric SGPc",
@@ -128,7 +132,7 @@ p_emp_avg <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_avg)],
                     aes(x = sgpc_emp, y = sgpc_avg)) +
   geom_hex(bins = 50) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
-  scale_fill_viridis_c(trans = "log10") +
+  scale_fill_gradientn(colors = zissou1_colors, trans = "log10", name = "Count") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
     title = "Empirical vs Canonical Averaged SGPc",
@@ -148,7 +152,7 @@ p_emp_gaussian <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_gaussian)],
                          aes(x = sgpc_emp, y = sgpc_gaussian)) +
   geom_hex(bins = 50) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
-  scale_fill_viridis_c(trans = "log10") +
+  scale_fill_gradientn(colors = zissou1_colors, trans = "log10", name = "Count") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
     title = "Empirical vs Gaussian SGPc (Mis-specified)",
@@ -168,7 +172,7 @@ p_emp_comon <- ggplot(all_data[!is.na(sgpc_emp) & !is.na(sgpc_comonotonic)],
                       aes(x = sgpc_emp, y = sgpc_comonotonic)) +
   geom_hex(bins = 50) +
   geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
-  scale_fill_viridis_c(trans = "log10") +
+  scale_fill_gradientn(colors = zissou1_colors, trans = "log10", name = "Count") +
   coord_equal(xlim = c(1, 99), ylim = c(1, 99)) +
   labs(
     title = "Empirical vs Comonotonic SGPc (TAMP Assumption)",
@@ -350,7 +354,7 @@ p_ba_best <- ggplot(ba_data_best, aes(x = mean, y = diff)) +
              color = "blue", linetype = "dotted", linewidth = 0.8) +
   geom_hline(yintercept = mean(ba_data_best$diff, na.rm = TRUE) - 1.96 * sd(ba_data_best$diff, na.rm = TRUE),
              color = "blue", linetype = "dotted", linewidth = 0.8) +
-  scale_fill_viridis_c(trans = "log10") +
+  scale_fill_gradientn(colors = zissou1_colors, trans = "log10", name = "Count") +
   labs(
     title = "Bland-Altman Plot: Empirical vs Best-Fit Parametric",
     subtitle = sprintf("Mean difference = %.2f | SD = %.2f",

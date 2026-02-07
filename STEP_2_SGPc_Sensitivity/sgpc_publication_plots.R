@@ -5,7 +5,7 @@
 ###          Panel A: Individual-level ECDF
 ###          Panel B: Group-level ECDF
 ###          Panel C: Condition-level dots (MAD by strata)
-###          Panel D1: Rank agreement (Spearman ρ)
+###          Panel D1: Rank agreement (Spearman rho)
 ###          Panel D2: Decile stability (classification)
 ###
 ### Author: dataimago
@@ -93,7 +93,7 @@ plot_individual_ecdf <- function(
               hjust = -0.3, vjust = -0.5, size = 3, fontface = "bold", show.legend = FALSE) +
     scale_color_manual(values = COMPARISON_COLORS, name = "Comparison") +
     scale_x_continuous(
-      name = "Absolute Difference (|Δ| in percentile points)",
+      name = bquote("Absolute Difference (|" * Delta * "| in percentile points)"),
       breaks = seq(0, 50, 5),
       limits = c(0, 50)
     ) +
@@ -124,7 +124,7 @@ plot_individual_ecdf <- function(
 #' @param enhanced_stats List from compute_enhanced_statistics()
 #' @param comparisons Character vector of comparison names to include
 #' @param reference_lines Numeric vector of x-values for vertical reference lines
-#' @param add_inset Logical, whether to add scatter plot inset showing |Δ_g| vs n_g
+#' @param add_inset Logical, whether to add scatter plot inset showing |Delta_g| vs n_g
 #' @param title Plot title
 #' @return ggplot object
 plot_group_ecdf <- function(
@@ -168,7 +168,7 @@ plot_group_ecdf <- function(
   })
   
   comparison_text <- sprintf(
-    "Individual median Δ: %.1f–%.1f\nGroup median Δ: %.1f–%.1f (%.0f%% reduction)",
+    "Individual median Delta: %.1f-%.1f\nGroup median Delta: %.1f-%.1f (%.0f%% reduction)",
     min(ind_medians), max(ind_medians),
     min(grp_medians), max(grp_medians),
     (1 - mean(grp_medians) / mean(ind_medians)) * 100
@@ -183,7 +183,7 @@ plot_group_ecdf <- function(
               hjust = -0.3, vjust = -0.5, size = 3, fontface = "bold", show.legend = FALSE) +
     scale_color_manual(values = COMPARISON_COLORS, name = "Comparison") +
     scale_x_continuous(
-      name = "Absolute Group-Level Difference (|Δ_g| in percentile points)",
+      name = bquote("Absolute Group-Level Difference (|" * Delta[g] * "| in percentile points)"),
       breaks = seq(0, 50, 5),
       limits = c(0, 50)
     ) +
@@ -196,7 +196,7 @@ plot_group_ecdf <- function(
       title = title,
       subtitle = sprintf("Aggregating students by school dramatically reduces sensitivity\n%s",
                         comparison_text),
-      caption = sprintf("Groups = schools with ≥10 students | Total groups: ~%s",
+      caption = sprintf("Groups = schools with >= 10 students | Total groups: ~%s",
                        format(enhanced_stats$group_stats$by_comparison[[1]]$n_groups, big.mark = ","))
     ) +
     theme_publication() +
@@ -285,10 +285,10 @@ plot_condition_dots <- function(
 }
 
 ############################################################################
-### PANEL D1: Rank Agreement (Spearman ρ)
+### PANEL D1: Rank Agreement (Spearman rho)
 ############################################################################
 
-#' Plot distribution of Spearman ρ across conditions
+#' Plot distribution of Spearman rho across conditions
 #' 
 #' @param enhanced_stats List from compute_enhanced_statistics()
 #' @param comparisons Character vector of comparison names to include
@@ -325,14 +325,14 @@ plot_rank_agreement <- function(
                                   content_area = function(x) x)) +
     scale_color_manual(values = COMPARISON_COLORS, name = "Comparison") +
     scale_y_continuous(
-      name = "Spearman ρ (rank correlation)",
+      name = bquote("Spearman" ~ rho ~ "(rank correlation)"),
       limits = c(0.95, 1.0),
       breaks = seq(0.95, 1.0, 0.01)
     ) +
     labs(
       title = title,
-      subtitle = "Each dot = one condition | Diamond = median | Dashed line = perfect agreement (ρ=1)\nHigh correlations indicate rank orderings are nearly identical",
-      caption = sprintf("n = %d conditions | All medians ≥ %.3f",
+      subtitle = "Each dot = one condition | Diamond = median | Dashed line = perfect agreement (rho = 1)\nHigh correlations indicate rank orderings are nearly identical",
+      caption = sprintf("n = %d conditions | All medians >= %.3f",
                        uniqueN(rank_data$condition_id),
                        min(summary_stats$median_rho))
     ) +
@@ -411,13 +411,13 @@ plot_decile_stability <- function(
   decile_long[, category := factor(
     category,
     levels = c("off_by_2plus", "off_by_1", "exact_match"),
-    labels = c("≥2 deciles", "±1 decile", "Exact match")
+    labels = c(">= 2 deciles", "+/- 1 decile", "Exact match")
   )]
   
   category_colors <- c(
     "Exact match" = "#2ca02c",    # Green
-    "±1 decile" = "#ff7f0e",      # Orange
-    "≥2 deciles" = "#d62728"      # Red
+    "+/- 1 decile" = "#ff7f0e",    # Orange
+    ">= 2 deciles" = "#d62728"    # Red
   )
   
   # Create plot
@@ -476,13 +476,20 @@ save_plot_multi <- function(plot, name, dir, width = 8, height = 6, dpi = 300) {
   for (fmt in formats) {
     filepath <- file.path(dir, paste0(name, ".", fmt))
     
+    # Use cairo_pdf for PDF when available (better Unicode/font support)
+    if (fmt == "pdf" && capabilities("cairo")) {
+      device <- cairo_pdf
+    } else {
+      device <- fmt
+    }
+    
     ggsave(
       filename = filepath,
       plot = plot,
       width = width,
       height = height,
       dpi = dpi,
-      device = fmt
+      device = device
     )
     
     cat(sprintf("  Saved: %s\n", filepath))
