@@ -110,9 +110,9 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
 # ============================================================================
-# >>> CURRENT DATASET SELECTION (Testing: dataset_4 only) <<<
+# >>> CURRENT DATASET SELECTION (EC2 default: all 4 datasets) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -141,7 +141,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEP 4 — STEP_4_TIMSS_Implementation (TIMSS application — placeholder)
 #   STEP 5 — STEP_5_Summary_Conclusions_Next_Steps (synthesis — placeholder)
 
-STEPS_TO_RUN <- c(2)  # EC2: Run STEP_2 for all datasets with parallelization
+if (!exists("STEPS_TO_RUN")) STEPS_TO_RUN <- c(2)  # EC2 default: STEP_2 pipeline
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
@@ -527,6 +527,13 @@ if (!exists("STEP2_SEED"))                  STEP2_SEED                  <- 42
 if (!exists("STEP2_MEMORY_PER_WORKER_GB"))  STEP2_MEMORY_PER_WORKER_GB  <- NULL
 if (!exists("STEP2_TOTAL_MEMORY_GB"))       STEP2_TOTAL_MEMORY_GB       <- NULL
 
+# EC2 defaults for r8g.16xlarge (64 vCPU, 512 GB RAM)
+# These apply only when the user has not already set explicit overrides.
+if (exists("EC2_MODE") && isTRUE(EC2_MODE)) {
+  if (is.null(STEP2_MEMORY_PER_WORKER_GB)) STEP2_MEMORY_PER_WORKER_GB <- 3.0
+  if (is.null(STEP2_TOTAL_MEMORY_GB)) STEP2_TOTAL_MEMORY_GB <- 512
+}
+
 if (!is.null(EXPERIMENT_TO_RUN_STEP2)) {
   cat("STEP 2 Configuration:\n")
   cat("  Selected experiments:", paste(EXPERIMENT_TO_RUN_STEP2, collapse = ", "), "\n")
@@ -541,6 +548,8 @@ if (!is.null(STEP2_MAX_CONDITIONS)) {
 } else {
   cat("  Subset mode: OFF (all conditions)\n")
 }
+cat("  Memory per worker (GB):", STEP2_MEMORY_PER_WORKER_GB, "\n")
+cat("  Total memory budget (GB):", STEP2_TOTAL_MEMORY_GB, "\n")
 cat("\n")
 
 # Generic workspace object name (data gets assigned to this name regardless of source)
