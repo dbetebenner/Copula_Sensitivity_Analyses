@@ -3,10 +3,12 @@
 ###
 ### Purpose: Orchestrate the complete workflow to generate publication figure
 ###          1. Load data with school/district IDs
-###          2. Compute enhanced statistics
-###          3. Generate 5 core plots
-###          4. Save plots in multiple formats
-###          5. Assemble LaTeX grid
+###          2. Compute enhanced statistics (8 comparison pairs)
+###          3a. Generate 8 core panels (A-H)
+###          3b. Run sampling sensitivity analysis (Family x Sample Size)
+###          3c. Generate panels I (error decomposition) and J (N vs MAD)
+###          4. Save plots in multiple formats (PDF, SVG, PNG)
+###          5. Assemble LaTeX grid (5x2 layout with 10 panels)
 ###
 ### Author: dataimago
 ### Date: January 2026
@@ -85,17 +87,35 @@ source("STEP_2_SGPc_Sensitivity/sgpc_enhanced_statistics.R")
 # Check if we can load cached stats or need to recompute
 enhanced_stats_file <- file.path(RESULTS_DIR, "sgpc_enhanced_stats.rds")
 
-if (file.exists(enhanced_stats_file)) {
+# Force recomputation flag (set TRUE to invalidate cache)
+# Cache MUST be regenerated when comparison pairs or statistics sections change
+FORCE_RECOMPUTE <- TRUE
+
+if (file.exists(enhanced_stats_file) && !FORCE_RECOMPUTE) {
+  # Validate cache: check that it has the expected 8 comparison pairs
   cat("Loading cached enhanced statistics...\n")
   enhanced_stats <- readRDS(enhanced_stats_file)
-  cat("✓ Loaded from cache\n\n")
+  
+  n_pairs <- length(enhanced_stats$comparison_pairs)
+  if (n_pairs < 8) {
+    cat(sprintf("  Cache has %d comparison pairs (need 8). Recomputing...\n", n_pairs))
+    enhanced_stats <- compute_enhanced_statistics(sgpc_data)
+    saveRDS(enhanced_stats, enhanced_stats_file)
+    cat(sprintf("  Cached updated statistics to: %s\n\n", enhanced_stats_file))
+  } else {
+    cat(sprintf("  Cache valid (%d comparison pairs)\n\n", n_pairs))
+  }
 } else {
-  cat("Computing enhanced statistics (this may take a few minutes)...\n")
+  if (FORCE_RECOMPUTE && file.exists(enhanced_stats_file)) {
+    cat("Invalidating stale cache (FORCE_RECOMPUTE=TRUE)...\n")
+    file.remove(enhanced_stats_file)
+  }
+  cat("Computing enhanced statistics (8 comparison pairs, this may take a few minutes)...\n")
   enhanced_stats <- compute_enhanced_statistics(sgpc_data)
   
   # Save for future use
   saveRDS(enhanced_stats, enhanced_stats_file)
-  cat(sprintf("✓ Cached enhanced statistics to: %s\n\n", enhanced_stats_file))
+  cat(sprintf("  Cached enhanced statistics to: %s\n\n", enhanced_stats_file))
 }
 
 ############################################################################
@@ -109,78 +129,395 @@ cat("====================================================================\n\n")
 # Load plotting functions
 source("STEP_2_SGPc_Sensitivity/sgpc_publication_plots.R")
 
-# Define plot dimensions
-PLOT_DIMS <- list(
-  panel_a = list(width = 8, height = 6),
-  panel_b = list(width = 8, height = 6),
-  panel_c = list(width = 8, height = 6),
-  panel_d1 = list(width = 8, height = 6),
-  panel_d2 = list(width = 8, height = 6)
-)
+# Define plot dimensions for all 8 panels
+PLOT_WIDTH <- 10
+PLOT_HEIGHT <- 7
 
 # Generate each panel
 plots <- list()
 
-cat("Generating Panel A (Individual-level ECDF)...\n")
+# --- Panel A: Individual-level ECDF ---
+cat("Generating Panel A (Individual-level ECDF, 8 comparison pairs)...\n")
 plots$panel_a <- plot_individual_ecdf(enhanced_stats)
-save_plot_multi(
-  plots$panel_a, 
-  "panel_a_individual_ecdf", 
-  VIZ_DIR,
-  width = PLOT_DIMS$panel_a$width,
-  height = PLOT_DIMS$panel_a$height
-)
+save_plot_multi(plots$panel_a, "panel_a_individual_ecdf", VIZ_DIR, 
+                width = PLOT_WIDTH, height = PLOT_HEIGHT)
 cat("\n")
 
+# --- Panel B: School-level ECDF (with inset) ---
 if (!skip_panel_b) {
-  cat("Generating Panel B (Group-level ECDF)...\n")
-  plots$panel_b <- plot_group_ecdf(enhanced_stats)
-  save_plot_multi(
-    plots$panel_b,
-    "panel_b_group_ecdf",
-    VIZ_DIR,
-    width = PLOT_DIMS$panel_b$width,
-    height = PLOT_DIMS$panel_b$height
-  )
+  cat("Generating Panel B (School-level ECDF with sqrt(n) inset)...\n")
+  plots$panel_b <- plot_group_ecdf(enhanced_stats, add_inset = TRUE, group_level = "school")
+  save_plot_multi(plots$panel_b, "panel_b_school_ecdf", VIZ_DIR, 
+                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  cat("\n")
+  # --- Panel B2: District-level ECDF ---
+  cat("Generating Panel B2 (District-level ECDF)...\n")
+  plots$panel_b2 <- plot_group_ecdf(enhanced_stats, add_inset = FALSE, group_level = "district")
+  save_plot_multi(plots$panel_b2, "panel_b2_district_ecdf", VIZ_DIR, 
+                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
   cat("\n")
 } else {
-  cat("Skipping Panel B (no group identifiers available)\n\n")
+  cat("Skipping Panel B / B2 (no group identifiers available)\n\n")
 }
 
-cat("Generating Panel C (Condition-level dots)...\n")
+# --- Panel C: Condition-level MAD dots ---
+cat("Generating Panel C (Condition-level MAD dots)...\n")
 plots$panel_c <- plot_condition_dots(enhanced_stats, sgpc_data)
-save_plot_multi(
-  plots$panel_c,
-  "panel_c_condition_dots",
-  VIZ_DIR,
-  width = PLOT_DIMS$panel_c$width,
-  height = PLOT_DIMS$panel_c$height
-)
+save_plot_multi(plots$panel_c, "panel_c_condition_dots", VIZ_DIR, 
+                width = PLOT_WIDTH, height = PLOT_HEIGHT)
 cat("\n")
 
-cat("Generating Panel D1 (Rank agreement)...\n")
-plots$panel_d1 <- plot_rank_agreement(enhanced_stats)
-save_plot_multi(
-  plots$panel_d1,
-  "panel_d1_rank_agreement",
-  VIZ_DIR,
-  width = PLOT_DIMS$panel_d1$width,
-  height = PLOT_DIMS$panel_d1$height
-)
+# --- Panel D: Rank agreement (Spearman rho) ---
+cat("Generating Panel D (Rank agreement)...\n")
+plots$panel_d <- plot_rank_agreement(enhanced_stats)
+save_plot_multi(plots$panel_d, "panel_d_rank_agreement", VIZ_DIR, 
+                width = PLOT_WIDTH, height = PLOT_HEIGHT)
 cat("\n")
 
-cat("Generating Panel D2 (Decile stability)...\n")
-plots$panel_d2 <- plot_decile_stability(enhanced_stats, stratify_by = "year_span")
-save_plot_multi(
-  plots$panel_d2,
-  "panel_d2_decile_stability",
-  VIZ_DIR,
-  width = PLOT_DIMS$panel_d2$width,
-  height = PLOT_DIMS$panel_d2$height
+# --- Panel E: Individual classification stability (K=3,5,10) ---
+cat("Generating Panel E (Individual classification stability: K=3,5,10)...\n")
+plots$panel_e <- plot_decile_stability(
+  enhanced_stats,
+  stratify_by = "year_span",
+  n_buckets = c(3, 5, 10)
 )
+save_plot_multi(plots$panel_e, "panel_e_decile_stability", VIZ_DIR, 
+                width = PANEL_CLASSIFICATION_PAGE_WIDTH,
+                height = PANEL_CLASSIFICATION_PAGE_HEIGHT)
 cat("\n")
 
-cat("✓ All individual plots generated and saved\n\n")
+# --- Panel D2: Group-level bucket stability (School + District) ---
+if (!skip_panel_b) {
+  cat("Generating Panel D2 (Group-level bucket stability: K=3,5,10)...\n")
+  tryCatch({
+    plots$panel_d2 <- plot_group_bucket_stability(enhanced_stats)
+    save_plot_multi(plots$panel_d2, "panel_d2_group_bucket_stability", VIZ_DIR, 
+                    width = PANEL_CLASSIFICATION_PAGE_WIDTH,
+                    height = PANEL_CLASSIFICATION_PAGE_HEIGHT)
+    cat("\n")
+  }, error = function(e) {
+    cat(sprintf("  WARNING: Panel D2 failed: %s\n\n", e$message))
+  })
+} else {
+  cat("Skipping Panel D2 (requires group identifiers)\n\n")
+}
+
+# --- Panel F: Prior achievement quartile sensitivity ---
+cat("Generating Panel F (Prior achievement quartile)...\n")
+tryCatch({
+  plots$panel_f <- plot_prior_quartile_sensitivity(enhanced_stats)
+  save_plot_multi(plots$panel_f, "panel_f_prior_quartile", VIZ_DIR, 
+                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  cat("\n")
+}, error = function(e) {
+  cat(sprintf("  WARNING: Panel F failed: %s\n\n", e$message))
+})
+
+# --- Panel G: Cross-dataset comparison ---
+cat("Generating Panel G (Cross-dataset comparison)...\n")
+tryCatch({
+  plots$panel_g <- plot_cross_dataset_comparison(enhanced_stats)
+  save_plot_multi(plots$panel_g, "panel_g_cross_dataset", VIZ_DIR, 
+                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  cat("\n")
+}, error = function(e) {
+  cat(sprintf("  WARNING: Panel G failed: %s\n\n", e$message))
+})
+
+# --- Panel H: Multi-level aggregation hierarchy ---
+if (!skip_panel_b) {
+  cat("Generating Panel H (Multi-level aggregation: Individual -> School -> District)...\n")
+  tryCatch({
+    plots$panel_h <- plot_multilevel_aggregation(enhanced_stats)
+    save_plot_multi(plots$panel_h, "panel_h_multilevel_aggregation", VIZ_DIR, 
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    cat("\n")
+  }, error = function(e) {
+    cat(sprintf("  WARNING: Panel H failed: %s\n\n", e$message))
+  })
+} else {
+  cat("Skipping Panel H (requires group identifiers for multi-level)\n\n")
+}
+
+# --- Panel I: Error Decomposition (Comparison Pair vs Sampling) ---
+cat("====================================================================\n")
+cat("STEP 3b: SAMPLING SENSITIVITY ANALYSIS (Comparison x Sample Size)\n")
+cat("====================================================================\n\n")
+
+# Check for cached sampling sensitivity results
+sampling_results_file <- file.path(RESULTS_DIR, "sgpc_sampling_sensitivity.rds")
+
+if (file.exists(sampling_results_file) && !FORCE_RECOMPUTE) {
+  cat("Loading cached sampling sensitivity results...\n")
+  sampling_results <- readRDS(sampling_results_file)
+  cat(sprintf("  Loaded (%d replicate rows, %d comparison pairs, %d sample sizes)\n\n",
+              nrow(sampling_results$replicate_results),
+              length(sampling_results$metadata$comparison_pairs),
+              length(sampling_results$metadata$sample_sizes)))
+} else {
+  cat("Computing sampling sensitivity (bootstrap of existing differences)...\n")
+  sampling_results <- compute_sampling_sensitivity(
+    sgpc_data,
+    sample_sizes = c(500L, 1000L, 2000L, 4000L),
+    B = 50L,
+    max_conditions = 5L,
+    seed = 42L
+  )
+  
+  # Cache the results
+  saveRDS(sampling_results, sampling_results_file)
+  cat(sprintf("  Cached sampling sensitivity to: %s\n\n", sampling_results_file))
+}
+
+cat("Generating Panel I1 & I2 (Error Decomposition: Comparison vs Sampling)...\n")
+tryCatch({
+  panel_i_plots <- plot_error_decomposition(sampling_results)
+  
+  if (is.list(panel_i_plots) && !inherits(panel_i_plots, "gg")) {
+    # Save each sub-panel as its own standalone figure
+    plots$panel_i1 <- panel_i_plots$ribbon
+    save_plot_multi(plots$panel_i1, "panel_i1_sensitivity_ribbon", VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    
+    plots$panel_i2 <- panel_i_plots$share
+    save_plot_multi(plots$panel_i2, "panel_i2_variance_decomposition", VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    
+    # Also keep composite for backwards compatibility
+    save_plot_multi_panel(panel_i_plots, "panel_i_error_decomposition", VIZ_DIR,
+                          width = 14, height = 7, ncol = 2, widths = c(1.2, 1))
+  } else {
+    # Single ggplot fallback
+    plots$panel_i1 <- panel_i_plots
+    save_plot_multi(plots$panel_i1, "panel_i1_sensitivity_ribbon", VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  }
+  cat("\n")
+}, error = function(e) {
+  cat(sprintf("  WARNING: Panel I1/I2 failed: %s\n\n", e$message))
+})
+
+# --- Panel J: Condition N vs MAD scatter ---
+cat("Generating Panel J (Condition N vs MAD scatter)...\n")
+tryCatch({
+  plots$panel_j <- plot_condition_n_vs_mad(enhanced_stats)
+  save_plot_multi(plots$panel_j, "panel_j_condition_n_vs_mad", VIZ_DIR, 
+                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  cat("\n")
+}, error = function(e) {
+  cat(sprintf("  WARNING: Panel J failed: %s\n\n", e$message))
+})
+
+# --- Panel K: Group-Level Rank Stability (School + District) ---
+if (!skip_panel_b) {
+  cat("Generating Panel K (Group-Level Rank Stability)...\n")
+  tryCatch({
+    plots$panel_k <- plot_group_rank_stability(enhanced_stats)
+    save_plot_multi(plots$panel_k, "panel_k_group_rank_stability", VIZ_DIR, 
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    cat("\n")
+  }, error = function(e) {
+    cat(sprintf("  WARNING: Panel K failed: %s\n\n", e$message))
+  })
+} else {
+  cat("Skipping Panel K (requires group identifiers)\n\n")
+}
+
+############################################################################
+### BLAND-ALTMAN PLOTS
+############################################################################
+
+cat("====================================================================\n")
+cat("STEP 3c: BLAND-ALTMAN AGREEMENT PLOTS\n")
+cat("====================================================================\n\n")
+
+require(wesanderson)
+require(hexbin)
+
+zissou1_colors <- colorRampPalette(wes_palette("Zissou1"))(50)
+
+# Helper to build a Bland-Altman plot
+make_bland_altman <- function(dt, var1, var2, title_label) {
+  ba_dt <- dt[!is.na(get(var1)) & !is.na(get(var2)), .(
+    mean_val = (get(var1) + get(var2)) / 2,
+    diff_val = get(var1) - get(var2)
+  )]
+  if (nrow(ba_dt) == 0) return(NULL)
+  
+  m <- mean(ba_dt$diff_val, na.rm = TRUE)
+  s <- sd(ba_dt$diff_val, na.rm = TRUE)
+  
+  ggplot(ba_dt, aes(x = mean_val, y = diff_val)) +
+    geom_hex(bins = 50) +
+    geom_hline(yintercept = 0, color = "#F21A00", linetype = "dashed", linewidth = 1) +
+    geom_hline(yintercept = m, color = "blue", linetype = "solid", linewidth = 1) +
+    geom_hline(yintercept = m + 1.96 * s, color = "blue", linetype = "dotted", linewidth = 0.8) +
+    geom_hline(yintercept = m - 1.96 * s, color = "blue", linetype = "dotted", linewidth = 0.8) +
+    scale_fill_gradientn(colors = zissou1_colors, trans = "log10", name = "Count") +
+    labs(
+      title = sprintf("Bland-Altman Plot: %s", title_label),
+      subtitle = sprintf("Mean diff = %.2f | SD = %.2f", m, s),
+      x = "Mean of Two Methods",
+      y = sprintf("Difference (%s)", title_label)
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold"),
+      plot.margin = margin(10, 10, 10, 10, "pt")
+    )
+}
+
+# Bland-Altman: Empirical vs Best-Fit
+if ("sgpc_best" %in% names(sgpc_data)) {
+  cat("Generating Bland-Altman: Empirical vs Best-Fit Parametric...\n")
+  plots$ba_emp_best <- make_bland_altman(sgpc_data, "sgpc_emp", "sgpc_best",
+                                          "Empirical vs Best-Fit Parametric")
+  if (!is.null(plots$ba_emp_best)) {
+    save_plot_multi(plots$ba_emp_best, "bland_altman_emp_vs_best", VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  }
+}
+
+# Bland-Altman: Empirical vs Gaussian
+if ("sgpc_gaussian" %in% names(sgpc_data)) {
+  cat("Generating Bland-Altman: Empirical vs Gaussian...\n")
+  plots$ba_emp_gaussian <- make_bland_altman(sgpc_data, "sgpc_emp", "sgpc_gaussian",
+                                              "Empirical vs Gaussian")
+  if (!is.null(plots$ba_emp_gaussian)) {
+    save_plot_multi(plots$ba_emp_gaussian, "bland_altman_emp_vs_gaussian", VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  }
+}
+
+# Bland-Altman: Empirical vs Gumbel
+if ("sgpc_gumbel" %in% names(sgpc_data)) {
+  cat("Generating Bland-Altman: Empirical vs Gumbel...\n")
+  plots$ba_emp_gumbel <- make_bland_altman(sgpc_data, "sgpc_emp", "sgpc_gumbel",
+                                            "Empirical vs Gumbel")
+  if (!is.null(plots$ba_emp_gumbel)) {
+    save_plot_multi(plots$ba_emp_gumbel, "bland_altman_emp_vs_gumbel", VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  }
+}
+
+# Bland-Altman: Empirical vs Traditional SGP
+if ("sgp_traditional" %in% names(sgpc_data)) {
+  cat("Generating Bland-Altman: Empirical SGPc vs Traditional SGP...\n")
+  plots$ba_emp_trad <- make_bland_altman(sgpc_data, "sgpc_emp", "sgp_traditional",
+                                          "Empirical SGPc vs Traditional SGP")
+  if (!is.null(plots$ba_emp_trad)) {
+    save_plot_multi(plots$ba_emp_trad, "bland_altman_emp_vs_traditional", VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  }
+}
+
+cat("\n")
+
+############################################################################
+### GAUSSIAN MISFIT DIAGNOSTICS (F-DeepDive composite + standalone)
+############################################################################
+
+cat("====================================================================\n")
+cat("STEP 3d: GAUSSIAN MISFIT DIAGNOSTICS\n")
+cat("====================================================================\n\n")
+
+diag_plots <- list()
+
+# --- Diag F-A: Focused Quartile Violins ---
+cat("Generating Diag F-A (Focused Quartile Violins)...\n")
+tryCatch({
+  diag_plots$diag_fa <- plot_diag_quartile_focused(enhanced_stats)
+  save_plot_multi(diag_plots$diag_fa, "diag_fa_quartile_focused", VIZ_DIR,
+                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
+}, error = function(e) {
+  cat(sprintf("  WARNING: Diag F-A failed: %s\n", e$message))
+})
+
+# --- Diag F-B: Quartile Summary Lines ---
+cat("Generating Diag F-B (Quartile Summary Lines)...\n")
+tryCatch({
+  diag_plots$diag_fb <- plot_diag_quartile_summary(enhanced_stats)
+  save_plot_multi(diag_plots$diag_fb, "diag_fb_quartile_summary", VIZ_DIR,
+                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
+}, error = function(e) {
+  cat(sprintf("  WARNING: Diag F-B failed: %s\n", e$message))
+})
+
+# --- Diag L: Delta-vs-Prior Miscalibration ---
+cat("Generating Diag L (Delta-vs-Prior Miscalibration)...\n")
+tryCatch({
+  diag_plots$diag_l <- plot_diag_delta_vs_prior(sgpc_data)
+  save_plot_multi(diag_plots$diag_l, "diag_l_delta_vs_prior", VIZ_DIR,
+                  width = 12, height = 10)
+}, error = function(e) {
+  cat(sprintf("  WARNING: Diag L failed: %s\n", e$message))
+})
+
+# --- Diag M: Tail-Focused Rank Stability ---
+cat("Generating Diag M (Tail-Focused Rank Stability)...\n")
+tryCatch({
+  diag_plots$diag_m <- plot_diag_tail_rank_stability(sgpc_data)
+  save_plot_multi(diag_plots$diag_m, "diag_m_tail_rank_stability", VIZ_DIR,
+                  width = 14, height = 7)
+}, error = function(e) {
+  cat(sprintf("  WARNING: Diag M failed: %s\n", e$message))
+})
+
+# --- Diag N: Mean-vs-Median Group Stability ---
+if (!skip_panel_b) {
+  cat("Generating Diag N (Mean-vs-Median Group Stability)...\n")
+  tryCatch({
+    diag_plots$diag_n <- plot_diag_mean_vs_median_stability(sgpc_data)
+    save_plot_multi(diag_plots$diag_n, "diag_n_mean_vs_median_stability", VIZ_DIR,
+                    width = 12, height = 7)
+  }, error = function(e) {
+    cat(sprintf("  WARNING: Diag N failed: %s\n", e$message))
+  })
+} else {
+  cat("Skipping Diag N (requires group identifiers)\n")
+}
+
+# --- Diag O: Composition-Bias Pathway ---
+if (!skip_panel_b) {
+  cat("Generating Diag O (Composition-Bias Pathway)...\n")
+  tryCatch({
+    diag_plots$diag_o <- plot_diag_composition_bias(sgpc_data)
+    save_plot_multi(diag_plots$diag_o, "diag_o_composition_bias", VIZ_DIR,
+                    width = 12, height = 10)
+  }, error = function(e) {
+    cat(sprintf("  WARNING: Diag O failed: %s\n", e$message))
+  })
+} else {
+  cat("Skipping Diag O (requires SCHOOL_NUMBER)\n")
+}
+
+# --- Assemble F-DeepDive Composite (2x2 grid) ---
+diag_composite_panels <- list()
+if (!is.null(diag_plots$diag_fa)) diag_composite_panels$fa <- diag_plots$diag_fa
+if (!is.null(diag_plots$diag_fb)) diag_composite_panels$fb <- diag_plots$diag_fb
+if (!is.null(diag_plots$diag_l))  diag_composite_panels$l  <- diag_plots$diag_l
+if (!is.null(diag_plots$diag_m))  diag_composite_panels$m  <- diag_plots$diag_m
+
+if (length(diag_composite_panels) >= 2) {
+  cat("Assembling Gaussian Misfit Diagnostic Composite Grid...\n")
+  n_diag <- length(diag_composite_panels)
+  diag_ncol <- min(2, n_diag)
+  diag_height <- if (n_diag > 2) 14 else 7
+  tryCatch({
+    save_plot_multi_panel(
+      diag_composite_panels,
+      "gaussian_misfit_diagnostic_grid", VIZ_DIR,
+      width = 16, height = diag_height,
+      ncol = diag_ncol, widths = rep(1, diag_ncol)
+    )
+  }, error = function(e) {
+    cat(sprintf("  WARNING: Diagnostic composite failed: %s\n", e$message))
+  })
+}
+
+cat("\nGaussian misfit diagnostics complete.\n\n")
+
+cat("Panel generation complete.\n\n")
 
 ############################################################################
 ### STEP 4: ASSEMBLE GRID
@@ -193,40 +530,78 @@ cat("====================================================================\n\n")
 # Load grid assembly function
 source("STEP_2_SGPc_Sensitivity/generate_sgpc_summary_grid.R")
 
-# Define panel file names
-if (skip_panel_b) {
-  cat("NOTE: Using placeholder for Panel B (group analysis not available)\n\n")
-  # Create a simple placeholder PDF
-  pdf(file.path(VIZ_DIR, "panel_b_placeholder.pdf"), width = 8, height = 6)
+# Build panel file list from successfully generated panels
+panel_files <- c()
+
+# Core panels (always expected)
+panel_files["panel_a"] <- "panel_a_individual_ecdf.pdf"
+
+if (!skip_panel_b) {
+  panel_files["panel_b"] <- "panel_b_school_ecdf.pdf"
+  panel_files["panel_b2"] <- "panel_b2_district_ecdf.pdf"
+} else {
+  # Create placeholder
+  pdf(file.path(VIZ_DIR, "panel_b_placeholder.pdf"), width = 10, height = 7)
   plot.new()
   text(0.5, 0.5, 
-       "Panel B: Group-Level Analysis\n\n(Requires SCHOOL_NUMBER/DISTRICT_NUMBER)\n\nRe-run Step 2.1 with updated sgpc_compute_all_variants.R",
+       "Panel B: School-Level Analysis\n\n(Requires SCHOOL_NUMBER/DISTRICT_NUMBER)\n\nRe-run Step 2.1 with updated sgpc_compute_all_variants.R",
        cex = 1.5, col = "gray50")
   dev.off()
-  
-  panel_files <- c(
-    panel_a = "panel_a_individual_ecdf.pdf",
-    panel_b = "panel_b_placeholder.pdf",
-    panel_c = "panel_c_condition_dots.pdf",
-    panel_d1 = "panel_d1_rank_agreement.pdf",
-    panel_d2 = "panel_d2_decile_stability.pdf"
-  )
-} else {
-  panel_files <- c(
-    panel_a = "panel_a_individual_ecdf.pdf",
-    panel_b = "panel_b_group_ecdf.pdf",
-    panel_c = "panel_c_condition_dots.pdf",
-    panel_d1 = "panel_d1_rank_agreement.pdf",
-    panel_d2 = "panel_d2_decile_stability.pdf"
-  )
+  panel_files["panel_b"] <- "panel_b_placeholder.pdf"
 }
+
+panel_files["panel_c"] <- "panel_c_condition_dots.pdf"
+panel_files["panel_d"] <- "panel_d_rank_agreement.pdf"
+panel_files["panel_e"] <- "panel_e_decile_stability.pdf"
+
+# New panels (may not exist if they failed)
+if (!is.null(plots$panel_d2)) {
+  panel_files["panel_d2"] <- "panel_d2_group_bucket_stability.pdf"
+}
+if (!is.null(plots$panel_f)) {
+  panel_files["panel_f"] <- "panel_f_prior_quartile.pdf"
+}
+if (!is.null(plots$panel_g)) {
+  panel_files["panel_g"] <- "panel_g_cross_dataset.pdf"
+}
+if (!is.null(plots$panel_h)) {
+  panel_files["panel_h"] <- "panel_h_multilevel_aggregation.pdf"
+}
+if (!is.null(plots$panel_k)) {
+  panel_files["panel_k"] <- "panel_k_group_rank_stability.pdf"
+}
+if (!is.null(plots$panel_i1)) {
+  panel_files["panel_i1"] <- "panel_i1_sensitivity_ribbon.pdf"
+}
+if (!is.null(plots$panel_i2)) {
+  panel_files["panel_i2"] <- "panel_i2_variance_decomposition.pdf"
+}
+if (!is.null(plots$panel_j)) {
+  panel_files["panel_j"] <- "panel_j_condition_n_vs_mad.pdf"
+}
+
+# Determine layout based on number of panels
+n_panels <- length(panel_files)
+if (n_panels >= 12) {
+  layout_choice <- "6x2"
+} else if (n_panels >= 10) {
+  layout_choice <- "5x2"
+} else if (n_panels >= 8) {
+  layout_choice <- "4x2"
+} else if (n_panels >= 6) {
+  layout_choice <- "3x2"
+} else {
+  layout_choice <- "2x3"
+}
+
+cat(sprintf("Assembling %d panels in %s layout...\n", n_panels, layout_choice))
 
 # Assemble grid
 grid_result <- generate_sgpc_summary_grid_latex(
   plot_files = panel_files,
   output_dir = VIZ_DIR,
-  layout = "2x3",
-  title = "SGPc Sensitivity to Copula Choice: A Multi-Level Analysis",
+  layout = layout_choice,
+  title = "SGPc Sensitivity to Copula Choice: Family Selection and Sampling Error",
   compile_pdf = TRUE,
   keep_tex = FALSE,
   export_formats = c("pdf", "svg", "png"),
@@ -243,26 +618,54 @@ cat("====================================================================\n\n")
 
 cat("Output directory:", VIZ_DIR, "\n\n")
 
-cat("Individual panels:\n")
-cat("  - panel_a_individual_ecdf.{pdf,svg,png}\n")
-if (!skip_panel_b) {
-  cat("  - panel_b_group_ecdf.{pdf,svg,png}\n")
-} else {
-  cat("  - panel_b_placeholder.pdf (re-run Step 2.1 to generate real panel)\n")
+cat("Individual panels generated:\n")
+panel_labels <- c(
+  panel_a  = "A:  Individual-level ECDF (10 comparisons)",
+  panel_b  = "B:  School-level ECDF (with sqrt(n) inset)",
+  panel_b2 = "B2: District-level ECDF",
+  panel_c  = "C:  Condition-level MAD dots",
+  panel_d  = "D:  Individual-level Rank Agreement",
+  panel_e  = "E:  Decile Stability",
+  panel_d2 = "D2: Group-Level Bucket Stability (School & District, K=3,5,10)",
+  panel_f  = "F:  Prior Achievement Quartile Sensitivity",
+  panel_g  = "G:  Cross-Dataset Comparison",
+  panel_h  = "H:  Multi-Level Aggregation (Individual->School->District)",
+  panel_k  = "K:  Group-Level Rank Stability (School & District)",
+  panel_i  = "I:  Error Decomposition (Family vs Sampling)",
+  panel_j  = "J:  Condition N vs MAD (Observed Sample Size Effect)"
+)
+for (pn in names(panel_files)) {
+  label <- if (pn %in% names(panel_labels)) panel_labels[pn] else pn
+  cat(sprintf("  [OK] %s\n", label))
 }
-cat("  - panel_c_condition_dots.{pdf,svg,png}\n")
-cat("  - panel_d1_rank_agreement.{pdf,svg,png}\n")
-cat("  - panel_d2_decile_stability.{pdf,svg,png}\n\n")
+cat("\n")
+
+# Report diagnostics
+diag_labels <- c(
+  diag_fa = "F-A: Focused Quartile Violins (Gaussian misfit)",
+  diag_fb = "F-B: Quartile Summary Lines (median / Q90)",
+  diag_l  = "L:   Delta-vs-Prior Miscalibration (signed, GAM smooth)",
+  diag_m  = "M:   Tail-Focused Rank Stability (Bottom 10/Mid 80/Top 10)",
+  diag_n  = "N:   Mean-vs-Median Group Stability",
+  diag_o  = "O:   Composition-Bias Pathway (school mean_prior vs mean_delta)"
+)
+if (length(diag_plots) > 0) {
+  cat("Gaussian misfit diagnostics generated:\n")
+  for (dn in names(diag_plots)) {
+    if (!is.null(diag_plots[[dn]])) {
+      label <- if (dn %in% names(diag_labels)) diag_labels[dn] else dn
+      cat(sprintf("  [OK] %s\n", label))
+    }
+  }
+  cat("\n")
+}
 
 cat("Assembled grid:\n")
+cat(sprintf("  Layout: %s (%d panels)\n", layout_choice, n_panels))
 cat("  - sgpc_summary_grid.tex (LaTeX source)\n")
 cat("  - sgpc_summary_grid.pdf (main figure)\n")
-if (!is.null(grid_result$svg)) {
-  cat("  - sgpc_summary_grid.svg\n")
-}
-if (!is.null(grid_result$png)) {
-  cat("  - sgpc_summary_grid.png\n")
-}
+if (!is.null(grid_result$svg)) cat("  - sgpc_summary_grid.svg\n")
+if (!is.null(grid_result$png)) cat("  - sgpc_summary_grid.png\n")
 cat("\n")
 
 cat("Enhanced statistics cached at:\n")
@@ -280,5 +683,6 @@ invisible(list(
   individual_plots = plots,
   grid_files = grid_result,
   enhanced_stats = enhanced_stats,
+  sampling_results = if (exists("sampling_results")) sampling_results else NULL,
   output_dir = VIZ_DIR
 ))

@@ -1,0 +1,296 @@
+############################################################################
+###
+### Bootstrap Uncertainty Quantification for STEP 3
+###
+### Two layers of uncertainty:
+###   (A) Sampling uncertainty — resample prior and current independently
+###   (B) Copula uncertainty  — draw baseline copula parameters from
+###       STEP 1 recommendation distributions
+###
+### Author: dataimago
+### Date: February 2026
+### Project: Copula Sensitivity Analyses — STEP 3 (LIw_LD)
+###
+############################################################################
+
+require(copula)
+
+
+#' Bootstrap Sampling Uncertainty for Growth Regime Estimation
+#'
+#' Resamples the prior and current samples independently (with replacement)
+#' and re-estimates the growth regime for each replicate.
+#'
+#' @param u_sample Numeric vector. Prior-grade reference percentiles.
+#' @param v_sample Numeric vector. Current-grade reference percentiles.
+#' @param kernel_cache A kernel_cache object.
+#' @param regime_family Character. Default "beta".
+#' @param distance_fn Character. Default "wasserstein1".
+#' @param n_boot Integer. Number of bootstrap replicates. Default 200.
+#' @param v_grid Numeric vector. CDF evaluation grid. Default NULL (auto).
+#' @param grid_resolution Integer. Grid resolution for coarse search.
+#'   Default 20 (lower than estimate_regime default for speed).
+#' @param seed Integer. RNG seed for reproducibility. Default NULL.
+#' @param verbose Logical. Print progress? Default TRUE.
+#'
+#' @return List with:
+#'   \itemize{
+#'     \item theta_draws: Matrix [n_boot, n_params] of estimated parameters
+#'     \item median_sgpc_draws: Numeric vector of median SGPc from each replicate
+#'     \item mean_sgpc_draws: Numeric vector of mean SGPc from each replicate
+#'     \item distance_draws: Numeric vector of minimum distances
+#'     \item ci_median_sgpc: 95 percent percentile CI for median SGPc
+#'     \item ci_mean_sgpc: 95 percent percentile CI for mean SGPc
+#'     \item se_median_sgpc: Bootstrap standard error
+#'     \item n_boot: Number of replicates
+#'     \item n_converged: Number that converged
+#'   }
+#'
+#' @export
+bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
+                              regime_family = "beta",
+                              distance_fn = "wasserstein1",
+                              n_boot = 200,
+                              v_grid = NULL,
+                              grid_resolution = 20,
+                              seed = NULL,
+                              verbose = TRUE) {
+
+  if (!is.null(seed)) set.seed(seed)
+
+  if (is.null(v_grid)) {
+    v_grid <- seq(0.005, 0.995, length.out = 201)
+  }
+
+  n_u <- length(u_sample)
+  n_v <- length(v_sample)
+
+  # Storage
+  theta_list <- list()
+  median_sgpc <- numeric(n_boot)
+  mean_sgpc   <- numeric(n_boot)
+  distances   <- numeric(n_boot)
+  converged   <- logical(n_boot)
+
+  if (verbose) cat("Bootstrap sampling uncertainty: ", n_boot, " replicates\n")
+
+  for (b in seq_len(n_boot)) {
+    if (verbose && (b %% 50 == 0 || b == 1)) {
+      cat("  Replicate", b, "/", n_boot, "\n")
+    }
+
+    # Resample independently
+    u_boot <- sample(u_sample, n_u, replace = TRUE)
+    v_boot <- sample(v_sample, n_v, replace = TRUE)
+
+    res <- tryCatch({
+      estimate_regime(u_boot, v_boot, kernel_cache,
+                      regime_family = regime_family,
+                      distance_fn = distance_fn,
+                      v_grid = v_grid,
+                      grid_resolution = grid_resolution,
+                      verbose = FALSE)
+    }, error = function(e) NULL)
+
+    if (!is.null(res)) {
+      theta_list[[b]] <- res$theta_hat
+      median_sgpc[b]  <- res$regime$median * 100
+      mean_sgpc[b]    <- res$regime$mean * 100
+      distances[b]    <- res$distance_min
+      converged[b]    <- (res$convergence == 0)
+    } else {
+      theta_list[[b]] <- rep(NA_real_, 2)
+      median_sgpc[b]  <- NA_real_
+      mean_sgpc[b]    <- NA_real_
+      distances[b]    <- NA_real_
+      converged[b]    <- FALSE
+    }
+  }
+
+  theta_draws <- do.call(rbind, theta_list)
+  n_converged <- sum(converged, na.rm = TRUE)
+  valid <- !is.na(median_sgpc)
+
+  if (verbose) {
+    cat("  Converged:", n_converged, "/", n_boot, "\n")
+    if (sum(valid) > 2) {
+      cat("  Median SGPc: ", round(median(median_sgpc[valid]), 1),
+          " [", round(quantile(median_sgpc[valid], 0.025), 1),
+          ", ", round(quantile(median_sgpc[valid], 0.975), 1), "]\n", sep = "")
+    }
+  }
+
+  list(
+    theta_draws      = theta_draws,
+    median_sgpc_draws = median_sgpc,
+    mean_sgpc_draws  = mean_sgpc,
+    distance_draws   = distances,
+    ci_median_sgpc   = if (sum(valid) > 2)
+                         quantile(median_sgpc[valid], c(0.025, 0.975)) else c(NA, NA),
+    ci_mean_sgpc     = if (sum(valid) > 2)
+                         quantile(mean_sgpc[valid], c(0.025, 0.975)) else c(NA, NA),
+    se_median_sgpc   = if (sum(valid) > 2) sd(median_sgpc[valid]) else NA_real_,
+    n_boot           = n_boot,
+    n_converged      = n_converged
+  )
+}
+
+
+#' Copula Parameter Uncertainty for Growth Regime Estimation
+#'
+#' Propagates uncertainty from the baseline copula parameter estimates
+#' (from STEP 1) by drawing copula parameters from the recommendation
+#' distribution and re-estimating the growth regime for each draw.
+#'
+#' @param u_sample Numeric vector. Prior-grade reference percentiles.
+#' @param v_sample Numeric vector. Current-grade reference percentiles.
+#' @param copula_param_draws List of copula parameter sets. Each element
+#'   should contain $rho and $df (for t-copula). Can be generated from
+#'   STEP 1 manifest IQR or from condition-level parameter distributions.
+#' @param regime_family Character. Default "beta".
+#' @param distance_fn Character. Default "wasserstein1".
+#' @param v_grid Numeric vector. CDF evaluation grid. Default NULL.
+#' @param grid_resolution Integer. Default 20.
+#' @param verbose Logical. Default TRUE.
+#'
+#' @return List with:
+#'   \itemize{
+#'     \item theta_draws: Matrix of estimated parameters per copula draw
+#'     \item median_sgpc_draws: Vector of median SGPc per copula draw
+#'     \item copula_params_used: The copula parameters used for each draw
+#'     \item var_copula: Variance in median SGPc due to copula uncertainty
+#'   }
+#'
+#' @export
+copula_uncertainty <- function(u_sample, v_sample,
+                                copula_param_draws,
+                                regime_family = "beta",
+                                distance_fn = "wasserstein1",
+                                v_grid = NULL,
+                                grid_resolution = 20,
+                                verbose = TRUE) {
+
+  n_draws <- length(copula_param_draws)
+
+  if (is.null(v_grid)) {
+    v_grid <- seq(0.005, 0.995, length.out = 201)
+  }
+
+  theta_list    <- list()
+  median_sgpc   <- numeric(n_draws)
+  copula_used   <- list()
+
+  if (verbose) cat("Copula parameter uncertainty:", n_draws, "draws\n")
+
+  for (m in seq_len(n_draws)) {
+    if (verbose && (m %% 10 == 0 || m == 1)) {
+      cat("  Draw", m, "/", n_draws, "\n")
+    }
+
+    params <- copula_param_draws[[m]]
+
+    # Build copula from parameters
+    cop <- tryCatch({
+      if (!is.null(params$df)) {
+        tCopula(param = params$rho, df = params$df, dispstr = "un")
+      } else {
+        normalCopula(param = params$rho)
+      }
+    }, error = function(e) NULL)
+
+    if (is.null(cop)) {
+      theta_list[[m]] <- rep(NA_real_, 2)
+      median_sgpc[m]  <- NA_real_
+      copula_used[[m]] <- params
+      next
+    }
+
+    # Build kernel cache for this copula parameter set
+    kc <- tryCatch(
+      create_kernel_cache(cop, u_grid_size = 101, v_grid_size = 101,
+                          compute_quantile = FALSE),
+      error = function(e) NULL
+    )
+
+    if (is.null(kc)) {
+      theta_list[[m]] <- rep(NA_real_, 2)
+      median_sgpc[m]  <- NA_real_
+      copula_used[[m]] <- params
+      next
+    }
+
+    res <- tryCatch({
+      estimate_regime(u_sample, v_sample, kc,
+                      regime_family = regime_family,
+                      distance_fn = distance_fn,
+                      v_grid = v_grid,
+                      grid_resolution = grid_resolution,
+                      verbose = FALSE)
+    }, error = function(e) NULL)
+
+    if (!is.null(res)) {
+      theta_list[[m]] <- res$theta_hat
+      median_sgpc[m]  <- res$regime$median * 100
+    } else {
+      theta_list[[m]] <- rep(NA_real_, 2)
+      median_sgpc[m]  <- NA_real_
+    }
+    copula_used[[m]] <- params
+  }
+
+  theta_draws <- do.call(rbind, theta_list)
+  valid <- !is.na(median_sgpc)
+
+  if (verbose && sum(valid) > 2) {
+    cat("  Median SGPc range due to copula uncertainty: [",
+        round(min(median_sgpc[valid]), 1), ", ",
+        round(max(median_sgpc[valid]), 1), "]\n", sep = "")
+    cat("  SD:", round(sd(median_sgpc[valid]), 2), "\n")
+  }
+
+  list(
+    theta_draws       = theta_draws,
+    median_sgpc_draws = median_sgpc,
+    copula_params_used = copula_used,
+    var_copula        = if (sum(valid) > 2) var(median_sgpc[valid]) else NA_real_
+  )
+}
+
+
+#' Generate Copula Parameter Draws from STEP 1 Recommendations
+#'
+#' Convenience function to create a list of copula parameter sets by
+#' sampling from the distribution implied by the STEP 1 manifest
+#' (median and IQR -> approximate Normal draws).
+#'
+#' @param manifest_params List with $rho (list with $median, $q25, $q75)
+#'   and $df (list with $median, $q25, $q75).
+#' @param n_draws Integer. Number of draws. Default 25.
+#' @param seed Integer. RNG seed. Default NULL.
+#'
+#' @return List of n_draws parameter sets, each with $rho and $df.
+#'
+#' @export
+generate_copula_draws <- function(manifest_params, n_draws = 25, seed = NULL) {
+
+  if (!is.null(seed)) set.seed(seed)
+
+  # Approximate SD from IQR: SD ~ IQR / 1.35
+  rho_med <- manifest_params$rho$median
+  rho_sd  <- (manifest_params$rho$q75 - manifest_params$rho$q25) / 1.35
+
+  df_med  <- manifest_params$df$median
+  df_sd   <- (manifest_params$df$q75 - manifest_params$df$q25) / 1.35
+
+  draws <- lapply(seq_len(n_draws), function(i) {
+    rho_draw <- pmax(-0.99, pmin(0.99, rnorm(1, rho_med, rho_sd)))
+    df_draw  <- pmax(2, round(rnorm(1, df_med, df_sd)))
+    list(rho = rho_draw, df = df_draw)
+  })
+
+  return(draws)
+}
+
+
+cat("STEP 3 bootstrap_uncertainty.R loaded.\n")
+cat("  Functions: bootstrap_regime, copula_uncertainty, generate_copula_draws\n")

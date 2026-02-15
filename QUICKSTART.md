@@ -1,17 +1,17 @@
-# Quick Start Guide: Copula-Based Pseudo-Growth Simulation
+# Quick Start Guide: Copula-Based Growth Regime Inference
 
 ## 🚀 Fastest Path to Results
 
-### Complete Analysis (All 4 Steps)
+### Complete Analysis (All 5 Steps)
 ```r
 # Navigate to project directory
 setwd("~/Research/Graphics_Visualizations/Copula_Sensitivity_Analyses")
 
-# Run complete pipeline
+# Run complete pipeline (STEPs 1-3 complete; 4-5 are placeholders)
 source("master_analysis.R")
 ```
 
-**Runtime:** 8-14 hours (local sequential) or 4-6 hours (EC2 with mirai parallelization, 180+ workers)
+**Runtime:** 43-47 hours for STEPs 1-3 on EC2 m8g-metal.48xl (192 cores, 752GB RAM)
 
 ---
 
@@ -22,18 +22,25 @@ source("master_analysis.R")
 STEPS_TO_RUN <- 1
 source("master_analysis.R")
 ```
-**Runtime:** 8-12 hours (local, 4 datasets, 966 conditions) or 3-4 hours (EC2 with 180+ mirai workers)
+**Runtime:** 38.7 hours on EC2 m8g-metal.48xl (192 cores, 752GB RAM) — 966 conditions, avg 2.4 min/condition
 
-### Steps 1-2 (Add Copula Sensitivity - CORE CONTRIBUTION)
+### Steps 1-2 (Add SGPc Sensitivity - CORE CONTRIBUTION)
 ```r
 STEPS_TO_RUN <- c(1, 2)
 source("master_analysis.R")
 ```
-**Runtime:** 10-16 hours (local) or 4-6 hours (EC2, Step 2 not yet migrated to mirai)
+**Runtime:** 42-45 hours total (STEP 1: 38.7 hours, STEP 2: 3-6 hours)
+
+### Steps 1-3 (Add Growth Regime Inference - PIÈCE DE RÉSISTANCE)
+```r
+STEPS_TO_RUN <- c(1, 2, 3)
+source("master_analysis.R")
+```
+**Runtime:** 43-47 hours total (STEP 1: 38.7 hours, STEP 2: 3-6 hours, STEP 3: 30-90 min)
 
 ### Custom Selection
 ```r
-STEPS_TO_RUN <- c(3, 4)  # Run only Steps 3 and 4
+STEPS_TO_RUN <- c(3)  # Run only STEP 3 (growth regime inference)
 source("master_analysis.R")
 ```
 
@@ -51,13 +58,15 @@ If missing, see `Data/README.md` for instructions.
 
 ### 2. R Packages
 ```r
-install.packages(c("data.table", "copula", "splines2", "grid"))
+install.packages(c("data.table", "copula", "mirai", "jsonlite", "grid"))
 ```
 
-### 3. System Requirements
+### 2. System Requirements
 - **Local:** 8GB RAM minimum (16GB recommended)
-- **EC2:** r8g.24xlarge or c8g.24xlarge (96 vCPUs, 192 GB RAM) for full parallelization
-  - Mirai scales to 180+ workers (bypasses R's 128 connection limit)
+- **EC2 Production:** m8g-metal.48xl (192 vCPUs, 752 GB RAM) for full parallelization
+  - Mirai scales across all available cores
+  - Per-task data loading minimizes memory overhead
+  - Latest run: Feb 6, 2026 — 38.7 hours, 966 conditions, 100% success
 
 ---
 
@@ -82,10 +91,10 @@ source("master_analysis.R")
 ```r
 # Auto-detects EC2 environment
 # - Enables batch mode (no pauses)
-# - Uses mirai with 180+ workers for STEP 1
-# - Per-task data loading (saves 3.74 GB RAM + 60s startup)
+# - Uses mirai with all available cores (192 on m8g-metal.48xl)
+# - Per-task data loading (minimizes memory overhead)
 # - Thread management prevents CPU oversubscription
-# - Checkpoint/resume for spot instance resilience
+# - Latest production run: Feb 6, 2026 (38.7 hours, 966 conditions, 100% success)
 source("master_analysis.R")
 ```
 
@@ -102,53 +111,60 @@ source("master_analysis.R")
 
 ## 📊 What Each Step Does
 
-### STEP 1: Copula Family Selection (8-12 hours local, 3-4 hours EC2)
+### STEP 1: Copula Family Selection (38.7 hours EC2, avg 2.4 min/condition)
 - Tests 6 copula families (5 parametric + comonotonic) across 966 conditions (4 datasets)
-- Uses mirai parallelization for scalability (180+ workers on EC2)
-- **Output:** Best copula family identified (t-copula), per-condition contour plots, SGPc results
+- Uses mirai parallelization for scalability on EC2 m8g-metal.48xl (192 cores)
+- **Output:** Family distribution: t-copula 63.6%, Frank 30.7%, Gumbel 3.6%, Gaussian 2.1%
+- **Output:** Parameter recommendations, contour plots, AI-consumable manifests
 - **Location:** `STEP_1_Family_Selection/results/`
 - **Paper:** Chapter 3, Section 3.1
 
-### STEP 2: Copula Sensitivity Analyses ⭐ **CORE CONTRIBUTION** (3-6 hours)
-- Tests t-copula robustness across 4 dimensions
-- Experiments: grade span, sample size, content area, cohort
-- **Output:** Validates Sklar-theoretic extension of TAMP
-- **Location:** `STEP_2_Copula_Sensitivity_Analyses/results/`
+### STEP 2: SGPc Sensitivity ⭐ **CORE CONTRIBUTION** (3-6 hours)
+- Computes multiple SGPc variants (empirical, best-fit, canonical, mis-specified, comonotonic)
+- Demonstrates practical consequences of copula choice
+- **Output:** Correlation matrices, classification agreement, publication panels
+- **Location:** `STEP_2_SGPc_Sensitivity/results/`
 - **Paper:** Chapter 3, Section 3.2 (Central empirical contribution)
+- **Note:** Comonotonic uses step function (bimodal 1s/99s); alternative constant-50 interpretation may be explored for STEP 3
 
-### STEP 3: Application Implementation (40-60 min)
-- Validates 15+ marginal transformation methods for invertibility
-- Note: Uses legacy parallel package (not yet migrated to mirai)
-- **Output:** Method classification for score-scale reporting
-- **Location:** `STEP_3_Application_Implementation/results/`
-- **Paper:** Chapter 3, Section 3.3 (Implementation detail)
+### STEP 3: Growth Regime Inference (LIw_LD) ⭐ **PIÈCE DE RÉSISTANCE** (30-90 min)
+- Validates copula-kernel growth regime inference from cross-sectional data
+- Compares inferred growth regimes to longitudinal ground truth
+- **Output:** Recovery accuracy tables, publication panels (6 panels A-F), manifests
+- **Location:** `STEP_3_LIw_LD/results/`
+- **Paper:** Chapter 4 (Growth Regime Inference)
 
-### STEP 4: Deep Dive & Reporting (1-2 hours)
-- Detailed t-copula analysis + SGP vs SGPc concordance
-- Generates publication materials
-- **Output:** LaTeX tables, figures, comprehensive report
-- **Location:** `STEP_4_Deep_Dive_Reporting/results/`
-- **Paper:** Chapter 3, Section 3.4 + Chapter 4
+### STEP 4: TIMSS Implementation (Placeholder)
+- Applies STEP 3 machinery to actual TIMSS cross-sectional data
+- **Status:** Awaiting STEP 3 validation and TIMSS data acquisition
+- **Location:** `STEP_4_TIMSS_Implementation/`
+- **Paper:** Chapter 5 (International Application)
+
+### STEP 5: Summary and Conclusions (Placeholder)
+- Synthesises findings, generates publication materials
+- **Status:** Awaiting upstream completion
+- **Location:** `STEP_5_Summary_Conclusions_Next_Steps/`
+- **Paper:** Chapters 6-7 (Discussion, Conclusions)
 
 ---
 
 ## 🎯 Common Workflows
 
-### Core Methodology (4-7 hours)
-Run Steps 1-2 to complete the core contribution (family selection + sensitivity):
+### Core Methodology (42-45 hours)
+Run Steps 1-2 to complete the core contribution (family selection + SGPc sensitivity):
 ```r
 STEPS_TO_RUN <- c(1, 2)
 source("master_analysis.R")
 ```
 
-### Full Analysis for Paper (8-14 hours)
+### Full Implemented Analysis (43-47 hours)
+Run Steps 1-3 (includes growth regime inference validation):
 ```r
-# Set to NULL to run all steps
-STEPS_TO_RUN <- NULL
+STEPS_TO_RUN <- c(1, 2, 3)
 source("master_analysis.R")
 ```
 
-### Application Implementation Only (40-60 min)
+### Growth Regime Inference Only (30-90 min)
 If you already have STEP 1-2 results:
 ```r
 STEPS_TO_RUN <- 3
@@ -161,10 +177,11 @@ source("master_analysis.R")
 
 | Step | Results Directory | Key Files |
 |------|-------------------|-----------|
-| 1 | `STEP_1_Family_Selection/results/` | `phase1_decision.RData`, `phase1_*.pdf` |
-| 2 | `STEP_2_Copula_Sensitivity_Analyses/results/` | `exp_*/` subdirectories with CSV and PDFs |
-| 3 | `STEP_3_Application_Implementation/results/` | `exp5_transformation_validation_summary.csv` |
-| 4 | `STEP_4_Deep_Dive_Reporting/results/` | `tables/*.tex`, `figures/*.pdf` |
+| 1 | `STEP_1_Family_Selection/results/dataset_all/` | `analysis_manifest.{json,md}`, `phase1_*.{pdf,svg,png}` |
+| 2 | `STEP_2_SGPc_Sensitivity/results/` | SGPc comparison CSVs, publication panels |
+| 3 | `STEP_3_LIw_LD/results/` | `phase_a_summary.csv`, `phase_b_systematic_summary.csv`, `step3_manifest.{json,md}` |
+| 4 | `STEP_4_TIMSS_Implementation/results/` | (Placeholder — awaiting implementation) |
+| 5 | `STEP_5_Summary_Conclusions_Next_Steps/results/` | (Placeholder — awaiting implementation) |
 
 ---
 
@@ -226,12 +243,13 @@ nohup Rscript -e "source('master_analysis.R')" > output.log 2>&1 &
 tail -f output.log
 ```
 
-### 4. Expected Runtime (EC2 r8g.24xlarge with 180+ mirai workers)
-- STEP 1: ~3-4 hours (966 conditions, mirai parallelized)
-- STEP 2: ~2-3 hours (copula sensitivity - CORE, legacy parallel)
-- STEP 3: ~40 minutes (transformation implementation, legacy parallel)
-- STEP 4: ~1 hour
-- **Total: ~6-9 hours**
+### 4. Expected Runtime (EC2 m8g-metal.48xl with mirai, 192 cores)
+- STEP 1: 38.7 hours (966 conditions, mirai parallelized, completed Feb 6, 2026)
+- STEP 2: 3-6 hours (SGPc sensitivity - CORE)
+- STEP 3: 30-90 minutes (growth regime inference - LIw_LD)
+- STEP 4: Placeholder (TIMSS implementation)
+- STEP 5: Placeholder (summary/conclusions)
+- **Total (Steps 1-3): 43-47 hours**
 
 ---
 
@@ -299,27 +317,30 @@ source("master_analysis.R")
 After running, you should see:
 
 **STEP 1:**
-- ✓ `phase1_decision.RData` exists
-- ✓ Selected copula family printed in summary
-- ✓ 5 PDF visualizations created
+- ✓ `analysis_manifest.{json,md}` exists in `results/dataset_all/`
+- ✓ Family distribution: t-copula 63.6%, Frank 30.7%, Gumbel 3.6%, Gaussian 2.1%
+- ✓ Contour plots for each condition with bootstrap uncertainty
+- ✓ 100% success rate (966/966 conditions)
 
 **STEP 2:** ⭐ **CORE CONTRIBUTION**
-- ✓ 4 experiment subdirectories with results
-- ✓ CSV files with copula parameter estimates
-- ✓ PDF visualizations showing robustness
+- ✓ SGPc variant comparison CSV files
+- ✓ Publication panel figures (PDF/SVG/PNG)
+- ✓ High correlation across variants (r > 0.95)
 
-**STEP 3:**
-- ✓ `exp5_transformation_validation_summary.csv` exists
-- ✓ Method classifications available
-- ✓ Figures directory created
+**STEP 3:** ⭐ **PIÈCE DE RÉSISTANCE**
+- ✓ `phase_a_summary.csv` with single-condition validation
+- ✓ `phase_b_systematic_summary.csv` with multi-subgroup validation
+- ✓ Publication panels A-F in `results/visualizations/`
+- ✓ `step3_manifest.{json,md}` with AI-consumable results
 
-**STEP 4:**
-- ✓ LaTeX tables in `tables/` subdirectory
-- ✓ Publication figures in `figures/` subdirectory
-- ✓ Comprehensive report generated
+**STEP 4:** (Placeholder)
+- Awaiting STEP 3 validation and TIMSS data
+
+**STEP 5:** (Placeholder)
+- Awaiting upstream completion
 
 ---
 
-**Version:** 5.0 (Mirai parallelization - scalable to 180+ workers)  
-**Last Updated:** January 2026  
-**Status:** ✓ Production Ready - EC2 Validated
+**Version:** 5.0 (5-step structure with growth regime inference)  
+**Last Updated:** February 2026  
+**Status:** ✓ Steps 1-3 Implemented; Steps 4-5 Placeholders

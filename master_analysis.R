@@ -112,7 +112,7 @@ if (file.exists("dataset_configs_local.R")) {
 # ============================================================================
 # >>> CURRENT DATASET SELECTION (Testing: dataset_4 only) <<<
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_3"
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_4"
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -130,9 +130,16 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 # Examples:
 #   STEPS_TO_RUN <- NULL              # Run all steps (default)
 #   STEPS_TO_RUN <- c(1, 2)          # Run only STEP_1 and STEP_2 (copula sensitivity)
-#   STEPS_TO_RUN <- c(3)             # Run only STEP_3 (application implementation)
+#   STEPS_TO_RUN <- c(3)             # Run only STEP_3 (growth regime inference — LIw_LD)
 #   STEPS_TO_RUN <- c(2, 3, 4)       # Run STEP_2 through STEP_4
-#   STEPS_TO_RUN <- 1:4              # Run all steps (same as NULL)
+#   STEPS_TO_RUN <- 1:5              # Run all steps (same as NULL)
+#
+# Step mapping:
+#   STEP 1 — STEP_1_Family_Selection     (copula family selection)
+#   STEP 2 — STEP_2_SGPc_Sensitivity     (SGPc sensitivity analysis)
+#   STEP 3 — STEP_3_LIw_LD              (growth regime inference — Longitudinal Inference w/o LD)
+#   STEP 4 — STEP_4_TIMSS_Implementation (TIMSS application — placeholder)
+#   STEP 5 — STEP_5_Summary_Conclusions_Next_Steps (synthesis — placeholder)
 
 STEPS_TO_RUN <- c(2)  # EC2: Run STEP_2 for all datasets with parallelization
 
@@ -497,15 +504,44 @@ if (!exists("USE_PARALLEL_STEP2")) USE_PARALLEL_STEP2 <- TRUE
 #   EXPERIMENT_TO_RUN_STEP2 <- c("exp_2_sample_size")     # Test experiment 2 only
 if (!exists("EXPERIMENT_TO_RUN_STEP2")) EXPERIMENT_TO_RUN_STEP2 <- NULL
 
+# STEP 2 Subset/Profiling Controls
+# These are passed through to sgpc_compute_all_variants.R for local testing
+# and EC2 staging before committing to the full 966-condition run.
+#
+# Examples:
+#   STEP2_MAX_CONDITIONS <- 10                  # Smoke test: 10 stratified conditions per dataset
+#   STEP2_MAX_CONDITIONS <- 50                  # Medium benchmark
+#   STEP2_MAX_CONDITIONS <- NULL                # Full run (all conditions, default)
+#   STEP2_SAMPLE_STRATEGY <- "stratified"       # "first", "random", or "stratified"
+#   STEP2_SEED <- 42                            # Reproducible subsetting
+#
+# Memory controls for parallel workers:
+#   STEP2_MEMORY_PER_WORKER_GB <- NULL          # Auto-estimate from dataset file size
+#   STEP2_TOTAL_MEMORY_GB <- NULL               # Auto-detect system RAM
+#   STEP2_MEMORY_PER_WORKER_GB <- 3.0           # Manual override (e.g., for dataset_1)
+#   STEP2_TOTAL_MEMORY_GB <- 64                 # EC2 instance memory budget
+#
+if (!exists("STEP2_MAX_CONDITIONS"))        STEP2_MAX_CONDITIONS        <- NULL
+if (!exists("STEP2_SAMPLE_STRATEGY"))       STEP2_SAMPLE_STRATEGY       <- "stratified"
+if (!exists("STEP2_SEED"))                  STEP2_SEED                  <- 42
+if (!exists("STEP2_MEMORY_PER_WORKER_GB"))  STEP2_MEMORY_PER_WORKER_GB  <- NULL
+if (!exists("STEP2_TOTAL_MEMORY_GB"))       STEP2_TOTAL_MEMORY_GB       <- NULL
+
 if (!is.null(EXPERIMENT_TO_RUN_STEP2)) {
   cat("STEP 2 Configuration:\n")
   cat("  Selected experiments:", paste(EXPERIMENT_TO_RUN_STEP2, collapse = ", "), "\n")
-  cat("  Parallel mode:", USE_PARALLEL_STEP2, "\n\n")
+  cat("  Parallel mode:", USE_PARALLEL_STEP2, "\n")
 } else {
   cat("STEP 2 Configuration:\n")
   cat("  Running all experiments (1-4)\n")
-  cat("  Parallel mode:", USE_PARALLEL_STEP2, "\n\n")
+  cat("  Parallel mode:", USE_PARALLEL_STEP2, "\n")
 }
+if (!is.null(STEP2_MAX_CONDITIONS)) {
+  cat("  Subset mode:", STEP2_MAX_CONDITIONS, "conditions per dataset (", STEP2_SAMPLE_STRATEGY, ")\n")
+} else {
+  cat("  Subset mode: OFF (all conditions)\n")
+}
+cat("\n")
 
 # Generic workspace object name (data gets assigned to this name regardless of source)
 WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG"
@@ -911,48 +947,44 @@ for (dataset_idx in seq_along(datasets_to_analyze)) {
   cat("  Results suffix:", ifelse(RESULTS_SUFFIX == "", "(none)", RESULTS_SUFFIX), "\n\n")
 
 ################################################################################
-### STEP 3: APPLICATION IMPLEMENTATION (Per-Dataset)
+### STEP 3: GROWTH REGIME INFERENCE — LIw_LD (Per-Dataset)
 ################################################################################
 # Note: Step 1 has already been processed for ALL datasets above.
 # Steps 2-4 are processed per-dataset in this loop.
+#
+# STEP 3 (LIw_LD) validates growth regime inference from cross-sectional
+# data against ground truth from longitudinal pairs. This is the "piece
+# de resistance" — demonstrating that group-level growth distributions
+# can be recovered without student-level linkage.
 ################################################################################
 
 if (should_run_step(3)) {
   
   cat("\n")
   cat("####################################################################\n")
-  cat("### STEP 3: APPLICATION IMPLEMENTATION\n")
+  cat("### STEP 3: GROWTH REGIME INFERENCE (LIw_LD)\n")
+  cat("### Longitudinal Inference without Longitudinal Data\n")
   cat("####################################################################\n\n")
   
-  cat("Paper Section: Application → Implementation\n")
-  cat("Objective: Validate transformation methods for copula pseudo-observations\n")
-  if (USE_PARALLEL) {
-    cat("Estimated time: 4-6 minutes (parallel)\n\n")
-  } else {
-    cat("Estimated time: 40-60 minutes (sequential)\n\n")
-  }
+  cat("Paper Section: Chapter 4 — Growth Regime Inference from Cross-Sectional Data\n")
+  cat("Objective: Validate copula-kernel growth regime inference against longitudinal truth\n")
+  cat("Estimated time: 30-90 minutes\n\n")
   
-  exp5_validation_results <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv"
-  exp5_full_results <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData"
+  step3_results_dir <- "STEP_3_LIw_LD/results"
+  step3_summary <- file.path(step3_results_dir, "phase_a_summary.csv")
   
-  if (SKIP_COMPLETED && check_results_exist(exp5_validation_results, "Step 3 validation")) {
-    cat("Skipping Step 3 validation (already completed)\n\n")
+  if (SKIP_COMPLETED && file.exists(step3_summary)) {
+    cat("Skipping Step 3 (already completed)\n")
+    cat("  Results:", step3_results_dir, "\n\n")
   } else {
-    result_3_1 <- time_phase("Step 3.1: Transformation Validation", {
-      # Use parallel version if enabled (EC2 or high-performance local)
-      if (USE_PARALLEL) {
-        cat("Using parallel implementation (", N_CORES, " cores)\n", sep = "")
-        source("STEP_3_Application_Implementation/exp_5_transformation_validation_parallel.R")
-      } else {
-        cat("Using sequential implementation\n")
-        source("STEP_3_Application_Implementation/exp_5_transformation_validation.R")
-      }
+    result_3 <- time_phase("Step 3: Growth Regime Inference (LIw_LD)", {
+      source("STEP_3_LIw_LD/run_step3.R")
     })
     
-    if (!result_3_1$success) {
-      cat("\n*** WARNING: Step 3 validation failed ***\n")
-      cat("This is critical for methodological justification.\n")
-      cat("Recommend stopping to investigate.\n\n")
+    if (!result_3$success) {
+      cat("\n*** WARNING: Step 3 (LIw_LD) failed ***\n")
+      cat("This is the core growth regime inference validation.\n")
+      cat("Recommend investigating before proceeding to TIMSS application.\n\n")
       
       if (!BATCH_MODE) {
         cat("Continue anyway? (y/n): ")
@@ -964,86 +996,41 @@ if (should_run_step(3)) {
     }
   }
   
-  # Generate visualizations
-  exp5_figures_dir <- "STEP_3_Application_Implementation/results/figures/exp5_transformation_validation"
-  
-  if (SKIP_COMPLETED && dir.exists(exp5_figures_dir) && length(list.files(exp5_figures_dir)) > 0) {
-    cat("✓ Skipping Step 3 visualizations (already exist)\n\n")
-  } else {
-    result_3_2 <- time_phase("Step 3.2: Visualization Generation", {
-      source("STEP_3_Application_Implementation/exp_5_visualizations.R")
-    })
-    
-    if (!result_3_2$success) {
-      cat("Warning: Step 3 visualizations failed but continuing.\n\n")
-    }
-  }
-  
   ## Review Step 3 Results
   cat("\n")
   cat("####################################################################\n")
   cat("### STEP 3 RESULTS SUMMARY\n")
   cat("####################################################################\n\n")
   
-  if (file.exists(exp5_validation_results)) {
-    exp5_summary <- fread(exp5_validation_results)
-    
-    cat("Method Classification Summary:\n")
-    cat("------------------------------\n")
-    class_counts <- table(exp5_summary$classification)
-    for (cls in c("EXCELLENT", "ACCEPTABLE", "MARGINAL", "UNACCEPTABLE")) {
-      if (cls %in% names(class_counts)) {
-        cat(sprintf("  %-15s: %2d methods\n", cls, class_counts[cls]))
-      }
-    }
-    cat("\n")
-    
-    cat("Recommended Methods for Steps 3-4:\n")
-    cat("----------------------------------\n")
-    phase2_methods <- exp5_summary[use_in_phase2 == TRUE, label]
-    if (length(phase2_methods) > 0) {
-      for (m in phase2_methods) {
-        cat("  ✓", m, "\n")
-      }
-    } else {
-      cat("  ⚠ WARNING: No methods passed all criteria!\n")
-      cat("  Recommend using empirical ranks for all analyses.\n")
-    }
-    cat("\n")
-    
-    cat("Key Findings:\n")
-    cat("-------------\n")
-    empirical_row <- exp5_summary[type == "empirical"][1]
-    ispline_4_row <- exp5_summary[method == "ispline_4knots"]
-    
-    if (nrow(empirical_row) > 0) {
-      cat(sprintf("  Empirical ranks: %s (K-S p=%.3f, copula=%s)\n",
-                  empirical_row$classification,
-                  empirical_row$ks_pvalue,
-                  empirical_row$best_copula))
-    }
-    
-    if (nrow(ispline_4_row) > 0) {
-      cat(sprintf("  I-spline (4 knots): %s (K-S p=%.3f, copula=%s) ← KNOWN BAD\n",
-                  ispline_4_row$classification,
-                  ispline_4_row$ks_pvalue,
-                  ispline_4_row$best_copula))
-    }
-    cat("\n")
-    
-    pause_for_review(
-      paste0("Review Step 3 results (Application Implementation):\n",
-             "  - STEP_3_Application_Implementation/results/\n\n",
-             "Verify:\n",
-             "  ✓ At least one method classified as ACCEPTABLE\n",
-             "  ✓ I-spline (4 knots) = UNACCEPTABLE/MARGINAL\n\n",
-             "If validation passed, we'll proceed to Step 4 (deep dive reporting)."),
-      "Step 3 Complete"
-    )
-  } else {
-    cat("⚠ WARNING: Step 3 results not found!\n")
-    cat("Cannot validate transformation methods.\n\n")
+  if (file.exists(step3_summary)) {
+    s3_summary <- fread(step3_summary)
+    cat("Phase A (Deep Validation):\n")
+    cat("  Condition:", s3_summary$condition_id[1], "\n")
+    cat("  Subgroup:", s3_summary$subgroup_id[1],
+        "(n =", s3_summary$n_subgroup[1], ")\n")
+    cat("  Inferred median SGPc:", s3_summary$median_sgpc_inferred[1], "\n")
+    cat("  True median SGPc:    ", s3_summary$median_sgpc_true[1], "\n")
+    cat("  Difference:          ", s3_summary$median_diff[1], "SGP points\n")
+    cat("  Bootstrap 95% CI:    [", s3_summary$boot_ci_lo[1], ",",
+        s3_summary$boot_ci_hi[1], "]\n\n")
   }
+  
+  phase_b_file <- file.path(step3_results_dir, "phase_b_systematic_summary.csv")
+  if (file.exists(phase_b_file)) {
+    s3_sys <- fread(phase_b_file)
+    cat("Phase B (Systematic Validation):\n")
+    cat("  Subgroups:", nrow(s3_sys), "\n")
+    cat("  Median |error|:", round(median(abs(s3_sys$median_diff)), 2), "SGP points\n")
+    cat("  Mean |error|:  ", round(mean(abs(s3_sys$median_diff)), 2), "SGP points\n\n")
+  }
+  
+  pause_for_review(
+    paste0("Review Step 3 results (Growth Regime Inference):\n",
+           "  - STEP_3_LIw_LD/results/\n",
+           "  - STEP_3_LIw_LD/results/visualizations/\n\n",
+           "If validation passed, proceed to Step 4 (TIMSS application)."),
+    "Step 3 Complete"
+  )
   
 } else {
   cat("\n####################################################################\n")
@@ -1123,12 +1110,38 @@ if (should_run_step(2)) {
       # Set environment variables for the computation script
       assign("USE_PARALLEL", USE_PARALLEL_STEP2, envir = .GlobalEnv)
       assign("DATASETS_TO_PROCESS", dataset_id, envir = .GlobalEnv)
+      # Export STEP_2 subset and memory controls
+      assign("STEP2_MAX_CONDITIONS",       STEP2_MAX_CONDITIONS,       envir = .GlobalEnv)
+      assign("STEP2_SAMPLE_STRATEGY",      STEP2_SAMPLE_STRATEGY,      envir = .GlobalEnv)
+      assign("STEP2_SEED",                 STEP2_SEED,                 envir = .GlobalEnv)
+      assign("STEP2_MEMORY_PER_WORKER_GB", STEP2_MEMORY_PER_WORKER_GB, envir = .GlobalEnv)
+      assign("STEP2_TOTAL_MEMORY_GB",      STEP2_TOTAL_MEMORY_GB,      envir = .GlobalEnv)
       source("STEP_2_SGPc_Sensitivity/sgpc_compute_all_variants.R")
     })
     
     if (!result_2_1$success) {
       cat("ERROR in Step 2.1: SGPc variant computation failed\n\n")
       stop("Cannot proceed with Step 2 without variant computations")
+    }
+  }
+  
+  ############################################################################
+  ### STEP 2.1b: CANONICAL COPULA VALIDATION
+  ############################################################################
+  
+  canonical_val_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/canonical_validation_report.md")
+  
+  if (SKIP_COMPLETED_STEP2 && canonical_val_complete) {
+    cat("✓ Skipping Step 2.1b (canonical validation already done)\n\n")
+  } else {
+    cat("Running Step 2.1b: Canonical copula validation...\n\n")
+    
+    result_2_1b <- time_phase("Step 2.1b: Canonical Copula Validation", {
+      source("STEP_2_SGPc_Sensitivity/canonical_validation.R")
+    })
+    
+    if (!result_2_1b$success) {
+      cat("Warning: Canonical validation failed (non-fatal, continuing)\n\n")
     }
   }
   
@@ -1213,6 +1226,24 @@ if (should_run_step(2)) {
     cat("Skipping Step 2.5: create_publication_figure.R not found\n\n")
   }
   
+  ############################################################################
+  ### STEP 2.6: WRITE CONSOLIDATED MANIFEST
+  ############################################################################
+  ## Always run (not gated by SKIP_COMPLETED_STEP2) so manifest reflects current outputs.
+  cat("Running Step 2.6: Write STEP_2 manifest...\n\n")
+  result_2_6 <- time_phase("Step 2.6: Write STEP_2 manifest", {
+    tryCatch({
+      source("STEP_2_SGPc_Sensitivity/write_step2_manifest.R")
+      TRUE
+    }, error = function(e) {
+      cat(sprintf("Warning: Manifest write failed: %s\n", e$message))
+      FALSE
+    })
+  })
+  if (!result_2_6$success || !isTRUE(result_2_6$result)) {
+    cat("Warning: Step 2.6 (manifest) failed (non-fatal, continuing)\n\n")
+  }
+  
   ## Step 2 Summary
   cat("\n")
   cat("####################################################################\n")
@@ -1244,75 +1275,85 @@ if (should_run_step(2)) {
 }
 
 ################################################################################
-### STEP 4: DEEP DIVE AND COMPREHENSIVE REPORTING
+### STEP 4: TIMSS IMPLEMENTATION
+################################################################################
+# Applies the copula-kernel growth regime inference framework (validated
+# in STEP 3) to actual TIMSS data (independent Grade 4 and Grade 8 samples).
+# Currently a placeholder — awaiting TIMSS data acquisition.
 ################################################################################
 
 if (should_run_step(4)) {
   
   cat("\n")
   cat("####################################################################\n")
-  cat("### STEP 4: DEEP DIVE AND COMPREHENSIVE REPORTING\n")
+  cat("### STEP 4: TIMSS IMPLEMENTATION\n")
   cat("####################################################################\n\n")
   
-  cat("Paper Section: Application → Case Studies; Conclusion\n")
-  cat("Objective: Deep analysis of selected copula + comprehensive reporting\n")
-  cat("Estimated time: 1-2 hours\n\n")
+  cat("Paper Section: Chapter 5 — International Application\n")
+  cat("Objective: Deploy copula-kernel growth regime inference on TIMSS data\n")
+  cat("Status: PLACEHOLDER — awaiting TIMSS data and STEP 3 completion\n\n")
   
-  # Check if t-copula was selected
-  phase1_decision_file <- "STEP_1_Family_Selection/results/phase1_decision.RData"
-  
-  run_t_copula_deep_dive <- FALSE
-  if (file.exists(phase1_decision_file)) {
-    load(phase1_decision_file)
-    run_t_copula_deep_dive <- ("t" %in% phase2_families)
-  }
-  
-  if (run_t_copula_deep_dive) {
-    
-    cat("t-copula selected in Step 1 - running deep dive analysis\n\n")
-    
-    t_copula_results <- "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData"
-    
-    if (SKIP_COMPLETED && check_results_exist(t_copula_results, "t-copula deep dive")) {
-      cat("Skipping Step 4.1 (already completed)\n\n")
-    } else {
-      result_4_1 <- time_phase("Step 4.1: t-Copula Deep Dive", {
-        source("STEP_4_Deep_Dive_Reporting/phase2_t_copula_deep_dive.R")
-      })
-      
-      if (!result_4_1$success) {
-        cat("Warning: t-copula deep dive failed but continuing.\n\n")
-      }
-    }
-  } else {
-    cat("t-copula not selected - skipping deep dive\n\n")
-  }
-  
-  # Comprehensive report
-  comprehensive_report_file <- "STEP_4_Deep_Dive_Reporting/results/phase2_comprehensive_report.RData"
-  
-  if (SKIP_COMPLETED && check_results_exist(comprehensive_report_file, "comprehensive report")) {
-    cat("Skipping Step 4.2 (already completed)\n\n")
-  } else {
-    result_4_2 <- time_phase("Step 4.2: Comprehensive Report Generation", {
-      source("STEP_4_Deep_Dive_Reporting/phase2_comprehensive_report.R")
+  step4_runner <- "STEP_4_TIMSS_Implementation/run_step4.R"
+  if (file.exists(step4_runner)) {
+    result_4 <- time_phase("Step 4: TIMSS Implementation", {
+      source(step4_runner)
     })
     
-    if (!result_4_2$success) {
-      cat("Warning: Comprehensive report generation failed.\n\n")
+    if (!result_4$success) {
+      cat("Warning: Step 4 (TIMSS) failed but continuing.\n\n")
     }
+  } else {
+    cat("Step 4 runner not yet implemented.\n")
+    cat("See STEP_4_TIMSS_Implementation/README.md for planned workflow.\n\n")
   }
   
   pause_for_review(
-    paste0("Review Step 4 results:\n",
-           "  - STEP_4_Deep_Dive_Reporting/results/\n\n",
-           "All steps complete! Review final outputs for paper integration."),
+    paste0("Review Step 4 status:\n",
+           "  - STEP_4_TIMSS_Implementation/README.md\n\n",
+           "Step 4 is a placeholder. Proceed to Step 5 (summary)."),
     "Step 4 Complete"
   )
   
 } else {
   cat("\n####################################################################\n")
   cat("### STEP 4: SKIPPED (not in STEPS_TO_RUN)\n")
+  cat("####################################################################\n\n")
+}
+
+################################################################################
+### STEP 5: SUMMARY, CONCLUSIONS, AND NEXT STEPS
+################################################################################
+# Final synthesis of all results. Currently a placeholder.
+################################################################################
+
+if (should_run_step(5)) {
+  
+  cat("\n")
+  cat("####################################################################\n")
+  cat("### STEP 5: SUMMARY, CONCLUSIONS, AND NEXT STEPS\n")
+  cat("####################################################################\n\n")
+  
+  cat("Paper Section: Chapter 6 — Discussion; Chapter 7 — Conclusions\n")
+  cat("Objective: Synthesise findings, generate publication materials\n")
+  cat("Status: PLACEHOLDER — awaiting upstream step completion\n\n")
+  
+  step5_runner <- "STEP_5_Summary_Conclusions_Next_Steps/step5_comprehensive_report.R"
+  if (file.exists(step5_runner)) {
+    result_5 <- time_phase("Step 5: Summary and Conclusions", {
+      source(step5_runner)
+    })
+    
+    if (!result_5$success) {
+      cat("Warning: Step 5 (summary) failed.\n\n")
+    }
+  } else {
+    cat("Step 5 runner not yet implemented.\n")
+    cat("See STEP_5_Summary_Conclusions_Next_Steps/README.md for planned content.\n\n")
+  }
+  
+} else {
+  cat("\n####################################################################\n")
+  cat("### STEP 5: SKIPPED (not in STEPS_TO_RUN)\n")
   cat("####################################################################\n\n")
 }
 

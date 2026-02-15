@@ -1,238 +1,263 @@
-# STEP 2 SGPc Sensitivity: Quick Start Guide
+# STEP 2 SGPc Sensitivity: Quick Start
 
-## Overview
+## Purpose
 
-The new STEP 2 assesses the **practical impact of copula choice on Student Growth Percentiles (SGPcs)** by computing multiple variants and comparing them.
+Run STEP 2 end-to-end and generate both:
+1. exploratory sensitivity visuals, and
+2. publication-ready panel figures.
+
+Documentation synchronized with implementation as of 2026-02-10.
+
+---
 
 ## Prerequisites
 
-1. **Phase 1 Complete**: Run Phase 1 first to generate:
+1. Phase 1 outputs exist:
    - `STEP_1_Family_Selection/results/dataset_all/analysis_manifest.json`
    - `STEP_1_Family_Selection/results/dataset_all/canonical_copula_parameters.csv`
-   - Per-condition empirical and parametric copula fits
+2. Dataset config and source data are available.
 
-2. **Data Available**: Dataset files in `Data/` directory
+---
 
-## Quick Start: Run via master_analysis.R
-
-### Option 1: Run New STEP 2 Only
+## Recommended: Run through `master_analysis.R`
 
 ```r
-# Configure which dataset(s) to process
-DATASETS_TO_RUN <- c("dataset_1")  # or c("dataset_1", "dataset_2", ...)
-
-# Configure STEP 2
+DATASETS_TO_RUN <- c("dataset_1")   # or multiple datasets
 STEPS_TO_RUN <- c(2)
-USE_PARALLEL_STEP2 <- FALSE  # Set TRUE for mirai parallel (faster)
+USE_PARALLEL_STEP2 <- FALSE
 
-# Run
 source("master_analysis.R")
 ```
 
-**What happens:**
-1. master_analysis.R loads the dataset using configuration system
-2. Calls `STEP_2_SGPc_Sensitivity/sgpc_compute_all_variants.R`
-   - Loads Phase 1's **pre-computed pseudo-observations** for consistency
-   - Computes 8 SGPc variants using Phase 1 copulas
-3. Calls `STEP_2_SGPc_Sensitivity/sgpc_aggregate_analysis.R`
-4. Calls `STEP_2_SGPc_Sensitivity/sgpc_visualizations.R`
-5. Calls `STEP_2_SGPc_Sensitivity/sgpc_generate_report.R`
+What this runs for STEP 2:
+1. `sgpc_compute_all_variants.R` (Step 2.1)
+2. `sgpc_aggregate_analysis.R` (Step 2.2)
+3. `sgpc_visualizations.R` (Step 2.3)
+4. `sgpc_generate_report.R` (Step 2.4)
+5. `create_publication_figure.R` (Step 2.5)
 
-**Outputs** in `STEP_2_SGPc_Sensitivity/results/`:
-- `sgpc_all_variants_{dataset_id}.rds` - Per-observation SGPc variants
-- `sgpc_key_comparisons.csv` - Summary statistics
-- `sgpc_sensitivity_manifest.json` - AI-readable output
-- `SGPC_SENSITIVITY_REPORT.md` - Narrative report
-- `visualizations/` - Plots in PDF, SVG, PNG formats
+---
 
-**Runtime:**
-- Sequential: 3-6 hours per dataset
-- Parallel (mirai): 60-120 minutes per dataset
+## Local Subset Benchmarking (dataset_1 profiling)
 
-### Option 2: Run All Steps Sequentially
+Before committing to the full 966-condition run on EC2, profile locally
+with small subsets of the largest dataset:
 
 ```r
-# Run complete pipeline: Phase 1 → STEP 2 → STEP 3 → STEP 4
+# --- Quick smoke test (5 stratified conditions) ---
+DATASETS_TO_RUN        <- "dataset_1"
+STEPS_TO_RUN           <- c(2)
+USE_PARALLEL_STEP2     <- TRUE
+STEP2_MAX_CONDITIONS   <- 5
+STEP2_SAMPLE_STRATEGY  <- "stratified"   # "first", "random", or "stratified"
+STEP2_SEED             <- 42
+
+source("master_analysis.R")
+# Timing artifacts written to: STEP_2_SGPc_Sensitivity/results/perf/
+
+# --- Medium benchmark (25 conditions) ---
+STEP2_MAX_CONDITIONS <- 25
+source("master_analysis.R")
+
+# --- Full run (all conditions; omit or set NULL) ---
+STEP2_MAX_CONDITIONS <- NULL
+source("master_analysis.R")
+```
+
+Or run the dedicated benchmark script:
+
+```r
+source("STEP_2_SGPc_Sensitivity/benchmark_step2.R")
+# Outputs: results/perf/benchmark_summary.csv, results/perf/ec2_projections.txt
+```
+
+### Memory controls for parallel workers
+
+When running `dataset_1` in parallel, workers each load the full dataset
+(~2-3 GB in memory). The system auto-estimates a safe worker count from
+CPU cores and available RAM. Override for EC2 if needed:
+
+```r
+STEP2_MEMORY_PER_WORKER_GB <- 3.0    # Manual per-worker estimate (GB)
+STEP2_TOTAL_MEMORY_GB      <- 384    # Total EC2 instance RAM (GB)
+```
+
+---
+
+## EC2 Execution
+
+### Recommended staging sequence
+
+1. **Smoke test** (5 conditions per dataset, ~2-5 min):
+
+```r
+STEP2_MAX_CONDITIONS <- 5
+DATASETS_TO_RUN <- c("dataset_1", "dataset_4")
+```
+
+2. **Medium validation** (25-50 conditions, ~30-60 min):
+
+```r
+STEP2_MAX_CONDITIONS <- 50
 DATASETS_TO_RUN <- c("dataset_1")
-STEPS_TO_RUN <- c(1, 2, 3, 4)
-USE_PARALLEL <- TRUE          # Phase 1 parallel
-USE_PARALLEL_STEP2 <- FALSE   # STEP 2 sequential (recommended for first run)
-
-source("master_analysis.R")
 ```
 
-## Advanced: Run Scripts Individually
-
-### Manual Workflow (For Development/Testing)
-
-**Step 1: Load Data and Configuration**
-```r
-# Load dataset configuration
-source("dataset_configs.R")
-DATASET_CONFIGS <- DATASETS
-
-# Load specific dataset
-dataset_config <- DATASET_CONFIGS[["dataset_1"]]
-load(dataset_config$local_path)
-STATE_DATA_LONG <- get(dataset_config$rdata_object_name)
-```
-
-**Step 2: Compute SGPc Variants**
-```r
-# Set which datasets to process
-DATASETS_TO_PROCESS <- "dataset_1"
-
-# Configure parallel mode
-USE_PARALLEL <- FALSE
-
-# Run computation
-source("STEP_2_SGPc_Sensitivity/sgpc_compute_all_variants.R")
-```
-
-**Step 3: Aggregate Analysis**
-```r
-source("STEP_2_SGPc_Sensitivity/sgpc_aggregate_analysis.R")
-```
-
-**Step 4: Create Visualizations**
-```r
-source("STEP_2_SGPc_Sensitivity/sgpc_visualizations.R")
-```
-
-**Step 5: Generate Report**
-```r
-source("STEP_2_SGPc_Sensitivity/sgpc_generate_report.R")
-```
-
-## Configuration Options
-
-### In master_analysis.R or environment:
+3. **Full run** (all 966 conditions across 4 datasets):
 
 ```r
-# Which datasets to analyze
+STEP2_MAX_CONDITIONS <- NULL
 DATASETS_TO_RUN <- c("dataset_1", "dataset_2", "dataset_3", "dataset_4")
-
-# Parallel processing for STEP 2
-USE_PARALLEL_STEP2 <- FALSE  # TRUE = mirai parallel, FALSE = sequential
-
-# Skip completed steps (for resuming interrupted runs)
-SKIP_COMPLETED_STEP2 <- FALSE
-
-# Use SGP-augmented data (if available)
-USE_SGP_DATA <- TRUE  # Loads traditional SGP values if available
 ```
 
-### In sgpc_compute_all_variants.R:
+### Recommended EC2 instance types
+
+| Instance | vCPU | RAM | Notes |
+|----------|------|-----|-------|
+| `r8g.12xlarge` | 48 | 384 GB | Adequate for all datasets |
+| `r8g.24xlarge` | 96 | 768 GB | Recommended for full run |
+| `m8g.metal-48xl` | 192 | 768 GB | Fastest (same as STEP_1 run) |
+
+### Performance log location
+
+After each run, timing data is written to:
+
+```
+STEP_2_SGPc_Sensitivity/results/perf/step2_perf_{dataset_id}.json
+```
+
+Fields: `phase1_load_secs`, `compute_secs`, `save_secs`, `total_secs`,
+`n_workers`, `mem_per_worker_gb`, `worker_limit`, `n_conditions`, `n_obs`.
+
+---
+
+## Fast Path: Regenerate publication panels only
+
+Use this when `sgpc_all_variants_dataset_*.rds` already exist and you only want updated panel outputs.
 
 ```r
-# Override default datasets
-DATASETS_TO_PROCESS <- c("dataset_1")
-
-# Parallel mode
-USE_PARALLEL <- FALSE
-N_CORES <- parallel::detectCores() - 1
+source("STEP_2_SGPc_Sensitivity/create_publication_figure.R")
 ```
 
-## Outputs Explained
+---
 
-### 1. Per-Observation Variants (`sgpc_all_variants_{dataset_id}.rds`)
+## Manual Script-by-Script Workflow
 
-data.table with columns:
-- `condition_id` - e.g., "2021_G4_G5_MATHEMATICS"
-- `ID` - Student identifier
-- `SCALE_SCORE_PRIOR`, `SCALE_SCORE_CURRENT` - Original scores
-- `u`, `v` - Pseudo-observations (ranks)
-- `sgpc_emp` - Empirical Bernstein copula (truth)
-- `sgpc_best` - Best-fit parametric from Phase 1
-- `sgpc_avg` - Canonical averaged from manifest
-- `sgpc_gaussian` - Mis-specified (no tail dependence)
-- `sgpc_gumbel` - Mis-specified (upper tail only)
-- `sgpc_frank` - Mis-specified (symmetric)
-- `sgpc_comonotonic` - TAMP assumption (perfect dependence)
-- `sgp_traditional` - Traditional SGP (if available)
+```r
+# Step 2.1
+source("STEP_2_SGPc_Sensitivity/sgpc_compute_all_variants.R")
 
-### 2. Key Comparisons (`sgpc_key_comparisons.csv`)
+# Step 2.2
+source("STEP_2_SGPc_Sensitivity/sgpc_aggregate_analysis.R")
 
-Critical pairwise statistics:
-- Empirical vs Best-fit: Validates parametric approach
-- Empirical vs Canonical: Validates averaged parameters
-- Empirical vs Gaussian: Impact of ignoring tail dependence
-- Empirical vs Comonotonic: Impact of TAMP assumption
+# Step 2.3
+source("STEP_2_SGPc_Sensitivity/sgpc_visualizations.R")
 
-Metrics: correlation, MAD (mean absolute difference), RMSD
+# Step 2.4
+source("STEP_2_SGPc_Sensitivity/sgpc_generate_report.R")
 
-### 3. Stratified Analyses
+# Step 2.5
+source("STEP_2_SGPc_Sensitivity/create_publication_figure.R")
+```
 
-- `sgpc_by_year_span.csv` - By time between assessments
-- `sgpc_by_content_area.csv` - By subject
-- `sgpc_by_stratum.csv` - Cross-stratified (year_span × content_area)
-- `sgpc_by_prior_quartile.csv` - By achievement level
+---
 
-### 4. Manifest (`sgpc_sensitivity_manifest.json`)
+## Output Checklist
 
-AI-readable structured output with:
-- Metadata (n observations, conditions, datasets)
-- Summary statistics (correlations, MAD, RMSD)
-- Stratified results
-- Key findings (programmatically generated)
+### Core STEP 2 outputs (`results/`)
 
-### 5. Report (`SGPC_SENSITIVITY_REPORT.md`)
+- `sgpc_all_variants_dataset_{1-4}.rds`
+- `sgpc_sensitivity_summary.csv`
+- `sgpc_correlation_matrix.csv`
+- `sgpc_key_comparisons.csv`
+- `sgpc_pairwise_differences.csv`
+- `sgpc_by_year_span.csv`
+- `sgpc_by_content_area.csv`
+- `sgpc_by_stratum.csv`
+- `sgpc_by_prior_quartile.csv`
+- `sgpc_sensitivity_manifest.json`
+- `SGPC_SENSITIVITY_REPORT.md`
+- `sgpc_enhanced_stats.rds` (from publication figure path)
 
-Human-readable narrative with:
-- Executive summary
-- Detailed results for each comparison
-- Stratified analyses
-- Conclusions and operational guidance
-- References to output files
+### Exploratory visualization outputs (`results/visualizations/`)
 
-## Troubleshooting
+- `scatter_*.{pdf,svg,png}`
+- `histogram_differences.{pdf,svg,png}`
+- `heatmap_*.{pdf,svg,png}`
+- `violin_by_prior_quartile.{pdf,svg,png}`
+- `bland_altman_*.{pdf,svg,png}`
 
-### Error: "Phase 1 manifest not found"
+### Publication panel outputs (`results/visualizations/`)
 
-**Solution:** Run Phase 1 analysis first:
+- `panel_a_individual_ecdf.{pdf,svg,png}`
+- `panel_b_school_ecdf.{pdf,svg,png}`
+- `panel_b2_district_ecdf.{pdf,svg,png}`
+- `panel_c_condition_dots.{pdf,svg,png}`
+- `panel_d_rank_agreement.{pdf,svg,png}`
+- `panel_e_decile_stability.{pdf,svg,png}`
+- `panel_d2_group_bucket_stability.{pdf,svg,png}`
+- `panel_f_prior_quartile.{pdf,svg,png}`
+- `panel_g_cross_dataset.{pdf,svg,png}`
+- `panel_h_multilevel_aggregation.{pdf,svg,png}`
+- `panel_i_error_decomposition.{pdf,svg,png}`
+- `panel_j_condition_n_vs_mad.{pdf,svg,png}`
+- `panel_k_group_rank_stability.{pdf,svg,png}`
+- `sgpc_summary_grid.{pdf,svg,png}`
+
+---
+
+## Group-ID Requirement (Important)
+
+Panels `B`, `B2`, `D2`, `H`, and `K` require valid `SCHOOL_NUMBER` and/or `DISTRICT_NUMBER`.
+
+Quick check:
+
+```r
+dt <- readRDS("STEP_2_SGPc_Sensitivity/results/sgpc_all_variants_dataset_1.rds")
+sum(!is.na(dt$SCHOOL_NUMBER))
+sum(!is.na(dt$DISTRICT_NUMBER))
+```
+
+If these are zero, regenerate Step 2.1 from source data that includes group identifiers.
+
+---
+
+## Comparison Label Conventions
+
+Publication/enhanced-statistics panels use these exact labels:
+- `Empirical – Best-Fit Parametric`
+- `Empirical – Canonical (averaged)`
+- `Best-Fit – Canonical`
+- `Empirical – Gaussian`
+- `Empirical – Gumbel`
+- `Empirical – Frank`
+- `Empirical – Clayton`
+- `Empirical – t (Student)`
+- `Empirical – Comonotonic`
+- `Empirical – Traditional (B-spline SGP)`
+
+---
+
+## Common Issues
+
+### Missing manifest/canonical files
+
 ```r
 source("STEP_1_Family_Selection/phase1_analysis.R")
 ```
 
-### Error: "Dataset file not found"
+### Missing variant results
 
-**Issue:** Data files not in expected location
+```r
+source("STEP_2_SGPc_Sensitivity/sgpc_compute_all_variants.R")
+```
 
-**Solution:** Use master_analysis.R (handles paths automatically) or check `dataset_configs.R` for correct paths
+### Publication figure missing group-level panels
 
-### Warning: "Could not load Phase 1 results for condition X"
+Verify group IDs in variant RDS and rerun Step 2.1 if needed.
 
-**Cause:** Phase 1 didn't process that condition (insufficient data, etc.)
+---
 
-**Impact:** That condition will be skipped, others will still process
+## Where to Go Next
 
-**Action:** Check Phase 1 logs; this is usually expected for edge cases
-
-### Memory Issues (Large Datasets)
-
-**Symptom:** R session crashes or runs out of memory
-
-**Solutions:**
-1. Process datasets one at a time (don't load all 4 simultaneously)
-2. Enable parallel mode: `USE_PARALLEL_STEP2 <- TRUE` (distributes memory across cores)
-3. Increase system RAM allocation to R
-
-## Performance Tips
-
-1. **Use Parallel Mode**: Set `USE_PARALLEL_STEP2 <- TRUE` for 3-5x speedup
-2. **Process Sequentially Across Datasets**: Don't try to load all datasets at once
-3. **Skip Completed Sections**: Set `SKIP_COMPLETED_STEP2 <- TRUE` to resume interrupted runs
-4. **Subsample for Testing**: Modify code to process fewer conditions initially
-
-## Integration with STEP 4
-
-STEP 4 (Deep Dive Reporting) will use STEP 2 outputs:
-- Load `sgpc_sensitivity_manifest.json` for key findings
-- Reference visualizations in final report
-- Provide operational recommendations based on sensitivity analyses
-
-## Questions?
-
-- **Technical Details**: See `README.md` in this directory
-- **Phase 1 Context**: See `../STEP_1_Family_Selection/CANONICAL_COPULA_README.md`
-- **Deprecated Experiments**: See `../STEP_2_Copula_Sensitivity_Analyses/DEPRECATED_NOTICE.md`
+- Detailed methodology: `STEP_2_SGPc_Sensitivity/README.md`
+- Publication panel details: `STEP_2_SGPc_Sensitivity/PUBLICATION_FIGURE_USAGE.md`

@@ -16,6 +16,25 @@ If you were using the original STEP 2 experiments (Exp 1-4), this guide explains
 
 ---
 
+## Publication Pipeline Update (Current)
+
+In addition to Step 2.1-2.4, current STEP 2 includes Step 2.5 publication figure generation via:
+
+```r
+source("STEP_2_SGPc_Sensitivity/create_publication_figure.R")
+```
+
+Current panel naming uses:
+- `D` (rank agreement),
+- `E` (decile stability),
+- `D2` (group bucket stability).
+
+See:
+- `STEP_2_SGPc_Sensitivity/PUBLICATION_FIGURE_USAGE.md`
+- `STEP_2_SGPc_Sensitivity/PUBLICATION_FIGURE_IMPLEMENTATION.md`
+
+---
+
 ## Mapping: Old Questions → New Answers
 
 ### Old Experiment 1: Grade Span Sensitivity

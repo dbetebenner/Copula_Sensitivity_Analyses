@@ -5,6 +5,20 @@
 
 ---
 
+## Documentation Sync Note (2026-02-10)
+
+This file is primarily a historical fix log. Current publication panel naming is:
+- `D` = individual rank agreement
+- `E` = decile classification stability
+- `D2` = group-level bucket stability
+
+Current output prefixes are:
+- `panel_d_rank_agreement`
+- `panel_e_decile_stability`
+- `panel_d2_group_bucket_stability`
+
+---
+
 ## Issues Fixed
 
 ### 1. ✅ School/District IDs Missing (CRITICAL)
@@ -170,7 +184,7 @@ Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
 - **Step 2.2:** 5-10 sec (aggregate analysis)
 - **Step 2.3:** 10-15 sec (old visualizations, may error on violin - that's OK)
 - **Step 2.4:** 5 sec (narrative report)
-- **Step 2.5:** 2-3 min (NEW publication figure with all 5 panels)
+- **Step 2.5:** 2-3 min (publication figure, dynamic multi-panel set)
 
 ---
 
@@ -190,9 +204,10 @@ STEP_2_SGPc_Sensitivity/results/visualizations/
 ├── panel_a_individual_ecdf.{pdf,svg,png}     ← Individual-level ECDF
 ├── panel_b_group_ecdf.{pdf,svg,png}          ← Group-level ECDF (NOW WORKING!)
 ├── panel_c_condition_dots.{pdf,svg,png}      ← 182 conditions as dots
-├── panel_d1_rank_agreement.{pdf,svg,png}     ← Spearman correlations
-├── panel_d2_decile_stability.{pdf,svg,png}   ← Classification with informative notes
-└── sgpc_summary_grid.{pdf,svg,png}           ← ⭐ Complete 2×3 assembled grid
+├── panel_d_rank_agreement.{pdf,svg,png}      ← Rank agreement
+├── panel_e_decile_stability.{pdf,svg,png}    ← Decile stability
+├── panel_d2_group_bucket_stability.{pdf,svg,png} ← Group bucket stability
+└── sgpc_summary_grid.{pdf,svg,png}            ← Assembled summary grid
 ```
 
 All with Wes Anderson Zissou1 colors! 🎨

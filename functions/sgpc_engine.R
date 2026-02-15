@@ -44,6 +44,14 @@ require(copula)
 #' This produces a bimodal SGPc distribution (all 1s and 99s), demonstrating
 #' how real data deviates from the perfect dependence assumption.
 #'
+#' **Note:** An alternative interpretation where comonotonic yields uniform
+#' SGPc = 50 (representing "exactly 1 year's growth") exists and may be
+#' implemented in future versions via a parameter flag. The current step
+#' function approach is mathematically grounded in the copula derivative
+#' and operationally effective for sensitivity analysis. See
+#' .sgpc_comonotonic() documentation for detailed discussion of both
+#' interpretations.
+#'
 #' @examples
 #' \dontrun{
 #' # Parametric t-copula
@@ -192,7 +200,6 @@ sgpc_engine <- function(u, v, copula,
 #' }
 #'
 #' This is a step function: under perfect positive dependence, ranks are
-
 #' preserved exactly (V = U almost surely). Therefore:
 #' \itemize{
 #'   \item If v >= u (student maintained or improved rank): SGPc = 100
@@ -202,6 +209,26 @@ sgpc_engine <- function(u, v, copula,
 #' For real data that doesn't follow perfect comonotonicity, this produces
 #' a bimodal distribution (all values at 1 or 99), clearly showing the
 #' failure of the perfect dependence assumption.
+#'
+#' **Note on Alternative Interpretation:**
+#' An alternative interpretation of the comonotonic copula exists where
+#' every student is assigned SGPc = 50 (representing "exactly 1 year's growth"
+#' under perfect rank preservation). This interprets the indeterminacy at
+#' v = u differently - using a "median" value rather than the derivative-based
+#' step function. Both interpretations have theoretical merit:
+#' \itemize{
+#'   \item **Step function (current)**: Based on dC/du, produces bimodal
+#'         distribution, emphasizes rank changes, effective for demonstrating
+#'         TAMP assumption's extremity in sensitivity analyses
+#'   \item **Constant 50**: Based on "typical growth" interpretation,
+#'         produces uniform distribution, useful for growth regime inference
+#'         where comonotonicity represents normative expectations
+#' }
+#' The current implementation uses the step function approach as it is
+#' mathematically grounded in the copula derivative and operationally
+#' demonstrates the practical limitations of assuming perfect dependence
+#' in real assessment data. Future work may implement both interpretations
+#' with a parameter flag for context-specific applications.
 #'
 #' @keywords internal
 .sgpc_comonotonic <- function(u, v) {

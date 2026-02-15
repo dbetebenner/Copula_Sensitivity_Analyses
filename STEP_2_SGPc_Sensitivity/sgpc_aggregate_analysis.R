@@ -283,15 +283,17 @@ fwrite(by_content_area, file.path(OUTPUT_DIR, "sgpc_by_content_area.csv"))
 fwrite(by_stratum, file.path(OUTPUT_DIR, "sgpc_by_stratum.csv"))
 fwrite(by_prior_quartile, file.path(OUTPUT_DIR, "sgpc_by_prior_quartile.csv"))
 cat("  Saved stratified analyses\n")
+cat("  Manifest will be written at end of STEP_2 (Step 2.6)\n")
 
 ############################################################################
-### CREATE AI-READABLE MANIFEST
+### PRINT SUMMARY
 ############################################################################
 
-cat("\nCreating AI-readable manifest...\n")
+cat("\n====================================================================\n")
+cat("AGGREGATE ANALYSIS COMPLETE\n")
+cat("====================================================================\n\n")
 
-# Extract key findings
-key_findings <- c(
+key_findings_display <- c(
   sprintf("Empirical vs best-fit parametric: r=%.3f, MAD=%.1f percentile points",
           key_stats[comparison == "Empirical vs Best-fit", correlation],
           key_stats[comparison == "Empirical vs Best-fit", mad]),
@@ -303,42 +305,8 @@ key_findings <- c(
   sprintf("TAMP comonotonic assumption: MAD=%.1f percentile points",
           key_stats[comparison == "Empirical vs Comonotonic", mad])
 )
-
-# Create manifest
-manifest <- list(
-  metadata = list(
-    generated_at = as.character(Sys.time()),
-    n_observations = nrow(all_data),
-    n_conditions = uniqueN(all_data$condition_id),
-    n_datasets = length(dataset_files),
-    year_spans = sort(unique(all_data$year_span)),
-    content_areas = sort(unique(all_data$content_area))
-  ),
-  summary_statistics = list(
-    correlations = as.list(cor_matrix),
-    key_comparisons = key_stats
-  ),
-  by_stratum = by_stratum,
-  by_year_span = by_year_span,
-  by_content_area = by_content_area,
-  by_prior_quartile = by_prior_quartile,
-  key_findings = key_findings
-)
-
-write_json(manifest, file.path(OUTPUT_DIR, "sgpc_sensitivity_manifest.json"), 
-           pretty = TRUE, auto_unbox = TRUE)
-cat("  Saved manifest\n")
-
-############################################################################
-### PRINT SUMMARY
-############################################################################
-
-cat("\n====================================================================\n")
-cat("AGGREGATE ANALYSIS COMPLETE\n")
-cat("====================================================================\n\n")
-
 cat("Key Findings:\n")
-for (finding in key_findings) {
+for (finding in key_findings_display) {
   cat(" ", finding, "\n")
 }
 

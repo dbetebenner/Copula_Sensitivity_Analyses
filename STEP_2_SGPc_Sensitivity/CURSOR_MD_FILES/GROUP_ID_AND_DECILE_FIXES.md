@@ -5,6 +5,20 @@
 
 ---
 
+## Documentation Sync Note (2026-02-10)
+
+This is a historical fix memo. Current publication panel naming is:
+- `D` = rank agreement
+- `E` = decile stability
+- `D2` = group bucket stability
+
+Current key output prefixes:
+- `panel_d_rank_agreement`
+- `panel_e_decile_stability`
+- `panel_d2_group_bucket_stability`
+
+---
+
 ## Issues Identified
 
 ### Issue 1: SCHOOL_NUMBER and DISTRICT_NUMBER All NA
@@ -30,7 +44,7 @@ SCHOOL_NUMBER NA count: 1918720 / 1918720  # All NA!
 ---
 
 ### Issue 2: Decile Computation Error
-**Severity:** MODERATE - Prevents Panel D2 (classification stability) from completing
+**Severity:** MODERATE - Prevents the decile stability panel (current Panel E) from completing
 
 **Symptom:**
 ```
@@ -170,7 +184,7 @@ result <- list(
 
 **File:** `STEP_2_SGPc_Sensitivity/sgpc_publication_plots.R` (lines 369-385, 424-427)
 
-**Enhancement to Panel D2:**
+**Enhancement to decile stability panel (current Panel E):**
 
 Added automatic detection and reporting of classification issues in the figure caption:
 
@@ -251,7 +265,7 @@ Computing decile misclassification rates...
 
 **Panel B will now generate** with real school aggregation data.
 
-**Panel D2 caption will show:**
+**Decile stability caption will show:**
 ```
 Note: Classification unavailable for some observations due to low variance: comonotonic (8.2%)
 ```
@@ -348,9 +362,9 @@ ls -lh STEP_2_SGPc_Sensitivity/results/visualizations/panel_b_group_ecdf.pdf
 # Should exist (not placeholder)
 ```
 
-**Check Panel D2 note:**
+**Check decile stability note:**
 ```bash
-open STEP_2_SGPc_Sensitivity/results/visualizations/panel_d2_decile_stability.pdf
+open STEP_2_SGPc_Sensitivity/results/visualizations/panel_e_decile_stability.pdf
 # Caption should mention any low-variance issues
 ```
 
@@ -394,7 +408,7 @@ If `sgpc_comonotonic` has classification issues, **this is actually evidence sup
 
 3. **`STEP_2_SGPc_Sensitivity/sgpc_publication_plots.R`** (lines 369-385, 424-427)
    - Detects classification issues
-   - Adds informative note to Panel D2 caption
+   - Adds informative note to decile stability caption
 
 ---
 
@@ -437,12 +451,12 @@ If you still see errors after these fixes:
 
 After re-running, you should see:
 
-**All 5 panels generate successfully:**
+**Core panels generate successfully:**
 - ✅ Panel A: Individual-level ECDF
 - ✅ Panel B: Group-level ECDF (now with real school data!)
 - ✅ Panel C: Condition-level dots
-- ✅ Panel D1: Rank agreement
-- ✅ Panel D2: Decile stability (with informative note if needed)
+- ✅ Panel D: Rank agreement
+- ✅ Panel E: Decile stability (with informative note if needed)
 
 **Assembled grid:**
 - `sgpc_summary_grid.pdf` (16" × 12")

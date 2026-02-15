@@ -5,6 +5,15 @@
 
 ---
 
+## Synchronization Note (2026-02-10)
+
+This summary captures the initial STEP 2 re-imagining milestone. Current production docs include the Step 2.5 publication pipeline and updated panel naming (`D`, `E`, `D2`) in:
+- `STEP_2_SGPc_Sensitivity/README.md`
+- `STEP_2_SGPc_Sensitivity/QUICKSTART.md`
+- `STEP_2_SGPc_Sensitivity/PUBLICATION_FIGURE_USAGE.md`
+
+---
+
 ## What Changed
 
 ### Problem Identified
@@ -465,7 +474,7 @@ source("master_analysis.R")
 - Dataset 1 (510 conditions): ~90 minutes sequential, ~30 minutes parallel
 - Dataset 2 (190 conditions): ~30 minutes sequential, ~10 minutes parallel
 - Dataset 3 (142 conditions): ~20 minutes sequential, ~7 minutes parallel
-- Dataset 4 (124 conditions): ~15 minutes sequential, ~5 minutes parallel
+- Dataset 4: runtime depends on current filtering/condition set; verify exact count from run logs
 
 **Total (All 4):** ~2.5 hours sequential, ~50 minutes parallel
 

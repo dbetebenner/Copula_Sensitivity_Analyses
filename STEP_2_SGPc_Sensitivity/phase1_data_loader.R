@@ -264,10 +264,22 @@ parse_condition_id <- function(condition_id) {
 
 #' Create averaged canonical copula from manifest parameters
 #'
-#' @param year_span Integer 1-4
-#' @param content_area String
-#' @param canonical_params data.table from Phase 1
-#' @return Copula object (usually t-copula)
+#' Returns a copula object with stability metadata attached as attributes.
+#' The canonical copula is the recommended parametric copula for a given
+#' year_span x content_area stratum, based on STEP_1 meta-analysis across
+#' 966 conditions. It is the copula used operationally for datasets like
+#' TIMSS/NAEP where no empirical copula is available.
+#'
+#' @param year_span_val Integer 1-4
+#' @param content_area_val String (e.g., "MATHEMATICS", "ELA")
+#' @param canonical_params data.table from Phase 1 (canonical_copula_parameters.csv)
+#' @return Copula object (usually t-copula) with attributes:
+#'   - "stratum_id": the year_span x content_area stratum identifier
+#'   - "overall_stability": "HIGH", "MEDIUM", or "LOW"
+#'   - "n_conditions": number of conditions in this stratum
+#'   - "tau_median": median Kendall's tau for this stratum
+#'   - "rho_cv": coefficient of variation for rho (lower = more stable)
+#'   - "df_cv": coefficient of variation for df
 create_canonical_copula <- function(year_span_val, content_area_val, canonical_params) {
   
   # Convert to uppercase for matching
@@ -279,9 +291,11 @@ create_canonical_copula <- function(year_span_val, content_area_val, canonical_p
     toupper(canonical_params$content_area) == content_upper
   ]
   
+  fallback_used <- FALSE
   if (nrow(params) == 0) {
     # Fallback to year_span only
     params <- canonical_params[canonical_params$year_span == year_span_val]
+    fallback_used <- TRUE
     if (nrow(params) == 0) {
       stop("No canonical parameters found for year_span=", year_span_val)
     }
@@ -297,7 +311,17 @@ create_canonical_copula <- function(year_span_val, content_area_val, canonical_p
   rho_val <- as.numeric(params$rho_median[1])
   df_val <- as.numeric(params$df_median[1])
   
-  # Create t-copula with canonical parameters
+  # Extract stability metadata (available in canonical_copula_parameters.csv)
+  stability <- tryCatch(as.character(params$overall_stability[1]), error = function(e) NA_character_)
+  n_cond <- tryCatch(as.integer(params$n_conditions[1]), error = function(e) NA_integer_)
+  tau_med <- tryCatch(as.numeric(params$tau_median[1]), error = function(e) NA_real_)
+  rho_cv_val <- tryCatch(as.numeric(params$rho_cv[1]), error = function(e) NA_real_)
+  df_cv_val <- tryCatch(as.numeric(params$df_cv[1]), error = function(e) NA_real_)
+  stratum <- tryCatch(as.character(params$stratum_id[1]), error = function(e) {
+    paste0("year_", year_span_val, "_", tolower(content_upper))
+  })
+  
+  # Create copula object based on recommended family
   if (family == "t") {
     copula_obj <- tCopula(
       param = rho_val,
@@ -307,13 +331,23 @@ create_canonical_copula <- function(year_span_val, content_area_val, canonical_p
   } else if (family == "gaussian") {
     copula_obj <- normalCopula(param = rho_val)
   } else {
-    # Default to t-copula if other families
+    # Default to t-copula if other families (e.g., Frank recommended but
+    # canonical CSV currently always reports t; see canonical_validation.R)
     copula_obj <- tCopula(
       param = rho_val,
-      df = 30,  # Reasonable default
+      df = 30,  # Reasonable default for non-t families
       dispstr = "un"
     )
   }
+  
+  # Attach stability metadata as attributes for downstream use
+  attr(copula_obj, "stratum_id") <- stratum
+  attr(copula_obj, "overall_stability") <- stability
+  attr(copula_obj, "n_conditions") <- n_cond
+  attr(copula_obj, "tau_median") <- tau_med
+  attr(copula_obj, "rho_cv") <- rho_cv_val
+  attr(copula_obj, "df_cv") <- df_cv_val
+  attr(copula_obj, "fallback_used") <- fallback_used
   
   return(copula_obj)
 }

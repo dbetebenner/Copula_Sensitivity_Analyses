@@ -470,7 +470,7 @@ V <- rank(scores_current) / (n + 1)
 
 **Trade-off:** No invertibility, but not needed for family selection. By Sklar's theorem, copulas are invariant to monotone marginal transformations, so the copula dependence structure estimated here is valid regardless of which marginal transformation is later used for applications.
 
-For transformation details and implementation methods (including invertibility for score-scale reporting), see **STEP_3_Application_Implementation**. For complete two-stage approach justification, see top-level `TWO_STAGE_TRANSFORMATION_METHODOLOGY.md`.
+For the complete two-stage approach justification, see top-level `TWO_STAGE_TRANSFORMATION_METHODOLOGY.md`. Note that the focus of this project has evolved from transformation methods (old STEP 3) to growth regime inference (new **STEP_3_LIw_LD**), which uses empirical ranks for pseudo-observation creation.
 
 ---
 

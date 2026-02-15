@@ -7,15 +7,40 @@
 ### Variants Computed:
 ###   1. SGPc_emp - Empirical Bernstein copula (non-parametric truth)
 ###   2. SGPc_best - Best-fitting parametric copula from Phase 1
-###   3. SGPc_avg - Canonical averaged copula from manifest
+###   3. SGPc_avg - Canonical copula from Phase 1 manifest (t-copula with
+###                 stratum-specific median rho and df parameters)
 ###   4. SGPc_gaussian - Gaussian copula (mis-specified)
 ###   5. SGPc_gumbel - Gumbel copula (mis-specified, upper tail)
-###   6. SGPc_frank - Frank copula (mis-specified, symmetric)
-###   7. SGPc_comonotonic - Perfect dependence (TAMP assumption)
-###   8. SGP_traditional - B-spline quantile regression (if available)
+###   6. SGPc_frank - Frank copula (mis-specified, symmetric, no tail dep.)
+###   7. SGPc_clayton - Clayton copula (mis-specified, lower tail)
+###   8. SGPc_t - t-copula with df=4 (extreme tail dependence stress test)
+###   9. SGPc_comonotonic - Perfect dependence (TAMP assumption)
+###                        NOTE: Uses derivative-based conditional CDF (step
+###                        function) yielding bimodal SGPc (1s/99s) to demonstrate
+###                        TAMP extremity. Alternative constant-50 interpretation
+###                        may be explored for growth regime inference (STEP 3).
+###                        See functions/sgpc_engine.R for detailed discussion.
+###  10. SGP_traditional - B-spline quantile regression (if available)
+###
+### Canonical Copula Rationale:
+###   The canonical (SGPc_avg) is a t-copula with median rho and df computed
+###   from all t-copula fits within each year_span x content_area stratum.
+###   This is the copula that would be used operationally for datasets like
+###   TIMSS/NAEP where no empirical copula is available.
+###
+###   STEP_1 family selection across 966 conditions found:
+###     - t-copula: 63.6% (AIC-best), plurality winner in all 16 strata
+###     - Frank:    30.7% (AIC-best), significant minority
+###     - Gumbel:    3.6%
+###     - Gaussian:  2.1%
+###
+###   The SGPc_frank variant directly captures sensitivity for the 30.7% of
+###   conditions where Frank was the true best fit. The canonical_validation.R
+###   script (STEP 2.2) provides empirical evidence that the t-canonical
+###   produces SGPc values sufficiently close to empirical across all strata.
 ###
 ### Author: dataimago
-### Date: January 2026
+### Date: January 2026 (canonical validation added February 2026)
 ############################################################################
 
 require(data.table)
@@ -45,6 +70,23 @@ if (!exists("USE_PARALLEL")) {
 }
 N_CORES <- parallel::detectCores() - 1
 
+# --- STEP_2 Subset Controls (set from master_analysis.R or interactively) ---
+# STEP2_MAX_CONDITIONS: integer or NULL (all).  Limits conditions per dataset.
+# STEP2_SAMPLE_STRATEGY: "first" | "random" | "stratified" (default "stratified")
+# STEP2_SEED: integer seed for reproducible random/stratified subsetting
+if (!exists("STEP2_MAX_CONDITIONS"))    STEP2_MAX_CONDITIONS    <- NULL
+if (!exists("STEP2_SAMPLE_STRATEGY"))   STEP2_SAMPLE_STRATEGY   <- "stratified"
+if (!exists("STEP2_SEED"))              STEP2_SEED              <- 42
+
+# --- Memory-aware worker cap ---
+# STEP2_MEMORY_PER_WORKER_GB: estimated peak RSS per worker (dataset + overhead).
+#   Set NULL for auto-estimate from dataset file size.  Manual override encouraged
+#   for EC2 instances with known memory budgets.
+# STEP2_TOTAL_MEMORY_GB: total system RAM budget for workers.
+#   NULL = auto-detect via /proc/meminfo or Sys.meminfo (fallback: 16 GB).
+if (!exists("STEP2_MEMORY_PER_WORKER_GB"))  STEP2_MEMORY_PER_WORKER_GB <- NULL
+if (!exists("STEP2_TOTAL_MEMORY_GB"))       STEP2_TOTAL_MEMORY_GB      <- NULL
+
 # Load canonical parameters from Phase 1 using helper function
 canonical_data <- load_canonical_parameters()
 manifest <- canonical_data$manifest
@@ -53,7 +95,166 @@ canonical_params <- canonical_data$canonical_params
 cat("Loaded Phase 1 outputs:\n")
 cat("  Manifest: analysis_manifest.json\n")
 cat("  Canonical parameters:", nrow(canonical_params), "strata\n")
-cat("  Datasets to process:", paste(DATASETS_TO_PROCESS, collapse = ", "), "\n\n")
+cat("  Datasets to process:", paste(DATASETS_TO_PROCESS, collapse = ", "), "\n")
+
+# Log key manifest statistics for STEP_2 context
+if (!is.null(manifest)) {
+  tryCatch({
+    cat("\n  STEP_1 Manifest Context:\n")
+    cat(sprintf("    Conditions: %d across %d datasets\n",
+                manifest$metadata$n_conditions, manifest$metadata$n_datasets))
+    cat(sprintf("    Year spans tested: %s\n",
+                paste(manifest$metadata$year_spans_tested, collapse = ", ")))
+    cat(sprintf("    Families tested: %d\n", manifest$metadata$n_families))
+    
+    # Family selection summary
+    if (!is.null(manifest$family_selection_summary)) {
+      cat("    Family selection (AIC-best):\n")
+      for (fam in manifest$family_selection_summary) {
+        cat(sprintf("      %s: %.1f%% (%d/%d conditions)\n",
+                    fam$family, fam$pct_best, fam$n_best_aic, fam$n_conditions))
+      }
+    }
+    
+    # Canonical stability overview
+    if (nrow(canonical_params) > 0 && "overall_stability" %in% names(canonical_params)) {
+      n_high <- sum(canonical_params$overall_stability == "HIGH", na.rm = TRUE)
+      n_med <- sum(canonical_params$overall_stability == "MEDIUM", na.rm = TRUE)
+      n_low <- sum(canonical_params$overall_stability == "LOW", na.rm = TRUE)
+      cat(sprintf("    Canonical stability: %d HIGH, %d MEDIUM, %d LOW\n",
+                  n_high, n_med, n_low))
+    }
+  }, error = function(e) {
+    cat("    (manifest context extraction failed:", e$message, ")\n")
+  })
+}
+cat("\n")
+
+############################################################################
+### SUBSET & MEMORY HELPERS
+############################################################################
+
+#' Subset conditions for local profiling / smoke testing
+#' @param conditions Character vector of condition IDs
+#' @param max_n NULL (keep all) or integer cap
+#' @param strategy "first", "random", or "stratified"
+#' @param seed Integer seed for reproducibility
+#' @return Subset of conditions (character vector)
+.subset_conditions <- function(conditions, max_n = NULL, strategy = "stratified", seed = 42) {
+  if (is.null(max_n) || max_n >= length(conditions)) return(conditions)
+  
+  max_n <- as.integer(max_n)
+  if (max_n <= 0) return(conditions)
+  
+  if (strategy == "first") {
+    return(conditions[seq_len(max_n)])
+  }
+  
+  if (strategy == "random") {
+    set.seed(seed)
+    return(sample(conditions, max_n))
+  }
+  
+  # "stratified": sample proportionally across year_span x content_area strata
+  set.seed(seed)
+  meta <- data.table::data.table(
+    cond = conditions,
+    year_span = sapply(conditions, function(c) parse_condition_id(c)$year_span),
+    content   = sapply(conditions, function(c) parse_condition_id(c)$content_area)
+  )
+  meta[, stratum := paste(year_span, content, sep = "_")]
+  
+  # Allocate proportionally (at least 1 per non-empty stratum)
+  strata_counts <- meta[, .N, by = stratum]
+  strata_counts[, alloc := pmax(1L, as.integer(round(N / nrow(meta) * max_n)))]
+  # Trim if over-allocated
+  while (sum(strata_counts$alloc) > max_n) {
+    biggest <- which.max(strata_counts$alloc)
+    strata_counts$alloc[biggest] <- strata_counts$alloc[biggest] - 1L
+  }
+  
+  selected <- character(0)
+  for (r in seq_len(nrow(strata_counts))) {
+    s <- strata_counts$stratum[r]
+    k <- strata_counts$alloc[r]
+    pool <- meta[stratum == s, cond]
+    selected <- c(selected, sample(pool, min(k, length(pool))))
+  }
+  return(selected)
+}
+
+
+#' Estimate per-worker memory budget and compute safe worker count
+#' @param dataset_id Character dataset ID (for file-size lookup)
+#' @param n_cores_available Integer CPU core count
+#' @param mem_per_worker_gb NULL (auto) or numeric override
+#' @param total_mem_gb NULL (auto) or numeric override
+#' @return Named list: n_workers, mem_per_worker_gb, total_mem_gb, limiting_factor
+.compute_worker_count <- function(dataset_id, n_cores_available,
+                                  mem_per_worker_gb = NULL,
+                                  total_mem_gb = NULL) {
+  
+  # --- Total system memory ---
+  if (is.null(total_mem_gb)) {
+    total_mem_gb <- tryCatch({
+      # Linux / EC2
+      meminfo <- readLines("/proc/meminfo", n = 1)
+      as.numeric(gsub("[^0-9]", "", meminfo)) / 1024 / 1024  # kB -> GB
+    }, error = function(e) {
+      tryCatch({
+        # macOS
+        raw <- system("sysctl -n hw.memsize", intern = TRUE)
+        as.numeric(raw) / 1024^3
+      }, error = function(e2) 16)  # fallback 16 GB
+    })
+  }
+  
+  # --- Per-worker memory estimate ---
+  if (is.null(mem_per_worker_gb)) {
+    # Heuristic: in-memory dataset is ~6-8x compressed .Rdata size,
+    # plus ~0.5 GB overhead per worker for copula objects + result tables
+    ds_config <- NULL
+    if (exists("DATASETS", envir = .GlobalEnv)) {
+      ds_config <- get("DATASETS", envir = .GlobalEnv)[[dataset_id]]
+    }
+    
+    file_size_gb <- 0.05  # fallback
+    if (!is.null(ds_config)) {
+      use_sgp <- exists("USE_SGP_DATA", envir = .GlobalEnv) && isTRUE(get("USE_SGP_DATA", envir = .GlobalEnv))
+      fpath <- if (use_sgp && !is.null(ds_config$local_path_sgp)) {
+        ds_config$local_path_sgp
+      } else {
+        ds_config$local_path
+      }
+      if (file.exists(fpath)) file_size_gb <- file.info(fpath)$size / 1024^3
+    }
+    
+    # R .Rdata typically decompresses 6-8x; add 0.5 GB worker overhead
+    mem_per_worker_gb <- file_size_gb * 7 + 0.5
+  }
+  
+  # --- Worker count ---
+  # CPU-based cap (same formula as before)
+  cores_to_reserve <- max(1, min(6, ceiling(n_cores_available / 40)))
+  cpu_cap <- n_cores_available - cores_to_reserve
+  
+  # Memory-based cap: leave 20% for OS + host R process
+  usable_mem <- total_mem_gb * 0.80
+  mem_cap <- max(1L, as.integer(floor(usable_mem / mem_per_worker_gb)))
+  
+  n_workers <- min(cpu_cap, mem_cap)
+  limiting <- if (cpu_cap <= mem_cap) "CPU" else "MEMORY"
+  
+  list(
+    n_workers          = n_workers,
+    mem_per_worker_gb  = round(mem_per_worker_gb, 2),
+    total_mem_gb       = round(total_mem_gb, 1),
+    cpu_cap            = cpu_cap,
+    mem_cap            = mem_cap,
+    limiting_factor    = limiting
+  )
+}
+
 
 ############################################################################
 ### HELPER FUNCTIONS
@@ -92,22 +293,45 @@ compute_sgpc_variants <- function(
       !exists(".LOADED_DATASET_ID") || 
       .LOADED_DATASET_ID != dataset_id) {
     
-    # Get dataset configuration
-    if (is.null(dataset_config) && exists("DATASETS_CONFIG")) {
-      dataset_config <- DATASETS_CONFIG[[dataset_id]]
+    # Get dataset configuration (check both DATASETS_CONFIG and DATASETS)
+    if (is.null(dataset_config)) {
+      if (exists("DATASETS_CONFIG")) {
+        dataset_config <- DATASETS_CONFIG[[dataset_id]]
+      } else if (exists("DATASETS")) {
+        dataset_config <- DATASETS[[dataset_id]]
+      }
     }
     
     if (!is.null(dataset_config)) {
       # Determine file path (EC2 vs local, SGP vs base)
-      ds_path <- if (exists("IS_EC2") && IS_EC2) {
-        dataset_config$ec2_path
+      # CRITICAL: Check USE_SGP_DATA flag to load SGP-enriched data when available
+      # The SGP data files contain pre-computed traditional SGP columns needed for
+      # the Emp-Traditional comparison pair in STEP_2 visualizations
+      use_sgp <- exists("USE_SGP_DATA") && isTRUE(USE_SGP_DATA)
+      
+      if (use_sgp && !is.null(dataset_config$local_path_sgp)) {
+        ds_path <- if (exists("IS_EC2") && IS_EC2) {
+          dataset_config$ec2_path_sgp
+        } else {
+          dataset_config$local_path_sgp
+        }
+        ds_object_name <- dataset_config$rdata_object_name_sgp
+        cat("\n[WORKER] Loading SGP dataset:", dataset_id, "from", ds_path, "\n")
       } else {
-        dataset_config$local_path
+        ds_path <- if (exists("IS_EC2") && IS_EC2) {
+          dataset_config$ec2_path
+        } else {
+          dataset_config$local_path
+        }
+        ds_object_name <- dataset_config$rdata_object_name
+        if (use_sgp) {
+          cat("\n[WORKER] WARNING: SGP data not configured for", dataset_id, ", using base data\n")
+        }
+        cat("\n[WORKER] Loading dataset:", dataset_id, "from", ds_path, "\n")
       }
       
-      cat("\n[WORKER] Loading dataset:", dataset_id, "from", ds_path, "\n")
       load(ds_path)
-      ds_data <- get(dataset_config$rdata_object_name)
+      ds_data <- get(ds_object_name)
       
       if (!inherits(ds_data, "data.table")) {
         ds_data <- as.data.table(ds_data)
@@ -232,7 +456,8 @@ compute_sgpc_variants <- function(
   }
   cat(sprintf(" %.1fs", as.numeric(difftime(Sys.time(), sgpc_start, units = "secs"))))
   
-  # 3. Canonical averaged copula
+  # 3. Canonical averaged copula (t-copula with stratum-specific median parameters)
+  # This is the copula that would be used operationally for TIMSS/NAEP
   cat(" -> SGPc_avg...")
   sgpc_start <- Sys.time()
   canonical_cop <- tryCatch({
@@ -241,6 +466,12 @@ compute_sgpc_variants <- function(
   
   if (!is.null(canonical_cop)) {
     result[, sgpc_avg := sgpc_engine(u, v, canonical_cop, scale = "percentile")]
+    # Log stability context from STEP_1 (first condition per dataset only, to avoid noise)
+    canon_stability <- attr(canonical_cop, "overall_stability")
+    if (!is.null(canon_stability) && !exists(".canonical_stability_logged")) {
+      cat(sprintf(" [stability=%s]", canon_stability))
+      assign(".canonical_stability_logged", TRUE, envir = parent.frame())
+    }
   } else {
     result[, sgpc_avg := NA_integer_]
   }
@@ -263,6 +494,20 @@ compute_sgpc_variants <- function(
   frank_param <- iTau(frankCopula(), tau)
   frank_cop <- frankCopula(param = frank_param)
   result[, sgpc_frank := sgpc_engine(u, v, frank_cop, scale = "percentile")]
+  
+  # Clayton (lower tail dependence)
+  clayton_param <- max(0.001, 2 * tau / (1 - tau))
+  clayton_cop <- claytonCopula(param = clayton_param)
+  result[, sgpc_clayton := sgpc_engine(u, v, clayton_cop, scale = "percentile")]
+  
+  # t copula with df=4: extreme tail dependence stress test
+  # STEP_1 manifest shows actual df median ranges 23.7 (1yr Writing) to 55.6 (1yr ELA)
+  # across strata, with CI lower bounds ~22-28. df=4 is intentionally ~5x more extreme
+  # than anything observed, demonstrating SGPc robustness under heavy mis-specification.
+  t_rho <- sin(pi * tau / 2)
+  t_cop <- tCopula(param = t_rho, df = 4)
+  result[, sgpc_t := sgpc_engine(u, v, t_cop, scale = "percentile")]
+  
   cat(sprintf(" %.1fs", as.numeric(difftime(Sys.time(), sgpc_start, units = "secs"))))
   
   # 5. Comonotonic (TAMP assumption)
@@ -308,67 +553,148 @@ for (dataset_id in DATASETS_TO_PROCESS) {
   cat("====================================================================\n\n")
   
   # Check if STATE_DATA_LONG already exists (e.g., loaded by master_analysis.R)
-  # If not, try to load dataset file
+  # If not, try to load dataset file using DATASETS config (respects USE_SGP_DATA)
   if (!exists("STATE_DATA_LONG")) {
     cat("Loading dataset file...\n")
     
-    # Try multiple possible locations
-    possible_paths <- c(
-      file.path("SGP", paste0(dataset_id, ".Rdata")),
-      file.path("data", paste0(dataset_id, ".rda")),
-      paste0(dataset_id, ".Rdata"),
-      paste0(dataset_id, ".rda")
-    )
+    # First try: use DATASETS config (preferred, respects USE_SGP_DATA flag)
+    ds_config <- NULL
+    if (exists("DATASETS")) ds_config <- DATASETS[[dataset_id]]
     
-    dataset_file <- possible_paths[file.exists(possible_paths)][1]
-    
-    if (is.na(dataset_file)) {
-      cat("Dataset file not found for", dataset_id, "\n")
-      cat("  Tried:", paste(possible_paths, collapse = ", "), "\n")
-      next
+    dataset_loaded <- FALSE
+    if (!is.null(ds_config)) {
+      use_sgp <- exists("USE_SGP_DATA") && isTRUE(USE_SGP_DATA)
+      
+      if (use_sgp && !is.null(ds_config$local_path_sgp)) {
+        ds_path <- if (exists("IS_EC2") && IS_EC2) ds_config$ec2_path_sgp else ds_config$local_path_sgp
+        ds_object <- ds_config$rdata_object_name_sgp
+        cat("  Using SGP data (includes traditional SGP column)\n")
+      } else {
+        ds_path <- if (exists("IS_EC2") && IS_EC2) ds_config$ec2_path else ds_config$local_path
+        ds_object <- ds_config$rdata_object_name
+        if (use_sgp) cat("  WARNING: SGP data not configured, using base data\n")
+      }
+      
+      if (file.exists(ds_path)) {
+        load(ds_path)
+        STATE_DATA_LONG <- get(ds_object)
+        if (!inherits(STATE_DATA_LONG, "data.table")) {
+          STATE_DATA_LONG <- as.data.table(STATE_DATA_LONG)
+        }
+        # Mark which dataset is loaded so compute_sgpc_variants() won't re-load
+        .LOADED_DATASET_ID <- dataset_id
+        cat("  Loaded from config:", ds_path, "\n")
+        cat("  Rows:", format(nrow(STATE_DATA_LONG), big.mark = ","), "\n")
+        dataset_loaded <- TRUE
+      }
     }
     
-    load(dataset_file)  # Loads STATE_DATA_LONG
-    
-    cat("Loaded dataset from:", dataset_file, "\n")
-    cat("  Rows:", format(nrow(STATE_DATA_LONG), big.mark = ","), "\n")
+    # Fallback: try multiple possible generic locations
+    if (!dataset_loaded) {
+      possible_paths <- c(
+        file.path("SGP", paste0(dataset_id, ".Rdata")),
+        file.path("data", paste0(dataset_id, ".rda")),
+        paste0(dataset_id, ".Rdata"),
+        paste0(dataset_id, ".rda")
+      )
+      
+      dataset_file <- possible_paths[file.exists(possible_paths)][1]
+      
+      if (is.na(dataset_file)) {
+        cat("Dataset file not found for", dataset_id, "\n")
+        cat("  Tried config paths and:", paste(possible_paths, collapse = ", "), "\n")
+        next
+      }
+      
+      load(dataset_file)  # Loads STATE_DATA_LONG
+      .LOADED_DATASET_ID <- dataset_id
+      cat("  Loaded from fallback:", dataset_file, "\n")
+      cat("  Rows:", format(nrow(STATE_DATA_LONG), big.mark = ","), "\n")
+    }
   } else {
+    # Ensure .LOADED_DATASET_ID is consistent with pre-loaded data
+    if (!exists(".LOADED_DATASET_ID")) .LOADED_DATASET_ID <- dataset_id
     cat("Using pre-loaded STATE_DATA_LONG\n")
     cat("  Rows:", format(nrow(STATE_DATA_LONG), big.mark = ","), "\n")
   }
   
   # Get list of conditions from Phase 1
-  conditions <- get_phase1_conditions(dataset_id)
+  conditions_all <- get_phase1_conditions(dataset_id)
   
-  if (length(conditions) == 0) {
+  if (length(conditions_all) == 0) {
     cat("No Phase 1 conditions found for", dataset_id, "\n")
     next
   }
   
-  cat("Found", length(conditions), "conditions from Phase 1\n")
+  cat("Found", length(conditions_all), "conditions from Phase 1\n")
+  
+  # --- Apply subset controls (for local profiling / smoke testing) ---
+  conditions <- .subset_conditions(
+    conditions_all,
+    max_n    = STEP2_MAX_CONDITIONS,
+    strategy = STEP2_SAMPLE_STRATEGY,
+    seed     = STEP2_SEED
+  )
+  if (length(conditions) < length(conditions_all)) {
+    cat(sprintf("  SUBSET MODE: %d of %d conditions selected (strategy=%s, seed=%d)\n",
+                length(conditions), length(conditions_all),
+                STEP2_SAMPLE_STRATEGY, STEP2_SEED))
+  }
+  
+  # --- Performance logging setup ---
+  perf_dir <- "STEP_2_SGPc_Sensitivity/results/perf"
+  if (!dir.exists(perf_dir)) dir.create(perf_dir, recursive = TRUE, showWarnings = FALSE)
+  
+  perf_dataset <- list(
+    dataset_id      = dataset_id,
+    n_conditions    = length(conditions),
+    n_conditions_total = length(conditions_all),
+    subset_mode     = length(conditions) < length(conditions_all),
+    use_parallel    = USE_PARALLEL,
+    n_cores         = N_CORES,
+    timestamp_start = format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  )
+  dataset_wall_start <- Sys.time()
   
   # Batch load Phase 1 results for all conditions
   cat("Loading Phase 1 copula results...\n")
+  phase1_load_start <- Sys.time()
   phase1_batch <- batch_load_phase1(dataset_id, conditions, verbose = TRUE)
+  perf_dataset$phase1_load_secs <- as.numeric(difftime(Sys.time(), phase1_load_start, units = "secs"))
   
   # Process each condition (sequential or parallel)
   all_results <- list()
   
   cat("\nComputing SGPc variants...\n")
+  compute_start <- Sys.time()
   
   if (USE_PARALLEL) {
-    cat("Using parallel processing with", N_CORES, "cores\n")
-    
     if (!requireNamespace("mirai", quietly = TRUE)) {
       stop("mirai package required for parallel processing. Install with: install.packages('mirai')")
     }
     
     require(mirai)
     
-    # Reduce worker count to leave memory headroom
-    # STEP_1 uses n-4 for large instances; we'll use n-5 for extra safety
-    n_workers <- N_CORES - 5
-    cat("Creating", n_workers, "workers (leaving 5 cores for system/GC)\n")
+    # --- Memory-aware worker count ---
+    winfo <- .compute_worker_count(
+      dataset_id          = dataset_id,
+      n_cores_available   = N_CORES,
+      mem_per_worker_gb   = STEP2_MEMORY_PER_WORKER_GB,
+      total_mem_gb        = STEP2_TOTAL_MEMORY_GB
+    )
+    n_workers <- winfo$n_workers
+    
+    cat(sprintf("Worker scaling:\n"))
+    cat(sprintf("  System memory:   %.1f GB\n", winfo$total_mem_gb))
+    cat(sprintf("  Per-worker est:  %.2f GB\n", winfo$mem_per_worker_gb))
+    cat(sprintf("  CPU cap:         %d workers\n", winfo$cpu_cap))
+    cat(sprintf("  Memory cap:      %d workers\n", winfo$mem_cap))
+    cat(sprintf("  SELECTED:        %d workers  (limited by %s)\n", n_workers, winfo$limiting_factor))
+    
+    perf_dataset$n_workers          <- n_workers
+    perf_dataset$mem_per_worker_gb  <- winfo$mem_per_worker_gb
+    perf_dataset$total_mem_gb       <- winfo$total_mem_gb
+    perf_dataset$worker_limit       <- winfo$limiting_factor
     
     # Create mirai daemons
     daemons(n = n_workers, dispatcher = FALSE)
@@ -419,6 +745,13 @@ for (dataset_id in DATASETS_TO_PROCESS) {
       FALSE
     }
     
+    # Check USE_SGP_DATA flag (needed for workers to load SGP-enriched data)
+    USE_SGP_DATA_VALUE <- if (exists("USE_SGP_DATA", envir = .GlobalEnv)) {
+      get("USE_SGP_DATA", envir = .GlobalEnv)
+    } else {
+      TRUE  # Default to TRUE so workers load SGP data when available
+    }
+    
     export_data <- everywhere({
       # Verify compute_sgpc_variants is available
       if (!exists("compute_sgpc_variants")) {
@@ -428,7 +761,8 @@ for (dataset_id in DATASETS_TO_PROCESS) {
       TRUE
     }, compute_sgpc_variants = compute_sgpc_variants,
        DATASETS_CONFIG = DATASETS_CONFIG,
-       IS_EC2 = IS_EC2_VALUE)
+       IS_EC2 = IS_EC2_VALUE,
+       USE_SGP_DATA = USE_SGP_DATA_VALUE)
     
     # Wait for export
     export_results <- export_data[]
@@ -437,36 +771,49 @@ for (dataset_id in DATASETS_TO_PROCESS) {
     }
     cat("Export complete\n")
     
-    # Use mirai_map for memory-efficient parallel processing
-    cat("Starting mirai_map processing...\n")
+    # ---------------------------------------------------------------
+    # LOW-MEMORY DISPATCH: Workers load Phase 1 results individually
+    # instead of receiving the full phase1_batch via serialization.
+    # This avoids O(n_workers × phase1_batch_size) memory overhead.
+    # ---------------------------------------------------------------
+    cat("Starting mirai_map processing (worker-local Phase 1 loading)...\n")
     
     mirai_results <- mirai_map(
       .x = seq_along(conditions),
-      .f = function(i, conditions, phase1_batch, canonical_params, dataset_id) {
+      .f = function(i, conditions, canonical_params, dataset_id) {
         cond_id <- conditions[i]
-        phase1_results <- phase1_batch[[cond_id]]
         
-        # Periodic garbage collection (every 5 conditions)
-        if (i %% 5 == 0) {
-          gc(verbose = FALSE, reset = TRUE)
+        # Worker loads its own Phase 1 results from disk (low memory)
+        phase1_results <- load_phase1_condition(dataset_id, cond_id)
+        
+        # Periodic garbage collection (every 10 conditions)
+        if (i %% 10 == 0) {
+          gc(verbose = FALSE, reset = FALSE)
         }
         
         # Call compute_sgpc_variants with dataset_id (not data)
-        compute_sgpc_variants(
+        result <- compute_sgpc_variants(
           condition_id = cond_id,
           dataset_id = dataset_id,
           phase1_results = phase1_results,
           canonical_params = canonical_params,
           dataset_config = DATASETS_CONFIG[[dataset_id]]
         )
+        
+        # Free Phase 1 objects immediately
+        rm(phase1_results)
+        
+        result
       },
       .args = list(
         conditions = conditions,
-        phase1_batch = phase1_batch,
         canonical_params = canonical_params,
         dataset_id = dataset_id
       )
     )
+    
+    # Free host-side phase1_batch now that workers load their own
+    rm(phase1_batch); gc(verbose = FALSE)
     
     # Collect results (blocking)
     cat("Collecting results...\n")
@@ -562,7 +909,11 @@ for (dataset_id in DATASETS_TO_PROCESS) {
     cat("====================================================================\n\n")
   }
   
+  # Record compute time
+  perf_dataset$compute_secs <- as.numeric(difftime(Sys.time(), compute_start, units = "secs"))
+  
   # Combine all results
+  save_start <- Sys.time()
   if (length(all_results) > 0) {
     dataset_results <- rbindlist(all_results, fill = TRUE)
     
@@ -582,9 +933,37 @@ for (dataset_id in DATASETS_TO_PROCESS) {
     cat("\nSaved results to:", output_file, "\n")
     cat("  Total observations:", nrow(dataset_results), "\n")
     cat("  Conditions processed:", length(all_results), "\n\n")
+    
+    perf_dataset$n_obs   <- nrow(dataset_results)
+    perf_dataset$n_ok    <- length(all_results)
+    perf_dataset$rds_mb  <- round(file.info(output_file)$size / 1024^2, 1)
   } else {
     cat("\nNo results generated for", dataset_id, "\n\n")
+    perf_dataset$n_obs <- 0
+    perf_dataset$n_ok  <- 0
   }
+  perf_dataset$save_secs <- as.numeric(difftime(Sys.time(), save_start, units = "secs"))
+  perf_dataset$total_secs <- as.numeric(difftime(Sys.time(), dataset_wall_start, units = "secs"))
+  perf_dataset$timestamp_end <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  
+  # --- Write performance log ---
+  perf_file <- file.path(perf_dir, paste0("step2_perf_", dataset_id, ".json"))
+  tryCatch({
+    jsonlite::write_json(perf_dataset, perf_file, auto_unbox = TRUE, pretty = TRUE)
+    cat("Performance log:", perf_file, "\n")
+  }, error = function(e) {
+    cat("Warning: could not write perf log:", e$message, "\n")
+  })
+  
+  # Summary timing table
+  cat(sprintf("\n--- %s Performance Summary ---\n", dataset_id))
+  cat(sprintf("  Phase 1 load:  %6.1f s\n", perf_dataset$phase1_load_secs))
+  cat(sprintf("  Compute:       %6.1f s  (%.1f min)\n", perf_dataset$compute_secs, perf_dataset$compute_secs / 60))
+  cat(sprintf("  Save:          %6.1f s\n", perf_dataset$save_secs))
+  cat(sprintf("  TOTAL:         %6.1f s  (%.1f min)\n", perf_dataset$total_secs, perf_dataset$total_secs / 60))
+  cat(sprintf("  Throughput:    %.2f conditions/min\n",
+              perf_dataset$n_ok / (perf_dataset$compute_secs / 60)))
+  cat("---\n\n")
 }
 
 cat("====================================================================\n")
