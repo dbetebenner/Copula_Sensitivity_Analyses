@@ -175,10 +175,10 @@ compute_enhanced_statistics <- function(
       # Compute both mean and median SGPc for each school
       by_cols <- if (has_dataset_id) c("SCHOOL_NUMBER", "dataset_id", "condition_id") else c("SCHOOL_NUMBER", "condition_id")
       group_agg <- sgpc_data[!is.na(SCHOOL_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean1  = mean(get(var1), na.rm = TRUE),
-        mean2  = mean(get(var2), na.rm = TRUE),
-        median1 = median(get(var1), na.rm = TRUE),
-        median2 = median(get(var2), na.rm = TRUE),
+        mean1   = mean(get(var1), na.rm = TRUE),
+        mean2   = mean(get(var2), na.rm = TRUE),
+        median1 = as.double(median(get(var1), na.rm = TRUE)),
+        median2 = as.double(median(get(var2), na.rm = TRUE)),
         n = .N
       ), by = by_cols]
       
@@ -303,8 +303,8 @@ compute_enhanced_statistics <- function(
       dist_agg <- sgpc_data[!is.na(DISTRICT_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
         mean1   = mean(get(var1), na.rm = TRUE),
         mean2   = mean(get(var2), na.rm = TRUE),
-        median1 = median(get(var1), na.rm = TRUE),
-        median2 = median(get(var2), na.rm = TRUE),
+        median1 = as.double(median(get(var1), na.rm = TRUE)),
+        median2 = as.double(median(get(var2), na.rm = TRUE)),
         n = .N
       ), by = dist_by_cols]
       
@@ -437,8 +437,8 @@ compute_enhanced_statistics <- function(
       group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
         mean1   = mean(get(var1), na.rm = TRUE),
         mean2   = mean(get(var2), na.rm = TRUE),
-        median1 = median(get(var1), na.rm = TRUE),
-        median2 = median(get(var2), na.rm = TRUE),
+        median1 = as.double(median(get(var1), na.rm = TRUE)),
+        median2 = as.double(median(get(var2), na.rm = TRUE)),
         n = .N
       ), by = grp_by]
       
@@ -687,8 +687,8 @@ compute_enhanced_statistics <- function(
       group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
         mean1   = mean(get(var1), na.rm = TRUE),
         mean2   = mean(get(var2), na.rm = TRUE),
-        median1 = median(get(var1), na.rm = TRUE),
-        median2 = median(get(var2), na.rm = TRUE),
+        median1 = as.double(median(get(var1), na.rm = TRUE)),
+        median2 = as.double(median(get(var2), na.rm = TRUE)),
         n = .N
       ), by = bucket_grp_by]
       
