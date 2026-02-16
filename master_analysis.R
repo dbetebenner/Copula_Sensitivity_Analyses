@@ -959,7 +959,7 @@ for (dataset_idx in seq_along(datasets_to_analyze)) {
 ### STEP 3: GROWTH REGIME INFERENCE — LIw_LD (Per-Dataset)
 ################################################################################
 # Note: Step 1 has already been processed for ALL datasets above.
-# Steps 2-4 are processed per-dataset in this loop.
+# Per-dataset: Steps 2.1/2.1b and 3 run here; Steps 2.2-2.6 run once after loop.
 #
 # STEP 3 (LIw_LD) validates growth regime inference from cross-sectional
 # data against ground truth from longitudinal pairs. This is the "piece
@@ -1153,129 +1153,6 @@ if (should_run_step(2)) {
       cat("Warning: Canonical validation failed (non-fatal, continuing)\n\n")
     }
   }
-  
-  ############################################################################
-  ### STEP 2.2: AGGREGATE ANALYSIS
-  ############################################################################
-  
-  aggregate_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/sgpc_key_comparisons.csv")
-  
-  if (SKIP_COMPLETED_STEP2 && aggregate_complete) {
-    cat("✓ Skipping Step 2.2 (aggregate analysis already done)\n\n")
-  } else {
-    cat("Running Step 2.2: Aggregate analysis...\n\n")
-    
-    result_2_2 <- time_phase("Step 2.2: Aggregate Analysis", {
-      source("STEP_2_SGPc_Sensitivity/sgpc_aggregate_analysis.R")
-    })
-    
-    if (!result_2_2$success) {
-      cat("Warning: Aggregate analysis failed\n\n")
-    }
-  }
-  
-  ############################################################################
-  ### STEP 2.3: VISUALIZATIONS
-  ############################################################################
-  
-  vis_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/visualizations/scatter_emp_vs_best.pdf")
-  
-  if (SKIP_COMPLETED_STEP2 && vis_complete) {
-    cat("✓ Skipping Step 2.3 (visualizations already created)\n\n")
-  } else {
-    cat("Running Step 2.3: Creating visualizations...\n\n")
-    
-    result_2_3 <- time_phase("Step 2.3: Visualizations", {
-      source("STEP_2_SGPc_Sensitivity/sgpc_visualizations.R")
-    })
-    
-    if (!result_2_3$success) {
-      cat("Warning: Visualization creation failed\n\n")
-    }
-  }
-  
-  ############################################################################
-  ### STEP 2.4: GENERATE REPORT
-  ############################################################################
-  
-  report_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/SGPC_SENSITIVITY_REPORT.md")
-  
-  if (SKIP_COMPLETED_STEP2 && report_complete) {
-    cat("✓ Skipping Step 2.4 (report already generated)\n\n")
-  } else {
-    cat("Running Step 2.4: Generating narrative report...\n\n")
-    
-    result_2_4 <- time_phase("Step 2.4: Generate Report", {
-      source("STEP_2_SGPc_Sensitivity/sgpc_generate_report.R")
-    })
-    
-    if (!result_2_4$success) {
-      cat("Warning: Report generation failed\n\n")
-    }
-  }
-  
-  ## Step 2.5: Generate Publication Figure (NEW)
-  if (file.exists("STEP_2_SGPc_Sensitivity/create_publication_figure.R")) {
-    cat("Running Step 2.5: Creating publication figure...\n\n")
-    
-    result_2_5 <- time_phase("Step 2.5: Publication Figure", {
-      tryCatch({
-        source("STEP_2_SGPc_Sensitivity/create_publication_figure.R")
-        TRUE
-      }, error = function(e) {
-        cat(sprintf("ERROR: %s\n", e$message))
-        FALSE
-      })
-    })
-    
-    if (!result_2_5$success || !isTRUE(result_2_5$result)) {
-      cat("Warning: Publication figure generation encountered issues\n\n")
-    }
-  } else {
-    cat("Skipping Step 2.5: create_publication_figure.R not found\n\n")
-  }
-  
-  ############################################################################
-  ### STEP 2.6: WRITE CONSOLIDATED MANIFEST
-  ############################################################################
-  ## Always run (not gated by SKIP_COMPLETED_STEP2) so manifest reflects current outputs.
-  cat("Running Step 2.6: Write STEP_2 manifest...\n\n")
-  result_2_6 <- time_phase("Step 2.6: Write STEP_2 manifest", {
-    tryCatch({
-      source("STEP_2_SGPc_Sensitivity/write_step2_manifest.R")
-      TRUE
-    }, error = function(e) {
-      cat(sprintf("Warning: Manifest write failed: %s\n", e$message))
-      FALSE
-    })
-  })
-  if (!result_2_6$success || !isTRUE(result_2_6$result)) {
-    cat("Warning: Step 2.6 (manifest) failed (non-fatal, continuing)\n\n")
-  }
-  
-  ## Step 2 Summary
-  cat("\n")
-  cat("####################################################################\n")
-  cat("### STEP 2: SGPc SENSITIVITY COMPLETE\n")
-  cat("####################################################################\n\n")
-  
-  cat("Results saved in: STEP_2_SGPc_Sensitivity/results/\n")
-  cat("  - Per-dataset SGPc variants: sgpc_all_variants_{dataset_id}.rds\n")
-  cat("  - Summary statistics: sgpc_key_comparisons.csv\n")
-  cat("  - Manifest: sgpc_sensitivity_manifest.json\n")
-  cat("  - Report: SGPC_SENSITIVITY_REPORT.md\n")
-  cat("  - Visualizations: visualizations/*.{pdf,svg,png}\n")
-  cat("  - Publication figure: visualizations/sgpc_summary_grid.{pdf,svg,png}\n\n")
-  
-  pause_for_review(
-    paste0("Review Step 2 SGPc sensitivity results:\n",
-           "  - STEP_2_SGPc_Sensitivity/results/SGPC_SENSITIVITY_REPORT.md\n",
-           "  - STEP_2_SGPc_Sensitivity/results/visualizations/\n",
-           "  - STEP_2_SGPc_Sensitivity/results/visualizations/sgpc_summary_grid.pdf (Publication Figure)\n\n",
-           "Key outputs: Quantified impact of copula choice on SGPcs.\n",
-           "If analysis completed successfully, we'll proceed to Step 3."),
-    "Step 2 Complete"
-  )
   
 } else {
   cat("\n####################################################################\n")
@@ -1520,6 +1397,154 @@ if (should_run_step(5)) {
   cat(paste(rep("=", 80), collapse=""), "\n\n", sep="")
   
 } # END DATASET LOOP
+
+################################################################################
+### STEP 2.2–2.6: CROSS-DATASET ANALYSIS, REPORTING & PUBLICATION FIGURES
+################################################################################
+# These steps combine results from ALL datasets and must run once, after
+# the per-dataset loop has produced sgpc_all_variants_*.rds for every dataset.
+################################################################################
+
+if (should_run_step(2)) {
+
+  if (!exists("SKIP_COMPLETED_STEP2")) SKIP_COMPLETED_STEP2 <- FALSE
+
+  cat("\n")
+  cat("####################################################################\n")
+  cat("### STEP 2 (continued): CROSS-DATASET ANALYSIS\n")
+  cat("####################################################################\n\n")
+
+  ############################################################################
+  ### STEP 2.2: AGGREGATE ANALYSIS
+  ############################################################################
+
+  aggregate_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/sgpc_key_comparisons.csv")
+
+  if (SKIP_COMPLETED_STEP2 && aggregate_complete) {
+    cat("✓ Skipping Step 2.2 (aggregate analysis already done)\n\n")
+  } else {
+    cat("Running Step 2.2: Aggregate analysis...\n\n")
+
+    result_2_2 <- time_phase("Step 2.2: Aggregate Analysis", {
+      source("STEP_2_SGPc_Sensitivity/sgpc_aggregate_analysis.R")
+    })
+
+    if (!result_2_2$success) {
+      cat("Warning: Aggregate analysis failed\n\n")
+    }
+  }
+
+  ############################################################################
+  ### STEP 2.3: VISUALIZATIONS
+  ############################################################################
+
+  vis_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/visualizations/scatter_emp_vs_best.pdf")
+
+  if (SKIP_COMPLETED_STEP2 && vis_complete) {
+    cat("✓ Skipping Step 2.3 (visualizations already created)\n\n")
+  } else {
+    cat("Running Step 2.3: Creating visualizations...\n\n")
+
+    result_2_3 <- time_phase("Step 2.3: Visualizations", {
+      source("STEP_2_SGPc_Sensitivity/sgpc_visualizations.R")
+    })
+
+    if (!result_2_3$success) {
+      cat("Warning: Visualization creation failed\n\n")
+    }
+  }
+
+  ############################################################################
+  ### STEP 2.4: GENERATE REPORT
+  ############################################################################
+
+  report_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/SGPC_SENSITIVITY_REPORT.md")
+
+  if (SKIP_COMPLETED_STEP2 && report_complete) {
+    cat("✓ Skipping Step 2.4 (report already generated)\n\n")
+  } else {
+    cat("Running Step 2.4: Generating narrative report...\n\n")
+
+    result_2_4 <- time_phase("Step 2.4: Generate Report", {
+      source("STEP_2_SGPc_Sensitivity/sgpc_generate_report.R")
+    })
+
+    if (!result_2_4$success) {
+      cat("Warning: Report generation failed\n\n")
+    }
+  }
+
+  ############################################################################
+  ### STEP 2.5: PUBLICATION FIGURE
+  ############################################################################
+
+  pub_fig_complete <- file.exists("STEP_2_SGPc_Sensitivity/results/visualizations/sgpc_summary_grid.pdf")
+
+  if (SKIP_COMPLETED_STEP2 && pub_fig_complete) {
+    cat("✓ Skipping Step 2.5 (publication figure already created)\n\n")
+  } else if (file.exists("STEP_2_SGPc_Sensitivity/create_publication_figure.R")) {
+    cat("Running Step 2.5: Creating publication figure...\n\n")
+
+    result_2_5 <- time_phase("Step 2.5: Publication Figure", {
+      tryCatch({
+        source("STEP_2_SGPc_Sensitivity/create_publication_figure.R")
+        TRUE
+      }, error = function(e) {
+        cat(sprintf("ERROR: %s\n", e$message))
+        FALSE
+      })
+    })
+
+    if (!result_2_5$success || !isTRUE(result_2_5$result)) {
+      cat("Warning: Publication figure generation encountered issues\n\n")
+    }
+  } else {
+    cat("Skipping Step 2.5: create_publication_figure.R not found\n\n")
+  }
+
+  ############################################################################
+  ### STEP 2.6: WRITE CONSOLIDATED MANIFEST
+  ############################################################################
+
+  cat("Running Step 2.6: Write STEP_2 manifest...\n\n")
+  result_2_6 <- time_phase("Step 2.6: Write STEP_2 manifest", {
+    tryCatch({
+      source("STEP_2_SGPc_Sensitivity/write_step2_manifest.R")
+      TRUE
+    }, error = function(e) {
+      cat(sprintf("Warning: Manifest write failed: %s\n", e$message))
+      FALSE
+    })
+  })
+  if (!result_2_6$success || !isTRUE(result_2_6$result)) {
+    cat("Warning: Step 2.6 (manifest) failed (non-fatal, continuing)\n\n")
+  }
+
+  ## Step 2 Summary
+  cat("\n")
+  cat("####################################################################\n")
+  cat("### STEP 2: SGPc SENSITIVITY COMPLETE\n")
+  cat("####################################################################\n\n")
+
+  cat("Results saved in: STEP_2_SGPc_Sensitivity/results/\n")
+  cat("  - Per-dataset SGPc variants: sgpc_all_variants_{dataset_id}.rds\n")
+  cat("  - Summary statistics: sgpc_key_comparisons.csv\n")
+  cat("  - Manifest: sgpc_sensitivity_manifest.json\n")
+  cat("  - Report: SGPC_SENSITIVITY_REPORT.md\n")
+  cat("  - Visualizations: visualizations/*.{pdf,svg,png}\n")
+  cat("  - Publication figure: visualizations/sgpc_summary_grid.{pdf,svg,png}\n\n")
+
+  pause_for_review(
+    paste0("Review Step 2 SGPc sensitivity results:\n",
+           "  - STEP_2_SGPc_Sensitivity/results/SGPC_SENSITIVITY_REPORT.md\n",
+           "  - STEP_2_SGPc_Sensitivity/results/visualizations/\n",
+           "  - STEP_2_SGPc_Sensitivity/results/visualizations/sgpc_summary_grid.pdf (Publication Figure)\n\n",
+           "Key outputs: Quantified impact of copula choice on SGPcs.\n",
+           "If analysis completed successfully, we'll proceed to Step 3."),
+    "Step 2 Complete"
+  )
+
+} # END STEP 2 cross-dataset block
 
 ###############################################################################
 # COMBINE RESULTS FROM ALL DATASETS

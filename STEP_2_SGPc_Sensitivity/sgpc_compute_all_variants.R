@@ -410,8 +410,10 @@ compute_sgpc_variants <- function(
   cat(sprintf(" (%.1fs)", pobs_time))
   
   # Initialize result data.table
-  # Include SCHOOL_NUMBER and DISTRICT_NUMBER for group-level aggregation (Panel B)
+  # Include dataset_id for globally-unique condition identification across datasets,
+  # and SCHOOL_NUMBER and DISTRICT_NUMBER for group-level aggregation (Panel B)
   result <- data.table(
+    dataset_id = dataset_id,
     condition_id = condition_id,
     year_span = cond_meta$year_span,
     content_area = cond_meta$content_area,

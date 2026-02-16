@@ -72,7 +72,13 @@ compute_enhanced_statistics <- function(
   
   cat("Input data:\n")
   cat("  Observations:", nrow(sgpc_data), "\n")
-  cat("  Conditions:", uniqueN(sgpc_data$condition_id), "\n")
+  has_dataset_id <- "dataset_id" %in% names(sgpc_data)
+  if (has_dataset_id) {
+    cat("  Datasets:", uniqueN(sgpc_data$dataset_id), "\n")
+    cat("  Conditions:", uniqueN(sgpc_data[, paste(dataset_id, condition_id, sep = "__")]), "\n")
+  } else {
+    cat("  Conditions:", uniqueN(sgpc_data$condition_id), "(WARNING: no dataset_id column)\n")
+  }
   cat("  Comparison pairs:", length(comparison_pairs), "\n\n")
   
   ############################################################################
@@ -165,12 +171,13 @@ compute_enhanced_statistics <- function(
         next
       }
       
-      # Aggregate by school
+      # Aggregate by school (include dataset_id to avoid cross-dataset collision)
+      by_cols <- if (has_dataset_id) c("SCHOOL_NUMBER", "dataset_id", "condition_id") else c("SCHOOL_NUMBER", "condition_id")
       group_means <- sgpc_data[!is.na(SCHOOL_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
         mean_var1 = mean(get(var1), na.rm = TRUE),
         mean_var2 = mean(get(var2), na.rm = TRUE),
         n = .N
-      ), by = .(SCHOOL_NUMBER, condition_id)]
+      ), by = by_cols]
       
       setnames(group_means, c("mean_var1", "mean_var2"), c("mean1", "mean2"))
       group_means[, delta_group := abs(mean1 - mean2)]
@@ -265,12 +272,13 @@ compute_enhanced_statistics <- function(
         next
       }
       
-      # Aggregate by district
+      # Aggregate by district (include dataset_id to avoid cross-dataset collision)
+      dist_by_cols <- if (has_dataset_id) c("DISTRICT_NUMBER", "dataset_id", "condition_id") else c("DISTRICT_NUMBER", "condition_id")
       dist_means <- sgpc_data[!is.na(DISTRICT_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
         mean_var1 = mean(get(var1), na.rm = TRUE),
         mean_var2 = mean(get(var2), na.rm = TRUE),
         n = .N
-      ), by = .(DISTRICT_NUMBER, condition_id)]
+      ), by = dist_by_cols]
       
       setnames(dist_means, c("mean_var1", "mean_var2"), c("mean1", "mean2"))
       dist_means[, delta_group := abs(mean1 - mean2)]
@@ -335,14 +343,15 @@ compute_enhanced_statistics <- function(
       next
     }
     
-    # Compute Spearman correlation for each condition
+    # Compute Spearman correlation for each condition (include dataset_id)
+    rho_by_cols <- if (has_dataset_id) c("dataset_id", "condition_id", "year_span", "content_area") else c("condition_id", "year_span", "content_area")
     rho_by_condition <- sgpc_data[, .(
       rho = tryCatch(
         cor(get(var1), get(var2), method = "spearman", use = "complete.obs"),
         error = function(e) NA_real_
       ),
       n = sum(!is.na(get(var1)) & !is.na(get(var2)))
-    ), by = .(condition_id, year_span, content_area)]
+    ), by = rho_by_cols]
     
     rho_by_condition[, comparison := comp_name]
     
@@ -368,18 +377,20 @@ compute_enhanced_statistics <- function(
   # Helper: compute group-level Spearman rho for a given grouping variable
   compute_group_rank_rho <- function(dt, group_var, min_n, comparison_pairs, level_label) {
     results <- list()
+    # Include dataset_id in grouping when available
+    grp_by <- if ("dataset_id" %in% names(dt)) c(group_var, "dataset_id", "condition_id", "year_span", "content_area") else c(group_var, "condition_id", "year_span", "content_area")
     for (comp_name in names(comparison_pairs)) {
       var1 <- comparison_pairs[[comp_name]][1]
       var2 <- comparison_pairs[[comp_name]][2]
       
       if (all(is.na(dt[[var1]])) || all(is.na(dt[[var2]]))) next
       
-      # Aggregate to group means
+      # Aggregate to group means (include dataset_id to avoid cross-dataset collision)
       group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
         mean1 = mean(get(var1), na.rm = TRUE),
         mean2 = mean(get(var2), na.rm = TRUE),
         n = .N
-      ), by = c(group_var, "condition_id", "year_span", "content_area")]
+      ), by = grp_by]
       
       group_agg <- group_agg[n >= min_n]
       

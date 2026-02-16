@@ -51,12 +51,23 @@ for (f in dataset_files) {
 cat("\n")
 
 # Load and combine all datasets
-all_data_list <- lapply(dataset_files, readRDS)
+# Each RDS should contain a dataset_id column (added in sgpc_compute_all_variants.R).
+# For backward compatibility with RDS files that lack it, infer from filename.
+all_data_list <- mapply(function(dt, f) {
+  if (!"dataset_id" %in% names(dt)) {
+    ds_id <- sub(".*sgpc_all_variants_(dataset_\\d+)\\.rds$", "\\1", basename(f))
+    dt[, dataset_id := ds_id]
+  }
+  dt
+}, lapply(dataset_files, readRDS), dataset_files, SIMPLIFY = FALSE)
 sgpc_data <- rbindlist(all_data_list, fill = TRUE)
 
-cat(sprintf("Combined dataset: %s observations, %d conditions\n\n",
+# Condition count must account for dataset_id to avoid collision across datasets
+n_conditions <- uniqueN(sgpc_data[, paste(dataset_id, condition_id, sep = "__")])
+cat(sprintf("Combined dataset: %s observations, %d conditions (across %d datasets)\n\n",
             format(nrow(sgpc_data), big.mark = ","),
-            uniqueN(sgpc_data$condition_id)))
+            n_conditions,
+            uniqueN(sgpc_data$dataset_id)))
 
 # Check for school/district IDs
 has_school <- "SCHOOL_NUMBER" %in% names(sgpc_data) && sum(!is.na(sgpc_data$SCHOOL_NUMBER)) > 0
@@ -89,7 +100,7 @@ enhanced_stats_file <- file.path(RESULTS_DIR, "sgpc_enhanced_stats.rds")
 
 # Force recomputation flag (set TRUE to invalidate cache)
 # Cache MUST be regenerated when comparison pairs or statistics sections change
-FORCE_RECOMPUTE <- TRUE
+if (!exists("FORCE_RECOMPUTE")) FORCE_RECOMPUTE <- FALSE
 
 if (file.exists(enhanced_stats_file) && !FORCE_RECOMPUTE) {
   # Validate cache: check that it has the expected 8 comparison pairs

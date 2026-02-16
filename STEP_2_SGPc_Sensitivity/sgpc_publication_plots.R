@@ -93,6 +93,26 @@ CONSISTENCY_COMPARISONS <- c(
 ACCURACY_LABEL_COLOR    <- "#6A3D9A"   # dark purple  (Empirical – X)
 CONSISTENCY_LABEL_COLOR <- "#1B7837"   # forest green (parametric vs parametric)
 
+############################################################################
+### ECDF Thinning Helper
+###
+### ECDF curves are monotonically increasing; subsampling to max_pts
+### evenly-spaced quantile points per group preserves perfect visual
+### fidelity while reducing SVG file sizes from GB to KB.
+############################################################################
+
+thin_ecdf <- function(dt, max_pts = 10000, by_col = "comparison") {
+  dt[, {
+    n <- .N
+    if (n <= max_pts) {
+      .SD
+    } else {
+      idx <- unique(as.integer(c(1L, seq(1L, n, length.out = max_pts), n)))
+      .SD[idx]
+    }
+  }, by = by_col]
+}
+
 #' Background layers for accuracy / consistency regions
 #'
 #' Returns a list of ggplot annotation layers: two semi-opaque coloured
@@ -268,9 +288,10 @@ plot_individual_ecdf <- function(
   if (length(available) == 0) stop("No valid comparisons found in data.")
   comparisons <- available
   
-  # Extract ECDF data
+  # Extract ECDF data and thin for SVG-friendly rendering
   ecdf_data <- enhanced_stats$individual_stats$all_ecdf_data
   ecdf_data <- ecdf_data[comparison %in% comparisons]
+  ecdf_data <- thin_ecdf(ecdf_data, max_pts = 10000)
   
   # Calculate annotations for reference lines
   annotations <- lapply(comparisons, function(comp) {
@@ -310,7 +331,9 @@ plot_individual_ecdf <- function(
       subtitle = "How large are individual student SGPc differences across copula models?\nECDF of |differences| with policy-relevant thresholds at 5 and 10 percentile points",
       caption = sprintf("n = %s observations across %d conditions", 
                        format(nrow(ecdf_data[comparison == comparisons[1]]), big.mark = ","),
-                       uniqueN(enhanced_stats$rank_agreement$condition_id))
+                       if ("dataset_id" %in% names(enhanced_stats$rank_agreement))
+                         uniqueN(enhanced_stats$rank_agreement[, paste(dataset_id, condition_id, sep = "__")])
+                       else uniqueN(enhanced_stats$rank_agreement$condition_id))
     ) +
     coord_cartesian(clip = "off") +
     theme_publication() +
@@ -385,6 +408,7 @@ plot_group_ecdf <- function(
   if (length(available) == 0) stop("No valid comparisons found in group data.")
   comparisons <- available
   ecdf_data <- ecdf_data[comparison %in% comparisons]
+  ecdf_data <- thin_ecdf(ecdf_data, max_pts = 10000)
   
   # Calculate annotations for reference lines
   annotations <- lapply(comparisons, function(comp) {
@@ -545,10 +569,11 @@ plot_condition_dots <- function(
     var1 <- comparison_pairs[[comp_name]][1]
     var2 <- comparison_pairs[[comp_name]][2]
     
+    mad_by_cols <- if ("dataset_id" %in% names(sgpc_data)) c("dataset_id", "condition_id", "year_span", "content_area") else c("condition_id", "year_span", "content_area")
     mad_data <- sgpc_data[, .(
       mad = mean(abs(get(var1) - get(var2)), na.rm = TRUE),
       n = sum(!is.na(get(var1)) & !is.na(get(var2)))
-    ), by = .(condition_id, year_span, content_area)]
+    ), by = mad_by_cols]
     
     mad_data[, comparison := comp_name]
     mad_by_condition_list[[comp_name]] <- mad_data
@@ -1363,6 +1388,7 @@ plot_multilevel_aggregation <- function(
   
   all_ecdf <- rbindlist(ecdf_list)
   all_ecdf[, level := factor(level, levels = c("Individual", "School", "District"))]
+  all_ecdf <- thin_ecdf(all_ecdf, max_pts = 10000, by_col = c("level", "comparison"))
   
   # Compute summary annotation: median |Delta| at each level
   medians <- all_ecdf[, .(

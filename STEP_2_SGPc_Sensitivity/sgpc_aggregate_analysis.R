@@ -41,12 +41,21 @@ for (f in dataset_files) {
 cat("\n")
 
 # Load and combine all datasets
-all_data_list <- lapply(dataset_files, readRDS)
+# Each RDS should contain a dataset_id column; infer from filename for backward compat
+all_data_list <- mapply(function(dt, f) {
+  if (!"dataset_id" %in% names(dt)) {
+    ds_id <- sub(".*sgpc_all_variants_(dataset_\\d+)\\.rds$", "\\1", basename(f))
+    dt[, dataset_id := ds_id]
+  }
+  dt
+}, lapply(dataset_files, readRDS), dataset_files, SIMPLIFY = FALSE)
 all_data <- rbindlist(all_data_list, fill = TRUE)
 
+n_conditions <- uniqueN(all_data[, paste(dataset_id, condition_id, sep = "__")])
 cat("Combined dataset:\n")
 cat("  Total observations:", nrow(all_data), "\n")
-cat("  Conditions:", uniqueN(all_data$condition_id), "\n")
+cat("  Datasets:", uniqueN(all_data$dataset_id), "\n")
+cat("  Conditions:", n_conditions, "\n")
 cat("  Year spans:", paste(sort(unique(all_data$year_span)), collapse = ", "), "\n")
 cat("  Content areas:", paste(unique(all_data$content_area), collapse = ", "), "\n\n")
 
@@ -196,7 +205,7 @@ cat("Computing stratified analyses...\n")
 by_year_span <- all_data[, {
   list(
     n_obs = .N,
-    n_conditions = uniqueN(condition_id),
+    n_conditions = uniqueN(paste(dataset_id, condition_id, sep = "__")),
     mad_emp_best = mad(sgpc_emp, sgpc_best),
     mad_emp_avg = mad(sgpc_emp, sgpc_avg),
     mad_emp_gaussian = mad(sgpc_emp, sgpc_gaussian),
@@ -210,7 +219,7 @@ by_year_span <- all_data[, {
 by_content_area <- all_data[, {
   list(
     n_obs = .N,
-    n_conditions = uniqueN(condition_id),
+    n_conditions = uniqueN(paste(dataset_id, condition_id, sep = "__")),
     mad_emp_best = mad(sgpc_emp, sgpc_best),
     mad_emp_avg = mad(sgpc_emp, sgpc_avg),
     mad_emp_gaussian = mad(sgpc_emp, sgpc_gaussian),
