@@ -985,7 +985,7 @@ compute_enhanced_statistics <- function(
           error = function(e) NA_real_
         )
       )
-    }, by = .(condition_id, year_span, content_area)]
+    }, by = c(if (has_dataset_id) "dataset_id", "condition_id", "year_span", "content_area")]
     
     cond_stats[, comparison := comp_name]
     condition_level_list[[comp_name]] <- cond_stats
