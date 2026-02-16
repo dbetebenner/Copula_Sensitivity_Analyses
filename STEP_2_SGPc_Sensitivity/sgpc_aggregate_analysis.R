@@ -233,7 +233,7 @@ by_content_area <- all_data[, {
 by_stratum <- all_data[, {
   list(
     n_obs = .N,
-    n_conditions = uniqueN(condition_id),
+    n_conditions = uniqueN(paste(dataset_id, condition_id, sep = "__")),
     mad_emp_best = mad(sgpc_emp, sgpc_best),
     mad_emp_avg = mad(sgpc_emp, sgpc_avg),
     mad_emp_gaussian = mad(sgpc_emp, sgpc_gaussian),

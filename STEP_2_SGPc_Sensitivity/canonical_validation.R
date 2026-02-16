@@ -175,9 +175,10 @@ if (length(all_variants) == 0) {
 }
 
 variants_dt <- rbindlist(all_variants, fill = TRUE)
-cat(sprintf("\nCombined STEP_2 data: %s observations across %d conditions\n",
+cat(sprintf("\nCombined STEP_2 data: %s observations across %d conditions (from %d datasets)\n",
             format(nrow(variants_dt), big.mark = ","),
-            length(unique(variants_dt$condition_id))))
+            uniqueN(variants_dt[, paste(dataset_id, condition_id, sep = "__")]),
+            uniqueN(variants_dt$dataset_id)))
 
 # Merge best-fit family information from STEP_1 into STEP_2 results
 # (at the condition level, so we know each condition's true best family)
@@ -257,7 +258,7 @@ condition_summary <- valid_obs[, .(
   cor_best      = round(cor(sgpc_best, sgpc_emp, use = "complete.obs"), 4),
   cor_frank     = round(cor(sgpc_frank, sgpc_emp, use = "complete.obs"), 4),
   cor_gaussian  = round(cor(sgpc_gaussian, sgpc_emp, use = "complete.obs"), 4)
-), by = condition_id]
+), by = .(dataset_id, condition_id)]
 
 # Add stratum_id
 condition_summary[, stratum_id := paste0("year_", year_span, "_", tolower(content_area))]
@@ -421,6 +422,8 @@ report_lines <- c(
   paste("**Generated:**", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
   paste("**STEP_1 conditions:**", nrow(best_fits)),
   paste("**STEP_2 observations:**", format(nrow(variants_dt), big.mark = ",")),
+  paste("**STEP_2 conditions:**", uniqueN(variants_dt[, paste(dataset_id, condition_id, sep = "__")]),
+        sprintf("(across %d datasets)", uniqueN(variants_dt$dataset_id))),
   "",
   "---",
   "",

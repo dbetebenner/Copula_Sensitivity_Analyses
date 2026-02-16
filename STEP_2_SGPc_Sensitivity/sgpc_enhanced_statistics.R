@@ -395,6 +395,7 @@ compute_enhanced_statistics <- function(
       group_agg <- group_agg[n >= min_n]
       
       # For each condition, compute Spearman rho of group rankings
+      rho_by_cols <- if ("dataset_id" %in% names(group_agg)) c("dataset_id", "condition_id", "year_span", "content_area") else c("condition_id", "year_span", "content_area")
       rho_by_cond <- group_agg[, {
         if (.N >= 5) {
           list(
@@ -407,7 +408,7 @@ compute_enhanced_statistics <- function(
         } else {
           list(rho = NA_real_, n_groups = .N)
         }
-      }, by = .(condition_id, year_span, content_area)]
+      }, by = rho_by_cols]
       
       rho_by_cond[, `:=`(comparison = comp_name, level = level_label)]
       results[[comp_name]] <- rho_by_cond
@@ -477,6 +478,7 @@ compute_enhanced_statistics <- function(
       for (K in individual_bucket_sizes) {
         bucket_var <- paste0("bucket_k", K, "_", clean_name)
         
+        bucket_by <- if (has_dataset_id) c("dataset_id", "condition_id") else "condition_id"
         sgpc_with_buckets[, (bucket_var) := {
           vals <- get(var)
           tryCatch({
@@ -489,7 +491,7 @@ compute_enhanced_statistics <- function(
           }, error = function(e) {
             rep(NA_character_, length(vals))
           })
-        }, by = condition_id]
+        }, by = bucket_by]
         
         if (K == 10L) {
           n_na <- sum(is.na(sgpc_with_buckets[[bucket_var]]))
@@ -616,18 +618,20 @@ compute_enhanced_statistics <- function(
   # Helper: compute bucket stability for a given grouping variable and K
   compute_bucket_stability <- function(dt, group_var, min_n, comparison_pairs, level_label, K) {
     results <- list()
+    # Include dataset_id in grouping when available
+    bucket_grp_by <- if ("dataset_id" %in% names(dt)) c(group_var, "dataset_id", "condition_id", "year_span", "content_area") else c(group_var, "condition_id", "year_span", "content_area")
     for (comp_name in names(comparison_pairs)) {
       var1 <- comparison_pairs[[comp_name]][1]
       var2 <- comparison_pairs[[comp_name]][2]
       
       if (all(is.na(dt[[var1]])) || all(is.na(dt[[var2]]))) next
       
-      # Aggregate to group means
+      # Aggregate to group means (include dataset_id to avoid cross-dataset collision)
       group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
         mean1 = mean(get(var1), na.rm = TRUE),
         mean2 = mean(get(var2), na.rm = TRUE),
         n = .N
-      ), by = c(group_var, "condition_id", "year_span", "content_area")]
+      ), by = bucket_grp_by]
       
       group_agg <- group_agg[n >= min_n]
       
@@ -635,17 +639,18 @@ compute_enhanced_statistics <- function(
       
       # Within each condition, assign buckets based on each variant's mean
       # Use quantile-based cuts so buckets are roughly equal-sized
+      grp_bucket_by <- if ("dataset_id" %in% names(group_agg)) c("dataset_id", "condition_id") else "condition_id"
       group_agg[, bucket1 := {
         brks <- unique(quantile(mean1, probs = seq(0, 1, 1/K), na.rm = TRUE))
         if (length(brks) < 2) rep(1L, .N)
         else as.integer(cut(mean1, breaks = brks, include.lowest = TRUE))
-      }, by = condition_id]
+      }, by = grp_bucket_by]
       
       group_agg[, bucket2 := {
         brks <- unique(quantile(mean2, probs = seq(0, 1, 1/K), na.rm = TRUE))
         if (length(brks) < 2) rep(1L, .N)
         else as.integer(cut(mean2, breaks = brks, include.lowest = TRUE))
-      }, by = condition_id]
+      }, by = grp_bucket_by]
       
       # Remove rows where bucket assignment failed
       group_agg <- group_agg[!is.na(bucket1) & !is.na(bucket2)]
@@ -836,8 +841,10 @@ compute_enhanced_statistics <- function(
   
   cat("Computing per-dataset statistics (cross-dataset generalizability)...\n")
   
-  # Extract dataset_id from condition_id (pattern: dataset_N_*)
-  sgpc_data[, dataset_id := sub("^(dataset_[0-9]+)_.*", "\\1", condition_id)]
+  # Use existing dataset_id if available; otherwise try to extract from condition_id
+  if (!"dataset_id" %in% names(sgpc_data)) {
+    sgpc_data[, dataset_id := sub("^(dataset_[0-9]+)_.*", "\\1", condition_id)]
+  }
   
   by_dataset_stats <- list()
   
