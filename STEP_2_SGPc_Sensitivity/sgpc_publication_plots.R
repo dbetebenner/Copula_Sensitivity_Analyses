@@ -1011,7 +1011,8 @@ plot_group_bucket_stability <- function(
   comparisons = ALL_COMPARISONS,
   levels = c("school", "district"),
   n_buckets = c(3, 5, 10),
-  title = "Classification Accuracy/Precision: Group-Level Mean SGPc Agreement"
+  agg_method = "mean",
+  title = NULL
 ) {
   
   require(ggplot2)
@@ -1025,10 +1026,18 @@ plot_group_bucket_stability <- function(
     return(ggplot() + theme_void() + ggtitle("Panel D2: No group-level bucket data"))
   }
   
-  # Filter to Overall stratum, requested levels and K values
+  # Derive labels from agg_method
+  agg_label <- if (agg_method == "mean") "Mean SGPc" else "Median SGPc"
+  if (is.null(title)) {
+    title <- paste0("Classification Accuracy/Precision: Group-Level ", agg_label, " Agreement")
+  }
+  selected_agg <- agg_method
+
+  # Filter to Overall stratum, requested levels, K values, and selected aggregation method
   plot_dt <- gbs[stratum == "Overall" &
                  level %in% levels &
-                 n_buckets %in% n_buckets]
+                 n_buckets %in% n_buckets &
+                 agg_method == selected_agg]
   
   # Filter to requested comparisons
   available <- intersect(comparisons, unique(plot_dt$comparison))
@@ -1042,8 +1051,12 @@ plot_group_bucket_stability <- function(
   plot_dt[, comparison := factor(comparison,
     levels = intersect(ACCURACY_COMPARISON_ORDER, unique(comparison)))]
   
-  # Pretty labels for facets
-  bucket_labels <- c("3" = "Mean SGPc Terciles (K=3)", "5" = "Mean SGPc Quintiles (K=5)", "10" = "Mean SGPc Deciles (K=10)")
+  # Pretty labels for facets (reflect chosen aggregation method)
+  bucket_labels <- c(
+    "3"  = paste0(agg_label, " Terciles (K=3)"),
+    "5"  = paste0(agg_label, " Quintiles (K=5)"),
+    "10" = paste0(agg_label, " Deciles (K=10)")
+  )
   plot_dt[, bucket_label := factor(
     bucket_labels[as.character(n_buckets)],
     levels = bucket_labels[as.character(sort(unique(n_buckets)))]
@@ -1105,7 +1118,7 @@ plot_group_bucket_stability <- function(
     coord_cartesian(ylim = c(-0.01, 1.01), clip = "off") +
     labs(
       title = title,
-      subtitle = "Do school/district mean SGPc categories change when the copula model changes?\nRows: K=3/5/10 | Columns: School/District | \u03ba = Cohen\u2019s weighted kappa (linear/quadratic weights)",
+      subtitle = paste0("Do school/district ", tolower(agg_label), " categories change when the copula model changes?\nRows: K=3/5/10 | Columns: School/District | \u03ba = Cohen\u2019s weighted kappa (linear/quadratic weights)"),
       caption = paste0(
         "School (n\u226510 students) | District (n\u226530 students) | ",
         "X-axis label colour: purple = accuracy (vs empirical) | green = classification consistency"
@@ -1130,7 +1143,7 @@ plot_group_bucket_stability <- function(
   # Add dual kappa annotation below x-axis (bottom row only, between bars and comparison labels)
   if ("kappa_w" %in% names(plot_dt)) {
     kappa_anno_d2 <- unique(plot_dt[, .(comparison, level_label, bucket_label, kappa_w, kappa_w_quad)])
-    kappa_anno_d2 <- kappa_anno_d2[!is.na(kappa_w) & bucket_label == "Mean SGPc Deciles (K=10)"]
+    kappa_anno_d2 <- kappa_anno_d2[!is.na(kappa_w) & bucket_label == bucket_labels[["10"]]]
     if (nrow(kappa_anno_d2) > 0) {
       p <- p + geom_text(
         data = kappa_anno_d2,
@@ -1146,8 +1159,8 @@ plot_group_bucket_stability <- function(
   }
   
   # Add manually coloured x-axis labels via geom_text
-  # Only show for bottom row (Mean SGPc Deciles K=10)
-  xaxis_label_data_bottom <- xaxis_label_data_d2[bucket_label == "Mean SGPc Deciles (K=10)"]
+  # Only show for bottom row (Deciles K=10)
+  xaxis_label_data_bottom <- xaxis_label_data_d2[bucket_label == bucket_labels[["10"]]]
   
   p <- p + geom_text(
     data = xaxis_label_data_bottom,
@@ -1213,11 +1226,14 @@ plot_prior_quartile_sensitivity <- function(
     n = .N
   ), by = .(comparison, prior_quartile)]
   
-  # Create violin + boxplot
+  # Create violin + boxplot (adjust = 2 smooths KDE over integer-valued deltas)
+  # dodge width > violin width creates visible gaps between adjacent violins
+  dodge_w <- 0.9
   p <- ggplot(raw_data, aes(x = prior_quartile, y = delta, fill = comparison)) +
-    geom_violin(alpha = 0.5, position = position_dodge(width = 0.8), scale = "width") +
+    geom_violin(alpha = 0.5, position = position_dodge(width = dodge_w), scale = "width",
+                adjust = 2, width = 0.78) +
     stat_summary(fun = "median", geom = "point", size = 1.5, color = "black",
-                 position = position_dodge(width = 0.8)) +
+                 position = position_dodge(width = dodge_w)) +
     geom_hline(yintercept = c(5, 10), linetype = "dashed", color = "gray50", linewidth = 0.5) +
     scale_fill_manual(values = COMPARISON_COLORS[comparisons], name = "Comparison") +
     scale_y_continuous(
@@ -1922,14 +1938,22 @@ plot_diag_quartile_focused <- function(
   if (length(available) == 0) stop("No valid comparisons in quartile data.")
   raw_data <- raw_data[comparison %in% available]
 
+  # Downsample for violin KDE performance (KDE converges well below 100K points)
+  MAX_PER_GROUP <- 100000
+  raw_data <- raw_data[, {
+    if (.N > MAX_PER_GROUP) .SD[sample(.N, MAX_PER_GROUP)] else .SD
+  }, by = .(comparison, prior_quartile)]
+
   # Apply accuracy-first ordering
- raw_data[, comparison := factor(comparison,
+  raw_data[, comparison := factor(comparison,
     levels = intersect(ACCURACY_COMPARISON_ORDER, unique(comparison)))]
 
   comp_cols <- COMPARISON_COLORS[levels(raw_data$comparison)]
 
+  # adjust = 2 smooths KDE over integer-valued deltas
   p <- ggplot(raw_data, aes(x = prior_quartile, y = delta, fill = comparison)) +
-    geom_violin(alpha = 0.5, position = position_dodge(width = 0.8), scale = "width") +
+    geom_violin(alpha = 0.5, position = position_dodge(width = 0.8), scale = "width",
+                adjust = 2) +
     stat_summary(fun = "median", geom = "point", size = 1.5, color = "black",
                  position = position_dodge(width = 0.8)) +
     geom_hline(yintercept = c(5, 10), linetype = "dashed", color = "gray50",

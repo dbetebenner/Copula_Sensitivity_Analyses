@@ -205,18 +205,23 @@ save_plot_multi(plots$panel_e, "panel_e_decile_stability", VIZ_DIR,
                 height = PANEL_CLASSIFICATION_PAGE_HEIGHT)
 cat("\n")
 
-# --- Panel D2: Group-level bucket stability (School + District) ---
+# --- Panel D2: Group-level bucket stability (School + District), mean & median ---
 if (!skip_panel_b) {
-  cat("Generating Panel D2 (Group-level bucket stability: K=3,5,10)...\n")
-  tryCatch({
-    plots$panel_d2 <- plot_group_bucket_stability(enhanced_stats)
-    save_plot_multi(plots$panel_d2, "panel_d2_group_bucket_stability", VIZ_DIR, 
-                    width = PANEL_CLASSIFICATION_PAGE_WIDTH,
-                    height = PANEL_CLASSIFICATION_PAGE_HEIGHT)
-    cat("\n")
-  }, error = function(e) {
-    cat(sprintf("  WARNING: Panel D2 failed: %s\n\n", e$message))
-  })
+  for (agg_m in c("mean", "median")) {
+    agg_lbl <- if (agg_m == "mean") "Mean SGPc" else "Median SGPc"
+    cat(sprintf("Generating Panel D2 [%s] (Group-level bucket stability: K=3,5,10)...\n", agg_lbl))
+    tryCatch({
+      plots[[paste0("panel_d2_", agg_m)]] <- plot_group_bucket_stability(
+        enhanced_stats, agg_method = agg_m)
+      save_plot_multi(plots[[paste0("panel_d2_", agg_m)]],
+                      paste0("panel_d2_group_bucket_stability_", agg_m), VIZ_DIR,
+                      width = PANEL_CLASSIFICATION_PAGE_WIDTH,
+                      height = PANEL_CLASSIFICATION_PAGE_HEIGHT)
+      cat("\n")
+    }, error = function(e) {
+      cat(sprintf("  WARNING: Panel D2 [%s] failed: %s\n\n", agg_lbl, e$message))
+    })
+  }
 } else {
   cat("Skipping Panel D2 (requires group identifiers)\n\n")
 }
@@ -580,8 +585,11 @@ panel_files["panel_d"] <- "panel_d_rank_agreement.pdf"
 panel_files["panel_e"] <- "panel_e_decile_stability.pdf"
 
 # New panels (may not exist if they failed)
-if (!is.null(plots$panel_d2)) {
-  panel_files["panel_d2"] <- "panel_d2_group_bucket_stability.pdf"
+if (!is.null(plots$panel_d2_mean)) {
+  panel_files["panel_d2_mean"] <- "panel_d2_group_bucket_stability_mean.pdf"
+}
+if (!is.null(plots$panel_d2_median)) {
+  panel_files["panel_d2_median"] <- "panel_d2_group_bucket_stability_median.pdf"
 }
 if (!is.null(plots$panel_f)) {
   panel_files["panel_f"] <- "panel_f_prior_quartile.pdf"

@@ -6,7 +6,7 @@
 ################################################################################
 
 # Current EC2 instance IP address
-EC2_IP="54.81.74.223"
+EC2_IP="EC2_IP=54.235.242.211"
 
 # SSH key location (default: ~/.ec2/SGP.pem)
 KEY_PATH="$HOME/.ec2/SGP.pem"
