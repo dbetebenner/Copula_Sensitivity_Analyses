@@ -154,19 +154,27 @@ save_plot_multi(plots$panel_a, "panel_a_individual_ecdf", VIZ_DIR,
                 width = PLOT_WIDTH, height = PLOT_HEIGHT)
 cat("\n")
 
-# --- Panel B: School-level ECDF (with inset) ---
+# --- Panel B: School-level ECDF (with inset) -- mean and median ---
 if (!skip_panel_b) {
-  cat("Generating Panel B (School-level ECDF with sqrt(n) inset)...\n")
-  plots$panel_b <- plot_group_ecdf(enhanced_stats, add_inset = TRUE, group_level = "school")
-  save_plot_multi(plots$panel_b, "panel_b_school_ecdf", VIZ_DIR, 
-                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
-  cat("\n")
-  # --- Panel B2: District-level ECDF ---
-  cat("Generating Panel B2 (District-level ECDF)...\n")
-  plots$panel_b2 <- plot_group_ecdf(enhanced_stats, add_inset = FALSE, group_level = "district")
-  save_plot_multi(plots$panel_b2, "panel_b2_district_ecdf", VIZ_DIR, 
-                  width = PLOT_WIDTH, height = PLOT_HEIGHT)
-  cat("\n")
+  for (agg_m in c("mean", "median")) {
+    agg_lbl <- if (agg_m == "mean") "Mean SGPc" else "Median SGPc"
+    
+    cat(sprintf("Generating Panel B (School-level ECDF, %s, with sqrt(n) inset)...\n", agg_lbl))
+    plots[[paste0("panel_b_", agg_m)]] <- plot_group_ecdf(enhanced_stats, add_inset = TRUE,
+                                                           group_level = "school", agg_method = agg_m)
+    save_plot_multi(plots[[paste0("panel_b_", agg_m)]],
+                    paste0("panel_b_school_ecdf_", agg_m), VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    cat("\n")
+    
+    cat(sprintf("Generating Panel B2 (District-level ECDF, %s)...\n", agg_lbl))
+    plots[[paste0("panel_b2_", agg_m)]] <- plot_group_ecdf(enhanced_stats, add_inset = FALSE,
+                                                            group_level = "district", agg_method = agg_m)
+    save_plot_multi(plots[[paste0("panel_b2_", agg_m)]],
+                    paste0("panel_b2_district_ecdf_", agg_m), VIZ_DIR,
+                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    cat("\n")
+  }
 } else {
   cat("Skipping Panel B / B2 (no group identifiers available)\n\n")
 }
@@ -235,17 +243,21 @@ tryCatch({
   cat(sprintf("  WARNING: Panel G failed: %s\n\n", e$message))
 })
 
-# --- Panel H: Multi-level aggregation hierarchy ---
+# --- Panel H: Multi-level aggregation hierarchy -- mean and median ---
 if (!skip_panel_b) {
-  cat("Generating Panel H (Multi-level aggregation: Individual -> School -> District)...\n")
-  tryCatch({
-    plots$panel_h <- plot_multilevel_aggregation(enhanced_stats)
-    save_plot_multi(plots$panel_h, "panel_h_multilevel_aggregation", VIZ_DIR, 
-                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
-    cat("\n")
-  }, error = function(e) {
-    cat(sprintf("  WARNING: Panel H failed: %s\n\n", e$message))
-  })
+  for (agg_m in c("mean", "median")) {
+    agg_lbl <- if (agg_m == "mean") "Mean SGPc" else "Median SGPc"
+    cat(sprintf("Generating Panel H (Multi-level aggregation, %s: Individual -> School -> District)...\n", agg_lbl))
+    tryCatch({
+      plots[[paste0("panel_h_", agg_m)]] <- plot_multilevel_aggregation(enhanced_stats, agg_method = agg_m)
+      save_plot_multi(plots[[paste0("panel_h_", agg_m)]],
+                      paste0("panel_h_multilevel_aggregation_", agg_m), VIZ_DIR,
+                      width = PLOT_WIDTH, height = PLOT_HEIGHT)
+      cat("\n")
+    }, error = function(e) {
+      cat(sprintf("  WARNING: Panel H (%s) failed: %s\n\n", agg_lbl, e$message))
+    })
+  }
 } else {
   cat("Skipping Panel H (requires group identifiers for multi-level)\n\n")
 }
@@ -548,8 +560,10 @@ panel_files <- c()
 panel_files["panel_a"] <- "panel_a_individual_ecdf.pdf"
 
 if (!skip_panel_b) {
-  panel_files["panel_b"] <- "panel_b_school_ecdf.pdf"
-  panel_files["panel_b2"] <- "panel_b2_district_ecdf.pdf"
+  panel_files["panel_b_mean"]    <- "panel_b_school_ecdf_mean.pdf"
+  panel_files["panel_b_median"]  <- "panel_b_school_ecdf_median.pdf"
+  panel_files["panel_b2_mean"]   <- "panel_b2_district_ecdf_mean.pdf"
+  panel_files["panel_b2_median"] <- "panel_b2_district_ecdf_median.pdf"
 } else {
   # Create placeholder
   pdf(file.path(VIZ_DIR, "panel_b_placeholder.pdf"), width = 10, height = 7)
@@ -575,8 +589,11 @@ if (!is.null(plots$panel_f)) {
 if (!is.null(plots$panel_g)) {
   panel_files["panel_g"] <- "panel_g_cross_dataset.pdf"
 }
-if (!is.null(plots$panel_h)) {
-  panel_files["panel_h"] <- "panel_h_multilevel_aggregation.pdf"
+if (!is.null(plots$panel_h_mean)) {
+  panel_files["panel_h_mean"]   <- "panel_h_multilevel_aggregation_mean.pdf"
+}
+if (!is.null(plots$panel_h_median)) {
+  panel_files["panel_h_median"] <- "panel_h_multilevel_aggregation_median.pdf"
 }
 if (!is.null(plots$panel_k)) {
   panel_files["panel_k"] <- "panel_k_group_rank_stability.pdf"

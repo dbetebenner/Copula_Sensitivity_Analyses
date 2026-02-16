@@ -172,52 +172,75 @@ compute_enhanced_statistics <- function(
       }
       
       # Aggregate by school (include dataset_id to avoid cross-dataset collision)
+      # Compute both mean and median SGPc for each school
       by_cols <- if (has_dataset_id) c("SCHOOL_NUMBER", "dataset_id", "condition_id") else c("SCHOOL_NUMBER", "condition_id")
-      group_means <- sgpc_data[!is.na(SCHOOL_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean_var1 = mean(get(var1), na.rm = TRUE),
-        mean_var2 = mean(get(var2), na.rm = TRUE),
+      group_agg <- sgpc_data[!is.na(SCHOOL_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
+        mean1  = mean(get(var1), na.rm = TRUE),
+        mean2  = mean(get(var2), na.rm = TRUE),
+        median1 = median(get(var1), na.rm = TRUE),
+        median2 = median(get(var2), na.rm = TRUE),
         n = .N
       ), by = by_cols]
       
-      setnames(group_means, c("mean_var1", "mean_var2"), c("mean1", "mean2"))
-      group_means[, delta_group := abs(mean1 - mean2)]
+      group_agg[, delta_group_mean   := abs(mean1 - mean2)]
+      group_agg[, delta_group_median := abs(median1 - median2)]
       
       # Filter: n >= 10 for stability
-      group_means_filtered <- group_means[n >= 10]
+      group_agg_filtered <- group_agg[n >= 10]
       
-      if (nrow(group_means_filtered) > 0) {
-        group_quantiles <- quantile(group_means_filtered$delta_group, 
-                                     probs = c(0.50, 0.90, 0.95), na.rm = TRUE)
-        
-        delta_sorted <- sort(group_means_filtered$delta_group)
-        group_ecdf_data <- data.table(
+      if (nrow(group_agg_filtered) > 0) {
+        # Mean-based ECDF
+        q_mean <- quantile(group_agg_filtered$delta_group_mean,
+                           probs = c(0.50, 0.90, 0.95), na.rm = TRUE)
+        ds_mean <- sort(group_agg_filtered$delta_group_mean)
+        ecdf_mean <- data.table(
           comparison = comp_name,
-          delta_group = delta_sorted,
-          cumulative_pct = seq_along(delta_sorted) / length(delta_sorted)
+          delta_group = ds_mean,
+          cumulative_pct = seq_along(ds_mean) / length(ds_mean)
+        )
+        
+        # Median-based ECDF
+        q_median <- quantile(group_agg_filtered$delta_group_median,
+                             probs = c(0.50, 0.90, 0.95), na.rm = TRUE)
+        ds_median <- sort(group_agg_filtered$delta_group_median)
+        ecdf_median <- data.table(
+          comparison = comp_name,
+          delta_group = ds_median,
+          cumulative_pct = seq_along(ds_median) / length(ds_median)
         )
         
         group_stats[[comp_name]] <- list(
           comparison = comp_name,
           var1 = var1, var2 = var2,
-          n_groups = nrow(group_means_filtered),
-          median_group_delta = group_quantiles["50%"],
-          q90_group_delta = group_quantiles["90%"],
-          q95_group_delta = group_quantiles["95%"],
-          group_ecdf_data = group_ecdf_data,
-          group_means_full = group_means_filtered
+          n_groups = nrow(group_agg_filtered),
+          median_group_delta_mean   = q_mean["50%"],
+          q90_group_delta_mean      = q_mean["90%"],
+          q95_group_delta_mean      = q_mean["95%"],
+          median_group_delta_median = q_median["50%"],
+          q90_group_delta_median    = q_median["90%"],
+          q95_group_delta_median    = q_median["95%"],
+          group_ecdf_data_mean   = ecdf_mean,
+          group_ecdf_data_median = ecdf_median,
+          group_ecdf_data = ecdf_mean,
+          group_agg_full = group_agg_filtered
         )
         
-        cat(sprintf("    %s: %d schools, median Delta=%.1f (vs individual %.1f)\n",
-                    comp_name, nrow(group_means_filtered),
-                    group_quantiles["50%"], individual_stats[[comp_name]]$median))
+        cat(sprintf("    %s: %d schools, median Delta (mean agg)=%.1f, median Delta (median agg)=%.1f (vs individual %.1f)\n",
+                    comp_name, nrow(group_agg_filtered),
+                    q_mean["50%"], q_median["50%"],
+                    individual_stats[[comp_name]]$median))
       }
     }
     
-    # Combine all school ECDF data
+    # Combine all school ECDF data (both mean-based and median-based)
     if (length(group_stats) > 0) {
-      all_group_ecdf_data <- rbindlist(lapply(group_stats, function(x) x$group_ecdf_data))
+      all_group_ecdf_data       <- rbindlist(lapply(group_stats, function(x) x$group_ecdf_data_mean))
+      all_group_ecdf_data_mean  <- all_group_ecdf_data
+      all_group_ecdf_data_median <- rbindlist(lapply(group_stats, function(x) x$group_ecdf_data_median))
     } else {
-      all_group_ecdf_data <- data.table()
+      all_group_ecdf_data        <- data.table()
+      all_group_ecdf_data_mean   <- data.table()
+      all_group_ecdf_data_median <- data.table()
     }
     
     # --- B1b: Group-size stratification (sqrt(n) effect) ---
@@ -227,7 +250,7 @@ compute_enhanced_statistics <- function(
     # (pattern is the same across comparisons, so one representative suffices)
     for (comp_name in names(comparison_pairs)) {
       if (!is.null(group_stats[[comp_name]])) {
-        gm <- group_stats[[comp_name]]$group_means_full
+        gm <- group_stats[[comp_name]]$group_agg_full
         
         # Bin by group size
         gm[, size_bin := cut(n, breaks = c(10, 30, 100, 300, Inf),
@@ -236,15 +259,17 @@ compute_enhanced_statistics <- function(
         
         size_summary <- gm[, .(
           n_groups = .N,
-          median_delta = median(delta_group, na.rm = TRUE),
-          q90_delta = quantile(delta_group, 0.90, na.rm = TRUE),
+          median_delta_mean   = median(delta_group_mean, na.rm = TRUE),
+          q90_delta_mean      = quantile(delta_group_mean, 0.90, na.rm = TRUE),
+          median_delta_median = median(delta_group_median, na.rm = TRUE),
+          q90_delta_median    = quantile(delta_group_median, 0.90, na.rm = TRUE),
           mean_n = mean(n)
         ), by = size_bin]
         
         group_size_analysis[[comp_name]] <- list(
           comparison = comp_name,
           size_summary = size_summary,
-          raw_data = gm[, .(SCHOOL_NUMBER, condition_id, n, delta_group, size_bin)]
+          raw_data = gm[, .(SCHOOL_NUMBER, condition_id, n, delta_group_mean, delta_group_median, size_bin)]
         )
       }
     }
@@ -273,54 +298,76 @@ compute_enhanced_statistics <- function(
       }
       
       # Aggregate by district (include dataset_id to avoid cross-dataset collision)
+      # Compute both mean and median SGPc for each district
       dist_by_cols <- if (has_dataset_id) c("DISTRICT_NUMBER", "dataset_id", "condition_id") else c("DISTRICT_NUMBER", "condition_id")
-      dist_means <- sgpc_data[!is.na(DISTRICT_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean_var1 = mean(get(var1), na.rm = TRUE),
-        mean_var2 = mean(get(var2), na.rm = TRUE),
+      dist_agg <- sgpc_data[!is.na(DISTRICT_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
+        mean1   = mean(get(var1), na.rm = TRUE),
+        mean2   = mean(get(var2), na.rm = TRUE),
+        median1 = median(get(var1), na.rm = TRUE),
+        median2 = median(get(var2), na.rm = TRUE),
         n = .N
       ), by = dist_by_cols]
       
-      setnames(dist_means, c("mean_var1", "mean_var2"), c("mean1", "mean2"))
-      dist_means[, delta_group := abs(mean1 - mean2)]
+      dist_agg[, delta_group_mean   := abs(mean1 - mean2)]
+      dist_agg[, delta_group_median := abs(median1 - median2)]
       
       # Filter: n >= 30 for district-level stability
-      dist_means_filtered <- dist_means[n >= 30]
+      dist_agg_filtered <- dist_agg[n >= 30]
       
-      if (nrow(dist_means_filtered) > 0) {
-        dist_quantiles <- quantile(dist_means_filtered$delta_group,
-                                    probs = c(0.50, 0.90, 0.95), na.rm = TRUE)
-        
-        delta_sorted <- sort(dist_means_filtered$delta_group)
-        dist_ecdf_data <- data.table(
+      if (nrow(dist_agg_filtered) > 0) {
+        # Mean-based ECDF
+        dq_mean <- quantile(dist_agg_filtered$delta_group_mean,
+                            probs = c(0.50, 0.90, 0.95), na.rm = TRUE)
+        ds_mean <- sort(dist_agg_filtered$delta_group_mean)
+        dist_ecdf_mean <- data.table(
           comparison = comp_name,
-          delta_group = delta_sorted,
-          cumulative_pct = seq_along(delta_sorted) / length(delta_sorted)
+          delta_group = ds_mean,
+          cumulative_pct = seq_along(ds_mean) / length(ds_mean)
+        )
+        
+        # Median-based ECDF
+        dq_median <- quantile(dist_agg_filtered$delta_group_median,
+                              probs = c(0.50, 0.90, 0.95), na.rm = TRUE)
+        ds_median <- sort(dist_agg_filtered$delta_group_median)
+        dist_ecdf_median <- data.table(
+          comparison = comp_name,
+          delta_group = ds_median,
+          cumulative_pct = seq_along(ds_median) / length(ds_median)
         )
         
         district_stats[[comp_name]] <- list(
           comparison = comp_name,
           var1 = var1, var2 = var2,
-          n_groups = nrow(dist_means_filtered),
-          median_group_delta = dist_quantiles["50%"],
-          q90_group_delta = dist_quantiles["90%"],
-          q95_group_delta = dist_quantiles["95%"],
-          group_ecdf_data = dist_ecdf_data,
-          group_means_full = dist_means_filtered
+          n_groups = nrow(dist_agg_filtered),
+          median_group_delta_mean   = dq_mean["50%"],
+          q90_group_delta_mean      = dq_mean["90%"],
+          q95_group_delta_mean      = dq_mean["95%"],
+          median_group_delta_median = dq_median["50%"],
+          q90_group_delta_median    = dq_median["90%"],
+          q95_group_delta_median    = dq_median["95%"],
+          group_ecdf_data_mean   = dist_ecdf_mean,
+          group_ecdf_data_median = dist_ecdf_median,
+          group_ecdf_data = dist_ecdf_mean,
+          group_agg_full = dist_agg_filtered
         )
         
-        cat(sprintf("    %s: %d districts, median Delta=%.1f (vs school %.1f, individual %.1f)\n",
-                    comp_name, nrow(dist_means_filtered),
-                    dist_quantiles["50%"],
-                    if (!is.null(group_stats[[comp_name]])) group_stats[[comp_name]]$median_group_delta else NA,
+        cat(sprintf("    %s: %d districts, median Delta (mean agg)=%.1f, median Delta (median agg)=%.1f (vs school %.1f, individual %.1f)\n",
+                    comp_name, nrow(dist_agg_filtered),
+                    dq_mean["50%"], dq_median["50%"],
+                    if (!is.null(group_stats[[comp_name]])) group_stats[[comp_name]]$median_group_delta_mean else NA,
                     individual_stats[[comp_name]]$median))
       }
     }
     
-    # Combine all district ECDF data
+    # Combine all district ECDF data (both mean-based and median-based)
     if (length(district_stats) > 0) {
-      all_district_ecdf_data <- rbindlist(lapply(district_stats, function(x) x$group_ecdf_data))
+      all_district_ecdf_data       <- rbindlist(lapply(district_stats, function(x) x$group_ecdf_data_mean))
+      all_district_ecdf_data_mean  <- all_district_ecdf_data
+      all_district_ecdf_data_median <- rbindlist(lapply(district_stats, function(x) x$group_ecdf_data_median))
     } else {
-      all_district_ecdf_data <- data.table()
+      all_district_ecdf_data        <- data.table()
+      all_district_ecdf_data_mean   <- data.table()
+      all_district_ecdf_data_median <- data.table()
     }
   }
   
@@ -375,6 +422,7 @@ compute_enhanced_statistics <- function(
   group_rank_agreement_list <- list()
   
   # Helper: compute group-level Spearman rho for a given grouping variable
+  # Returns rho for both mean-based and median-based group aggregations
   compute_group_rank_rho <- function(dt, group_var, min_n, comparison_pairs, level_label) {
     results <- list()
     # Include dataset_id in grouping when available
@@ -385,31 +433,39 @@ compute_enhanced_statistics <- function(
       
       if (all(is.na(dt[[var1]])) || all(is.na(dt[[var2]]))) next
       
-      # Aggregate to group means (include dataset_id to avoid cross-dataset collision)
+      # Aggregate to group means AND medians
       group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean1 = mean(get(var1), na.rm = TRUE),
-        mean2 = mean(get(var2), na.rm = TRUE),
+        mean1   = mean(get(var1), na.rm = TRUE),
+        mean2   = mean(get(var2), na.rm = TRUE),
+        median1 = median(get(var1), na.rm = TRUE),
+        median2 = median(get(var2), na.rm = TRUE),
         n = .N
       ), by = grp_by]
       
       group_agg <- group_agg[n >= min_n]
       
-      # For each condition, compute Spearman rho of group rankings
+      # For each condition, compute Spearman rho of group rankings (mean-based and median-based)
       rho_by_cols <- if ("dataset_id" %in% names(group_agg)) c("dataset_id", "condition_id", "year_span", "content_area") else c("condition_id", "year_span", "content_area")
       rho_by_cond <- group_agg[, {
         if (.N >= 5) {
           list(
-            rho = tryCatch(
+            rho_mean = tryCatch(
               cor(mean1, mean2, method = "spearman", use = "complete.obs"),
+              error = function(e) NA_real_
+            ),
+            rho_median = tryCatch(
+              cor(median1, median2, method = "spearman", use = "complete.obs"),
               error = function(e) NA_real_
             ),
             n_groups = .N
           )
         } else {
-          list(rho = NA_real_, n_groups = .N)
+          list(rho_mean = NA_real_, rho_median = NA_real_, n_groups = .N)
         }
       }, by = rho_by_cols]
       
+      # Keep backward-compatible 'rho' column (mean-based)
+      rho_by_cond[, rho := rho_mean]
       rho_by_cond[, `:=`(comparison = comp_name, level = level_label)]
       results[[comp_name]] <- rho_by_cond
     }
@@ -616,6 +672,7 @@ compute_enhanced_statistics <- function(
   bucket_sizes <- c(3L, 5L, 10L)
   
   # Helper: compute bucket stability for a given grouping variable and K
+  # Computes both mean-based and median-based bucket assignments, tagged via agg_method column
   compute_bucket_stability <- function(dt, group_var, min_n, comparison_pairs, level_label, K) {
     results <- list()
     # Include dataset_id in grouping when available
@@ -626,10 +683,12 @@ compute_enhanced_statistics <- function(
       
       if (all(is.na(dt[[var1]])) || all(is.na(dt[[var2]]))) next
       
-      # Aggregate to group means (include dataset_id to avoid cross-dataset collision)
+      # Aggregate to group means AND medians
       group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean1 = mean(get(var1), na.rm = TRUE),
-        mean2 = mean(get(var2), na.rm = TRUE),
+        mean1   = mean(get(var1), na.rm = TRUE),
+        mean2   = mean(get(var2), na.rm = TRUE),
+        median1 = median(get(var1), na.rm = TRUE),
+        median2 = median(get(var2), na.rm = TRUE),
         n = .N
       ), by = bucket_grp_by]
       
@@ -637,68 +696,71 @@ compute_enhanced_statistics <- function(
       
       if (nrow(group_agg) == 0) next
       
-      # Within each condition, assign buckets based on each variant's mean
-      # Use quantile-based cuts so buckets are roughly equal-sized
       grp_bucket_by <- if ("dataset_id" %in% names(group_agg)) c("dataset_id", "condition_id") else "condition_id"
-      group_agg[, bucket1 := {
-        brks <- unique(quantile(mean1, probs = seq(0, 1, 1/K), na.rm = TRUE))
-        if (length(brks) < 2) rep(1L, .N)
-        else as.integer(cut(mean1, breaks = brks, include.lowest = TRUE))
-      }, by = grp_bucket_by]
       
-      group_agg[, bucket2 := {
-        brks <- unique(quantile(mean2, probs = seq(0, 1, 1/K), na.rm = TRUE))
-        if (length(brks) < 2) rep(1L, .N)
-        else as.integer(cut(mean2, breaks = brks, include.lowest = TRUE))
-      }, by = grp_bucket_by]
+      # Inner helper: assign buckets, compute stability for a given (val1, val2) pair
+      run_bucket_stability <- function(ga, v1_col, v2_col, method_label) {
+        ga_copy <- copy(ga)
+        ga_copy[, bucket1 := {
+          brks <- unique(quantile(get(v1_col), probs = seq(0, 1, 1/K), na.rm = TRUE))
+          if (length(brks) < 2) rep(1L, .N)
+          else as.integer(cut(get(v1_col), breaks = brks, include.lowest = TRUE))
+        }, by = grp_bucket_by]
+        
+        ga_copy[, bucket2 := {
+          brks <- unique(quantile(get(v2_col), probs = seq(0, 1, 1/K), na.rm = TRUE))
+          if (length(brks) < 2) rep(1L, .N)
+          else as.integer(cut(get(v2_col), breaks = brks, include.lowest = TRUE))
+        }, by = grp_bucket_by]
+        
+        ga_copy <- ga_copy[!is.na(bucket1) & !is.na(bucket2)]
+        if (nrow(ga_copy) == 0) return(NULL)
+        
+        ga_copy[, bucket_diff := abs(bucket1 - bucket2)]
+        
+        overall <- ga_copy[, .(
+          exact_match  = mean(bucket_diff == 0, na.rm = TRUE),
+          off_by_1     = mean(bucket_diff == 1, na.rm = TRUE),
+          off_by_2plus = mean(bucket_diff >= 2, na.rm = TRUE),
+          n_groups     = .N,
+          kappa_w      = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "linear"),
+          kappa_w_quad = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "quadratic")
+        )]
+        overall[, `:=`(comparison = comp_name, level = level_label,
+                       n_buckets = K, stratum = "Overall", agg_method = method_label)]
+        
+        by_year <- ga_copy[, .(
+          exact_match  = mean(bucket_diff == 0, na.rm = TRUE),
+          off_by_1     = mean(bucket_diff == 1, na.rm = TRUE),
+          off_by_2plus = mean(bucket_diff >= 2, na.rm = TRUE),
+          n_groups     = .N,
+          kappa_w      = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "linear"),
+          kappa_w_quad = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "quadratic")
+        ), by = year_span]
+        by_year[, `:=`(comparison = comp_name, level = level_label,
+                       n_buckets = K, stratum = paste0("Year_", year_span), agg_method = method_label)]
+        
+        by_content <- ga_copy[, .(
+          exact_match  = mean(bucket_diff == 0, na.rm = TRUE),
+          off_by_1     = mean(bucket_diff == 1, na.rm = TRUE),
+          off_by_2plus = mean(bucket_diff >= 2, na.rm = TRUE),
+          n_groups     = .N,
+          kappa_w      = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "linear"),
+          kappa_w_quad = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "quadratic")
+        ), by = content_area]
+        by_content[, `:=`(comparison = comp_name, level = level_label,
+                          n_buckets = K, stratum = content_area, agg_method = method_label)]
+        
+        out_cols <- c("comparison", "level", "n_buckets", "stratum", "agg_method",
+                      "exact_match", "off_by_1", "off_by_2plus", "n_groups", "kappa_w", "kappa_w_quad")
+        rbind(overall[, ..out_cols], by_year[, ..out_cols], by_content[, ..out_cols])
+      }
       
-      # Remove rows where bucket assignment failed
-      group_agg <- group_agg[!is.na(bucket1) & !is.na(bucket2)]
-      if (nrow(group_agg) == 0) next
+      res_mean   <- run_bucket_stability(group_agg, "mean1", "mean2", "mean")
+      res_median <- run_bucket_stability(group_agg, "median1", "median2", "median")
       
-      group_agg[, bucket_diff := abs(bucket1 - bucket2)]
-      
-      # Overall stability
-      overall <- group_agg[, .(
-        exact_match  = mean(bucket_diff == 0, na.rm = TRUE),
-        off_by_1     = mean(bucket_diff == 1, na.rm = TRUE),
-        off_by_2plus = mean(bucket_diff >= 2, na.rm = TRUE),
-        n_groups     = .N,
-        kappa_w      = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "linear"),
-        kappa_w_quad = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "quadratic")
-      )]
-      overall[, `:=`(comparison = comp_name, level = level_label,
-                     n_buckets = K, stratum = "Overall")]
-      
-      # By year_span
-      by_year <- group_agg[, .(
-        exact_match  = mean(bucket_diff == 0, na.rm = TRUE),
-        off_by_1     = mean(bucket_diff == 1, na.rm = TRUE),
-        off_by_2plus = mean(bucket_diff >= 2, na.rm = TRUE),
-        n_groups     = .N,
-        kappa_w      = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "linear"),
-        kappa_w_quad = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "quadratic")
-      ), by = year_span]
-      by_year[, `:=`(comparison = comp_name, level = level_label,
-                     n_buckets = K, stratum = paste0("Year_", year_span))]
-      
-      # By content_area
-      by_content <- group_agg[, .(
-        exact_match  = mean(bucket_diff == 0, na.rm = TRUE),
-        off_by_1     = mean(bucket_diff == 1, na.rm = TRUE),
-        off_by_2plus = mean(bucket_diff >= 2, na.rm = TRUE),
-        n_groups     = .N,
-        kappa_w      = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "linear"),
-        kappa_w_quad = compute_weighted_kappa(bucket1, bucket2, K = K, weights = "quadratic")
-      ), by = content_area]
-      by_content[, `:=`(comparison = comp_name, level = level_label,
-                        n_buckets = K, stratum = content_area)]
-      
-      results[[comp_name]] <- rbind(
-        overall[, .(comparison, level, n_buckets, stratum, exact_match, off_by_1, off_by_2plus, n_groups, kappa_w, kappa_w_quad)],
-        by_year[, .(comparison, level, n_buckets, stratum, exact_match, off_by_1, off_by_2plus, n_groups, kappa_w, kappa_w_quad)],
-        by_content[, .(comparison, level, n_buckets, stratum, exact_match, off_by_1, off_by_2plus, n_groups, kappa_w, kappa_w_quad)]
-      )
+      comp_results <- rbindlist(list(res_mean, res_median)[!sapply(list(res_mean, res_median), is.null)])
+      if (nrow(comp_results) > 0) results[[comp_name]] <- comp_results
     }
     
     if (length(results) > 0) rbindlist(results) else data.table()
@@ -971,20 +1033,24 @@ compute_enhanced_statistics <- function(
       by_comparison = individual_stats,
       all_ecdf_data = all_ecdf_data
     ),
-    # School-level group statistics
+    # School-level group statistics (mean- and median-based)
     group_stats = if (length(group_stats) > 0) {
       list(
         by_comparison = group_stats,
-        all_group_ecdf_data = all_group_ecdf_data
+        all_group_ecdf_data        = all_group_ecdf_data,
+        all_group_ecdf_data_mean   = all_group_ecdf_data_mean,
+        all_group_ecdf_data_median = all_group_ecdf_data_median
       )
     } else {
       NULL
     },
-    # District-level group statistics (TIMSS country / NAEP state surrogate)
+    # District-level group statistics (TIMSS country / NAEP state surrogate, mean- and median-based)
     district_stats = if (length(district_stats) > 0) {
       list(
         by_comparison = district_stats,
-        all_district_ecdf_data = all_district_ecdf_data
+        all_district_ecdf_data        = all_district_ecdf_data,
+        all_district_ecdf_data_mean   = all_district_ecdf_data_mean,
+        all_district_ecdf_data_median = all_district_ecdf_data_median
       )
     } else {
       NULL

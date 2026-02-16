@@ -6,7 +6,7 @@
 ###          will be operationally deployed for datasets like TIMSS/NAEP
 ###          where no empirical copula is available. This script answers:
 ###          "Is the current canonical the best single-parametric copula 
-###           we could offer for each year_span x content_area stratum?"
+###           we could offer for each grade_pair x content_area stratum?"
 ###
 ### Inputs:
 ###   - STEP_1: phase1_copula_family_comparison_all_datasets.csv
@@ -72,7 +72,7 @@ best_fits <- best_fits[, .SD[1], by = condition_id]
 
 cat(sprintf("Best-fit families identified for %d conditions\n", nrow(best_fits)))
 
-# Compute per-stratum family distributions
+# Compute per-stratum family distributions (grade_pair x content_area)
 stratum_family_dist <- best_fits[, .(
   n_conditions = .N,
   n_t = sum(family == "t"),
@@ -85,12 +85,12 @@ stratum_family_dist <- best_fits[, .(
   pct_gaussian = round(100 * mean(family == "gaussian"), 1),
   pct_gumbel = round(100 * mean(family == "gumbel"), 1),
   pct_clayton = round(100 * mean(family == "clayton"), 1)
-), by = .(year_span, content_area)]
+), by = .(grade_prior, grade_current, content_area)]
 
-setorder(stratum_family_dist, year_span, content_area)
+setorder(stratum_family_dist, grade_prior, grade_current, content_area)
 
 # Add stratum_id for downstream matching
-stratum_family_dist[, stratum_id := paste0("year_", year_span, "_", tolower(content_area))]
+stratum_family_dist[, stratum_id := paste0("G", grade_prior, "_G", grade_current, "_", tolower(content_area))]
 
 # Flag strata where t-copula wins less than 50%
 stratum_family_dist[, t_majority := pct_t >= 50]
@@ -185,29 +185,33 @@ cat(sprintf("\nCombined STEP_2 data: %s observations across %d conditions (from 
 #
 # CRITICAL: STEP_1 uses numeric condition_ids (12, 19, 20, ...),
 # while STEP_2 uses descriptive string IDs ("2024_G5_G6_MATHEMATICS", ...).
-# These will never match directly. Instead, construct the descriptive ID
-# from STEP_1 metadata columns (year_current, grade_prior, grade_current,
-# content_area) -- the same formula used by get_phase1_conditions() in
-# phase1_data_loader.R (lines 162-167).
+# These will never match directly. Instead, construct a grade_pair x content_area
+# key from STEP_1 metadata (grade_prior, grade_current, content_area). Calendar
+# year is excluded because conditions sharing the same grade transition and content
+# area have the same structural properties regardless of testing year.
 condition_best_family <- best_fits[, .(
-  descriptive_id = paste0(year_current, "_G", grade_prior, "_G", grade_current, "_", content_area),
+  grade_pair_id = paste0("G", grade_prior, "_G", grade_current, "_", content_area),
   best_family_aic = family
 )]
 
-# De-duplicate: a single descriptive_id could appear in multiple datasets
-# (same year/grade/content across dataset_1..4). Take majority family.
+# De-duplicate: multiple conditions (across years and datasets) may map to the
+# same grade_pair x content_area key. Take majority-vote for best family.
 condition_best_family <- condition_best_family[, .(
   best_family_aic = names(sort(table(best_family_aic), decreasing = TRUE))[1]
-), by = descriptive_id]
+), by = grade_pair_id]
 
-cat(sprintf("  STEP_1 best-family lookup: %d unique conditions\n", nrow(condition_best_family)))
-cat(sprintf("  Sample IDs: %s\n", paste(head(condition_best_family$descriptive_id, 3), collapse = ", ")))
-cat(sprintf("  STEP_2 sample IDs: %s\n", paste(head(unique(variants_dt$condition_id), 3), collapse = ", ")))
+cat(sprintf("  STEP_1 best-family lookup: %d unique grade_pair x content_area patterns\n", nrow(condition_best_family)))
+cat(sprintf("  Sample IDs: %s\n", paste(head(condition_best_family$grade_pair_id, 3), collapse = ", ")))
 
-# Merge on the descriptive condition_id that both sides now share
+# Derive matching key from STEP_2 condition_id by stripping the leading year
+# e.g., "2017_G3_G4_MATHEMATICS" -> "G3_G4_MATHEMATICS"
+variants_dt[, merge_key := sub("^[0-9]+_", "", condition_id)]
+cat(sprintf("  STEP_2 sample merge keys: %s\n", paste(head(unique(variants_dt$merge_key), 3), collapse = ", ")))
+
+# Merge on grade_pair_id
 variants_dt <- merge(
   variants_dt, condition_best_family,
-  by.x = "condition_id", by.y = "descriptive_id",
+  by.x = "merge_key", by.y = "grade_pair_id",
   all.x = TRUE
 )
 
@@ -260,10 +264,17 @@ condition_summary <- valid_obs[, .(
   cor_gaussian  = round(cor(sgpc_gaussian, sgpc_emp, use = "complete.obs"), 4)
 ), by = .(dataset_id, condition_id)]
 
-# Add stratum_id
-condition_summary[, stratum_id := paste0("year_", year_span, "_", tolower(content_area))]
+# Extract grade_prior / grade_current from condition_id for stratum grouping
+# condition_id has form "2017_G3_G4_MATHEMATICS" -> grade_prior=3, grade_current=4
+if (!"grade_prior" %in% names(condition_summary)) {
+  condition_summary[, grade_prior   := as.integer(sub("^[0-9]+_G([0-9]+)_G[0-9]+_.*", "\\1", condition_id))]
+  condition_summary[, grade_current := as.integer(sub("^[0-9]+_G[0-9]+_G([0-9]+)_.*", "\\1", condition_id))]
+}
 
-# --- Per-stratum aggregation ---
+# Add stratum_id (grade_pair x content_area)
+condition_summary[, stratum_id := paste0("G", grade_prior, "_G", grade_current, "_", tolower(content_area))]
+
+# --- Per-stratum aggregation (grade_pair x content_area) ---
 stratum_validation <- condition_summary[, .(
   n_conditions = .N,
   n_obs_total = sum(n_obs),
@@ -303,10 +314,10 @@ stratum_validation <- condition_summary[, .(
   cor_canonical_mean = round(mean(cor_canonical, na.rm = TRUE), 4),
   cor_best_mean = round(mean(cor_best, na.rm = TRUE), 4),
   cor_frank_mean = round(mean(cor_frank, na.rm = TRUE), 4)
-), by = .(year_span, content_area)]
+), by = .(grade_prior, grade_current, content_area)]
 
-setorder(stratum_validation, year_span, content_area)
-stratum_validation[, stratum_id := paste0("year_", year_span, "_", tolower(content_area))]
+setorder(stratum_validation, grade_prior, grade_current, content_area)
+stratum_validation[, stratum_id := paste0("G", grade_prior, "_G", grade_current, "_", tolower(content_area))]
 
 # Compute "canonical gap" -- how much worse is canonical than best-fit?
 stratum_validation[, canonical_gap := round(mad_canonical_mean - mad_best_mean, 2)]
@@ -447,7 +458,7 @@ report_lines <- c(
   "",
   "## Phase 1: Per-Stratum Family Distribution",
   "",
-  "The table below shows the AIC-best family distribution within each year_span x content_area stratum.",
+  "The table below shows the AIC-best family distribution within each grade_pair x content_area stratum.",
   "The canonical is t-copula for all strata; this phase checks whether t is actually the majority winner.",
   "",
   "| Stratum | n | %t | %frank | %gaussian | %gumbel | t majority? |",
@@ -567,7 +578,7 @@ if (is_validated) {
   report_lines <- c(report_lines,
     "### TIMSS Application (4-year Mathematics)",
     "",
-    "For TIMSS (year_span=4, content_area=MATHEMATICS), use the canonical parameters from:",
+    "For TIMSS (e.g., G4_G8 MATHEMATICS), use the canonical parameters from:",
     "`STEP_1_Family_Selection/results/dataset_all/canonical_copula_parameters.csv`",
     "",
     "```r",

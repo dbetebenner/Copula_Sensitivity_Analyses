@@ -361,12 +361,14 @@ plot_individual_ecdf <- function(
 ### PANEL B: Group-Level ECDF
 ############################################################################
 
-#' Plot group-level ECDF of absolute SGPc differences (school/district means)
+#' Plot group-level ECDF of absolute SGPc differences (school/district aggregation)
 #' 
 #' @param enhanced_stats List from compute_enhanced_statistics()
 #' @param comparisons Character vector of comparison names to include
 #' @param reference_lines Numeric vector of x-values for vertical reference lines
 #' @param add_inset Logical, whether to add scatter plot inset showing |Delta_g| vs n_g
+#' @param group_level "school" or "district"
+#' @param agg_method "mean" or "median" -- which aggregation statistic to use
 #' @param title Plot title
 #' @return ggplot object
 plot_group_ecdf <- function(
@@ -375,8 +377,12 @@ plot_group_ecdf <- function(
   reference_lines = c(5, 10),
   add_inset = TRUE,
   group_level = "school",
+  agg_method = "mean",
   title = NULL
 ) {
+  
+  agg_method <- match.arg(agg_method, c("mean", "median"))
+  agg_label <- if (agg_method == "mean") "Mean SGPc" else "Median SGPc"
   
   # Select the appropriate group stats based on level
   if (group_level == "district" && !is.null(enhanced_stats$district_stats)) {
@@ -393,17 +399,22 @@ plot_group_ecdf <- function(
   }
   
   if (is.null(title)) {
-    title <- sprintf("%s-Level Aggregation: Differences Shrink Dramatically", level_label)
+    title <- sprintf("%s-Level Aggregation (%s): Differences Shrink Dramatically", level_label, agg_label)
   }
   
-  # Filter to available comparisons
-  # For school level: stored in all_group_ecdf_data
-  # For district level: stored in all_district_ecdf_data
-  ecdf_data <- if (group_level == "district") {
-    grp$all_district_ecdf_data
+  # Select ECDF data based on agg_method and group_level
+  ecdf_key_mean   <- if (group_level == "district") "all_district_ecdf_data_mean"   else "all_group_ecdf_data_mean"
+  ecdf_key_median <- if (group_level == "district") "all_district_ecdf_data_median" else "all_group_ecdf_data_median"
+  ecdf_key_compat <- if (group_level == "district") "all_district_ecdf_data"        else "all_group_ecdf_data"
+  
+  ecdf_data <- if (agg_method == "median" && !is.null(grp[[ecdf_key_median]])) {
+    grp[[ecdf_key_median]]
+  } else if (!is.null(grp[[ecdf_key_mean]])) {
+    grp[[ecdf_key_mean]]
   } else {
-    grp$all_group_ecdf_data
+    grp[[ecdf_key_compat]]
   }
+  
   available <- intersect(comparisons, unique(ecdf_data$comparison))
   if (length(available) == 0) stop("No valid comparisons found in group data.")
   comparisons <- available
@@ -427,9 +438,14 @@ plot_group_ecdf <- function(
     if (!is.null(s)) s$median else NA_real_
   })
   
+  # Select group-level median of deltas for the chosen agg_method
+  delta_key <- if (agg_method == "median") "median_group_delta_median" else "median_group_delta_mean"
+  delta_key_compat <- "median_group_delta"
   grp_medians <- sapply(comparisons, function(comp) {
     s <- grp$by_comparison[[comp]]
-    if (!is.null(s)) s$median_group_delta else NA_real_
+    if (!is.null(s) && !is.null(s[[delta_key]])) s[[delta_key]]
+    else if (!is.null(s) && !is.null(s[[delta_key_compat]])) s[[delta_key_compat]]
+    else NA_real_
   })
   
   ind_medians <- ind_medians[!is.na(ind_medians)]
@@ -469,10 +485,10 @@ plot_group_ecdf <- function(
     ) +
     labs(
       title = title,
-      subtitle = sprintf("Does averaging students to %s level wash out copula-choice differences?\nAggregation sharply reduces sensitivity | %s",
-                        tolower(level_label), comparison_text),
-      caption = sprintf("%ss with >= %s students | Total groups: ~%s\n(%ss as surrogates for TIMSS countries / NAEP states)",
-                       level_label, min_n_label, n_groups_str, level_label)
+      subtitle = sprintf("Aggregation via %s | Does averaging students to %s level wash out copula-choice differences?\nAggregation sharply reduces sensitivity | %s",
+                        agg_label, tolower(level_label), comparison_text),
+      caption = sprintf("%ss with >= %s students | Total groups: ~%s | Aggregation: %s\n(%ss as surrogates for TIMSS countries / NAEP states)",
+                       level_label, min_n_label, n_groups_str, agg_label, level_label)
     ) +
     coord_cartesian(clip = "off") +
     theme_publication() +
@@ -507,13 +523,22 @@ plot_group_ecdf <- function(
     }
     
     if (length(inset_data_list) > 0) {
-      inset_data <- rbindlist(inset_data_list)
+      inset_data <- rbindlist(inset_data_list, fill = TRUE)
+      # Select appropriate delta column for the chosen agg_method
+      delta_col_inset <- if (agg_method == "median" && "delta_group_median" %in% names(inset_data)) {
+        "delta_group_median"
+      } else if ("delta_group_mean" %in% names(inset_data)) {
+        "delta_group_mean"
+      } else {
+        "delta_group"
+      }
+      if (!delta_col_inset %in% names(inset_data)) inset_data[, delta_group := delta_group_mean]
       # Use just a representative comparison for the inset
       rep_comp <- intersect(c("Emp-Best", "Emp-Canonical"), comparisons)
       if (length(rep_comp) > 0) {
         inset_data <- inset_data[comparison == rep_comp[1]]
         
-        p_inset <- ggplot(inset_data, aes(x = n, y = delta_group)) +
+        p_inset <- ggplot(inset_data, aes(x = n, y = get(delta_col_inset))) +
           geom_point(alpha = 0.2, size = 0.5, color = "gray40") +
           geom_smooth(method = "loess", color = COMPARISON_COLORS[rep_comp[1]], se = FALSE, linewidth = 1) +
           scale_x_log10(name = "Group size (n)", breaks = c(10, 30, 100, 300, 1000)) +
@@ -1327,6 +1352,7 @@ plot_cross_dataset_comparison <- function(
 #' 
 #' @param enhanced_stats List from compute_enhanced_statistics()
 #' @param comparisons Character vector of comparison names (subset recommended)
+#' @param agg_method "mean" or "median" -- which group aggregation statistic
 #' @param title Plot title
 #' @return ggplot object
 plot_multilevel_aggregation <- function(
@@ -1336,13 +1362,20 @@ plot_multilevel_aggregation <- function(
     "Empirical \u2013 Gaussian",
     "Empirical \u2013 Comonotonic"
   ),
-  title = "Multi-Level Aggregation: Individual to School to District"
+  agg_method = "mean",
+  title = NULL
 ) {
+  
+  agg_method <- match.arg(agg_method, c("mean", "median"))
+  agg_label <- if (agg_method == "mean") "Mean SGPc" else "Median SGPc"
+  if (is.null(title)) {
+    title <- sprintf("Multi-Level Aggregation (%s): Individual to School to District", agg_label)
+  }
   
   # Build combined ECDF data across levels
   ecdf_list <- list()
   
-  # Individual level
+  # Individual level (always the same -- raw student-level values, not aggregated)
   if (!is.null(enhanced_stats$individual_stats$all_ecdf_data)) {
     ind_ecdf <- enhanced_stats$individual_stats$all_ecdf_data
     available_ind <- intersect(comparisons, unique(ind_ecdf$comparison))
@@ -1350,18 +1383,19 @@ plot_multilevel_aggregation <- function(
       ind_ecdf <- ind_ecdf[comparison %in% available_ind]
       ind_ecdf <- copy(ind_ecdf)
       ind_ecdf[, level := "Individual"]
-      # Standardize column name: individual ECDF stores as "delta"
       if ("delta" %in% names(ind_ecdf)) setnames(ind_ecdf, "delta", "abs_diff")
       ecdf_list[["individual"]] <- ind_ecdf[, .(comparison, abs_diff, cumulative_pct, level)]
     }
   }
   
-  # School level
-  if (!is.null(enhanced_stats$group_stats$all_group_ecdf_data)) {
-    sch_ecdf <- enhanced_stats$group_stats$all_group_ecdf_data
-    available_sch <- intersect(comparisons, unique(sch_ecdf$comparison))
+  # School level -- select mean or median ECDF
+  sch_ecdf_key <- if (agg_method == "median") "all_group_ecdf_data_median" else "all_group_ecdf_data_mean"
+  sch_ecdf_src <- enhanced_stats$group_stats[[sch_ecdf_key]]
+  if (is.null(sch_ecdf_src)) sch_ecdf_src <- enhanced_stats$group_stats$all_group_ecdf_data
+  if (!is.null(sch_ecdf_src)) {
+    available_sch <- intersect(comparisons, unique(sch_ecdf_src$comparison))
     if (length(available_sch) > 0) {
-      sch_ecdf <- sch_ecdf[comparison %in% available_sch]
+      sch_ecdf <- sch_ecdf_src[comparison %in% available_sch]
       sch_ecdf <- copy(sch_ecdf)
       sch_ecdf[, level := "School"]
       if ("delta_group" %in% names(sch_ecdf)) setnames(sch_ecdf, "delta_group", "abs_diff")
@@ -1369,12 +1403,14 @@ plot_multilevel_aggregation <- function(
     }
   }
   
-  # District level
-  if (!is.null(enhanced_stats$district_stats$all_district_ecdf_data)) {
-    dist_ecdf <- enhanced_stats$district_stats$all_district_ecdf_data
-    available_dist <- intersect(comparisons, unique(dist_ecdf$comparison))
+  # District level -- select mean or median ECDF
+  dist_ecdf_key <- if (agg_method == "median") "all_district_ecdf_data_median" else "all_district_ecdf_data_mean"
+  dist_ecdf_src <- enhanced_stats$district_stats[[dist_ecdf_key]]
+  if (is.null(dist_ecdf_src)) dist_ecdf_src <- enhanced_stats$district_stats$all_district_ecdf_data
+  if (!is.null(dist_ecdf_src)) {
+    available_dist <- intersect(comparisons, unique(dist_ecdf_src$comparison))
     if (length(available_dist) > 0) {
-      dist_ecdf <- dist_ecdf[comparison %in% available_dist]
+      dist_ecdf <- dist_ecdf_src[comparison %in% available_dist]
       dist_ecdf <- copy(dist_ecdf)
       dist_ecdf[, level := "District"]
       if ("delta_group" %in% names(dist_ecdf)) setnames(dist_ecdf, "delta_group", "abs_diff")
@@ -1421,10 +1457,11 @@ plot_multilevel_aggregation <- function(
     labs(
       title = title,
       subtitle = paste0(
+        sprintf("Group aggregation via %s | ", agg_label),
         "How much do copula differences shrink at each level of aggregation?\n",
         "Individual \u2192 School \u2192 District: progressive tightening toward near-zero sensitivity"
       ),
-      caption = "Individual = student-level | School = n>=10 | District = n>=30"
+      caption = sprintf("Individual = student-level | School = n>=10 | District = n>=30 | Aggregation: %s", agg_label)
     ) +
     theme_publication(base_size = 9) +
     theme(
