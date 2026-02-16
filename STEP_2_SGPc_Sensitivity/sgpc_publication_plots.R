@@ -1196,6 +1196,12 @@ plot_prior_quartile_sensitivity <- function(
   comparisons <- available
   raw_data <- raw_data[comparison %in% comparisons]
   
+  # Downsample for violin KDE performance (KDE converges well below 100K points)
+  MAX_PER_GROUP <- 100000
+  raw_data <- raw_data[, {
+    if (.N > MAX_PER_GROUP) .SD[sample(.N, MAX_PER_GROUP)] else .SD
+  }, by = .(comparison, prior_quartile)]
+  
   # Apply accuracy-first ordering (Empirical-* accuracy on left, consistency on right)
   raw_data[, comparison := factor(comparison,
     levels = intersect(ACCURACY_COMPARISON_ORDER, unique(comparison)))]
