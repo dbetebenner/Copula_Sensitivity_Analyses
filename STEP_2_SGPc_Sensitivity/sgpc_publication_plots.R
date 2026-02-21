@@ -1180,6 +1180,231 @@ plot_group_bucket_stability <- function(
 
 
 ############################################################################
+### PANEL D3: Group-Level Transition Matrices (School / District, K=5/7/10)
+############################################################################
+
+#' Plot group-level transition matrices with policy-oriented diagnostics
+#'
+#' Deep-dive companion to Panel D2. For a selected bucket count K, each facet
+#' shows the full transition matrix P(comparison bucket | empirical bucket) for
+#' one comparison model and one aggregation level (School or District).
+#' Adjacent annotation reports rank/classification diagnostics for that facet.
+#'
+#' @param enhanced_stats List from compute_enhanced_statistics()
+#' @param agg_method "mean" or "median"
+#' @param comparisons Comparison groups to render as facet rows
+#' @param levels Aggregation levels to show
+#' @param n_buckets Single bucket count K to display (5, 7, or 10)
+#' @param title Plot title
+#' @return ggplot object
+plot_group_transition_matrices <- function(
+  enhanced_stats,
+  agg_method = "mean",
+  comparisons = c(
+    "Empirical – Canonical",
+    "Empirical – Best-Fit Parametric",
+    "Empirical – t (Student)",
+    "Empirical – Gaussian",
+    "Empirical – B-spline SGP",
+    "Empirical – Comonotonic"
+  ),
+  levels = c("school", "district"),
+  n_buckets = 10,
+  title = NULL
+) {
+  require(ggplot2)
+  require(data.table)
+  require(scales)
+  
+  tm <- enhanced_stats$group_transition_matrices
+  tmet <- enhanced_stats$group_transition_metrics
+  
+  if (is.null(tm) || nrow(tm) == 0 || is.null(tmet) || nrow(tmet) == 0) {
+    warning("No group transition matrix data available. Returning empty plot.")
+    return(ggplot() + theme_void() + ggtitle("Panel D3: No transition matrix data"))
+  }
+  
+  if (length(n_buckets) != 1L) {
+    stop("plot_group_transition_matrices() now expects a single K per figure (e.g., 5, 7, or 10).")
+  }
+  
+  agg_label <- if (agg_method == "mean") "Mean SGPc" else "Median SGPc"
+  selected_k <- as.integer(n_buckets[[1]])
+  if (is.null(title)) {
+    title <- paste0(
+      "Classification Pathways: Group-Level ", agg_label, " Transition Matrices (K=", selected_k, ")"
+    )
+  }
+  selected_agg <- agg_method
+  selected_levels <- levels
+  
+  tm_filt <- tm[
+    level %in% selected_levels &
+      n_buckets == selected_k &
+      agg_method == selected_agg &
+      comparison %in% comparisons
+  ]
+  
+  # Fall back to available comparisons if requested ones are absent
+  if (nrow(tm_filt) == 0) {
+    available_comps <- unique(tm[agg_method == selected_agg & n_buckets == selected_k, comparison])
+    if (length(available_comps) == 0) {
+      warning("No transition matrix rows for selected aggregation method.")
+      return(ggplot() + theme_void() + ggtitle("Panel D3: No matching transitions"))
+    }
+    comparisons <- available_comps
+    tm_filt <- tm[
+      level %in% selected_levels &
+        n_buckets == selected_k &
+        agg_method == selected_agg &
+        comparison %in% comparisons
+    ]
+  }
+  
+  available_comparisons <- intersect(comparisons, unique(tm_filt$comparison))
+  if (length(available_comparisons) == 0) {
+    warning("No requested comparisons available for selected K and aggregation.")
+    return(ggplot() + theme_void() + ggtitle("Panel D3: No matching comparisons"))
+  }
+  
+  tm_filt[, level_label := factor(
+    fifelse(level == "school", "School", "District"),
+    levels = c("School", "District")
+  )]
+  tm_filt[, comparison_label := factor(comparison, levels = available_comparisons)]
+  tm_filt[, label_txt := fifelse(!is.na(row_prop), sprintf(".%02.0f", row_prop * 100), "")]
+  tm_filt[, label_txt := fifelse(label_txt == ".100", "1.0", label_txt)]
+  tm_filt[, label_col := fifelse(!is.na(row_prop) & row_prop >= 0.45, "white", "gray20")]
+  
+  # Build diagnostics for each facet (comparison x level), shown to the right of square heatmap
+  met_filt <- tmet[
+    level %in% selected_levels &
+      n_buckets == selected_k &
+      agg_method == selected_agg &
+      comparison %in% available_comparisons
+  ]
+  
+  met_filt[, level_label := factor(
+    fifelse(level == "school", "School", "District"),
+    levels = c("School", "District")
+  )]
+  met_filt[, comparison_label := factor(comparison, levels = available_comparisons)]
+  
+  comp_short <- c(
+    "Empirical – Comonotonic" = "Emp-Comono",
+    "Empirical – Best-Fit Parametric" = "Emp-Best",
+    "Empirical – B-spline SGP" = "Emp-BSpline",
+    "Empirical – t (Student)" = "Emp-t",
+    "Empirical – Gaussian" = "Emp-Gauss",
+    "Empirical – Canonical" = "Emp-Canon"
+  )
+  met_filt[, comp_short := fifelse(comparison %in% names(comp_short), comp_short[comparison], comparison)]
+  
+  stats_dt <- met_filt[, {
+    d <- .SD[1]
+    stats_label <- paste(
+      sprintf("%s  (n = %s)", d$comp_short, format(d$n_groups, big.mark = ",")),
+      "",
+      "Rank agreement",
+      sprintf("  \u03c1 = %.3f", d$spearman_rho),
+      sprintf("  \u03baL = %.3f", d$kappa_w),
+      sprintf("  \u03baQ = %.3f", d$kappa_w_quad),
+      "",
+      "Classification",
+      sprintf("  Exact  = %.1f%%", 100 * d$exact_match),
+      sprintf("  \u00b11      = %.1f%%", 100 * d$off_by_1),
+      sprintf("  \u22652      = %.1f%%", 100 * d$off_by_2plus),
+      "",
+      "Error rates (top / bottom)",
+      sprintf("  FP = %.1f%% / %.1f%%", 100 * d$fpr_top, 100 * d$fpr_bottom),
+      sprintf("  FN = %.1f%% / %.1f%%", 100 * d$fnr_top, 100 * d$fnr_bottom),
+      "",
+      "Conditional probs",
+      sprintf("  P(Ctop|Etop) = %.1f%%", 100 * d$p_comp_top_given_emp_top),
+      sprintf("  P(Etop|Ctop) = %.1f%%", 100 * d$p_emp_top_given_comp_top),
+      sprintf("  P(Cbot|Ebot) = %.1f%%", 100 * d$p_comp_bottom_given_emp_bottom),
+      sprintf("  P(Ebot|Cbot) = %.1f%%", 100 * d$p_emp_bottom_given_comp_bottom),
+      sep = "\n"
+    )
+    list(
+      stats_label = stats_label,
+      x_pos = selected_k + 0.65,
+      y_pos = (selected_k + 0.5) / 2
+    )
+  }, by = .(comparison_label, level_label)]
+  
+  p <- ggplot(tm_filt, aes(x = comparison_bucket, y = empirical_bucket, fill = row_prop)) +
+    geom_tile(color = "white", linewidth = 0.25) +
+    geom_text(aes(label = label_txt, color = label_col), size = 1.9, show.legend = FALSE) +
+    geom_label(
+      data = stats_dt,
+      aes(x = x_pos, y = y_pos, label = stats_label),
+      inherit.aes = FALSE,
+      hjust = 0,
+      vjust = 0.5,
+      size = 1.85,
+      lineheight = 0.92,
+      label.size = 0.2,
+      label.padding = unit(0.18, "lines"),
+      fill = "white",
+      color = "gray20",
+      alpha = 0.92,
+      family = "mono"
+    ) +
+    facet_grid(comparison_label ~ level_label) +
+    scale_fill_gradientn(
+      colors = ZISSOU1_RAMP(100),
+      limits = c(0, 1),
+      labels = function(x) sprintf("%.2f", x),
+      na.value = "gray95",
+      name = "P(Comp bucket |\nEmp bucket)"
+    ) +
+    scale_color_identity() +
+    scale_x_continuous(
+      breaks = seq_len(selected_k),
+      minor_breaks = NULL,
+      limits = c(0.5, selected_k + 3.8),
+      expand = expansion(mult = c(0, 0))
+    ) +
+    scale_y_continuous(
+      breaks = seq_len(selected_k),
+      minor_breaks = NULL,
+      limits = c(0.5, selected_k + 0.5),
+      expand = expansion(mult = c(0, 0))
+    ) +
+    coord_fixed(ratio = 1, clip = "off") +
+    labs(
+      title = title,
+      subtitle = paste0(
+        "How do school/district growth-bucket classifications shift under different comparison models at K=", selected_k, "?\n",
+        "Rows: comparison groups | Columns: School/District | Aggregation: ", agg_label,
+        " | School n≥250 | District n≥500"
+      ),
+      x = "Comparison Bucket",
+      y = "Empirical Bucket",
+      caption = paste0(
+        "Each facet: square transition matrix plus right-side diagnostics ",
+        "(ρ, weighted κ, exact/±1/≥2, FP/FN top-bottom, and policy conditional probabilities)."
+      )
+    ) +
+    theme_publication(base_size = 9) +
+    theme(
+      axis.text.x = element_text(size = 7),
+      axis.text.y = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(face = "bold", size = 8.8),
+      legend.position = "right",
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 7),
+      plot.margin = margin(10, 42, 10, 10, "pt")
+    )
+  
+  return(p)
+}
+
+
+############################################################################
 ### PANEL F: Prior Achievement Quartile Sensitivity
 ############################################################################
 
@@ -1322,9 +1547,9 @@ plot_cross_dataset_comparison <- function(
     scale_x_discrete(name = "Comparison", labels = NULL) +
     scale_y_continuous(
       name = "Mean Absolute Difference (MAD, percentile points)",
-      breaks = seq(0, 30, 2)
+      breaks = seq(0, 30, 5)
     ) +
-    coord_cartesian(clip = "off") +
+    coord_cartesian(ylim = c(0, NA), clip = "off") +
     annotate("text", x = 0.6, y = 3, label = "Negligible", color = "gray50", 
              hjust = 0, vjust = -0.5, size = 2.5, fontface = "italic") +
     annotate("text", x = 0.6, y = 5, label = "Small", color = "gray50",
@@ -1343,8 +1568,10 @@ plot_cross_dataset_comparison <- function(
     theme(
       axis.text.x = element_blank(),
       axis.ticks.x = element_blank(),
+      axis.title.x = element_text(margin = margin(t = 75, b = 5)),
       legend.position = "bottom",
-      plot.margin = margin(10, 10, 30, 10, "pt")
+      plot.caption = element_text(margin = margin(t = 14)),
+      plot.margin = margin(10, 10, 10, 10, "pt")
     ) +
     guides(color = guide_legend(nrow = 1))
   
@@ -1355,7 +1582,7 @@ plot_cross_dataset_comparison <- function(
     p <- p + annotate("text",
       x = i, y = -2, label = comps[i],
       color = xaxis_label_data$xcolor[i],
-      angle = 45, hjust = 1, vjust = 0.5, size = 1.7
+      angle = 45, hjust = 1, vjust = 0.5, size = 2.0
     )
   }
   
@@ -1543,7 +1770,7 @@ plot_error_decomposition <- function(
     geom_ribbon(aes(ymin = mad_q25, ymax = mad_q75), alpha = 0.22, linewidth = 0) +
     geom_line(linewidth = 0.9) +
     geom_point(size = 2) +
-    scale_x_continuous(
+    scale_x_log10(
       name = "Subsample Size (N)",
       breaks = sampling_results$metadata$sample_sizes,
       labels = scales::comma
@@ -1563,7 +1790,10 @@ plot_error_decomposition <- function(
       )
     ) +
     theme_publication(base_size = 10) +
-    theme(legend.position = "right")
+    theme(
+      legend.position = "right",
+      plot.margin = margin(10, 10, 10, 10, "pt")
+    )
 
   # ---- Right panel: stacked area of variance shares ----
   per_ss <- copy(sampling_results$per_ss_decomposition)
@@ -1583,9 +1813,24 @@ plot_error_decomposition <- function(
 
   share_colors <- SHARE_COLORS
 
+  # Secondary-axis context: show total absolute MAD SD as a line
+  # scaled onto [0, 1], then recover SD units via sec_axis.
+  per_ss[, total_sd := sqrt(pmax(total_var, 0))]
+  sd_scale <- max(per_ss$total_sd, na.rm = TRUE)
+  if (!is.finite(sd_scale) || sd_scale <= 0) sd_scale <- 1
+
   p_share <- ggplot(per_ss_long, aes(x = sample_size, y = share, fill = source_label)) +
     geom_area(alpha = 0.7, position = "stack") +
-    scale_x_continuous(
+    geom_line(
+      data = per_ss,
+      aes(x = sample_size, y = total_sd / sd_scale),
+      inherit.aes = FALSE,
+      linewidth = 0.8,
+      color = "black",
+      linetype = "solid",
+      alpha = 0.75
+    ) +
+    scale_x_log10(
       name = "Subsample Size (N)",
       breaks = sampling_results$metadata$sample_sizes,
       labels = scales::comma
@@ -1594,18 +1839,23 @@ plot_error_decomposition <- function(
       name = "Share of MAD Variance",
       labels = scales::percent_format(accuracy = 1),
       limits = c(0, 1),
-      breaks = seq(0, 1, 0.2)
+      breaks = seq(0, 1, 0.2),
+      sec.axis = sec_axis(~ . * sd_scale, name = "Total MAD SD (percentile points)")
     ) +
     scale_fill_manual(values = share_colors, name = "Error Source") +
     labs(
       title = "Variance Decomposition of MAD",
       subtitle = paste0(
         "Is observed MAD driven more by copula choice or by sampling variability?\n",
-        "At small N, sampling noise dominates; at large N, copula pair emerges | Both remain modest"
+        "Across N = 50 to 10,000, copula-pair differences explain most variance; sampling share is small and drops quickly below ~5%\n",
+        "Black line (right axis) = total MAD SD at each N"
       )
     ) +
     theme_publication(base_size = 10) +
-    theme(legend.position = "bottom")
+    theme(
+      legend.position = "bottom",
+      plot.margin = margin(10, 10, 10, 10, "pt")
+    )
 
   # Return a list of two plots; save_plot_multi_panel handles the composite
   return(list(ribbon = p_ribbon, share = p_share))
@@ -1719,7 +1969,7 @@ plot_condition_n_vs_mad <- function(
       title = title,
       subtitle = paste0(
         "Does sensitivity decrease as condition sample size grows?\n",
-        "Each point = one condition | Loess trend lines reveal the 1/\u221aN averaging effect"
+        "Each point = one condition | Loess trend lines are largely horizontal, indicating little systematic N-related bias (MAD remains stable from <10k to >100k)"
       ),
       caption = bquote("MAD = mean |" * Delta * "SGPc| between copula variants within each condition")
     ) +
@@ -1728,36 +1978,6 @@ plot_condition_n_vs_mad <- function(
       legend.position = "right",
       legend.key.height = unit(0.4, "cm")
     )
-  
-  # Add optional annotation for the 1/sqrt(N) reference curve
-  # Scale to the median MAD at the smallest N
-  n_range <- range(plot_dt$n, na.rm = TRUE)
-  if (n_range[1] > 0 && n_range[2] > n_range[1]) {
-    # Reference curve: MAD_ref * sqrt(n_min / n)
-    ref_mad <- median(plot_dt[n <= quantile(n, 0.25), mad], na.rm = TRUE)
-    ref_n <- min(plot_dt$n, na.rm = TRUE)
-    
-    if (!is.na(ref_mad) && ref_mad > 0) {
-      curve_dt <- data.table(
-        n = seq(n_range[1], n_range[2], length.out = 100)
-      )
-      curve_dt[, mad := ref_mad * sqrt(ref_n / n)]
-      
-      p <- p +
-        geom_line(
-          data = curve_dt, aes(x = n, y = mad),
-          inherit.aes = FALSE,
-          linetype = "dashed", color = "gray50", linewidth = 0.6
-        ) +
-        annotate("text",
-          x = n_range[2] * 0.85,
-          y = ref_mad * sqrt(ref_n / (n_range[2] * 0.85)) + 0.5,
-          label = "proportional %~% 1/sqrt(N)",
-          parse = TRUE,
-          color = "gray40", size = 3, hjust = 0.5
-        )
-    }
-  }
   
   return(p)
 }
@@ -1780,11 +2000,19 @@ plot_condition_n_vs_mad <- function(
 plot_group_rank_stability <- function(
     enhanced_stats,
     comparisons = ALL_COMPARISONS,
-    title = "School & District Level Mean SGPc Rank Stability"
+    agg_method = "mean",
+    title = NULL
 ) {
   
   require(ggplot2)
   require(data.table)
+  
+  # Derive labels from agg_method
+  agg_label <- if (agg_method == "mean") "Mean SGPc" else "Median SGPc"
+  rho_col   <- if (agg_method == "mean") "rho_mean" else "rho_median"
+  if (is.null(title)) {
+    title <- paste0("School & District Level ", agg_label, " Rank Stability")
+  }
   
   gra <- enhanced_stats$group_rank_agreement
   
@@ -1799,7 +2027,11 @@ plot_group_rank_stability <- function(
     return(ggplot() + theme_void() + ggtitle("Panel K: No matching comparisons"))
   }
   
-  plot_dt <- gra[comparison %in% available & !is.na(rho)]
+  # Select the appropriate rho column; fall back to 'rho' for backward compat
+  if (!rho_col %in% names(gra) && "rho" %in% names(gra)) rho_col <- "rho"
+  
+  plot_dt <- gra[comparison %in% available & !is.na(get(rho_col))]
+  plot_dt[, rho_plot := get(rho_col)]
   
   # Apply accuracy-first ordering (Empirical-* = accuracy, others = consistency)
   plot_dt[, comparison := factor(comparison,
@@ -1811,11 +2043,18 @@ plot_group_rank_stability <- function(
     levels = c("School", "District")
   )]
   
+  # Correct condition count (composite key when dataset_id present)
+  n_conditions <- if ("dataset_id" %in% names(plot_dt)) {
+    uniqueN(plot_dt[, paste(dataset_id, condition_id, sep = "__")])
+  } else {
+    uniqueN(plot_dt$condition_id)
+  }
+  
   # Compute summary stats per comparison x level
   summary_dt <- plot_dt[, .(
-    median_rho = median(rho, na.rm = TRUE),
-    q25        = as.double(quantile(rho, 0.25, na.rm = TRUE)),
-    q75        = as.double(quantile(rho, 0.75, na.rm = TRUE))
+    median_rho = median(rho_plot, na.rm = TRUE),
+    q25        = as.double(quantile(rho_plot, 0.25, na.rm = TRUE)),
+    q75        = as.double(quantile(rho_plot, 0.75, na.rm = TRUE))
   ), by = .(comparison, level)]
   
   # Build coloured x-axis label data (one row per comparison)
@@ -1827,10 +2066,10 @@ plot_group_rank_stability <- function(
   )
   
   # Build plot
-  p <- ggplot(plot_dt, aes(x = comparison, y = rho)) +
+  p <- ggplot(plot_dt, aes(x = comparison, y = rho_plot)) +
     accuracy_background_layers(comps) +
     geom_hline(yintercept = 1.0, linetype = "dashed", color = "gray50", linewidth = 0.5) +
-    geom_jitter(width = 0.2, height = 0, alpha = 0.35, size = 1.2, color = "gray30") +
+    geom_jitter(width = 0.2, height = 0, alpha = 0.15, size = 0.9, color = "gray30") +
     geom_point(data = summary_dt, aes(y = median_rho),
                size = 2, shape = 18, color = rgb(247, 247, 247, maxColorValue = 255)) +
     geom_errorbar(data = summary_dt,
@@ -1840,14 +2079,19 @@ plot_group_rank_stability <- function(
     scale_x_discrete(name = "Comparison", labels = NULL) +
     scale_y_continuous(
       name = bquote("Spearman" ~ rho ~ "(rank correlation)"),
-      breaks = seq(0.70, 1.0, 0.05)
+      breaks = seq(0.50, 1.0, 0.05)
     ) +
-    coord_cartesian(ylim = c(0.70, 1.0), clip = "off") +
+    coord_cartesian(ylim = c(0.50, 1.0), clip = "off") +
     labs(
       title = title,
-      subtitle = "Are school and district growth rankings preserved across copula models?\nDiamond = median \u03c1 | Error bars = IQR | Left = rank agreement vs empirical | Right = rank agreement vs parametric",
-      caption = sprintf("School (n\u226510 students) | District (n\u226530 students) | %d conditions\nX-axis label colour: purple = rank agreement vs empirical | green = rank agreement vs parametric",
-                       uniqueN(plot_dt$condition_id))
+      subtitle = paste0(
+        "Are school and district ", tolower(agg_label), " growth rankings preserved across copula models?\n",
+        "Each dot represents Spearman \u03c1 for ", tolower(agg_label),
+        " ranking of schools/districts within each copula combination\n",
+        "Diamond = median \u03c1 | Error bars = IQR | Rank agreement empirical vs parametric (purple) | parametric vs parametric (green)"
+      ),
+      caption = sprintf("School (n\u226510 students) | District (n\u226530 students) | %d conditions",
+                       n_conditions)
     ) +
     theme_publication(base_size = 9) +
     theme(
@@ -1863,7 +2107,7 @@ plot_group_rank_stability <- function(
   # Add coloured x-axis comparison labels in margin
   p <- p + geom_text(
     data = xaxis_label_data,
-    aes(x = comparison, y = 0.675, label = comparison, colour = xcolor),
+    aes(x = comparison, y = 0.46, label = comparison, colour = xcolor),
     inherit.aes = FALSE,
     angle = 45,
     hjust = 1,
@@ -2214,6 +2458,9 @@ plot_diag_tail_rank_stability <- function(
   )]
 
   # Compute Spearman rho per tier per condition per comparison
+  # Include dataset_id in grouping when available to preserve unique dataset-condition combinations
+  has_dataset_id <- "dataset_id" %in% names(sgpc_data)
+  by_cols <- c("prior_tier", if (has_dataset_id) "dataset_id", "condition_id", "year_span", "content_area")
   rho_list <- list()
   for (comp_name in names(comparison_pairs)) {
     vars <- comparison_pairs[[comp_name]]
@@ -2236,7 +2483,7 @@ plot_diag_tail_rank_stability <- function(
           list(rho = NA_real_, n = n_valid)
         }
       },
-      by = .(prior_tier, condition_id, year_span, content_area)
+      by = by_cols
     ]
 
     rho_by_tier[, comparison := comp_name]
@@ -2265,8 +2512,8 @@ plot_diag_tail_rank_stability <- function(
 
   comp_cols <- COMPARISON_COLORS[levels(rho_dt$comparison)]
 
-  # Determine y-axis floor
-  y_floor <- min(0.5, min(rho_dt$rho, na.rm = TRUE) - 0.05)
+  # Fixed y-axis floor for comparability across regenerated outputs
+  y_floor <- 0.7
 
   p <- ggplot(rho_dt, aes(x = comparison, y = rho, color = comparison)) +
     geom_jitter(width = 0.2, alpha = 0.3, size = 1) +
@@ -2279,14 +2526,14 @@ plot_diag_tail_rank_stability <- function(
     scale_color_manual(values = comp_cols) +
     scale_y_continuous(
       name = "Spearman \u03c1",
-      breaks = seq(round(y_floor, 1), 1.0, 0.1)
+      breaks = seq(y_floor, 1.0, 0.05)
     ) +
     coord_cartesian(ylim = c(y_floor, 1.0)) +
     labs(
       title = title,
       subtitle = paste0(
         "Rank stability by prior achievement tier\n",
-        "Diamonds = median | Bars = IQR across conditions"
+        "Points = one Spearman \u03c1 per tier \u00d7 dataset \u00d7 condition combination | Diamonds = median | Bars = IQR across conditions"
       ),
       x = "Comparison",
       caption = "Weaker tail correlations for Gaussian support the tail-dependence hypothesis"

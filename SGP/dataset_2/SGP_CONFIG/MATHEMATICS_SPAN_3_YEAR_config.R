@@ -10,7 +10,7 @@ MATHEMATICS_2010.config <- list(
         sgp.content.areas=rep("MATHEMATICS", 2),
         sgp.panel.years=c("2007", "2010"),
         sgp.grade.sequences=list(
-            c("3", "6"), c("4", "7"), c("5", "8")
+            c("3", "6"), c("4", "7"), c("5", "8"), c("7", "10")
         )
     )
 )
@@ -20,7 +20,7 @@ MATHEMATICS_2011.config <- list(
         sgp.content.areas=rep("MATHEMATICS", 3),
         sgp.panel.years=c("2007", "2008", "2011"),
         sgp.grade.sequences=list(
-            c("3", "6"), c("3", "4", "7"), c("4", "5", "8")
+            c("3", "6"), c("3", "4", "7"), c("4", "5", "8"), c("6", "7", "10")
         )
     )
 )
@@ -30,7 +30,7 @@ MATHEMATICS_2012.config <- list(
         sgp.content.areas=rep("MATHEMATICS", 3),
         sgp.panel.years=c("2008", "2009", "2012"),
         sgp.grade.sequences=list(
-            c("3", "6"), c("3", "4", "7"), c("4", "5", "8")
+            c("3", "6"), c("3", "4", "7"), c("4", "5", "8"), c("6", "7", "10")
         )
     )
 )
@@ -40,7 +40,7 @@ MATHEMATICS_2013.config <- list(
         sgp.content.areas=rep("MATHEMATICS", 3),
         sgp.panel.years=c("2009", "2010", "2013"),
         sgp.grade.sequences=list(
-            c("3", "6"), c("3", "4", "7"), c("4", "5", "8")
+            c("3", "6"), c("3", "4", "7"), c("4", "5", "8"), c("6", "7", "10")
         )
     )
 )
@@ -50,7 +50,7 @@ MATHEMATICS_2014.config <- list(
         sgp.content.areas=rep("MATHEMATICS", 3),
         sgp.panel.years=c("2010", "2011", "2014"),
         sgp.grade.sequences=list(
-            c("3", "6"), c("3", "4", "7"), c("4", "5", "8")
+            c("3", "6"), c("3", "4", "7"), c("4", "5", "8"), c("6", "7", "10")
         )
     )
 )

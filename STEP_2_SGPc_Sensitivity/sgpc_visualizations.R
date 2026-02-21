@@ -51,16 +51,14 @@ cat("Loading data from", length(dataset_files), "files...\n")
 all_data_list <- lapply(dataset_files, readRDS)
 all_data <- rbindlist(all_data_list, fill = TRUE)
 
-cat("Total observations:", nrow(all_data), "\n")
+cat(sprintf("Total observations: %s\n", format(nrow(all_data), big.mark = ",")))
 
-# Subsample if dataset is very large (for visualization performance)
-if (nrow(all_data) > 100000) {
-  cat("Subsampling to 100,000 observations for visualizations...\n")
-  set.seed(42)
-  all_data <- all_data[sample(.N, 100000)]
-}
+# Full dataset is used for hex-binned plots (scatter, Bland-Altman, heatmaps,
+# histograms).  geom_hex bins millions of rows into ~2,500 hexes so performance
+# and file size stay manageable.  Only the violin-plot section (KDE-based)
+# receives a targeted subsample below.
 
-# Add prior achievement quartile
+# Add prior achievement quartile (needed by violin section)
 all_data[, prior_quartile := cut(
   SCALE_SCORE_PRIOR,
   breaks = quantile(SCALE_SCORE_PRIOR, probs = 0:4/4, na.rm = TRUE),
@@ -408,6 +406,17 @@ save_plot(p_heatmap_avg, "heatmap_mad_emp_vs_canonical", width = 10, height = 6)
 
 cat("\nCreating violin plots...\n")
 
+# Subsample for violin KDE performance (KDE converges well below 200K points)
+VIOLIN_MAX <- 200000L
+if (nrow(all_data) > VIOLIN_MAX) {
+  cat(sprintf("  Subsampling to %s observations for violin KDE...\n",
+              format(VIOLIN_MAX, big.mark = ",")))
+  set.seed(42)
+  violin_data <- all_data[sample(.N, VIOLIN_MAX)]
+} else {
+  violin_data <- all_data
+}
+
 # Calculate differences first, then melt (all variants)
 violin_cols <- list(
   diff_emp_best = c("sgpc_emp", "sgpc_best"),
@@ -420,12 +429,12 @@ if ("sgpc_gumbel" %in% names(all_data)) violin_cols$diff_emp_gumbel <- c("sgpc_e
 if ("sgpc_frank" %in% names(all_data)) violin_cols$diff_emp_frank <- c("sgpc_emp", "sgpc_frank")
 if ("sgp_traditional" %in% names(all_data)) violin_cols$diff_emp_trad <- c("sgpc_emp", "sgp_traditional")
 
-violin_prep <- all_data[!is.na(prior_quartile), "prior_quartile"]
+violin_prep <- violin_data[!is.na(prior_quartile), "prior_quartile"]
 for (cn in names(violin_cols)) {
   v1 <- violin_cols[[cn]][1]
   v2 <- violin_cols[[cn]][2]
-  if (v1 %in% names(all_data) && v2 %in% names(all_data)) {
-    violin_prep[, (cn) := all_data[!is.na(prior_quartile)][[v1]] - all_data[!is.na(prior_quartile)][[v2]]]
+  if (v1 %in% names(violin_data) && v2 %in% names(violin_data)) {
+    violin_prep[, (cn) := violin_data[!is.na(prior_quartile)][[v1]] - violin_data[!is.na(prior_quartile)][[v2]]]
   }
 }
 
@@ -468,6 +477,9 @@ p_violin <- ggplot(violin_long[!is.na(difference)],
   )
 
 save_plot(p_violin, "violin_by_prior_quartile", width = 14, height = 6)
+
+# Free the subsampled copy used only for violins
+if (exists("violin_data")) rm(violin_data)
 
 ############################################################################
 ### 5. BLAND-ALTMAN PLOTS

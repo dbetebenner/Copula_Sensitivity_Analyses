@@ -157,6 +157,61 @@ compute_enhanced_statistics <- function(
     cat("  Re-run Step 2.1 with updated sgpc_compute_all_variants.R to include these IDs.\n\n")
   }
   
+  # Build once-per-comparison group aggregates and reuse across sections (B, C2, D2, D3)
+  build_group_aggregate_cache <- function(dt, group_var, level_label) {
+    cache <- list()
+    grp_by <- if (has_dataset_id) {
+      c(group_var, "dataset_id", "condition_id", "year_span", "content_area")
+    } else {
+      c(group_var, "condition_id", "year_span", "content_area")
+    }
+    
+    for (comp_name in names(comparison_pairs)) {
+      var1 <- comparison_pairs[[comp_name]][1]
+      var2 <- comparison_pairs[[comp_name]][2]
+      
+      if (all(is.na(dt[[var1]])) || all(is.na(dt[[var2]]))) {
+        next
+      }
+      
+      agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
+        mean1   = mean(get(var1), na.rm = TRUE),
+        mean2   = mean(get(var2), na.rm = TRUE),
+        median1 = as.double(median(get(var1), na.rm = TRUE)),
+        median2 = as.double(median(get(var2), na.rm = TRUE)),
+        n = .N
+      ), by = grp_by]
+      
+      if (nrow(agg) == 0L) next
+      
+      agg[, `:=`(
+        comparison = comp_name,
+        var1 = var1,
+        var2 = var2,
+        level = level_label,
+        delta_group_mean = abs(mean1 - mean2),
+        delta_group_median = abs(median1 - median2)
+      )]
+      
+      cache[[comp_name]] <- agg
+    }
+    
+    cache
+  }
+  
+  school_group_cache <- list()
+  district_group_cache <- list()
+  
+  if (has_school) {
+    cat("  Precomputing school-level group aggregates (reused across sections)...\n")
+    school_group_cache <- build_group_aggregate_cache(sgpc_data, "SCHOOL_NUMBER", "school")
+  }
+  
+  if (has_district) {
+    cat("  Precomputing district-level group aggregates (reused across sections)...\n")
+    district_group_cache <- build_group_aggregate_cache(sgpc_data, "DISTRICT_NUMBER", "district")
+  }
+  
   # --- B1: School-level aggregation ---
   if (has_school) {
     cat("  Computing school-level aggregates (min n=10)...\n")
@@ -164,26 +219,8 @@ compute_enhanced_statistics <- function(
     for (comp_name in names(comparison_pairs)) {
       var1 <- comparison_pairs[[comp_name]][1]
       var2 <- comparison_pairs[[comp_name]][2]
-      
-      # Skip if either variable is entirely NA
-      if (all(is.na(sgpc_data[[var1]])) || all(is.na(sgpc_data[[var2]]))) {
-        cat(sprintf("    %s: skipped (NA values)\n", comp_name))
-        next
-      }
-      
-      # Aggregate by school (include dataset_id to avoid cross-dataset collision)
-      # Compute both mean and median SGPc for each school
-      by_cols <- if (has_dataset_id) c("SCHOOL_NUMBER", "dataset_id", "condition_id") else c("SCHOOL_NUMBER", "condition_id")
-      group_agg <- sgpc_data[!is.na(SCHOOL_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean1   = mean(get(var1), na.rm = TRUE),
-        mean2   = mean(get(var2), na.rm = TRUE),
-        median1 = as.double(median(get(var1), na.rm = TRUE)),
-        median2 = as.double(median(get(var2), na.rm = TRUE)),
-        n = .N
-      ), by = by_cols]
-      
-      group_agg[, delta_group_mean   := abs(mean1 - mean2)]
-      group_agg[, delta_group_median := abs(median1 - median2)]
+      group_agg <- school_group_cache[[comp_name]]
+      if (is.null(group_agg)) next
       
       # Filter: n >= 10 for stability
       group_agg_filtered <- group_agg[n >= 10]
@@ -291,25 +328,8 @@ compute_enhanced_statistics <- function(
     for (comp_name in names(comparison_pairs)) {
       var1 <- comparison_pairs[[comp_name]][1]
       var2 <- comparison_pairs[[comp_name]][2]
-      
-      if (all(is.na(sgpc_data[[var1]])) || all(is.na(sgpc_data[[var2]]))) {
-        cat(sprintf("    %s: skipped (NA values)\n", comp_name))
-        next
-      }
-      
-      # Aggregate by district (include dataset_id to avoid cross-dataset collision)
-      # Compute both mean and median SGPc for each district
-      dist_by_cols <- if (has_dataset_id) c("DISTRICT_NUMBER", "dataset_id", "condition_id") else c("DISTRICT_NUMBER", "condition_id")
-      dist_agg <- sgpc_data[!is.na(DISTRICT_NUMBER) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean1   = mean(get(var1), na.rm = TRUE),
-        mean2   = mean(get(var2), na.rm = TRUE),
-        median1 = as.double(median(get(var1), na.rm = TRUE)),
-        median2 = as.double(median(get(var2), na.rm = TRUE)),
-        n = .N
-      ), by = dist_by_cols]
-      
-      dist_agg[, delta_group_mean   := abs(mean1 - mean2)]
-      dist_agg[, delta_group_median := abs(median1 - median2)]
+      dist_agg <- district_group_cache[[comp_name]]
+      if (is.null(dist_agg)) next
       
       # Filter: n >= 30 for district-level stability
       dist_agg_filtered <- dist_agg[n >= 30]
@@ -421,28 +441,15 @@ compute_enhanced_statistics <- function(
   
   group_rank_agreement_list <- list()
   
-  # Helper: compute group-level Spearman rho for a given grouping variable
+  # Helper: compute group-level Spearman rho using precomputed group aggregates
   # Returns rho for both mean-based and median-based group aggregations
-  compute_group_rank_rho <- function(dt, group_var, min_n, comparison_pairs, level_label) {
+  compute_group_rank_rho <- function(group_cache, min_n, level_label) {
     results <- list()
-    # Include dataset_id in grouping when available
-    grp_by <- if ("dataset_id" %in% names(dt)) c(group_var, "dataset_id", "condition_id", "year_span", "content_area") else c(group_var, "condition_id", "year_span", "content_area")
-    for (comp_name in names(comparison_pairs)) {
-      var1 <- comparison_pairs[[comp_name]][1]
-      var2 <- comparison_pairs[[comp_name]][2]
-      
-      if (all(is.na(dt[[var1]])) || all(is.na(dt[[var2]]))) next
-      
-      # Aggregate to group means AND medians
-      group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean1   = mean(get(var1), na.rm = TRUE),
-        mean2   = mean(get(var2), na.rm = TRUE),
-        median1 = as.double(median(get(var1), na.rm = TRUE)),
-        median2 = as.double(median(get(var2), na.rm = TRUE)),
-        n = .N
-      ), by = grp_by]
-      
+    for (comp_name in names(group_cache)) {
+      group_agg <- group_cache[[comp_name]]
+      if (is.null(group_agg)) next
       group_agg <- group_agg[n >= min_n]
+      if (nrow(group_agg) == 0L) next
       
       # For each condition, compute Spearman rho of group rankings (mean-based and median-based)
       rho_by_cols <- if ("dataset_id" %in% names(group_agg)) c("dataset_id", "condition_id", "year_span", "content_area") else c("condition_id", "year_span", "content_area")
@@ -475,7 +482,7 @@ compute_enhanced_statistics <- function(
   
   if (has_school) {
     cat("  School-level rank agreement...\n")
-    school_rank_rho <- compute_group_rank_rho(sgpc_data, "SCHOOL_NUMBER", 10, comparison_pairs, "school")
+    school_rank_rho <- compute_group_rank_rho(school_group_cache, 10, "school")
     if (nrow(school_rank_rho) > 0) {
       group_rank_agreement_list[["school"]] <- school_rank_rho
       for (cn in unique(school_rank_rho$comparison)) {
@@ -490,7 +497,7 @@ compute_enhanced_statistics <- function(
   
   if (has_district) {
     cat("  District-level rank agreement...\n")
-    district_rank_rho <- compute_group_rank_rho(sgpc_data, "DISTRICT_NUMBER", 30, comparison_pairs, "district")
+    district_rank_rho <- compute_group_rank_rho(district_group_cache, 30, "district")
     if (nrow(district_rank_rho) > 0) {
       group_rank_agreement_list[["district"]] <- district_rank_rho
       for (cn in unique(district_rank_rho$comparison)) {
@@ -552,7 +559,12 @@ compute_enhanced_statistics <- function(
         if (K == 10L) {
           n_na <- sum(is.na(sgpc_with_buckets[[bucket_var]]))
           if (n_na > 0) {
-            failed_conditions <- sgpc_with_buckets[is.na(get(bucket_var)), unique(condition_id)]
+            failed_conditions <- if (has_dataset_id) {
+              sgpc_with_buckets[is.na(get(bucket_var)),
+                unique(paste(dataset_id, condition_id, sep = "__"))]
+            } else {
+              sgpc_with_buckets[is.na(get(bucket_var)), unique(condition_id)]
+            }
             classification_issues[[var]] <- list(
               n_failed = n_na,
               n_total = nrow(sgpc_with_buckets),
@@ -671,29 +683,14 @@ compute_enhanced_statistics <- function(
   group_bucket_stability_list <- list()
   bucket_sizes <- c(3L, 5L, 10L)
   
-  # Helper: compute bucket stability for a given grouping variable and K
+  # Helper: compute bucket stability for a given level and K using cached group aggregates
   # Computes both mean-based and median-based bucket assignments, tagged via agg_method column
-  compute_bucket_stability <- function(dt, group_var, min_n, comparison_pairs, level_label, K) {
+  compute_bucket_stability <- function(group_cache, min_n, level_label, K) {
     results <- list()
-    # Include dataset_id in grouping when available
-    bucket_grp_by <- if ("dataset_id" %in% names(dt)) c(group_var, "dataset_id", "condition_id", "year_span", "content_area") else c(group_var, "condition_id", "year_span", "content_area")
-    for (comp_name in names(comparison_pairs)) {
-      var1 <- comparison_pairs[[comp_name]][1]
-      var2 <- comparison_pairs[[comp_name]][2]
-      
-      if (all(is.na(dt[[var1]])) || all(is.na(dt[[var2]]))) next
-      
-      # Aggregate to group means AND medians
-      group_agg <- dt[!is.na(get(group_var)) & !is.na(get(var1)) & !is.na(get(var2)), .(
-        mean1   = mean(get(var1), na.rm = TRUE),
-        mean2   = mean(get(var2), na.rm = TRUE),
-        median1 = as.double(median(get(var1), na.rm = TRUE)),
-        median2 = as.double(median(get(var2), na.rm = TRUE)),
-        n = .N
-      ), by = bucket_grp_by]
-      
+    for (comp_name in names(group_cache)) {
+      group_agg <- group_cache[[comp_name]]
+      if (is.null(group_agg)) next
       group_agg <- group_agg[n >= min_n]
-      
       if (nrow(group_agg) == 0) next
       
       grp_bucket_by <- if ("dataset_id" %in% names(group_agg)) c("dataset_id", "condition_id") else "condition_id"
@@ -769,7 +766,7 @@ compute_enhanced_statistics <- function(
   if (has_school) {
     cat("  School-level bucket stability...\n")
     for (K in bucket_sizes) {
-      res <- compute_bucket_stability(sgpc_data, "SCHOOL_NUMBER", 10, comparison_pairs, "school", K)
+      res <- compute_bucket_stability(school_group_cache, 10, "school", K)
       if (nrow(res) > 0) {
         group_bucket_stability_list[[paste0("school_K", K)]] <- res
         ovr <- res[stratum == "Overall"]
@@ -784,7 +781,7 @@ compute_enhanced_statistics <- function(
   if (has_district) {
     cat("  District-level bucket stability...\n")
     for (K in bucket_sizes) {
-      res <- compute_bucket_stability(sgpc_data, "DISTRICT_NUMBER", 30, comparison_pairs, "district", K)
+      res <- compute_bucket_stability(district_group_cache, 30, "district", K)
       if (nrow(res) > 0) {
         group_bucket_stability_list[[paste0("district_K", K)]] <- res
         ovr <- res[stratum == "Overall"]
@@ -804,6 +801,197 @@ compute_enhanced_statistics <- function(
   
   if (!has_school && !has_district) {
     cat("  WARNING: No SCHOOL_NUMBER or DISTRICT_NUMBER. Skipping bucket stability.\n")
+  }
+  
+  cat("\n")
+  
+  ############################################################################
+  ### D3. GROUP-LEVEL TRANSITION MATRICES (School/District, policy sample floors)
+  ###
+  ### Deep-dive companion to D2: instead of only reporting exact/off-by rates,
+  ### compute full bucket-to-bucket transition matrices and policy-oriented
+  ### error metrics under stricter minimum group sizes.
+  ###
+  ### Requested sample-size floors:
+  ###   - School:   n >= 250 students
+  ###   - District: n >= 500 students
+  ###
+  ### Bucket granularities:
+  ###   - Quintiles (K=5), Septiles (K=7), Deciles (K=10)
+  ############################################################################
+  
+  cat("Computing group-level transition matrices (K=5,7,10; school>=250, district>=500)...\n")
+  
+  transition_bucket_sizes <- c(5L, 7L, 10L)
+  group_transition_matrices_list <- list()
+  group_transition_metrics_list <- list()
+  
+  compute_group_transitions <- function(group_cache, min_n, level_label, K) {
+    trans_results <- list()
+    metric_results <- list()
+    
+    for (comp_name in names(group_cache)) {
+      group_agg <- group_cache[[comp_name]]
+      if (is.null(group_agg)) next
+      group_agg <- group_agg[n >= min_n]
+      if (nrow(group_agg) == 0) next
+      
+      grp_bucket_by <- if ("dataset_id" %in% names(group_agg)) c("dataset_id", "condition_id") else "condition_id"
+      
+      run_transition <- function(ga, v1_col, v2_col, method_label) {
+        ga_copy <- copy(ga)
+        
+        ga_copy[, empirical_bucket := {
+          brks <- unique(quantile(get(v1_col), probs = seq(0, 1, 1 / K), na.rm = TRUE))
+          if (length(brks) < 2) rep(1L, .N)
+          else as.integer(cut(get(v1_col), breaks = brks, include.lowest = TRUE))
+        }, by = grp_bucket_by]
+        
+        ga_copy[, comparison_bucket := {
+          brks <- unique(quantile(get(v2_col), probs = seq(0, 1, 1 / K), na.rm = TRUE))
+          if (length(brks) < 2) rep(1L, .N)
+          else as.integer(cut(get(v2_col), breaks = brks, include.lowest = TRUE))
+        }, by = grp_bucket_by]
+        
+        ga_copy <- ga_copy[!is.na(empirical_bucket) & !is.na(comparison_bucket)]
+        if (nrow(ga_copy) == 0) return(list(trans = NULL, metrics = NULL))
+        
+        ga_copy[, bucket_diff := abs(empirical_bucket - comparison_bucket)]
+        
+        # Full transition matrix (including zero-count cells)
+        trans <- ga_copy[, .(n = .N), by = .(empirical_bucket, comparison_bucket)]
+        grid <- CJ(empirical_bucket = 1:K, comparison_bucket = 1:K)
+        trans <- merge(grid, trans, by = c("empirical_bucket", "comparison_bucket"), all.x = TRUE)
+        trans[is.na(n), n := 0L]
+        trans[, row_total := sum(n), by = empirical_bucket]
+        trans[, row_prop := fifelse(row_total > 0, n / row_total, NA_real_)]
+        trans[, `:=`(
+          comparison = comp_name,
+          level = level_label,
+          n_buckets = K,
+          agg_method = method_label,
+          min_group_n = min_n,
+          n_groups_total = nrow(ga_copy)
+        )]
+        
+        # Policy-relevant summary metrics
+        emp_top <- ga_copy$empirical_bucket == K
+        cmp_top <- ga_copy$comparison_bucket == K
+        emp_bot <- ga_copy$empirical_bucket == 1L
+        cmp_bot <- ga_copy$comparison_bucket == 1L
+        
+        tp_top <- sum(emp_top & cmp_top, na.rm = TRUE)
+        fp_top <- sum(!emp_top & cmp_top, na.rm = TRUE)
+        fn_top <- sum(emp_top & !cmp_top, na.rm = TRUE)
+        tn_top <- sum(!emp_top & !cmp_top, na.rm = TRUE)
+        
+        tp_bot <- sum(emp_bot & cmp_bot, na.rm = TRUE)
+        fp_bot <- sum(!emp_bot & cmp_bot, na.rm = TRUE)
+        fn_bot <- sum(emp_bot & !cmp_bot, na.rm = TRUE)
+        tn_bot <- sum(!emp_bot & !cmp_bot, na.rm = TRUE)
+        
+        den_non_top <- fp_top + tn_top
+        den_top <- tp_top + fn_top
+        den_cmp_top <- tp_top + fp_top
+        
+        den_non_bot <- fp_bot + tn_bot
+        den_bot <- tp_bot + fn_bot
+        den_cmp_bot <- tp_bot + fp_bot
+        
+        metrics <- data.table(
+          comparison = comp_name,
+          level = level_label,
+          n_buckets = K,
+          agg_method = method_label,
+          min_group_n = min_n,
+          n_groups = nrow(ga_copy),
+          exact_match = mean(ga_copy$bucket_diff == 0, na.rm = TRUE),
+          off_by_1 = mean(ga_copy$bucket_diff == 1, na.rm = TRUE),
+          off_by_2plus = mean(ga_copy$bucket_diff >= 2, na.rm = TRUE),
+          spearman_rho = tryCatch(
+            cor(as.double(ga_copy[[v1_col]]), as.double(ga_copy[[v2_col]]), method = "spearman", use = "complete.obs"),
+            error = function(e) NA_real_
+          ),
+          kappa_w = compute_weighted_kappa(ga_copy$empirical_bucket, ga_copy$comparison_bucket, K = K, weights = "linear"),
+          kappa_w_quad = compute_weighted_kappa(ga_copy$empirical_bucket, ga_copy$comparison_bucket, K = K, weights = "quadratic"),
+          fpr_top = ifelse(den_non_top > 0, fp_top / den_non_top, NA_real_),
+          fnr_top = ifelse(den_top > 0, fn_top / den_top, NA_real_),
+          fpr_bottom = ifelse(den_non_bot > 0, fp_bot / den_non_bot, NA_real_),
+          fnr_bottom = ifelse(den_bot > 0, fn_bot / den_bot, NA_real_),
+          p_comp_top_given_emp_top = ifelse(den_top > 0, tp_top / den_top, NA_real_),
+          p_emp_top_given_comp_top = ifelse(den_cmp_top > 0, tp_top / den_cmp_top, NA_real_),
+          p_comp_bottom_given_emp_bottom = ifelse(den_bot > 0, tp_bot / den_bot, NA_real_),
+          p_emp_bottom_given_comp_bottom = ifelse(den_cmp_bot > 0, tp_bot / den_cmp_bot, NA_real_)
+        )
+        
+        list(trans = trans, metrics = metrics)
+      }
+      
+      res_mean <- run_transition(group_agg, "mean1", "mean2", "mean")
+      res_median <- run_transition(group_agg, "median1", "median2", "median")
+      
+      if (!is.null(res_mean$trans))  trans_results[[paste0(comp_name, "_mean")]] <- res_mean$trans
+      if (!is.null(res_median$trans)) trans_results[[paste0(comp_name, "_median")]] <- res_median$trans
+      if (!is.null(res_mean$metrics))  metric_results[[paste0(comp_name, "_mean")]] <- res_mean$metrics
+      if (!is.null(res_median$metrics)) metric_results[[paste0(comp_name, "_median")]] <- res_median$metrics
+    }
+    
+    list(
+      transitions = if (length(trans_results) > 0) rbindlist(trans_results, fill = TRUE) else data.table(),
+      metrics = if (length(metric_results) > 0) rbindlist(metric_results, fill = TRUE) else data.table()
+    )
+  }
+  
+  if (has_school) {
+    cat("  School-level transitions...\n")
+    for (K in transition_bucket_sizes) {
+      res <- compute_group_transitions(school_group_cache, 250L, "school", K)
+      if (nrow(res$transitions) > 0) {
+        group_transition_matrices_list[[paste0("school_K", K)]] <- res$transitions
+      }
+      if (nrow(res$metrics) > 0) {
+        group_transition_metrics_list[[paste0("school_K", K)]] <- res$metrics
+      }
+      ovr <- res$metrics[comparison == "Empirical – Canonical" & agg_method == "mean"]
+      if (nrow(ovr) > 0) {
+        cat(sprintf("    K=%d: canonical exact match = %.1f%% (n_groups=%s)\n",
+                    K, ovr$exact_match[1] * 100, format(ovr$n_groups[1], big.mark = ",")))
+      }
+    }
+  }
+  
+  if (has_district) {
+    cat("  District-level transitions...\n")
+    for (K in transition_bucket_sizes) {
+      res <- compute_group_transitions(district_group_cache, 500L, "district", K)
+      if (nrow(res$transitions) > 0) {
+        group_transition_matrices_list[[paste0("district_K", K)]] <- res$transitions
+      }
+      if (nrow(res$metrics) > 0) {
+        group_transition_metrics_list[[paste0("district_K", K)]] <- res$metrics
+      }
+      ovr <- res$metrics[comparison == "Empirical – Canonical" & agg_method == "mean"]
+      if (nrow(ovr) > 0) {
+        cat(sprintf("    K=%d: canonical exact match = %.1f%% (n_groups=%s)\n",
+                    K, ovr$exact_match[1] * 100, format(ovr$n_groups[1], big.mark = ",")))
+      }
+    }
+  }
+  
+  group_transition_matrices <- if (length(group_transition_matrices_list) > 0) {
+    rbindlist(group_transition_matrices_list, fill = TRUE)
+  } else {
+    data.table()
+  }
+  
+  group_transition_metrics <- if (length(group_transition_metrics_list) > 0) {
+    rbindlist(group_transition_metrics_list, fill = TRUE)
+  } else {
+    data.table()
+  }
+  
+  if (!has_school && !has_district) {
+    cat("  WARNING: No SCHOOL_NUMBER or DISTRICT_NUMBER. Skipping transition matrices.\n")
   }
   
   cat("\n")
@@ -1000,8 +1188,13 @@ compute_enhanced_statistics <- function(
   if (nrow(condition_level_stats) > 0) {
     # Summary: median condition-level MAD and range of N
     n_range <- range(condition_level_stats$n)
+    n_unique_conditions <- if ("dataset_id" %in% names(condition_level_stats)) {
+      uniqueN(condition_level_stats[, paste(dataset_id, condition_id, sep = "__")])
+    } else {
+      uniqueN(condition_level_stats$condition_id)
+    }
     cat(sprintf("  Conditions: %d unique, N range: %s - %s\n",
-                uniqueN(condition_level_stats$condition_id),
+                n_unique_conditions,
                 format(n_range[1], big.mark = ","),
                 format(n_range[2], big.mark = ",")))
     
@@ -1068,6 +1261,9 @@ compute_enhanced_statistics <- function(
     classification_issues = if (length(classification_issues) > 0) classification_issues else NULL,
     # Group-level bucket stability (K=3,5,10 for school/district)
     group_bucket_stability = group_bucket_stability,
+    # Group-level transition matrices and policy metrics for D3 (K=5,7,10; stricter min_n)
+    group_transition_matrices = group_transition_matrices,
+    group_transition_metrics = group_transition_metrics,
     # Prior achievement quartile statistics
     prior_quartile_stats = list(
       summary = prior_quartile_combined,

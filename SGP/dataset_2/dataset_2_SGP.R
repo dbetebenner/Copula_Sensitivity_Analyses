@@ -75,7 +75,8 @@ dataset_2_config <- list(
 # Parameters
 ### Parallel processing configuration
 ### Enabled for production runs (8 workers per task)
-parallel.config <- list(BACKEND = "PARALLEL", WORKERS = list(PERCENTILES = 8))
+#parallel.config <- list(BACKEND = "PARALLEL", WORKERS = list(PERCENTILES = 8))
+parallel.config <- NULL
 
 # Loop over time span configurations
 for (span_config in seq_along(dataset_2_config)) {

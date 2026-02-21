@@ -37,8 +37,12 @@ VIZ_DIR <- file.path(RESULTS_DIR, "visualizations")
 # Ensure visualization directory exists
 if (!dir.exists(VIZ_DIR)) dir.create(VIZ_DIR, recursive = TRUE)
 
-# Load SGPc variant data
-dataset_files <- list.files(RESULTS_DIR, pattern = "^sgpc_all_variants_dataset_.*\\.rds$", full.names = TRUE)
+# Load SGPc variant data (canonical dataset files only: dataset_1 ... dataset_n)
+dataset_files <- list.files(
+  RESULTS_DIR,
+  pattern = "^sgpc_all_variants_dataset_[0-9]+\\.rds$",
+  full.names = TRUE
+)
 
 if (length(dataset_files) == 0) {
   stop("No variant results found. Run sgpc_compute_all_variants.R first.")
@@ -54,9 +58,12 @@ cat("\n")
 # Each RDS should contain a dataset_id column (added in sgpc_compute_all_variants.R).
 # For backward compatibility with RDS files that lack it, infer from filename.
 all_data_list <- mapply(function(dt, f) {
+  ds_id <- sub(".*sgpc_all_variants_(dataset_\\d+)\\.rds$", "\\1", basename(f))
   if (!"dataset_id" %in% names(dt)) {
-    ds_id <- sub(".*sgpc_all_variants_(dataset_\\d+)\\.rds$", "\\1", basename(f))
     dt[, dataset_id := ds_id]
+  } else {
+    dt[, dataset_id := as.character(dataset_id)]
+    dt[is.na(dataset_id) | dataset_id == "", dataset_id := ds_id]
   }
   dt
 }, lapply(dataset_files, readRDS), dataset_files, SIMPLIFY = FALSE)
@@ -103,13 +110,20 @@ enhanced_stats_file <- file.path(RESULTS_DIR, "sgpc_enhanced_stats.rds")
 if (!exists("FORCE_RECOMPUTE")) FORCE_RECOMPUTE <- FALSE
 
 if (file.exists(enhanced_stats_file) && !FORCE_RECOMPUTE) {
-  # Validate cache: check that it has the expected 8 comparison pairs
+  # Validate cache: check comparison pairs and required sections
   cat("Loading cached enhanced statistics...\n")
   enhanced_stats <- readRDS(enhanced_stats_file)
   
   n_pairs <- length(enhanced_stats$comparison_pairs)
-  if (n_pairs < 8) {
-    cat(sprintf("  Cache has %d comparison pairs (need 8). Recomputing...\n", n_pairs))
+  has_d3_tables <- !is.null(enhanced_stats$group_transition_matrices) &&
+    !is.null(enhanced_stats$group_transition_metrics)
+  
+  if (n_pairs < 8 || !has_d3_tables) {
+    if (n_pairs < 8) {
+      cat(sprintf("  Cache has %d comparison pairs (need 8). Recomputing...\n", n_pairs))
+    } else {
+      cat("  Cache missing D3 transition tables. Recomputing...\n")
+    }
     enhanced_stats <- compute_enhanced_statistics(sgpc_data)
     saveRDS(enhanced_stats, enhanced_stats_file)
     cat(sprintf("  Cached updated statistics to: %s\n\n", enhanced_stats_file))
@@ -226,6 +240,52 @@ if (!skip_panel_b) {
   cat("Skipping Panel D2 (requires group identifiers)\n\n")
 }
 
+# --- Panel D3: Group transition matrices (School + District), mean & median ---
+if (!skip_panel_b) {
+  d3_comparisons <- c(
+    "Empirical – Canonical",
+    "Empirical – Best-Fit Parametric",
+    "Empirical – t (Student)",
+    "Empirical – Gaussian",
+    "Empirical – B-spline SGP",
+    "Empirical – Comonotonic"
+  )
+  d3_bucket_sizes <- c(5L, 7L, 10L)
+  D3_PAGE_WIDTH <- 16
+  D3_PAGE_HEIGHT <- 22
+  
+  for (agg_m in c("mean", "median")) {
+    agg_lbl <- if (agg_m == "mean") "Mean SGPc" else "Median SGPc"
+    for (k in d3_bucket_sizes) {
+      cat(sprintf("Generating Panel D3 [%s, K=%d] (6x2 comparison x level grid)...\n", agg_lbl, k))
+      tryCatch({
+        plot_key <- paste0("panel_d3_k", k, "_", agg_m)
+        file_key <- paste0("panel_d3_group_transition_matrices_k", k, "_", agg_m)
+        
+        plots[[plot_key]] <- plot_group_transition_matrices(
+          enhanced_stats,
+          agg_method = agg_m,
+          comparisons = d3_comparisons,
+          n_buckets = k
+        )
+        
+        save_plot_multi(
+          plots[[plot_key]],
+          file_key,
+          VIZ_DIR,
+          width = D3_PAGE_WIDTH,
+          height = D3_PAGE_HEIGHT
+        )
+        cat("\n")
+      }, error = function(e) {
+        cat(sprintf("  WARNING: Panel D3 [%s, K=%d] failed: %s\n\n", agg_lbl, k, e$message))
+      })
+    }
+  }
+} else {
+  cat("Skipping Panel D3 (requires group identifiers)\n\n")
+}
+
 # --- Panel F: Prior achievement quartile sensitivity ---
 cat("Generating Panel F (Prior achievement quartile)...\n")
 tryCatch({
@@ -274,19 +334,36 @@ cat("====================================================================\n\n")
 
 # Check for cached sampling sensitivity results
 sampling_results_file <- file.path(RESULTS_DIR, "sgpc_sampling_sensitivity.rds")
+target_sample_sizes <- c(50L, 250L, 500L, 1000L, 2500L, 5000L, 10000L)
 
 if (file.exists(sampling_results_file) && !FORCE_RECOMPUTE) {
   cat("Loading cached sampling sensitivity results...\n")
   sampling_results <- readRDS(sampling_results_file)
-  cat(sprintf("  Loaded (%d replicate rows, %d comparison pairs, %d sample sizes)\n\n",
-              nrow(sampling_results$replicate_results),
-              length(sampling_results$metadata$comparison_pairs),
-              length(sampling_results$metadata$sample_sizes)))
+  cached_sample_sizes <- as.integer(sampling_results$metadata$sample_sizes)
+  if (!identical(cached_sample_sizes, target_sample_sizes)) {
+    cat(sprintf("  Cached sample sizes (%s) differ from target (%s); recomputing.\n",
+                paste(format(cached_sample_sizes, big.mark = ","), collapse = ", "),
+                paste(format(target_sample_sizes, big.mark = ","), collapse = ", ")))
+    sampling_results <- compute_sampling_sensitivity(
+      sgpc_data,
+      sample_sizes = target_sample_sizes,
+      B = 50L,
+      max_conditions = 5L,
+      seed = 42L
+    )
+    saveRDS(sampling_results, sampling_results_file)
+    cat(sprintf("  Cached sampling sensitivity to: %s\n\n", sampling_results_file))
+  } else {
+    cat(sprintf("  Loaded (%d replicate rows, %d comparison pairs, %d sample sizes)\n\n",
+                nrow(sampling_results$replicate_results),
+                length(sampling_results$metadata$comparison_pairs),
+                length(sampling_results$metadata$sample_sizes)))
+  }
 } else {
   cat("Computing sampling sensitivity (bootstrap of existing differences)...\n")
   sampling_results <- compute_sampling_sensitivity(
     sgpc_data,
-    sample_sizes = c(500L, 1000L, 2000L, 4000L),
+    sample_sizes = target_sample_sizes,
     B = 50L,
     max_conditions = 5L,
     seed = 42L
@@ -336,17 +413,22 @@ tryCatch({
   cat(sprintf("  WARNING: Panel J failed: %s\n\n", e$message))
 })
 
-# --- Panel K: Group-Level Rank Stability (School + District) ---
+# --- Panel K: Group-Level Rank Stability (School + District), mean & median ---
 if (!skip_panel_b) {
-  cat("Generating Panel K (Group-Level Rank Stability)...\n")
-  tryCatch({
-    plots$panel_k <- plot_group_rank_stability(enhanced_stats)
-    save_plot_multi(plots$panel_k, "panel_k_group_rank_stability", VIZ_DIR, 
-                    width = PLOT_WIDTH, height = PLOT_HEIGHT)
-    cat("\n")
-  }, error = function(e) {
-    cat(sprintf("  WARNING: Panel K failed: %s\n\n", e$message))
-  })
+  for (agg_m in c("mean", "median")) {
+    agg_lbl <- if (agg_m == "mean") "Mean SGPc" else "Median SGPc"
+    cat(sprintf("Generating Panel K [%s] (Group-Level Rank Stability)...\n", agg_lbl))
+    tryCatch({
+      plots[[paste0("panel_k_", agg_m)]] <- plot_group_rank_stability(
+        enhanced_stats, agg_method = agg_m)
+      save_plot_multi(plots[[paste0("panel_k_", agg_m)]],
+                      paste0("panel_k_group_rank_stability_", agg_m), VIZ_DIR,
+                      width = PLOT_WIDTH, height = PLOT_HEIGHT)
+      cat("\n")
+    }, error = function(e) {
+      cat(sprintf("  WARNING: Panel K [%s] failed: %s\n\n", agg_lbl, e$message))
+    })
+  }
 } else {
   cat("Skipping Panel K (requires group identifiers)\n\n")
 }
@@ -484,7 +566,17 @@ tryCatch({
 # --- Diag M: Tail-Focused Rank Stability ---
 cat("Generating Diag M (Tail-Focused Rank Stability)...\n")
 tryCatch({
-  diag_plots$diag_m <- plot_diag_tail_rank_stability(sgpc_data)
+  diag_m_pairs <- c(
+    GAUSSIAN_DIAG_PAIRS,
+    list(
+      "Empirical \u2013 Frank" = c("sgpc_emp", "sgpc_frank"),
+      "Empirical \u2013 t (Student)" = c("sgpc_emp", "sgpc_t")
+    )
+  )
+  diag_plots$diag_m <- plot_diag_tail_rank_stability(
+    sgpc_data,
+    comparison_pairs = diag_m_pairs
+  )
   save_plot_multi(diag_plots$diag_m, "diag_m_tail_rank_stability", VIZ_DIR,
                   width = 14, height = 7)
 }, error = function(e) {
@@ -591,6 +683,12 @@ if (!is.null(plots$panel_d2_mean)) {
 if (!is.null(plots$panel_d2_median)) {
   panel_files["panel_d2_median"] <- "panel_d2_group_bucket_stability_median.pdf"
 }
+if (!is.null(plots$panel_d3_mean)) {
+  panel_files["panel_d3_mean"] <- "panel_d3_group_transition_matrices_mean.pdf"
+}
+if (!is.null(plots$panel_d3_median)) {
+  panel_files["panel_d3_median"] <- "panel_d3_group_transition_matrices_median.pdf"
+}
 if (!is.null(plots$panel_f)) {
   panel_files["panel_f"] <- "panel_f_prior_quartile.pdf"
 }
@@ -603,8 +701,11 @@ if (!is.null(plots$panel_h_mean)) {
 if (!is.null(plots$panel_h_median)) {
   panel_files["panel_h_median"] <- "panel_h_multilevel_aggregation_median.pdf"
 }
-if (!is.null(plots$panel_k)) {
-  panel_files["panel_k"] <- "panel_k_group_rank_stability.pdf"
+if (!is.null(plots$panel_k_mean)) {
+  panel_files["panel_k_mean"] <- "panel_k_group_rank_stability_mean.pdf"
+}
+if (!is.null(plots$panel_k_median)) {
+  panel_files["panel_k_median"] <- "panel_k_group_rank_stability_median.pdf"
 }
 if (!is.null(plots$panel_i1)) {
   panel_files["panel_i1"] <- "panel_i1_sensitivity_ribbon.pdf"
@@ -663,6 +764,10 @@ panel_labels <- c(
   panel_d  = "D:  Individual-level Rank Agreement",
   panel_e  = "E:  Decile Stability",
   panel_d2 = "D2: Group-Level Bucket Stability (School & District, K=3,5,10)",
+  panel_d2_mean = "D2: Group-Level Bucket Stability (Mean SGPc)",
+  panel_d2_median = "D2: Group-Level Bucket Stability (Median SGPc)",
+  panel_d3_mean = "D3: Group Transition Matrices (Mean SGPc, K=5,7,10)",
+  panel_d3_median = "D3: Group Transition Matrices (Median SGPc, K=5,7,10)",
   panel_f  = "F:  Prior Achievement Quartile Sensitivity",
   panel_g  = "G:  Cross-Dataset Comparison",
   panel_h  = "H:  Multi-Level Aggregation (Individual->School->District)",
