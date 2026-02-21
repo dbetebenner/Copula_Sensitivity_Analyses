@@ -144,7 +144,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEP 4 — STEP_4_TIMSS_Implementation (TIMSS application — placeholder)
 #   STEP 5 — STEP_5_Summary_Conclusions_Next_Steps (synthesis — placeholder)
 
-if (!exists("STEPS_TO_RUN")) STEPS_TO_RUN <- c(1)  # Targeted re-run: STEP_1 only for new dataset_2 READING G10 conditions
+if (!exists("STEPS_TO_RUN")) STEPS_TO_RUN <- c(2) 
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
