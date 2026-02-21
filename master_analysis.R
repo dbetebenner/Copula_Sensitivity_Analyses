@@ -110,9 +110,12 @@ if (file.exists("dataset_configs_local.R")) {
 #   DATASETS_TO_RUN <- c("dataset_1", "dataset_2")       # Run only datasets 1 and 2
 #   DATASETS_TO_RUN <- "dataset_4"                       # Run only dataset 4 (pandemic analysis)
 # ============================================================================
-# >>> CURRENT DATASET SELECTION (EC2 default: all 4 datasets) <<<
+# >>> CURRENT DATASET SELECTION <<<
+# Targeted re-run: dataset_2 only, to pick up the 2 newly added READING G10
+# grade sequences (READING span=3 G7->G10 and span=4 G6->G10).
+# All other datasets (1, 3, 4) are fully covered; no changes needed there.
 # ============================================================================
-if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- NULL
+if (!exists("DATASETS_TO_RUN")) DATASETS_TO_RUN <- "dataset_2"
   
 if (is.null(DATASETS_TO_RUN)) {
   DATASETS_TO_RUN <- names(DATASETS)
@@ -141,7 +144,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 #   STEP 4 — STEP_4_TIMSS_Implementation (TIMSS application — placeholder)
 #   STEP 5 — STEP_5_Summary_Conclusions_Next_Steps (synthesis — placeholder)
 
-if (!exists("STEPS_TO_RUN")) STEPS_TO_RUN <- c(2)  # EC2 default: STEP_2 pipeline
+if (!exists("STEPS_TO_RUN")) STEPS_TO_RUN <- c(1)  # Targeted re-run: STEP_1 only for new dataset_2 READING G10 conditions
 
 # Helper function to check if step should run
 should_run_step <- function(step_num) {
