@@ -250,7 +250,7 @@ if (!skip_panel_b) {
     "Empirical – B-spline SGP",
     "Empirical – Comonotonic"
   )
-  d3_bucket_sizes <- c(5L, 7L, 10L)
+  d3_bucket_sizes <- c(3L, 5L, 7L, 10L)
   D3_PAGE_WIDTH <- 16
   D3_PAGE_HEIGHT <- 22
   

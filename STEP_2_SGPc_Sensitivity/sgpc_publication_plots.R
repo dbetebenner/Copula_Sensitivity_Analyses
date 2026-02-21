@@ -1363,7 +1363,7 @@ plot_group_transition_matrices <- function(
     scale_x_continuous(
       breaks = seq_len(selected_k),
       minor_breaks = NULL,
-      limits = c(0.5, selected_k + 3.8),
+      limits = c(0.5, 0.5 + selected_k * (10.3 / 7)),
       expand = expansion(mult = c(0, 0))
     ) +
     scale_y_continuous(

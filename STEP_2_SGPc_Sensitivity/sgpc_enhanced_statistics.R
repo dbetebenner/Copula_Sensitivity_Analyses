@@ -817,12 +817,12 @@ compute_enhanced_statistics <- function(
   ###   - District: n >= 500 students
   ###
   ### Bucket granularities:
-  ###   - Quintiles (K=5), Septiles (K=7), Deciles (K=10)
+  ###   - Terciles (K=3), Quintiles (K=5), Septiles (K=7), Deciles (K=10)
   ############################################################################
   
-  cat("Computing group-level transition matrices (K=5,7,10; school>=250, district>=500)...\n")
+  cat("Computing group-level transition matrices (K=3,5,7,10; school>=250, district>=500)...\n")
   
-  transition_bucket_sizes <- c(5L, 7L, 10L)
+  transition_bucket_sizes <- c(3L, 5L, 7L, 10L)
   group_transition_matrices_list <- list()
   group_transition_metrics_list <- list()
   
