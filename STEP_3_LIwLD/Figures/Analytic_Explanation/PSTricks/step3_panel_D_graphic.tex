@@ -1,0 +1,76 @@
+%%%%
+%%%% Panel D graphic: Inferred growth regime H_theta
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage[svgnames,dvips]{xcolor}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\psset{xunit=0.033in,yunit=0.65in}
+\begin{pspicture}(-7,-0.85)(108,\panelDymax)
+  %% Read density data
+  \readdata{\dataUnif}{data/panel_D_density_uniform.dat}
+  \readdata{\dataTrue}{data/panel_D_density_true.dat}
+  \readdata{\dataInf}{data/panel_D_density_inferred.dat}
+
+  %% Filled area under inferred density
+  \pscustom[fillstyle=solid,fillcolor=zissouTeal,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataInf}%
+    \psline(100,0)%
+    \closepath}
+
+  %% Density curves
+  \listplot[linecolor=panelGrey,linewidth=1.1pt,linestyle=dashed,dash=4pt 3pt,
+            plotstyle=line]{\dataUnif}
+  \listplot[linecolor=zissouAmber,linewidth=1.2pt,linestyle=dashed,dash=5pt 2.5pt,
+            plotstyle=line]{\dataTrue}
+  \listplot[linecolor=zissouTeal,linewidth=1.4pt,plotstyle=line]{\dataInf}
+
+  %% Reference lines
+  \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.6pt](50,0)(50,\panelDymax)
+  \psline[linecolor=zissouAmber,linestyle=dashed,linewidth=0.7pt]%
+         (\trueMeanVline,0)(\trueMeanVline,\panelDymax)
+  \psline[linecolor=zissouTeal,linestyle=dashed,linewidth=0.7pt]%
+         (\inferredMeanVline,0)(\inferredMeanVline,\panelDymax)
+
+  %% Axes
+  \psaxes[Dx=20,Dy=1,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(100,\panelDymax)
+
+  %% Axis labels
+  \rput[t](50,-0.45){\textsf{\small Latent $\SGPc$}}
+  \rput[b]{90}(-7,2.0){\textsf{\small Density}}
+
+  %% Legend
+  \rput[tr](97,\panelDymax){%
+    \raisebox{-16pt}{\psframebox[linecolor=white,fillstyle=solid,fillcolor=white,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}l@{}}
+        \psline[linecolor=panelGrey,linewidth=1pt,linestyle=dashed](0,0)(0.35,0)
+          \textsf{\scriptsize\enspace Uniform}\\[-1pt]
+        \psline[linecolor=zissouAmber,linewidth=1pt,linestyle=dashed](0,0)(0.35,0)
+          \textsf{\scriptsize\enspace True synthetic}\\[-1pt]
+        \psline[linecolor=zissouTeal,linewidth=1.2pt](0,0)(0.35,0)
+          \textsf{\scriptsize\enspace Inferred}
+      \end{tabular}%
+    }}}
+
+  %% Recovery annotation
+  \rput[tl](3,\panelDymax){%
+    \raisebox{-28pt}{\textsf{\scriptsize\textcolor{zissouTeal}{%
+      Recovered mean $\SGPc = \inferredRegimeMean$}}}}
+
+\end{pspicture}
+
+\end{document}

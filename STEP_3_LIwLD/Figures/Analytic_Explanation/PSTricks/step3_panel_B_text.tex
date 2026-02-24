@@ -1,0 +1,42 @@
+%%%%
+%%%% Panel B text: Explanation of the forward CDF prediction
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=3.0in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.15in}
+  \hspace{0.12in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    \textbf{\textcolor{black}{B.\enspace The analytic identity}}
+
+    \vspace{6pt}
+    Given a candidate growth regime~$\Htheta$ and the baseline
+    transition kernel~$\Fzero(v\!\mid\!u)$ from the fitted copula, the
+    \textbf{analytic identity}
+    \[
+      \Ftheta(v)
+        \;=\; \mathbb{E}_U\!\bigl[\,\Htheta\!\bigl(\Fzero(v\!\mid\!U)\bigr)\bigr]
+        \;=\; \frac{1}{n}\sum_{i=1}^{n}\Htheta\!\bigl(\Fzero(v\!\mid\!u_i)\bigr)
+    \]
+    predicts the current-grade CDF \emph{exactly}---no Monte Carlo
+    simulation is needed. The uniform regime $H(p)=p$ (grey dashed)
+    systematically misses the observed CDF, while the inferred
+    $H_{\thetahat}$ (teal dashed) closes the gap.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

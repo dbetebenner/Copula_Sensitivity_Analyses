@@ -1,13 +1,13 @@
 ############################################################################
 ###
-### STEP 3 Configuration: Growth Regime Inference (LIw_LD)
+### STEP 3 Configuration: Growth Regime Inference (LIwLD)
 ###
 ### All tuneable parameters for STEP 3 in one place.
 ### Loaded by run_step3.R and individual analysis scripts.
 ###
 ### Author: dataimago
 ### Date: February 2026
-### Project: Copula Sensitivity Analyses — STEP 3 (LIw_LD)
+### Project: Copula Sensitivity Analyses — STEP 3 (LIwLD)
 ###
 ############################################################################
 
@@ -96,17 +96,25 @@ STEP3_CONFIG <- list(
   ),
 
   # ===========================================================================
-  # 8. Output settings
+  # 8. Bucket classification
+  # ===========================================================================
+  buckets = list(
+    k3 = c(45, 55),
+    k5 = c(40, 45, 55, 60)
+  ),
+
+  # ===========================================================================
+  # 9. Output settings
   # ===========================================================================
   output = list(
     export_formats     = c("pdf", "svg", "png"),
     make_publication_panels = TRUE,
     make_manifests     = TRUE,
-    results_dir        = "STEP_3_LIw_LD/results"
+    results_dir        = "STEP_3_LIwLD/results"
   ),
 
   # ===========================================================================
-  # 9. Reproducibility
+  # 10. Reproducibility
   # ===========================================================================
   seed = 20260210
 )

@@ -9,7 +9,7 @@
 ###
 ### Author: dataimago
 ### Date: February 2026
-### Project: Copula Sensitivity Analyses — STEP 3 (LIw_LD)
+### Project: Copula Sensitivity Analyses — STEP 3 (LIwLD)
 ###
 ############################################################################
 

@@ -1,0 +1,53 @@
+%%%%
+%%%% Panel B graphic: Forward CDF check in v-space
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage[svgnames,dvips]{xcolor}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\psset{xunit=3.3in,yunit=3.1in}
+\begin{pspicture}(-0.22,-0.18)(1.1,1.1)
+  %% Read CDF data
+  \readdata{\dataObs}{data/panel_B_cdf_obs.dat}
+  \readdata{\dataUnif}{data/panel_B_cdf_uniform.dat}
+  \readdata{\dataInf}{data/panel_B_cdf_inferred.dat}
+
+  %% CDF curves
+  \listplot[linecolor=black,linewidth=1.4pt,plotstyle=line]{\dataObs}
+  \listplot[linecolor=panelGrey,linewidth=1.2pt,linestyle=dashed,dash=4pt 3pt,
+            plotstyle=line]{\dataUnif}
+  \listplot[linecolor=zissouTeal,linewidth=1.3pt,linestyle=dashed,dash=5pt 2.5pt,
+            plotstyle=line]{\dataInf}
+
+  %% Axes
+  \psaxes[Dx=0.2,Dy=0.2,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(1.0,1.0)
+
+  %% Axis labels
+  \rput[t](0.5,-0.1){\textsf{\small $v$ (current pseudo-observation)}}
+  \rput[b]{90}(-0.12,0.5){\textsf{\small CDF}}
+
+  %% Legend
+  \rput[br](0.97,0.04){%
+    \psframebox[linecolor=white,fillstyle=solid,fillcolor=white,opacity=0.88,framesep=3pt]{%
+      \begin{tabular}{@{}l@{}}
+        \psline[linecolor=black,linewidth=1.2pt](0,0)(0.35,0) \textsf{\scriptsize\enspace Observed $\Fobs(v)$}\\[-1pt]
+        \psline[linecolor=panelGrey,linewidth=1pt,linestyle=dashed](0,0)(0.35,0)
+          \textsf{\scriptsize\enspace Uniform $H(p)=p$}\\[-1pt]
+        \psline[linecolor=zissouTeal,linewidth=1.2pt,linestyle=dashed](0,0)(0.35,0)
+          \textsf{\scriptsize\enspace Inferred $\Htheta$}
+      \end{tabular}%
+    }}
+\end{pspicture}
+\end{document}

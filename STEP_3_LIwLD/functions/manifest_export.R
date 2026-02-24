@@ -7,7 +7,7 @@
 ###
 ### Author: dataimago
 ### Date: February 2026
-### Project: Copula Sensitivity Analyses — STEP 3 (LIw_LD)
+### Project: Copula Sensitivity Analyses — STEP 3 (LIwLD)
 ###
 ############################################################################
 
@@ -46,7 +46,7 @@ export_step3_manifest <- function(results,
   manifest <- list(
     metadata = list(
       generated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
-      step         = "STEP_3_LIw_LD",
+      step         = "STEP_3_LIwLD",
       description  = "Growth regime inference from cross-sectional data",
       n_subgroups  = length(results$subgroup_estimates),
       config       = results$config
@@ -59,14 +59,18 @@ export_step3_manifest <- function(results,
     if (is.null(est)) return(NULL)
 
     list(
-      subgroup_id   = sg_id,
-      regime_family = est$regime$family,
-      theta_hat     = est$theta_hat,
-      median_sgpc   = round(est$regime$median * 100, 2),
-      mean_sgpc     = round(est$regime$mean * 100, 2),
-      distance_min  = round(est$distance_min, 6),
-      distances     = lapply(est$all_distances, function(x) round(x, 6)),
-      convergence   = est$convergence
+      subgroup_id    = sg_id,
+      regime_family  = est$regime$family,
+      theta_hat      = est$theta_hat,
+      median_sgpc    = round(est$regime$median * 100, 2),
+      mean_sgpc      = round(est$regime$mean * 100, 2),
+      dispersion_sd  = if (!is.null(est$regime$sd))  round(est$regime$sd * 100, 2) else NA,
+      dispersion_iqr = if (!is.null(est$regime$iqr)) round(est$regime$iqr * 100, 2) else NA,
+      entropy        = if (!is.null(est$regime$entropy)) round(est$regime$entropy, 4) else NA,
+      concentration  = if (!is.null(est$regime$concentration)) round(est$regime$concentration, 2) else NA,
+      distance_min   = round(est$distance_min, 6),
+      distances      = lapply(est$all_distances, function(x) round(x, 6)),
+      convergence    = est$convergence
     )
   })
   subgroup_summaries <- Filter(Negate(is.null), subgroup_summaries)
@@ -150,6 +154,20 @@ export_step3_manifest <- function(results,
   }
 
   md_lines <- c(md_lines,
+    "---",
+    "",
+    "## Output Files",
+    "",
+    "| File | Description |",
+    "|------|-------------|",
+    "| `step3_country_estimates.csv` | Subgroup estimates with dispersion and entropy |",
+    "| `step3_uncertainty_decomposition.csv` | Variance decomposition (sampling, copula, family) |",
+    "| `step3_bucket_probabilities.csv` | K=3 and K=5 bucket membership probabilities |",
+    "| `bucket_stability_summary.json` | Classification consistency summary |",
+    "| `step3_manifest.json` | This manifest (machine-readable) |",
+    "| `step3_manifest.md` | This manifest (human-readable) |",
+    "| `run_metadata.json` | Reproducibility metadata |",
+    "",
     "---",
     "",
     "## How to Use These Results",

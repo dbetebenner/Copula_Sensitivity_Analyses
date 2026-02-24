@@ -1,0 +1,45 @@
+%%%%
+%%%% Panel C graphic: Reverse-engineer theta (objective landscape)
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.4in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage[svgnames,dvips]{xcolor}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/panel_C_optimum}
+
+\pagestyle{empty}
+\begin{document}
+
+%% x in [23, 77] (mean SGPc), y in [0.23, 2.37] (log10 kappa)
+\psset{xunit=0.061in,yunit=1.3in}
+\begin{pspicture}(15,0.0)(85,2.6)
+
+  %% Heatmap cells (R-generated colored rectangles)
+  \input{data/panel_C_heatmap_cells}
+
+  %% Optimum marker
+  \psdot[dotscale=1.8,dotstyle=x,linewidth=1.6pt](\optX,\optY)
+  \rput[l](\optX,\optY){\hspace{6pt}\textsf{\scriptsize $\thetahat$}}
+
+  %% Axes overlay
+  \psaxes[Ox=20,Oy=0,Dx=10,Dy=0.5,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          axesstyle=frame,linecolor=borderGrey]{-}%
+          (23,0.23)(77,2.37)
+
+  %% Axis labels
+  \rput[t](50,0.0){\textsf{\small Mean of $\Htheta$ ($\SGPc$)}}
+  \rput[b]{90}(17.5,1.30){\textsf{\small $\log_{10}(\kappa)$}}
+
+  %% Color legend annotation
+  \rput[tr](72,2.37){%
+    \raisebox{-20pt}{\textsf{\scriptsize\textcolor{subtitleGrey}{Color $=\log_{10}$ distance}}}}
+
+\end{pspicture}
+
+\end{document}

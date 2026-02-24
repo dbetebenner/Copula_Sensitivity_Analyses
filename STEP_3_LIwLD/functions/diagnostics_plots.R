@@ -2,360 +2,296 @@
 ###
 ### Diagnostic Plots for STEP 3: Growth Regime Inference
 ###
-### Publication-quality visualisations comparing inferred growth regimes
-### to ground truth (actual SGPc distributions from longitudinal data).
-###
-### Uses export_plot_multi_format() from shared functions for PDF/SVG/PNG.
+### Publication-quality ggplot2 visualisations comparing inferred growth
+### regimes to ground truth (actual SGPc distributions from longitudinal
+### data). Styled via step3_publication_style.R (Zissou1 palette,
+### theme_publication, save_plot_multi).
 ###
 ### Author: dataimago
 ### Date: February 2026
-### Project: Copula Sensitivity Analyses — STEP 3 (LIw_LD)
+### Project: Copula Sensitivity Analyses — STEP 3 (LIwLD)
 ###
 ############################################################################
+
+require(ggplot2)
+require(patchwork)
 
 
 #' Plot Observed vs Predicted CDF
 #'
-#' Overlay of observed current-grade CDF and the predicted CDF under
-#' the estimated growth regime. The residual (difference) is shown
-#' in a lower panel.
+#' Upper: CDF overlay; lower: residual ribbon. Uses STEP 3 style bridge.
 #'
 #' @param est Result from estimate_regime()
 #' @param title Character. Plot title.
 #' @param output_dir Character. Directory for saved plots.
-#' @param filename Character. Base filename (no extension). Default "cdf_comparison".
-#' @param export_formats Character vector. Default c("pdf", "svg", "png").
+#' @param filename Character. Base filename (no extension).
 #'
-#' @return Invisible NULL. Side effect: plots saved to output_dir.
-#'
+#' @return The combined ggplot (invisible). Side effect: files saved.
 #' @export
 plot_observed_vs_predicted_cdf <- function(est,
                                             title = "Observed vs Predicted CDF",
                                             output_dir = "results/visualizations",
-                                            filename = "cdf_comparison",
-                                            export_formats = c("pdf", "svg", "png")) {
+                                            filename = "cdf_comparison") {
 
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  df <- data.frame(
+    v        = rep(est$v_grid, 2),
+    cdf      = c(est$F_obs, est$F_pred),
+    source   = rep(c("Observed", "Predicted"), each = length(est$v_grid))
+  )
 
-  plot_fn <- function() {
-    layout(matrix(1:2, ncol = 1), heights = c(3, 1))
+  residual_df <- data.frame(
+    v        = est$v_grid,
+    residual = est$F_pred - est$F_obs
+  )
 
-    # --- Upper panel: CDF overlay ---
-    par(mar = c(1, 4.5, 3, 1))
-    plot(est$v_grid, est$F_obs, type = "l", lwd = 2, col = "grey30",
-         xlab = "", ylab = "CDF",
-         main = title, ylim = c(0, 1))
-    lines(est$v_grid, est$F_pred, lwd = 2, col = "#2171B5", lty = 2)
+  cols <- c("Observed" = STEP3_COLORS$observed, "Predicted" = STEP3_COLORS$predicted)
+  ltys <- c("Observed" = "solid", "Predicted" = "dashed")
 
-    legend("bottomright",
-           legend = c("Observed", "Predicted"),
-           col = c("grey30", "#2171B5"),
-           lty = c(1, 2), lwd = 2, bty = "n", cex = 0.9)
+  regime <- est$regime
+  d <- est$all_distances
+  subtitle <- sprintf(
+    "Regime: %s | Median SGPc: %.1f | W1: %.4f | CvM: %.6f",
+    regime$family, regime$median * 100, d$wasserstein1, d$cramer_von_mises
+  )
 
-    # Annotate with regime summary
-    regime <- est$regime
-    d <- est$all_distances
-    info_text <- paste0(
-      "Regime: ", regime$family,
-      " | Median SGPc: ", round(regime$median * 100, 1),
-      " | W1: ", round(d$wasserstein1, 4),
-      " | CvM: ", round(d$cramer_von_mises, 6)
-    )
-    mtext(info_text, side = 1, line = -0.5, cex = 0.7, col = "grey40")
+  p_upper <- ggplot(df, aes(x = v, y = cdf, color = source, linetype = source)) +
+    geom_line(linewidth = 0.9) +
+    scale_color_manual(values = cols) +
+    scale_linetype_manual(values = ltys) +
+    labs(title = title, subtitle = subtitle,
+         x = NULL, y = "CDF", color = NULL, linetype = NULL) +
+    theme_publication() +
+    theme(legend.position = c(0.85, 0.15),
+          axis.text.x = element_blank())
 
-    # --- Lower panel: residual ---
-    par(mar = c(4.5, 4.5, 0.5, 1))
-    residual <- est$F_pred - est$F_obs
-    plot(est$v_grid, residual, type = "l", lwd = 1.5, col = "#CB181D",
-         xlab = "v (current-grade reference percentile)",
-         ylab = expression(F[theta](v) - F[obs](v)),
-         ylim = c(-max(abs(residual)) * 1.3, max(abs(residual)) * 1.3))
-    abline(h = 0, lty = 3, col = "grey50")
-    abline(h = c(-0.02, 0.02), lty = 2, col = "grey70")
-  }
+  p_lower <- ggplot(residual_df, aes(x = v, y = residual)) +
+    geom_ribbon(aes(ymin = pmin(residual, 0), ymax = pmax(residual, 0)),
+                fill = STEP3_COLORS$residual_pos, alpha = 0.25) +
+    geom_line(linewidth = 0.7, color = STEP3_COLORS$residual_pos) +
+    geom_ref_hline(yintercept = 0) +
+    geom_hline(yintercept = c(-0.02, 0.02), linetype = "dotted", color = "grey70") +
+    labs(x = "v (current-grade reference percentile)",
+         y = expression(F[theta](v) - F[obs](v))) +
+    theme_publication()
 
-  # Export using shared utility if available
-  base_path <- file.path(output_dir, filename)
-  if (exists("export_plot_multi_format")) {
-    export_plot_multi_format(plot_fn, base_filename = base_path,
-                              width = 8, height = 7, formats = export_formats)
-  } else {
-    pdf(paste0(base_path, ".pdf"), width = 8, height = 7)
-    plot_fn()
-    dev.off()
-  }
+  combined <- p_upper / p_lower + plot_layout(heights = c(3, 1))
 
-  invisible(NULL)
+  save_plot_multi(combined, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+
+  invisible(combined)
 }
 
 
 #' Plot Inferred Regime Shape vs True SGPc Distribution
 #'
-#' Compares the estimated growth regime H_theta (density on [0,1]) with
-#' the actual distribution of SGPc values computed from longitudinal data.
-#' This is the key validation plot for STEP 3.
+#' Compares the estimated H_theta density with the actual SGPc
+#' distribution from longitudinal data.
 #'
 #' @param regime A growth_regime object (estimated)
-#' @param true_sgpc Numeric vector of actual SGPc values (1-99 scale) from
-#'   longitudinal data. If NULL, only the estimated regime is shown.
+#' @param true_sgpc Numeric vector of actual SGPc values (1-99 scale).
+#'   If NULL, only the estimated regime is shown.
 #' @param title Character. Plot title.
 #' @param output_dir Character. Directory for saved plots.
-#' @param filename Character. Base filename. Default "regime_comparison".
-#' @param export_formats Character vector. Default c("pdf", "svg", "png").
+#' @param filename Character. Base filename.
 #'
-#' @return Invisible NULL.
-#'
+#' @return The ggplot (invisible).
 #' @export
 plot_regime_shape <- function(regime, true_sgpc = NULL,
                                title = "Growth Regime: Inferred vs Actual",
                                output_dir = "results/visualizations",
-                               filename = "regime_comparison",
-                               export_formats = c("pdf", "svg", "png")) {
+                               filename = "regime_comparison") {
 
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  p_grid <- seq(0.01, 0.99, length.out = 200)
+  inferred_d <- regime$density(p_grid)
 
-  plot_fn <- function() {
-    p_grid <- seq(0.01, 0.99, length.out = 200)
+  df_inferred <- data.frame(sgpc = p_grid * 100, density = inferred_d,
+                             source = "Inferred")
+  df_all <- df_inferred
 
-    # Inferred density
-    inferred_density <- regime$density(p_grid)
-
-    y_max <- max(inferred_density, na.rm = TRUE) * 1.3
-    if (!is.null(true_sgpc)) {
-      true_density <- density(true_sgpc / 100, from = 0.01, to = 0.99,
-                               bw = "SJ", n = 200)
-      y_max <- max(y_max, max(true_density$y) * 1.3)
-    }
-
-    par(mar = c(5, 4.5, 3, 1))
-    plot(p_grid * 100, inferred_density, type = "l", lwd = 2.5,
-         col = "#2171B5",
-         xlab = "SGPc (Conditional Growth Percentile)",
-         ylab = "Density",
-         main = title,
-         ylim = c(0, y_max),
-         xlim = c(0, 100))
-
-    # Add shading under inferred curve
-    polygon(c(p_grid * 100, rev(p_grid * 100)),
-            c(inferred_density, rep(0, length(p_grid))),
-            col = adjustcolor("#2171B5", alpha.f = 0.15), border = NA)
-
-    if (!is.null(true_sgpc)) {
-      lines(true_density$x * 100, true_density$y, lwd = 2.5,
-            col = "#E6550D", lty = 1)
-      polygon(c(true_density$x * 100, rev(true_density$x * 100)),
-              c(true_density$y, rep(0, length(true_density$y))),
-              col = adjustcolor("#E6550D", alpha.f = 0.10), border = NA)
-
-      legend("topright",
-             legend = c(paste0("Inferred (", regime$family, ")"),
-                        "Actual (longitudinal)"),
-             col = c("#2171B5", "#E6550D"),
-             lwd = 2.5, lty = c(1, 1), bty = "n", cex = 0.9)
-
-      # Summary statistics
-      info <- paste0(
-        "Inferred median: ", round(regime$median * 100, 1),
-        " | Actual median: ", round(median(true_sgpc), 1),
-        " | Diff: ", round(regime$median * 100 - median(true_sgpc), 1)
-      )
-      mtext(info, side = 1, line = 3.5, cex = 0.7, col = "grey40")
-    } else {
-      legend("topright",
-             legend = paste0("Inferred (", regime$family, ")"),
-             col = "#2171B5", lwd = 2.5, bty = "n", cex = 0.9)
-    }
-
-    # Reference lines
-    abline(v = 50, lty = 3, col = "grey50")
-    abline(v = regime$median * 100, lty = 2, col = "#2171B5")
+  if (!is.null(true_sgpc)) {
+    kd <- density(true_sgpc / 100, from = 0.01, to = 0.99, bw = "SJ", n = 200)
+    df_actual <- data.frame(sgpc = kd$x * 100, density = kd$y, source = "Actual")
+    df_all <- rbind(df_all, df_actual)
   }
 
-  base_path <- file.path(output_dir, filename)
-  if (exists("export_plot_multi_format")) {
-    export_plot_multi_format(plot_fn, base_filename = base_path,
-                              width = 8, height = 6, formats = export_formats)
-  } else {
-    pdf(paste0(base_path, ".pdf"), width = 8, height = 6)
-    plot_fn()
-    dev.off()
-  }
+  cols <- c("Inferred" = STEP3_COLORS$inferred, "Actual" = STEP3_COLORS$actual)
 
-  invisible(NULL)
+  subtitle <- if (!is.null(true_sgpc)) {
+    sprintf("Inferred median: %.1f | Actual median: %.1f | Diff: %.1f",
+            regime$median * 100, median(true_sgpc),
+            regime$median * 100 - median(true_sgpc))
+  } else NULL
+
+  p <- ggplot(df_all, aes(x = sgpc, y = density, fill = source, color = source)) +
+    geom_area(alpha = 0.15, position = "identity") +
+    geom_line(linewidth = 0.9) +
+    geom_ref_vline(xintercept = 50) +
+    geom_vline(xintercept = regime$median * 100, linetype = "dashed",
+               color = STEP3_COLORS$inferred, linewidth = 0.6) +
+    scale_color_manual(values = cols) +
+    scale_fill_manual(values = cols) +
+    labs(title = title, subtitle = subtitle,
+         x = "SGPc (Conditional Growth Percentile)",
+         y = "Density", color = NULL, fill = NULL) +
+    coord_cartesian(xlim = c(0, 100)) +
+    theme_publication() +
+    theme(legend.position = c(0.88, 0.88))
+
+  save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+
+  invisible(p)
 }
 
 
 #' Plot Residual Curve
 #'
-#' Simple residual plot: F_theta(v) - F_obs(v).
-#'
 #' @param est Result from estimate_regime()
 #' @param output_dir Character.
-#' @param filename Character. Default "residual_curve".
-#' @param export_formats Character vector.
+#' @param filename Character.
 #'
-#' @return Invisible NULL.
-#'
+#' @return The ggplot (invisible).
 #' @export
 plot_residual_curve <- function(est,
                                  output_dir = "results/visualizations",
-                                 filename = "residual_curve",
-                                 export_formats = c("pdf", "svg", "png")) {
+                                 filename = "residual_curve") {
 
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  residual <- est$F_pred - est$F_obs
+  df <- data.frame(v = est$v_grid, residual = residual,
+                    sign = ifelse(residual >= 0, "positive", "negative"))
 
-  plot_fn <- function() {
-    residual <- est$F_pred - est$F_obs
-    par(mar = c(5, 4.5, 3, 1))
-    plot(est$v_grid, residual, type = "l", lwd = 2, col = "#CB181D",
-         xlab = "v (current-grade reference percentile)",
-         ylab = expression(F[theta](v) - F[obs](v)),
-         main = "CDF Residual Curve")
-    abline(h = 0, lty = 1, col = "grey50")
-    abline(h = c(-0.02, 0.02), lty = 2, col = "grey70")
-    abline(h = c(-0.05, 0.05), lty = 3, col = "grey80")
+  p <- ggplot(df, aes(x = v, y = residual)) +
+    geom_segment(aes(xend = v, y = 0, yend = residual, color = sign),
+                 alpha = 0.35, linewidth = 0.3) +
+    geom_line(linewidth = 0.8, color = STEP3_COLORS$residual_pos) +
+    geom_ref_hline(yintercept = 0) +
+    geom_hline(yintercept = c(-0.02, 0.02), linetype = "dotted", color = "grey70") +
+    geom_hline(yintercept = c(-0.05, 0.05), linetype = "dotdash", color = "grey80") +
+    scale_color_manual(values = c("positive" = STEP3_COLORS$residual_pos,
+                                   "negative" = STEP3_COLORS$residual_neg),
+                        guide = "none") +
+    labs(title = "CDF Residual Curve",
+         x = "v (current-grade reference percentile)",
+         y = expression(F[theta](v) - F[obs](v))) +
+    theme_publication()
 
-    # Shade positive/negative regions
-    pos <- residual > 0
-    neg <- residual < 0
-    if (any(pos)) {
-      segments(est$v_grid[pos], 0, est$v_grid[pos], residual[pos],
-               col = adjustcolor("#CB181D", 0.3))
-    }
-    if (any(neg)) {
-      segments(est$v_grid[neg], 0, est$v_grid[neg], residual[neg],
-               col = adjustcolor("#2171B5", 0.3))
-    }
-  }
+  save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = 5)
 
-  base_path <- file.path(output_dir, filename)
-  if (exists("export_plot_multi_format")) {
-    export_plot_multi_format(plot_fn, base_filename = base_path,
-                              width = 8, height = 5, formats = export_formats)
-  } else {
-    pdf(paste0(base_path, ".pdf"), width = 8, height = 5)
-    plot_fn()
-    dev.off()
-  }
-
-  invisible(NULL)
+  invisible(p)
 }
 
 
 #' Multi-Panel Recovery Summary
 #'
-#' Four-panel diagnostic combining:
-#'   A. Observed vs predicted CDF
-#'   B. Inferred regime density vs true SGPc histogram
-#'   C. Q-Q plot (predicted vs observed quantiles)
-#'   D. Grid search landscape (distance vs parameter)
+#' Four-panel diagnostic: A. CDF overlay, B. Regime density vs true,
+#' C. Q-Q plot, D. Grid search landscape.
 #'
 #' @param est Result from estimate_regime()
 #' @param true_sgpc Numeric vector of actual SGPc values (1-99). Can be NULL.
 #' @param title Character. Overall title.
 #' @param output_dir Character.
-#' @param filename Character. Default "recovery_summary".
-#' @param export_formats Character vector.
+#' @param filename Character.
 #'
-#' @return Invisible NULL.
-#'
+#' @return The patchwork composite (invisible).
 #' @export
 plot_recovery_summary <- function(est, true_sgpc = NULL,
                                    title = "Growth Regime Recovery Summary",
                                    output_dir = "results/visualizations",
-                                   filename = "recovery_summary",
-                                   export_formats = c("pdf", "svg", "png")) {
+                                   filename = "recovery_summary") {
 
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  # --- Panel A: CDF overlay ---
+  cdf_df <- data.frame(
+    v   = rep(est$v_grid, 2),
+    cdf = c(est$F_obs, est$F_pred),
+    source = rep(c("Observed", "Predicted"), each = length(est$v_grid))
+  )
+  cols_cdf <- c("Observed" = STEP3_COLORS$observed, "Predicted" = STEP3_COLORS$predicted)
+  ltys_cdf <- c("Observed" = "solid", "Predicted" = "dashed")
 
-  plot_fn <- function() {
-    par(mfrow = c(2, 2), mar = c(4, 4, 2.5, 1), oma = c(0, 0, 2, 0))
+  pA <- ggplot(cdf_df, aes(x = v, y = cdf, color = source, linetype = source)) +
+    geom_line(linewidth = 0.8) +
+    scale_color_manual(values = cols_cdf) +
+    scale_linetype_manual(values = ltys_cdf) +
+    labs(title = "A. CDF Comparison", x = "v", y = "CDF",
+         color = NULL, linetype = NULL) +
+    theme_publication(base_size = 9) +
+    theme(legend.position = c(0.80, 0.15))
 
-    # --- Panel A: CDF overlay ---
-    plot(est$v_grid, est$F_obs, type = "l", lwd = 2, col = "grey30",
-         xlab = "v", ylab = "CDF", main = "A. CDF Comparison")
-    lines(est$v_grid, est$F_pred, lwd = 2, col = "#2171B5", lty = 2)
-    legend("bottomright", legend = c("Observed", "Predicted"),
-           col = c("grey30", "#2171B5"), lty = c(1, 2), lwd = 2,
-           bty = "n", cex = 0.75)
+  # --- Panel B: Regime density ---
+  p_grid <- seq(0.01, 0.99, length.out = 200)
+  inferred_d <- est$regime$density(p_grid)
+  df_B <- data.frame(sgpc = p_grid * 100, density = inferred_d, source = "Inferred")
 
-    # --- Panel B: Regime density vs true SGPc ---
-    p_grid <- seq(0.01, 0.99, length.out = 200)
-    inferred_d <- est$regime$density(p_grid)
-    y_max <- max(inferred_d) * 1.3
+  if (!is.null(true_sgpc)) {
+    kd <- density(true_sgpc / 100, from = 0.01, to = 0.99, bw = "SJ", n = 200)
+    df_B <- rbind(df_B, data.frame(sgpc = kd$x * 100, density = kd$y,
+                                    source = "Actual"))
+  }
+  cols_B <- c("Inferred" = STEP3_COLORS$inferred, "Actual" = STEP3_COLORS$actual)
 
-    if (!is.null(true_sgpc)) {
-      true_d <- density(true_sgpc / 100, from = 0.01, to = 0.99, bw = "SJ")
-      y_max <- max(y_max, max(true_d$y) * 1.3)
-    }
+  pB <- ggplot(df_B, aes(x = sgpc, y = density, color = source)) +
+    geom_line(linewidth = 0.8) +
+    scale_color_manual(values = cols_B) +
+    labs(title = "B. Regime Shape", x = "SGPc", y = "Density", color = NULL) +
+    theme_publication(base_size = 9) +
+    theme(legend.position = c(0.80, 0.85))
 
-    plot(p_grid * 100, inferred_d, type = "l", lwd = 2, col = "#2171B5",
-         xlab = "SGPc", ylab = "Density", main = "B. Regime Shape",
-         ylim = c(0, y_max))
-    if (!is.null(true_sgpc)) {
-      lines(true_d$x * 100, true_d$y, lwd = 2, col = "#E6550D")
-      legend("topright", legend = c("Inferred", "Actual"),
-             col = c("#2171B5", "#E6550D"), lwd = 2, bty = "n", cex = 0.75)
-    }
+  # --- Panel C: Q-Q plot ---
+  n_qq <- min(99, length(est$v_grid))
+  probs <- seq(0.01, 0.99, length.out = n_qq)
+  q_obs  <- quantile(est$F_obs,  probs = probs, type = 1)
+  q_pred <- quantile(est$F_pred, probs = probs, type = 1)
+  qq_df <- data.frame(observed = q_obs, predicted = q_pred)
 
-    # --- Panel C: Q-Q plot ---
-    n_qq <- min(99, length(est$v_grid))
-    probs <- seq(0.01, 0.99, length.out = n_qq)
-    q_obs  <- quantile(est$F_obs, probs = probs, type = 1)
-    q_pred <- quantile(est$F_pred, probs = probs, type = 1)
-    plot(q_obs, q_pred, pch = 16, cex = 0.6, col = "#2171B5",
-         xlab = "Observed quantiles", ylab = "Predicted quantiles",
-         main = "C. Q-Q Plot")
-    abline(0, 1, lty = 2, col = "grey50")
+  pC <- ggplot(qq_df, aes(x = observed, y = predicted)) +
+    geom_point(size = 1, alpha = 0.6, color = STEP3_COLORS$point_est) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+    labs(title = "C. Q-Q Plot", x = "Observed quantiles",
+         y = "Predicted quantiles") +
+    theme_publication(base_size = 9)
 
-    # --- Panel D: Grid search landscape ---
-    gs <- est$grid_search
-    if (!is.null(gs) && nrow(gs) > 0 && "theta1" %in% names(gs)) {
-      valid_gs <- gs[is.finite(gs$distance), ]
-      if (nrow(valid_gs) > 0) {
-        col_pal <- colorRampPalette(c("#2171B5", "#FEC44F", "#CB181D"))(100)
-        d_range <- range(valid_gs$distance)
-        d_scaled <- (valid_gs$distance - d_range[1]) / max(diff(d_range), 1e-10)
-        d_idx <- pmax(1, pmin(100, round(d_scaled * 99) + 1))
-
-        if ("theta2" %in% names(valid_gs)) {
-          plot(valid_gs$theta1, valid_gs$theta2, pch = 15, cex = 0.5,
-               col = col_pal[d_idx],
-               xlab = "theta1 (mean)", ylab = "theta2 (kappa)",
-               main = "D. Grid Search Landscape")
-          points(est$theta_hat[1], est$theta_hat[2],
-                 pch = 4, cex = 2, lwd = 2, col = "black")
-        } else {
-          plot(valid_gs$theta1, valid_gs$distance, type = "l", lwd = 2,
-               col = "#2171B5",
-               xlab = "theta (mean)", ylab = "Distance",
-               main = "D. Grid Search Landscape")
-          abline(v = est$theta_hat[1], lty = 2, col = "red")
-        }
-      } else {
-        plot.new()
-        text(0.5, 0.5, "Grid search data\nnot available", cex = 1.1)
-      }
+  # --- Panel D: Grid search landscape ---
+  gs <- est$grid_search
+  if (!is.null(gs) && nrow(gs) > 0 && "theta1" %in% names(gs)) {
+    valid_gs <- gs[is.finite(gs$distance), ]
+    if (nrow(valid_gs) > 0 && "theta2" %in% names(valid_gs)) {
+      opt_pt <- data.frame(theta1 = est$theta_hat[1], theta2 = est$theta_hat[2])
+      pD <- ggplot(valid_gs, aes(x = theta1, y = theta2, color = distance)) +
+        geom_point(size = 0.8) +
+        scale_color_gradientn(colours = c(STEP3_COLORS$predicted, "#FEC44F",
+                                           STEP3_COLORS$residual_pos)) +
+        geom_point(data = opt_pt, aes(x = theta1, y = theta2),
+                   shape = 4, size = 3, stroke = 1.5, color = "black",
+                   inherit.aes = FALSE) +
+        labs(title = "D. Grid Search", x = "theta1 (mean)", y = "theta2 (kappa)") +
+        theme_publication(base_size = 9) +
+        theme(legend.position = "none")
+    } else if (nrow(valid_gs) > 0) {
+      opt_pt <- data.frame(theta = est$theta_hat[1])
+      pD <- ggplot(valid_gs, aes(x = theta1, y = distance)) +
+        geom_line(linewidth = 0.8, color = STEP3_COLORS$predicted) +
+        geom_vline(data = opt_pt, aes(xintercept = theta),
+                   linetype = "dashed", color = STEP3_COLORS$residual_pos) +
+        labs(title = "D. Grid Search", x = "theta (mean)", y = "Distance") +
+        theme_publication(base_size = 9)
     } else {
-      plot.new()
-      text(0.5, 0.5, "Grid search data\nnot available", cex = 1.1)
+      pD <- ggplot() + annotate("text", x = 0.5, y = 0.5,
+                                 label = "Grid search data\nnot available",
+                                 size = 4) + theme_void()
     }
-
-    mtext(title, outer = TRUE, cex = 1.1, font = 2)
-  }
-
-  base_path <- file.path(output_dir, filename)
-  if (exists("export_plot_multi_format")) {
-    export_plot_multi_format(plot_fn, base_filename = base_path,
-                              width = 10, height = 9, formats = export_formats)
   } else {
-    pdf(paste0(base_path, ".pdf"), width = 10, height = 9)
-    plot_fn()
-    dev.off()
+    pD <- ggplot() + annotate("text", x = 0.5, y = 0.5,
+                               label = "Grid search data\nnot available",
+                               size = 4) + theme_void()
   }
 
-  invisible(NULL)
+  combined <- (pA | pB) / (pC | pD) +
+    plot_annotation(title = title,
+                    theme = theme(plot.title = element_text(face = "bold",
+                                                            size = 14, hjust = 0)))
+
+  save_plot_multi(combined, filename, output_dir, width = PLOT_WIDTH, height = 9)
+
+  invisible(combined)
 }
 
 

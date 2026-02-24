@@ -17,7 +17,7 @@
 ###
 ### Author: dataimago
 ### Date: February 2026
-### Project: Copula Sensitivity Analyses — STEP 3 (LIw_LD)
+### Project: Copula Sensitivity Analyses — STEP 3 (LIwLD)
 ###
 ############################################################################
 
@@ -62,12 +62,22 @@ regime_beta <- function(mean_val, kappa) {
   alpha <- mean_val * kappa
   beta  <- (1 - mean_val) * kappa
 
+  med  <- qbeta(0.5, shape1 = alpha, shape2 = beta)
+  q25  <- qbeta(0.25, shape1 = alpha, shape2 = beta)
+  q75  <- qbeta(0.75, shape1 = alpha, shape2 = beta)
+  sd_p <- sqrt(alpha * beta / ((alpha + beta)^2 * (alpha + beta + 1)))
+
   result <- list(
     cdf      = function(p) pbeta(p, shape1 = alpha, shape2 = beta),
     quantile = function(q) qbeta(q, shape1 = alpha, shape2 = beta),
     density  = function(p) dbeta(p, shape1 = alpha, shape2 = beta),
     mean     = mean_val,
-    median   = qbeta(0.5, shape1 = alpha, shape2 = beta),
+    median   = med,
+    sd       = sd_p,
+    iqr      = q75 - q25,
+    entropy  = lbeta(alpha, beta) - (alpha - 1) * digamma(alpha) -
+               (beta - 1) * digamma(beta) + (alpha + beta - 2) * digamma(alpha + beta),
+    concentration = kappa,
     params   = list(alpha = alpha, beta = beta, mean = mean_val, kappa = kappa),
     family   = "beta"
   )
@@ -149,12 +159,32 @@ regime_truncexp <- function(mean_val, tol = 1e-8) {
     log(1 + q * (exp(lambda) - 1)) / lambda
   }
 
+  med  <- quantile_fn(0.5)
+  q25  <- quantile_fn(0.25)
+  q75  <- quantile_fn(0.75)
+
+  # Variance of truncated exponential on [0,1]
+  if (abs(lambda) < 1e-10) {
+    var_p <- 1 / 12
+  } else {
+    e_p2 <- 2 / lambda^2 - (2 * exp(lambda)) / (lambda * (exp(lambda) - 1)) +
+             exp(lambda) / (exp(lambda) - 1)
+    var_p <- max(0, e_p2 - mean_val^2)
+  }
+
+  # Differential entropy of truncated exponential
+  ent <- log(norm_const) - lambda * mean_val
+
   result <- list(
     cdf      = Vectorize(cdf_fn),
     quantile = Vectorize(quantile_fn),
     density  = Vectorize(density_fn),
     mean     = mean_val,
-    median   = quantile_fn(0.5),
+    median   = med,
+    sd       = sqrt(var_p),
+    iqr      = q75 - q25,
+    entropy  = ent,
+    concentration = 1 / max(var_p, 1e-10),
     params   = list(lambda = lambda, mean = mean_val),
     family   = "truncexp"
   )
@@ -201,12 +231,21 @@ regime_truncunif <- function(lower = 0, upper = 1) {
     lower + q * width
   }
 
+  sd_p <- width / sqrt(12)
+  q25  <- lower + 0.25 * width
+  q75  <- lower + 0.75 * width
+  ent  <- log(width)
+
   result <- list(
     cdf      = Vectorize(cdf_fn),
     quantile = Vectorize(quantile_fn),
     density  = Vectorize(density_fn),
     mean     = mean_val,
     median   = mean_val,
+    sd       = sd_p,
+    iqr      = q75 - q25,
+    entropy  = ent,
+    concentration = 1 / max(sd_p^2, 1e-10),
     params   = list(lower = lower, upper = upper),
     family   = "truncunif"
   )
@@ -264,8 +303,12 @@ create_regime <- function(family, theta) {
 #' @export
 print.growth_regime <- function(x, ...) {
   cat("Growth Regime:", x$family, "\n")
-  cat("  Mean:   ", sprintf("%.4f", x$mean), "\n")
-  cat("  Median: ", sprintf("%.4f", x$median), "\n")
+  cat("  Mean:          ", sprintf("%.4f", x$mean), "\n")
+  cat("  Median:        ", sprintf("%.4f", x$median), "\n")
+  cat("  SD:            ", sprintf("%.4f", x$sd), "\n")
+  cat("  IQR:           ", sprintf("%.4f", x$iqr), "\n")
+  cat("  Entropy:       ", sprintf("%.4f", x$entropy), "\n")
+  cat("  Concentration: ", sprintf("%.2f", x$concentration), "\n")
   cat("  Params: ", paste(names(x$params), "=",
       sprintf("%.4f", unlist(x$params)), collapse = ", "), "\n")
 }

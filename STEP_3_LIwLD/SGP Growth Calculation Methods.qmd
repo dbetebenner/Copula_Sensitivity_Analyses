@@ -1,0 +1,211 @@
+---
+title: "Deterministic vs Stochastic Systems, Copulas, and STEP 3 (sgpcFlow)"
+format: html
+---
+
+```{=latex}
+% This document is intended to compile under Quarto.
+% Math is written in standard LaTeX.
+```
+
+According to a document from **January 2026**, STEP 3 is explicitly framed as *growth regime inference from cross-sectional data* by treating a **baseline copula as a transition kernel** and then estimating a **distribution on conditional percentiles** that makes the predicted current-grade marginal match the observed one.【234:5†README.md†L1-L47】
+
+That framing is exactly what makes the “growth regime = stochastic process” intuition click—*with a few precision upgrades*.
+
+## 1. Deterministic vs stochastic here: what’s the object?
+
+Work on the pseudo-observation scale (where copulas are cleanest). Let \(U\in(0,1)\) be the “prior” percentile and \(V\in(0,1)\) the “current” percentile (both computed relative to a reference marginal).
+
+- A **deterministic** “system” from Grade 4 to Grade 8 means:
+  \[
+  V = g(U)\quad \text{a.s.}
+  \]
+  i.e., conditional on \(U=u\), there is no dispersion: \(V\mid U=u\) is a **point mass**.
+
+- A **stochastic** “system” means:
+  \[
+  V\mid U=u \sim K(u,\cdot),
+  \]
+  where \(K(u,\cdot)\) is a **non-degenerate** distribution on \((0,1)\).
+
+This \(K\) is what probabilists call a **transition kernel** (a.k.a. stochastic kernel): for each current state \(u\), it gives a distribution over next state \(v\). Your key move—interpreting the copula machinery as defining a kernel—is the right abstraction.
+
+## 2. How a copula becomes a transition kernel
+
+If \((U,V)\) has copula \(C\), then (under regularity / absolute continuity) the **conditional CDF** is
+
+\[
+F_{V\mid U=u}(v) \;=\; \frac{\partial}{\partial u}C(u,v).
+\]
+
+This conditional CDF *is* the transition kernel written in CDF form:
+\[
+K(u,(-\infty,v]) := F_{V\mid U=u}(v).
+\]
+
+Your STEP 3 documentation states exactly this:
+\[
+F_0(v\mid u) = \frac{d}{du}C_0(u,v),
+\]
+where \(C_0\) is the baseline copula imported from STEP 1.【234:5†README.md†L25-L41】
+
+So: **copula = dependence object**, **its partial derivative = transition kernel**.
+
+## 3. Deterministic extremes live on the boundary of copula space
+
+Koenker’s memo emphasizes that the Fréchet bounds are copulas; in the bivariate case, the **upper bound** corresponds to perfect concordance \((U,U)\) and the **lower bound** to perfect discordance \((U,1-U)\).【234:12†como.pdf†L31-L37】
+
+- **Comonotonic copula**:
+  \[
+  C^+(u,v)=\min(u,v)
+  \]
+  corresponds to \(V=U\) almost surely (perfect rank preservation on the pseudo-observation scale).
+
+- **Countermonotonic copula**:
+  \[
+  C^-(u,v)=\max(u+v-1,0)
+  \]
+  corresponds to \(V=1-U\) almost surely (perfect negative rank preservation).
+
+These are *singular* copulas (no density in the interior): probability mass lies on a curve rather than spread over an area. That is why the conditional distribution collapses to a point mass.
+
+### TAMP equivalence
+
+Your STEP 1 documentation makes the equivalence operational:
+
+> “Comonotonic SGPc = U … This is what the traditional TAMP assumption implicitly produces.”【234:2†README.md†L23-L25】
+
+So the equipercentile mapping \(V=U\) is deterministic and aligns perfectly with the comonotonic copula.
+
+## 4. The subtlety: “everyone gets SGP = 50” is deterministic, but not the same deterministic mapping as TAMP
+
+Here is the disambiguation that resolves the conceptual knot.
+
+### 4.1 What does “SGPc = 50 for everyone” mean?
+
+On the percentile scale,
+\[
+\mathrm{SGPc}(u,v) = 100\cdot F_{V\mid U=u}(v).
+\]
+
+So “everyone has SGPc = 50” means:
+\[
+F_{V\mid U=u}(v) = 0.5
+\quad\Rightarrow\quad
+v = Q_{V\mid U=u}(0.5),
+\]
+i.e., each student lies exactly on the **conditional median curve**. That yields a deterministic map:
+\[
+V = g(U) := Q_{V\mid U}(0.5\mid U).
+\]
+
+This is deterministic in the kernel sense (point mass conditional), but it is **not necessarily** the identity map \(V=U\). It depends on the kernel.
+
+- Under **comonotonic** dependence, every conditional quantile equals \(u\), so the median curve is \(v=u\).
+- Under a **t-copula** kernel (your canonical baseline), the conditional median curve is increasing but generally not equal to \(u\) pointwise.
+
+So there are many deterministic regimes; **TAMP is one special deterministic regime** that happens to preserve percentile rank exactly.
+
+### 4.2 Does “point mass \(V\mid U=u\)” force comonotonicity?
+
+On the copula scale, “conditional point mass” implies \(V=g(U)\) almost surely (functional dependence). If \(g\) is monotone increasing, the dependence is comonotone in the rank sense; if monotone decreasing, countermonotone. In education growth, we typically assume monotone positive dependence, so practically one is pushed toward comonotonicity at the deterministic limit.
+
+## 5. Where STEP 3 adds something new: stochastic growth regimes layered on a fixed kernel
+
+STEP 3 takes:
+
+- cross-sectional Grade 4 sample mapped to reference percentiles \(u_i\),
+- cross-sectional Grade 8 sample mapped to reference percentiles \(v_j\),
+- baseline copula \(C_0\) from STEP 1,
+
+and forms the baseline transition kernel:
+\[
+F_0(v\mid u) = \frac{\partial}{\partial u}C_0(u,v).
+\]【234:5†README.md†L25-L41】
+
+This is your “structural template.”
+
+### 5.1 Growth regime as a distribution over conditional percentiles (sgpcFlow)
+
+STEP 3 introduces \(H_\theta\), a distribution on \((0,1)\), interpreted as the distribution of latent conditional percentiles (a population-level growth allocation rule).【234:5†README.md†L7-L47】
+
+A clean generative view is:
+
+1. Draw \(U\) from the subgroup’s observed grade-4 percentile distribution.
+2. Draw a latent percentile \(P \sim H_\theta\).
+3. Set
+   \[
+   V = Q_0(P\mid U),
+   \]
+   where \(Q_0(\cdot\mid u)\) is induced by \(F_0(\cdot\mid u)\).
+
+This is a one-step Markov process on \((0,1)\). In your terminology, this is the **sgpcFlow** mechanism: a *stochastic* flow from \(U\) to \(V\) driven by \(H_\theta\).
+
+### 5.2 Deterministic vs stochastic regimes inside sgpcFlow
+
+- If \(H_\theta\) is a **point mass** at \(p_0\), then \(P=p_0\) always and the process collapses to the deterministic trajectory:
+  \[
+  V = Q_0(p_0\mid U).
+  \]
+
+- If \(H_\theta\) has **spread**, then even for fixed \(u\), \(V\mid U=u\) has dispersion: the flow is stochastic.
+
+### 5.3 The analytic identity that makes STEP 3 computationally sharp
+
+Assuming \(P\perp U\) within subgroup, STEP 3 exploits:
+\[
+F_\theta(v)
+=
+\mathbb{E}\!\left[\,H_\theta\!\left(F_0(v\mid U)\right)\right]
+\approx
+\frac{1}{n}\sum_i H_\theta\!\left(F_0(v\mid u_i)\right),
+\]
+which gives the predicted grade-8 marginal from the grade-4 sample and the baseline kernel.【234:5†README.md†L32-L41】
+
+This is why STEP 3 is not “recovering individual SGPc values” (impossible without pairing). It is recovering a **regime distribution** \(H_\theta\) that best explains the observed grade-8 marginal given the observed grade-4 marginal and the imported dependence template.【234:5†README.md†L43-L48】
+
+## 6. Why “copulas bridge deterministic ↔ stochastic” is a good slogan (with the right meaning)
+
+Copulas do not magically turn determinism into randomness. They *organize* dependence in a way that:
+
+- has deterministic boundary cases (singular copulas like comonotonic/countermonotonic), and
+- has stochastic interior cases (absolutely continuous copulas with non-degenerate kernels).
+
+Then STEP 3 adds a second dial:
+
+- baseline kernel \(F_0(\cdot\mid u)\): dependence physics,
+- regime \(H_\theta\): how the subgroup “occupies” that kernel (policy-relevant flow).
+
+So you end up with a two-layer system:
+- **Dependence template** (STEP 1/2 justify canonical choice),
+- **Flow/regime inference** (STEP 3 estimates \(\theta\) by matching predicted to observed distributions).【234:5†README.md†L7-L47】
+
+## 7. Interrogating the logic: where the big assumption sits
+
+Your STEP 3 definition becomes tractable under the exchangeability-style assumption:
+\[
+P\perp U \quad \text{within subgroup}.
+\]
+
+STEP 3’s core identity depends on this assumption.【234:5†README.md†L32-L41】 It is the minimal structure that lets you identify a low-dimensional \(H_\theta\) from unlinked marginals.
+
+It does **not** by itself identify differential opportunity effects like “low-\(u\) students systematically get lower \(P\)”—that requires allowing \(H_{\theta(u)}\) to vary with \(u\) and adding either stronger priors/regularization or additional data structure.
+
+## 8. The clean definition of sgpcFlow
+
+A compact anchor definition is:
+
+\[
+\boxed{
+\text{sgpcFlow}_\theta:\;
+U \mapsto V,\;
+V = Q_0(P_\theta\mid U),\;
+P_\theta\sim H_\theta,
+}
+\]
+with \(Q_0\) induced by \(C_0\) through
+\[
+F_0(v\mid u)=\frac{\partial}{\partial u}C_0(u,v).
+\]【234:5†README.md†L25-L41】
+
+This definition is kernel-native, deterministic at the boundary (degenerate \(H_\theta\)), and stochastic in the interior—matching the conceptual bridge you’re describing.

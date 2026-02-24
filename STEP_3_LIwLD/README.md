@@ -1,4 +1,4 @@
-# STEP 3: Longitudinal Inference without Longitudinal Data (LIw_LD)
+# STEP 3: Longitudinal Inference without Longitudinal Data (LIwLD)
 
 ## Overview
 
@@ -29,6 +29,22 @@ Given:
 
 We estimate a **growth regime** H_theta — a distribution on [0,1] representing the latent conditional percentiles — such that the predicted current-grade marginal matches the observed one.
 
+Generative view (SGPcFlow):
+- draw U from the observed Grade 4 subgroup distribution,
+- draw latent percentile P_theta from H_theta,
+- map to current percentile using baseline quantile kernel: V = Q_0(P_theta | U).
+
+This separates:
+- dependence template (baseline copula kernel from STEP 1), and
+- subgroup flow occupancy (the inferred H_theta).
+
+### Deterministic vs Stochastic Clarification
+
+- **TAMP/equipercentile mapping** is the deterministic comonotonic boundary: V = U.
+- "Everyone has SGPc = 50" is also deterministic, but generally follows V = Q_0(0.5 | U), which is not necessarily V = U.
+
+So deterministic behavior does not imply TAMP unless the baseline dependence template itself is comonotonic.
+
 ### Key Analytic Identity
 
 If the growth-regime percentile P_theta is independent of the prior percentile U within a subgroup:
@@ -51,32 +67,39 @@ This is exact (no Monte Carlo) and can be computed in milliseconds.
 ## Directory Structure
 
 ```
-STEP_3_LIw_LD/
+STEP_3_LIwLD/
   README.md                              # This file
-  Growth_Regime_Inference_Plan.md        # Detailed build plan (retained)
+  SGPcFlow_Inference_Plan.md             # Detailed build plan (updated)
   config_step3.R                         # All tuneable parameters
   run_step3.R                            # Master runner (single entry point)
   step3_validation_deep_dive.R           # Phase A: single condition/district
   step3_systematic_validation.R          # Phase B: across conditions
   step3_publication_panels.R             # Phase C: publication figures + manifest
   functions/
+    step3_publication_style.R            # Style bridge (Zissou1, theme_publication)
     reference_marginals.R                # Weighted ECDF + inverse CDF
     copula_kernel_cache.R                # Precompute F_0(v|u) on grid
-    regime_families.R                    # Beta, trunc-exp, trunc-uniform
+    regime_families.R                    # Beta, trunc-exp, trunc-uniform (+sd/entropy)
     predict_v_cdf.R                      # Analytic predicted CDF
     distance_metrics.R                   # Wasserstein-1, CvM, KS
     optimize_theta.R                     # Grid search + local refinement
     bootstrap_uncertainty.R              # Sampling + copula uncertainty
-    diagnostics_plots.R                  # Per-subgroup diagnostic plots
+    bucket_classification.R              # K=3/K=5 bucket probabilities
+    diagnostics_plots.R                  # ggplot2 diagnostic plots
     manifest_export.R                    # JSON/MD manifest output
   results/                               # Generated outputs
     phase_a_deep_dive.rds                # Phase A full results
     phase_a_summary.csv                  # Phase A key metrics
     phase_b_systematic_summary.csv       # Phase B summary table
     phase_b_all_results.rds              # Phase B full results
+    step3_country_estimates.csv          # Unified subgroup estimates
+    step3_uncertainty_decomposition.csv  # Variance decomposition
+    step3_bucket_probabilities.csv       # K=3 and K=5 bucket memberships
+    bucket_stability_summary.json        # Classification consistency
     step3_manifest.json                  # AI-consumable manifest
     step3_manifest.md                    # Human-readable manifest
     run_metadata.json                    # Reproducibility metadata
+    CONFORMANCE_MATRIX.md                # Audit matrix vs SGPcFlow plan
     visualizations/                      # Publication panels
       phase_a/                           # Phase A diagnostic plots
       panel_c_recovery_by_size.*         # Phase B: accuracy vs n
@@ -93,7 +116,7 @@ STEP_3_LIw_LD/
 
 ```r
 # From project root
-source("STEP_3_LIw_LD/run_step3.R")
+source("STEP_3_LIwLD/run_step3.R")
 ```
 
 ### Via Master Pipeline
@@ -108,15 +131,15 @@ source("master_analysis.R")
 ```r
 # Phase A only (single-condition deep validation)
 STEP3_PHASE_B <- FALSE; STEP3_PHASE_C <- FALSE
-source("STEP_3_LIw_LD/run_step3.R")
+source("STEP_3_LIwLD/run_step3.R")
 
 # Phase B only (systematic validation)
 STEP3_PHASE_A <- FALSE; STEP3_PHASE_C <- FALSE
-source("STEP_3_LIw_LD/run_step3.R")
+source("STEP_3_LIwLD/run_step3.R")
 
 # Phase C only (publication panels, requires A and/or B results)
 STEP3_PHASE_A <- FALSE; STEP3_PHASE_B <- FALSE
-source("STEP_3_LIw_LD/run_step3.R")
+source("STEP_3_LIwLD/run_step3.R")
 ```
 
 ---
@@ -177,7 +200,7 @@ Three families are implemented, each parameterising a distribution on [0,1]:
 
 ### Beta(mean, kappa)
 
-The default. Parameterised by mean m in (0,1) and concentration kappa (alpha + beta). Uniform(0,1) is Beta(0.5, 2) — the baseline "no growth signal" case.
+The default. Parameterised by mean m in (0,1) and concentration kappa (alpha + beta). Uniform(0,1) is Beta(1,1) — the baseline "no growth signal" case.
 
 ### Truncated Exponential (max-entropy)
 
@@ -199,6 +222,8 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 | `distance$primary` | `"wasserstein1"` | Optimiser objective |
 | `kernel$u_grid_size` | 201 | Transition kernel grid resolution |
 | `uncertainty$n_bootstrap` | 200 | Bootstrap replicates |
+| `buckets$k3` | `c(45, 55)` | K=3 bucket cutpoints (SGPc scale) |
+| `buckets$k5` | `c(40, 45, 55, 60)` | K=5 bucket cutpoints (SGPc scale) |
 | `validation$dataset_id` | `"dataset_1"` | Phase A dataset |
 | `validation$min_subgroup_n` | 100 | Minimum subgroup size |
 | `systematic$n_conditions_per_dataset` | 10 | Conditions for Phase B |
@@ -218,6 +243,7 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 
 - Panel naming conventions and multi-format export patterns
 - Error decomposition concept (adapted for sampling vs copula uncertainty)
+- **Visual style bridge:** STEP 3 panels reuse the same Zissou1 palette, `theme_publication()`, and `save_plot_multi()` conventions as STEP 2 via `functions/step3_publication_style.R`
 
 ### Shared Functions
 
@@ -225,6 +251,67 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 - `functions/longitudinal_pairs.R` — Data extraction
 - `functions/export_plot_utils.R` — Multi-format plot export
 - `STEP_2_SGPc_Sensitivity/phase1_data_loader.R` — Phase 1 data loading utilities
+
+### R Package Dependencies
+
+- `data.table`, `copula`, `jsonlite` (core analytics)
+- `ggplot2`, `wesanderson`, `patchwork` (publication visualisations)
+
+---
+
+## Output Contract
+
+After a complete run of Phases A + B + C, the following files are guaranteed in `results/`:
+
+### Tabular Outputs
+
+| File | Columns | Source |
+|------|---------|--------|
+| `step3_country_estimates.csv` | subgroup_id, dataset_id, condition_id, n, regime_family, theta1, theta2, median_sgpc, mean_sgpc, dispersion_sd, dispersion_iqr, entropy, concentration, distance_min, wasserstein1, cvm | Phases A + B |
+| `step3_uncertainty_decomposition.csv` | subgroup_id, var_sampling, var_copula, var_family, total_var, se_sampling, n_boot, n_converged | Phase A |
+| `step3_bucket_probabilities.csv` | subgroup_id, median_sgpc, k3_{Low,Typical,High}, k3_assigned, k3_consistency, k5_{VeryLow,...,VeryHigh}, k5_assigned, k5_consistency | Phase A |
+
+### Machine-Readable Manifests
+
+| File | Purpose |
+|------|---------|
+| `step3_manifest.json` | AI-consumable manifest with subgroup estimates (includes dispersion, entropy, concentration) |
+| `step3_manifest.md` | Human-readable manifest with output file table |
+| `bucket_stability_summary.json` | Classification consistency by subgroup |
+| `run_metadata.json` | Timestamp, config snapshot, R session info |
+
+### Validation Checks
+
+- All bucket probabilities sum to ~1 per subgroup (tolerance: 0.001)
+- Uncertainty decomposition fields are populated (NA only when source data is unavailable)
+- Every publication panel is exported as PDF + SVG + PNG
+
+---
+
+## Visualization Style Policy
+
+STEP 3 panels follow the same visual conventions as STEP 2, enforced via `functions/step3_publication_style.R`:
+
+| Convention | Specification |
+|---|---|
+| **Colour palette** | Wes Anderson "Zissou1" — teal (#3B9AB2), light blue (#78B7C5), gold (#EBCC2A), amber (#E1AF00), red (#F21A00) |
+| **Theme** | `theme_publication(base_size = 10)` — bold titles, gray30 subtitles, no minor grid, gray80 panel border |
+| **Export** | PDF (cairo_pdf) + SVG + PNG @ 300 dpi via `save_plot_multi()` |
+| **Dimensions** | 10 x 7 (standard panels), adjusted per panel as needed |
+| **Panel naming** | `panel_{letter}_{description}.{pdf,svg,png}` |
+| **Legend** | Alpha-blended white background, bold title, positioned contextually |
+
+### STEP 3 Semantic Colours
+
+| Role | Colour | Hex |
+|------|--------|-----|
+| Observed/actual | grey30 | — |
+| Predicted/inferred | Zissou teal | #3B9AB2 |
+| True/longitudinal | Zissou amber | #E1AF00 |
+| Residual/trend | Zissou red | #F21A00 |
+| Beta family | teal | #3B9AB2 |
+| Truncated exponential | amber | #E1AF00 |
+| Truncated uniform | gold | #EBCC2A |
 
 ---
 
@@ -279,18 +366,20 @@ STEP 3 validates the inference machinery on data where ground truth is available
 | File | Purpose |
 |------|---------|
 | `README.md` | This documentation |
-| `Growth_Regime_Inference_Plan.md` | Detailed mathematical plan |
-| `config_step3.R` | Configuration |
+| `SGPcFlow_Inference_Plan.md` | Detailed mathematical plan |
+| `config_step3.R` | Configuration (incl. bucket cutpoints) |
 | `run_step3.R` | Master runner |
 | `step3_validation_deep_dive.R` | Phase A: single-condition showcase |
 | `step3_systematic_validation.R` | Phase B: multi-condition validation |
-| `step3_publication_panels.R` | Phase C: figures + manifest |
+| `step3_publication_panels.R` | Phase C: figures + manifests + CSV outputs |
+| `functions/step3_publication_style.R` | Zissou1 style bridge (shared with STEP 2) |
 | `functions/reference_marginals.R` | Weighted ECDF + inverse CDF |
 | `functions/copula_kernel_cache.R` | Precompute F_0(v\|u) |
-| `functions/regime_families.R` | Beta, trunc-exp, trunc-uniform |
+| `functions/regime_families.R` | Beta, trunc-exp, trunc-uniform (sd, IQR, entropy) |
 | `functions/predict_v_cdf.R` | Analytic predicted CDF |
 | `functions/distance_metrics.R` | W1, CvM, KS |
 | `functions/optimize_theta.R` | Grid search + optim() |
 | `functions/bootstrap_uncertainty.R` | Sampling + copula uncertainty |
-| `functions/diagnostics_plots.R` | Diagnostic visualisations |
-| `functions/manifest_export.R` | JSON/MD export |
+| `functions/bucket_classification.R` | K=3/K=5 bucket probabilities + stability |
+| `functions/diagnostics_plots.R` | ggplot2 diagnostic visualisations |
+| `functions/manifest_export.R` | JSON/MD export (incl. output file table) |

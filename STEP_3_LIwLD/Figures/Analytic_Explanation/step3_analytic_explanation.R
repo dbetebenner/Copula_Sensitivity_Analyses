@@ -4,14 +4,14 @@
 ###
 ### Purpose:
 ###   Create a single wide mathematical infographic that explains how STEP 3
-###   infers a latent growth regime H(theta) from unlinked cross-sectional
+###   infers a latent growth regime H_theta from unlinked cross-sectional
 ###   pseudo-observations (U sample, V sample).
 ###
 ### Figure flow (left -> right):
 ###   A) Observe unlinked U and V marginals
 ###   B) Forward check under random-uniform regime vs observed V CDF
 ###   C) Reverse-engineer theta by minimizing distance
-###   D) Recovered growth regime H(theta)
+###   D) Recovered growth regime H_theta
 ###
 ### Outputs are written to:
 ###   STEP_3_LIwLD/Figures/Analytic_Explanation/outputs/
@@ -39,7 +39,9 @@ STEP3_ANALYTIC_EXPLANATION_CONFIG <- list(
   optimizer_grid_resolution = 16L,
   output_basename = "step3_growth_regime_analytic_infographic",
   figure_width = 16,           # >= 2x height (horizontal infographic)
-  figure_height = 7
+  figure_height = 7,
+  base_cex = 1.08,             # readability scaling for panel text
+  line_width = 2.3
 )
 
 
@@ -62,6 +64,22 @@ STEP3_ANALYTIC_EXPLANATION_CONFIG <- list(
 
   script_dir
 }
+
+# ---------------------------------------------------------------------------
+# STEP 3 publication-aligned colours (Zissou anchors)
+# ---------------------------------------------------------------------------
+STEP3_FIG_COLORS <- list(
+  prior = "#3B9AB2",          # Zissou teal
+  current = "#F21A00",        # Zissou red
+  observed = "black",
+  uniform = "grey55",
+  inferred = "#3B9AB2",
+  truth = "#E1AF00",          # Zissou amber
+  contour = adjustcolor("white", alpha.f = 0.45),
+  border = "grey85",
+  subtitle = "grey30",
+  body = "grey25"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +303,8 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
     on.exit(par(old_par), add = TRUE)
 
     layout(matrix(1:4, nrow = 1), widths = c(1.15, 1.2, 1.1, 1.15))
-    par(oma = c(1.1, 0.5, 3.7, 0.5), family = "sans")
+    par(oma = c(1.25, 0.5, 4.1, 0.5), family = "sans", cex = cfg$base_cex,
+        cex.main = 0.95, cex.lab = 0.94)
 
     # Panel A: Unlinked cross-sectional inputs
     par(mar = c(4.5, 4.6, 4.2, 0.8))
@@ -294,45 +313,44 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
     y_max_a <- 1.20 * max(c(d_u$y, d_v$y))
 
     plot(d_u$x, d_u$y, type = "n", xlim = c(0, 1), ylim = c(0, y_max_a),
-         xlab = "Pseudo-observation value",
+         xlab = "Reference percentile (u, v)",
          ylab = "Density",
-         main = "A. Observe unlinked U and V")
+         main = "A. Independent U and V")
     polygon(c(d_u$x, rev(d_u$x)), c(d_u$y, rep(0, length(d_u$y))),
-            col = adjustcolor("#4C72B0", alpha.f = 0.18), border = NA)
-    lines(d_u$x, d_u$y, lwd = 2.2, col = "#4C72B0")
+            col = adjustcolor(STEP3_FIG_COLORS$prior, alpha.f = 0.20), border = NA)
+    lines(d_u$x, d_u$y, lwd = cfg$line_width, col = STEP3_FIG_COLORS$prior)
     polygon(c(d_v$x, rev(d_v$x)), c(d_v$y, rep(0, length(d_v$y))),
-            col = adjustcolor("#C44E52", alpha.f = 0.18), border = NA)
-    lines(d_v$x, d_v$y, lwd = 2.2, col = "#C44E52")
+            col = adjustcolor(STEP3_FIG_COLORS$current, alpha.f = 0.16), border = NA)
+    lines(d_v$x, d_v$y, lwd = cfg$line_width, col = STEP3_FIG_COLORS$current)
     legend("topright",
            legend = c("Prior sample U", "Current sample V"),
-           col = c("#4C72B0", "#C44E52"),
-           lwd = 2.2, bty = "n", cex = 0.85)
-    mtext("No student-level pair IDs are used", side = 3, line = 0.3, cex = 0.78, col = "grey30")
-    mtext(paste0("n = ", format(n, big.mark = ","), " per sample"),
-          side = 1, line = 2.9, cex = 0.74, col = "grey35")
-    box(col = "grey85")
+           col = c(STEP3_FIG_COLORS$prior, STEP3_FIG_COLORS$current),
+           lwd = cfg$line_width, bty = "n", cex = 0.86)
+    mtext("No student-level pair IDs are available", side = 3, line = 0.3, cex = 0.80,
+          col = STEP3_FIG_COLORS$subtitle)
+    box(col = STEP3_FIG_COLORS$border)
 
     # Panel B: Forward check from random regime to observed CDF
     par(mar = c(4.5, 4.6, 4.2, 0.8))
-    plot(v_grid, F_obs, type = "l", lwd = 2.5, col = "black",
+    plot(v_grid, F_obs, type = "l", lwd = cfg$line_width, col = STEP3_FIG_COLORS$observed,
          xlim = c(0, 1), ylim = c(0, 1),
          xlab = "v (current pseudo-observation)",
          ylab = "CDF",
          main = "B. Forward check in v-space")
-    lines(v_grid, F_uniform, lwd = 2.2, lty = 3, col = "#7F7F7F")
-    lines(v_grid, est$F_pred, lwd = 2.4, lty = 2, col = "#1F78B4")
+    lines(v_grid, F_uniform, lwd = cfg$line_width - 0.1, lty = 3, col = STEP3_FIG_COLORS$uniform)
+    lines(v_grid, est$F_pred, lwd = cfg$line_width, lty = 2, col = STEP3_FIG_COLORS$inferred)
     legend("bottomright",
-           legend = c("Observed F_obs(v)", "Uniform-regime prediction", "Inferred-regime prediction"),
-           col = c("black", "#7F7F7F", "#1F78B4"),
-           lwd = c(2.5, 2.2, 2.4),
+           legend = c("Observed F_obs(v)", "Uniform H(p)=p prediction", "Inferred H_theta prediction"),
+           col = c(STEP3_FIG_COLORS$observed, STEP3_FIG_COLORS$uniform, STEP3_FIG_COLORS$inferred),
+           lwd = c(cfg$line_width, cfg$line_width - 0.1, cfg$line_width),
            lty = c(1, 3, 2),
            bty = "n",
            cex = 0.80)
     text(0.03, 0.96, labels = "Uniform misses.\nInference closes gap.",
-         adj = c(0, 1), cex = 0.80, col = "grey30")
-    text(0.03, 0.84, labels = "F_theta(v) = (1/n) * sum H_theta(F_0(v | u_i))",
-         adj = c(0, 1), cex = 0.73, col = "grey25")
-    box(col = "grey85")
+         adj = c(0, 1), cex = 0.80, col = STEP3_FIG_COLORS$subtitle)
+    text(0.03, 0.84, labels = "F_theta(v) = E_U[ H_theta(F_0(v | U)) ]",
+         adj = c(0, 1), cex = 0.76, col = STEP3_FIG_COLORS$body)
+    box(col = STEP3_FIG_COLORS$border)
 
     # Panel C: Reverse-engineering objective over theta
     par(mar = c(4.5, 5.0, 4.2, 0.8))
@@ -352,7 +370,7 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
       y = log10(kappa_vals),
       z = z_log,
       col = hcl.colors(90, "YlOrRd", rev = TRUE),
-      xlab = "Candidate mean SGPc",
+      xlab = "Mean of H_theta (SGPc)",
       ylab = expression(log[10](kappa)),
       main = "C. Reverse-engineer theta",
       useRaster = TRUE
@@ -363,15 +381,15 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
       z = z_log,
       add = TRUE,
       drawlabels = FALSE,
-      col = adjustcolor("white", alpha.f = 0.45),
+      col = STEP3_FIG_COLORS$contour,
       lwd = 0.8
     )
     points(est$theta_hat[1] * 100, log10(est$theta_hat[2]),
            pch = 4, lwd = 2.2, cex = 1.2, col = "black")
     text(est$theta_hat[1] * 100, log10(est$theta_hat[2]),
-         labels = "  optimum", pos = 4, cex = 0.78)
-    mtext("Color = log10 distance", side = 1, line = 2.7, cex = 0.74, col = "grey35")
-    box(col = "grey85")
+         labels = "  optimum theta_hat", pos = 4, cex = 0.78)
+    mtext("Color = log10 distance", side = 3, line = 0.2, cex = 0.72, col = "grey35")
+    box(col = STEP3_FIG_COLORS$border)
 
     # Panel D: Inferred growth regime
     par(mar = c(4.5, 4.6, 4.2, 0.8))
@@ -381,34 +399,34 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
     d_inf <- est$regime$density(p_grid)
     y_max_d <- 1.15 * max(c(d_unif, d_true, d_inf))
 
-    plot(p_grid * 100, d_unif, type = "l", lwd = 2.0, lty = 3, col = "#7F7F7F",
+    plot(p_grid * 100, d_unif, type = "l", lwd = cfg$line_width - 0.2, lty = 3, col = STEP3_FIG_COLORS$uniform,
          xlim = c(0, 100), ylim = c(0, y_max_d),
-         xlab = "Latent growth percentile p",
+         xlab = "Latent growth percentile p (SGPc scale)",
          ylab = "Density",
-         main = "D. Inferred growth regime H(theta)")
+         main = "D. Inferred H_theta")
     polygon(c(p_grid * 100, rev(p_grid * 100)),
             c(d_inf, rep(0, length(d_inf))),
-            col = adjustcolor("#1F78B4", alpha.f = 0.22), border = NA)
-    lines(p_grid * 100, d_inf, lwd = 2.4, col = "#1F78B4")
-    lines(p_grid * 100, d_true, lwd = 2.1, lty = 2, col = "#B2182B")
+            col = adjustcolor(STEP3_FIG_COLORS$inferred, alpha.f = 0.20), border = NA)
+    lines(p_grid * 100, d_inf, lwd = cfg$line_width, col = STEP3_FIG_COLORS$inferred)
+    lines(p_grid * 100, d_true, lwd = cfg$line_width - 0.1, lty = 2, col = STEP3_FIG_COLORS$truth)
     abline(v = 50, lty = 3, col = "grey60")
-    abline(v = true_regime$mean * 100, lty = 2, col = "#B2182B")
-    abline(v = est$regime$mean * 100, lty = 2, col = "#1F78B4")
+    abline(v = true_regime$mean * 100, lty = 2, col = STEP3_FIG_COLORS$truth)
+    abline(v = est$regime$mean * 100, lty = 2, col = STEP3_FIG_COLORS$inferred)
     legend("topright",
-           legend = c("Uniform baseline", "True synthetic regime", "Inferred regime"),
-           col = c("#7F7F7F", "#B2182B", "#1F78B4"),
+           legend = c("Uniform", "True synthetic", "Inferred"),
+           col = c(STEP3_FIG_COLORS$uniform, STEP3_FIG_COLORS$truth, STEP3_FIG_COLORS$inferred),
            lty = c(3, 2, 1),
-           lwd = c(2.0, 2.1, 2.4),
+           lwd = c(cfg$line_width - 0.2, cfg$line_width - 0.1, cfg$line_width),
            bty = "n",
-           cex = 0.80)
-    text(2, y_max_d * 0.95,
+           cex = 0.78)
+    text(2, y_max_d * 0.86,
          labels = sprintf("Recovered mean SGPc = %.1f", est$regime$mean * 100),
-         adj = c(0, 1), col = "#1F78B4", cex = 0.86)
-    box(col = "grey85")
+         adj = c(0, 1), col = STEP3_FIG_COLORS$inferred, cex = 0.78)
+    box(col = STEP3_FIG_COLORS$border)
 
     # Outer title + subtitle + footer
     mtext(
-      "STEP 3 Analytic Explanation: from observed v outcomes to inferred growth regime",
+      "STEP 3 SGPcFlow analytic explanation: from observed V to inferred growth regime",
       side = 3, outer = TRUE, line = 2.2, cex = 1.18, font = 2
     )
     mtext(
@@ -420,10 +438,10 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
     )
     mtext(
       sprintf(
-        "Flow A -> B -> C -> D | W1 distance to observed CDF: uniform = %.4f, inferred = %.4f (%.1f%% reduction)",
+        "Flow A -> B -> C -> D | W1(F_obs, F_theta): uniform = %.4f, inferred = %.4f (%.1f%% reduction)",
         d_uniform$wasserstein1, d_inferred$wasserstein1, w1_reduction_pct
       ),
-      side = 1, outer = TRUE, line = -0.2, cex = 0.86, col = "grey30"
+      side = 1, outer = TRUE, line = -0.2, cex = 0.86, col = STEP3_FIG_COLORS$subtitle
     )
   }
 

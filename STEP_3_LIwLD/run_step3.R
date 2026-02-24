@@ -12,7 +12,7 @@
 ###
 ### Usage:
 ###   # From project root
-###   source("STEP_3_LIw_LD/run_step3.R")
+###   source("STEP_3_LIwLD/run_step3.R")
 ###
 ###   # Or via master pipeline
 ###   STEPS_TO_RUN <- 3
@@ -20,13 +20,13 @@
 ###
 ### Author: dataimago
 ### Date: February 2026
-### Project: Copula Sensitivity Analyses — STEP 3 (LIw_LD)
+### Project: Copula Sensitivity Analyses — STEP 3 (LIwLD)
 ###
 ############################################################################
 
 cat("\n")
 cat("====================================================================\n")
-cat("STEP 3: GROWTH REGIME INFERENCE (LIw_LD)\n")
+cat("STEP 3: GROWTH REGIME INFERENCE (LIwLD)\n")
 cat("Longitudinal Inference without Longitudinal Data\n")
 cat("====================================================================\n\n")
 
@@ -37,12 +37,12 @@ step3_start_time <- Sys.time()
 ############################################################################
 
 # Detect working directory and set paths
-if (grepl("STEP_3_LIw_LD$", getwd())) {
+if (grepl("STEP_3_LIwLD$", getwd())) {
   STEP3_ROOT <- getwd()
   PROJECT_ROOT <- dirname(STEP3_ROOT)
 } else {
   PROJECT_ROOT <- getwd()
-  STEP3_ROOT <- file.path(PROJECT_ROOT, "STEP_3_LIw_LD")
+  STEP3_ROOT <- file.path(PROJECT_ROOT, "STEP_3_LIwLD")
 }
 
 cat("Project root:", PROJECT_ROOT, "\n")
@@ -52,6 +52,9 @@ cat("STEP 3 root: ", STEP3_ROOT, "\n\n")
 require(data.table)
 require(copula)
 require(jsonlite)
+require(ggplot2)
+require(wesanderson)
+require(patchwork)
 
 # Source shared functions
 source(file.path(PROJECT_ROOT, "functions/sgpc_engine.R"))
@@ -69,7 +72,9 @@ source(file.path(STEP3_ROOT, "functions/predict_v_cdf.R"))
 source(file.path(STEP3_ROOT, "functions/distance_metrics.R"))
 source(file.path(STEP3_ROOT, "functions/optimize_theta.R"))
 source(file.path(STEP3_ROOT, "functions/bootstrap_uncertainty.R"))
+source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
 source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
+source(file.path(STEP3_ROOT, "functions/bucket_classification.R"))
 source(file.path(STEP3_ROOT, "functions/manifest_export.R"))
 
 # Load configuration

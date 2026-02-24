@@ -1,7 +1,8 @@
 # STEP 3 Analytic Explanation Figure
 
 This folder contains a synthetic, horizontal multi-panel infographic that explains
-how STEP 3 infers a latent growth regime from unlinked cross-sectional pseudo-observations.
+how STEP 3 infers a latent growth regime `H_theta` (SGPcFlow) from unlinked
+cross-sectional pseudo-observations.
 
 The default layout is intentionally wide (`16 x 7` inches), with a left-to-right
 causal story:
@@ -23,9 +24,10 @@ The script auto-runs by default and writes outputs to:
 ## What the figure shows
 
 - **A:** observed unlinked `U` and `V` marginal distributions
-- **B:** observed `F_obs(v)` vs prediction under a uniform growth regime and inferred regime
+- **B:** observed `F_obs(v)` vs prediction under a uniform growth regime and inferred regime, using  
+  `F_theta(v) = E_U[H_theta(F_0(v|U))]`
 - **C:** reverse-engineering of regime parameters (`mean`, `kappa`) via minimum-distance search
-- **D:** inferred growth regime density vs uniform baseline (and true synthetic regime)
+- **D:** inferred growth regime density `H_theta(p)` vs uniform baseline (and true synthetic regime)
 
 ## Main tuning knobs
 
@@ -42,6 +44,7 @@ Edit `STEP3_ANALYTIC_EXPLANATION_CONFIG` in the script:
 - Several thousand students (`n = 3500`)
 - Baseline transition kernel from a t-copula (`rho = 0.72`, `df = 8`)
 - Inferred regime is fit by minimizing Wasserstein-1 distance between observed and predicted `v` CDFs
+- Colour palette is aligned with STEP 2/STEP 3 publication conventions (Zissou anchors)
 
 ## Output files
 
@@ -51,3 +54,16 @@ Edit `STEP3_ANALYTIC_EXPLANATION_CONFIG` in the script:
 - `*.pdf` (always)
 - `*.svg` (if `svglite` installed)
 - `*@2x.png` (if `ragg` installed)
+
+## PSTricks publication version
+
+A publication-grade PSTricks/LaTeX version of this infographic is in the `PSTricks/` subfolder.
+It renders the same 4-panel story as a 2x4 layout (top: graphic panels, bottom: text explanations)
+with crisp mathematical typesetting. Build with:
+
+```bash
+cd PSTricks/
+Rscript step3_build_pstricks.R
+```
+
+See `PSTricks/README.md` for full details.

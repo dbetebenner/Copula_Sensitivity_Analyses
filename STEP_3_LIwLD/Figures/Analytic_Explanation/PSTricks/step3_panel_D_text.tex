@@ -1,0 +1,43 @@
+%%%%
+%%%% Panel D text: Explanation of the inferred growth regime
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=3.0in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.15in}
+  \hspace{0.12in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    \textbf{\textcolor{black}{D.\enspace The recovered growth regime}}
+
+    \vspace{6pt}
+    The estimated growth regime $H_{\thetahat}$ (teal) is a Beta
+    density on $[0,1]$ representing the distribution of latent
+    conditional growth percentiles ($\SGPc$).  It closely matches the
+    true synthetic regime (amber dashed), recovering both the mean and
+    spread.
+
+    \vspace{4pt}
+    The regime separates the subgroup's \emph{growth occupancy}---where
+    students actually fall in the conditional growth
+    distribution---from the baseline \emph{dependence template}
+    encoded by the copula kernel~$\Fzero(v\!\mid\!u)$.  A regime
+    centred below 50 indicates growth that is systematically lower
+    than the reference population.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

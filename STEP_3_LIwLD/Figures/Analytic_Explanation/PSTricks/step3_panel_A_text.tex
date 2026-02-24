@@ -1,0 +1,43 @@
+%%%%
+%%%% Panel A text: Explanation of independent U and V marginals
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=3.0in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.15in}
+  \hspace{0.12in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    \textbf{\textcolor{black}{A.\enspace Independent cross-sectional inputs}}
+
+    \vspace{6pt}
+    The starting point is two independent cross-sectional samples:
+    prior-grade reference percentiles $U = F_X^{\mathrm{ref}}(x_i)$ and
+    current-grade reference percentiles $V = F_Y^{\mathrm{ref}}(y_j)$.
+
+    \vspace{4pt}
+    Crucially, there is \emph{no student-level linkage} between these
+    samples---we cannot match any $u_i$ to its corresponding~$v_j$.
+    This is exactly the situation faced by international assessments such
+    as TIMSS, where Grade~4 and Grade~8 cohorts are sampled independently.
+
+    \vspace{4pt}
+    The distributions of~$U$ and~$V$ are the only observables; all
+    subsequent inference proceeds from these marginals alone.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

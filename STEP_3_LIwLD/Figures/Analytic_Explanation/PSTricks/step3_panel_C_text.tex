@@ -1,0 +1,44 @@
+%%%%
+%%%% Panel C text: Explanation of theta reverse-engineering
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=3.0in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.15in}
+  \hspace{0.12in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    \textbf{\textcolor{black}{C.\enspace Minimising the distance}}
+
+    \vspace{6pt}
+    We search over candidate parameter vectors
+    $\theta = (\mathrm{mean},\;\kappa)$ of the Beta growth regime,
+    computing the Wasserstein-1 distance
+    \[
+      \Wone\!\bigl(\Fobs,\;\Ftheta\bigr)
+    \]
+    at each grid point.  The heatmap shows $\log_{10}$ distance:
+    dark regions are far from the observed CDF; light regions are close.
+
+    \vspace{4pt}
+    A two-stage procedure---coarse grid scan followed by
+    L-BFGS-B refinement---locates $\thetahat$, the parameter vector
+    that minimises the distance between the predicted and observed
+    marginal CDFs of~$V$.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}
