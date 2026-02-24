@@ -23,7 +23,7 @@
 \raisebox{0pt}[0.55in][0pt]{%
   \parbox{15.2in}{%
     \vspace{0.15in}
-    {\large\bfseries Stochastic Growth: From observed \textit{V} to inferred \textit{SGPcFlow} growth regime}
+    {\Large\bfseries Growth as a stochastic process: From observed \textit{U} and \textit{V} to mean SGPc}
 
     \vspace{0.05in}
 
@@ -42,9 +42,22 @@
       ($\rho = \copulaRho$, $\mathrm{df} = \copulaDf$)}%
   }}
 
-\vspace{0.5in}
+\vspace{0.6in}
 
-%% --- Top row: graphic panels ---
+%% --- Top row: A, B, C, D labels ---
+\noindent
+\hspace{0.5in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries A.\enspace Observed marginals: \textit{U} and \textit{V} (no pairs)}%
+\hspace{0.05in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries B.\enspace Analytic prediction of $\symbf{F_V}$ from kernel + regime}%
+\hspace{0.05in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries C.\enspace Estimate $\symbf{\theta}$: Minimize Wasserstein-1 distance over $\symbf{\mbox{Beta}(\kappa m, \kappa(1-m))}$}%
+\hspace{0.05in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries D.\enspace Recovered growth regime $\symbf{H_{\thetahat}}$ (latent SGPc)}%
+
+\vspace{0.1in}
+
+%% --- Middle row: graphic panels ---
 \noindent
 \hspace{0.15in}%
 \includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_A_graphic.pdf}%
@@ -55,7 +68,7 @@
 \hspace{0.05in}%
 \includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_D_graphic.pdf}%
 
-\vspace{0.2in}
+%\vspace{0.1in}
 
 %% --- Bottom row: text panels ---
 \noindent

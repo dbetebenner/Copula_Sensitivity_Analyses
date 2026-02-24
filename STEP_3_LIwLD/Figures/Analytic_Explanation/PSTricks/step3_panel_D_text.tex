@@ -19,22 +19,18 @@
   \begin{minipage}{3.45in}
     \small\raggedright\color{bodyGrey}
 
-    \textbf{\textcolor{black}{D.\enspace The recovered growth regime}}
-
-    \vspace{6pt}
-    The estimated growth regime $H_{\thetahat}$ (teal) is a Beta
-    density on $[0,1]$ representing the distribution of latent
-    conditional growth percentiles ($\SGPc$).  It closely matches the
-    true synthetic regime (amber dashed), recovering both the mean and
-    spread.
+    The fitted regime $H_{\hat\theta}$ (teal) is a distribution of latent 
+    conditional percentiles $P$ (SGPc scale), i.e., how the subgroup allocates 
+    conditional ranks \emph{within} the baseline dependence kernel $F_0(\cdot\mid u)$.
 
     \vspace{4pt}
-    The regime separates the subgroup's \emph{growth occupancy}---where
-    students actually fall in the conditional growth
-    distribution---from the baseline \emph{dependence template}
-    encoded by the copula kernel~$\Fzero(v\!\mid\!u)$.  A regime
-    centred below 50 indicates growth that is systematically lower
-    than the reference population.
+    A regime centred below $50$ indicates systematically lower conditional ranks 
+    relative to the reference population, while the concentration $\kappa$ quantifies 
+    dispersion (a ``common-cause'' spread in percentile allocation).
+
+    \vspace{4pt}
+    In this synthetic validation, the recovered regime closely matches the generating 
+    regime and yields an implied $V$ distribution that overlaps the observed current-grade marginal.
 
   \end{minipage}
   \vspace{0.1in}

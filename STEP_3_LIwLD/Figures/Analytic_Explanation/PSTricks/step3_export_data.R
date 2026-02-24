@@ -71,10 +71,12 @@ z_log <- log10(z_raw)
 z_min <- min(z_log, na.rm = TRUE)
 z_max <- max(z_log, na.rm = TRUE)
 
-pal <- colorRampPalette(rev(c(
-  "#FFFFCC", "#FFEDA0", "#FED976", "#FEB24C",
-  "#FD8D3C", "#FC4E2A", "#E31A1C", "#BD0026", "#800026"
-)))(256)
+pal <- colorRampPalette(c(
+  "#FCFCF4",  # close (low log10 distance)
+  "#E2E4C8",
+  "#B7BA87",
+  "#8A9048"   # far (high log10 distance)
+))(256)
 
 nr <- length(kappa_vals);  nc <- length(mean_vals)
 dx <- if (nc > 1) diff(mean_vals[1:2]) else 0.01

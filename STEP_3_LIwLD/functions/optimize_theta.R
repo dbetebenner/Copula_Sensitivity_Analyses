@@ -176,7 +176,10 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
   switch(family,
     beta = {
       mean_seq  <- seq(0.25, 0.75, length.out = resolution)
-      kappa_seq <- exp(seq(log(2), log(200), length.out = resolution))
+      # Include kappa=1 so the U(0,1) baseline at kappa=2 is interior to Panel C.
+      # This preserves a faithful visual comparison to theta_hat without
+      # over-expanding into extremely small-kappa regimes.
+      kappa_seq <- exp(seq(log(1), log(200), length.out = resolution))
       grid <- expand.grid(theta1 = mean_seq, theta2 = kappa_seq)
     },
     truncexp = {
@@ -200,7 +203,7 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
 #' @keywords internal
 .get_bounds <- function(family) {
   switch(family,
-    beta = list(lower = c(0.05, 1.5), upper = c(0.95, 500)),
+    beta = list(lower = c(0.05, 1.0), upper = c(0.95, 500)),
     truncexp = list(lower = 0.05, upper = 0.95),
     truncunif = list(lower = c(0.0, 0.10), upper = c(0.90, 1.0)),
     stop("Unknown family: ", family)

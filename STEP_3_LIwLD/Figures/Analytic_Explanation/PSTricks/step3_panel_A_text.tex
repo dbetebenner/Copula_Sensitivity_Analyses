@@ -19,22 +19,19 @@
   \begin{minipage}{3.45in}
     \small\raggedright\color{bodyGrey}
 
-    \textbf{\textcolor{black}{A.\enspace Independent cross-sectional inputs}}
-
-    \vspace{6pt}
-    The starting point is two independent cross-sectional samples:
-    prior-grade reference percentiles $U = F_X^{\mathrm{ref}}(x_i)$ and
-    current-grade reference percentiles $V = F_Y^{\mathrm{ref}}(y_j)$.
+    We observe two independent samples: prior-grade scores $\{X_i,w_i\}$ 
+    and current-grade scores $\{Y_j,w'_j\}$ for the same subgroup (e.g., 
+    a TIMSS country), but \emph{no student-level pairs} $(X_i,Y_i)$ are available.
 
     \vspace{4pt}
-    Crucially, there is \emph{no student-level linkage} between these
-    samples---we cannot match any $u_i$ to its corresponding~$v_j$.
-    This is exactly the situation faced by international assessments such
-    as TIMSS, where Grade~4 and Grade~8 cohorts are sampled independently.
+    We map scores to reference-percentiles using fixed reference marginals,
+    $U=F_X^{\mathrm{ref}}(X)$ and $V=F_Y^{\mathrm{ref}}(Y)$, so that 
+    distributional shifts remain visible across groups and periods.
 
     \vspace{4pt}
-    The distributions of~$U$ and~$V$ are the only observables; all
-    subsequent inference proceeds from these marginals alone.
+    The weighted empirical distributions of $U$ (prior; blue) and $V$ (current; red) are 
+    therefore the only observables; all subsequent inference proceeds from these 
+    marginals plus a baseline dependence template.
 
   \end{minipage}
   \vspace{0.1in}

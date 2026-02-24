@@ -19,21 +19,26 @@
   \begin{minipage}{3.45in}
     \small\raggedright\color{bodyGrey}
 
-    \textbf{\textcolor{black}{B.\enspace The analytic identity}}
+    Let $C_0$ be a baseline copula (empirical or parametric) calibrated from 
+    longitudinal data, inducing a transition kernel
+    $F_0(v\mid u)=\Pr(V\le v\mid U=u)=\partial C_0(u,v)/\partial u$.
 
-    \vspace{6pt}
-    Given a candidate growth regime~$\Htheta$ and the baseline
-    transition kernel~$\Fzero(v\!\mid\!u)$ from the fitted copula, the
-    \textbf{analytic identity}
+    \vspace{4pt}
+    We posit a \emph{growth regime} $\symbf{H_\theta}$ for the latent conditional 
+    percentile $P\in(0,1)$ (SGPc scale), with the key assumption $P\perp U$ within 
+    the subgroup.
+
+    \vspace{4pt}
+    Then the implied current-grade marginal is computed deterministically by
+
     \[
-      \Ftheta(v)
-        \;=\; \mathbb{E}_U\!\bigl[\,\Htheta\!\bigl(\Fzero(v\!\mid\!U)\bigr)\bigr]
-        \;=\; \frac{1}{n}\sum_{i=1}^{n}\Htheta\!\bigl(\Fzero(v\!\mid\!u_i)\bigr)
+    F_\theta(v)=\mathbb{E}\thinspace\big[H_\theta\thinspace\big(F_0(v\mid U)\big)\big]
+    \approx \frac{\sum_i w_i\,H_\theta(F_0(v\mid u_i))}{\sum_i w_i}.
     \]
-    predicts the current-grade CDF \emph{exactly}---no Monte Carlo
-    simulation is needed. The uniform regime $H(p)=p$ (grey dashed)
-    systematically misses the observed CDF, while the inferred
-    $H_{\thetahat}$ (teal dashed) closes the gap.
+
+    \vspace{4pt}
+    Uniform growth corresponds to $\symbf{H(p)=p}$. Departures from uniformity 
+    tilt mass within the baseline kernel and change the implied $\symbf{V}$ marginal.
 
   \end{minipage}
   \vspace{0.1in}

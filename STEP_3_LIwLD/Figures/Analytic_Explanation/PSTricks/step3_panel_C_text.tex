@@ -19,24 +19,19 @@
   \begin{minipage}{3.45in}
     \small\raggedright\color{bodyGrey}
 
-    \textbf{\textcolor{black}{C.\enspace Minimising the distance}}
-
-    \vspace{6pt}
-    We search over candidate parameter vectors
-    $\theta = (\mathrm{mean},\;\kappa)$ of the Beta growth regime,
-    computing the Wasserstein-1 distance
-    \[
-      \Wone\!\bigl(\Fobs,\;\Ftheta\bigr)
-    \]
-    at each grid point.  The heatmap shows $\log_{10}$ distance:
-    dark regions are far from the observed CDF; light regions are close.
+    We estimate $\theta$ by matching the predicted marginal 
+    $F_\theta$ to the observed $F_{\mathrm{obs}}$ using a distributional 
+    distance, here the Wasserstein-1 (earth mover) metric on $v\in[0,1]$.
 
     \vspace{4pt}
-    A two-stage procedure---coarse grid scan followed by
-    L-BFGS-B refinement---locates $\thetahat$, the parameter vector
-    that minimises the distance between the predicted and observed
-    marginal CDFs of~$V$.
+    For a Beta regime parameterization $P\sim\mathrm{Beta}(\kappa m,\kappa(1-m))$ (mean $m$ and 
+    concentration $\kappa$), we evaluate the distance on a coarse grid over $(m,\kappa)$ and refine 
+    locally (e.g., L-BFGS-B).
 
+    \vspace{4pt}
+    The heatmap shows $\log_{10}$ distance: lighter regions indicate regime 
+    parameters that reproduce the observed current-grade distribution more closely. 
+    The marked point is the minimizer $\hat\theta$.
   \end{minipage}
   \vspace{0.1in}
 \end{minipage}

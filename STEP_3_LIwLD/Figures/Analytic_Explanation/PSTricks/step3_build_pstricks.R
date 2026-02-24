@@ -62,8 +62,8 @@ cat("\n")
 custom_bounding_boxes <- list(
   step3_panel_A_graphic = c(0, 522, 295, 802),
   step3_panel_B_graphic = c(21, 510, 315, 780),
-  step3_panel_C_graphic = c(10, 535, 305, 780),
-  step3_panel_D_graphic = c(0, 550, 285, 801)
+  step3_panel_C_graphic = c(10, 505, 305, 780),
+  step3_panel_D_graphic = c(0, 577, 285, 801)
 )
 
 apply_custom_bounding_box <- function(ps_file, bbox) {

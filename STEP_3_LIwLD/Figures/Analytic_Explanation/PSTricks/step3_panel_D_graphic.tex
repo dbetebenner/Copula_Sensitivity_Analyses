@@ -47,10 +47,19 @@
   %% Axes
   \psaxes[Dx=20,Dy=1,ticksize=-3pt 0,
           subticks=0,labelsep=4pt,
+          labels=y, %keep only y-axis labels
           axesstyle=frame,linecolor=borderGrey]{-}(0,0)(100,\panelDymax)
 
+  % Custom x labels (0..1 by 0.2)
+  \uput[d](0,0){\textsf{\small 0}}
+  \uput[d](20,0){\textsf{\small 0.2}}
+  \uput[d](40,0){\textsf{\small 0.4}}
+  \uput[d](60,0){\textsf{\small 0.6}}
+  \uput[d](80,0){\textsf{\small 0.8}}
+  \uput[d](100,0){\textsf{\small 1.0}}
+
   %% Axis labels
-  \rput[t](50,-0.45){\textsf{\small Latent $\SGPc$}}
+  \rput[t](50,-0.4){\textsf{\footnotesize Latent $\SGPc/100$}}
   \rput[b]{90}(-7,2.0){\textsf{\small Density}}
 
   %% Legend
