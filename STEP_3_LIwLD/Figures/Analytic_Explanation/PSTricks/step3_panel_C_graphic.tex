@@ -30,11 +30,20 @@
   %% Axes overlay
   \psaxes[Ox=20,Oy=0,Dx=10,Dy=0.5,ticksize=-3pt 0,
           subticks=0,labelsep=4pt,
+          labels=y, %keep only y-axis labels
           axesstyle=frame,linecolor=borderGrey]{-}%
           (\panelCxmin,\panelCymin)(\panelCxmax,\panelCymax)
 
+  % Custom x labels (0.2 to 0.7 by 0.1)
+  \uput[d](23,-0.1){\textsf{\small 0.2}}
+  \uput[d](33,-0.1){\textsf{\small 0.3}}
+  \uput[d](43,-0.1){\textsf{\small 0.4}}
+  \uput[d](53,-0.1){\textsf{\small 0.5}}
+  \uput[d](63,-0.1){\textsf{\small 0.6}}
+  \uput[d](73,-0.1){\textsf{\small 0.7}}
+
   %% Axis labels
-  \rput[t](50,-0.3){\textsf{\small Mean of $\Htheta$ ($\SGPc$)}}
+  \rput[t](50,-0.3){\textsf{\small $m$ (mean of $\Htheta$, $\SGPc/100$)}}
   \rput[b]{90}(17.5,1.30){\textsf{\small $\log_{10}(\kappa)$}}
 
   %% Color legend annotation

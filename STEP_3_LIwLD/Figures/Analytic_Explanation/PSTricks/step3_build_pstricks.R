@@ -216,8 +216,7 @@ if (file.exists(final_pdf)) {
 
 cat("\n--- Cleanup ---\n")
 all_stems <- c(graphic_panels, text_panels, "step3_infographic_main")
-#cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
-cleanup_suffixes <- c(".aux",".log",".dvi",".fls",".fdb_latexmk",".out",".pdf")
+cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
 old_wd <- setwd(pstricks_dir)
 for (stem in all_stems) {
   for (ext in cleanup_suffixes) {

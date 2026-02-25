@@ -23,11 +23,11 @@
   \readdata{\dataInf}{data/panel_B_cdf_inferred.dat}
 
   %% CDF curves
-  \listplot[linecolor=black,linewidth=1.4pt,plotstyle=line]{\dataObs}
-  \listplot[linecolor=panelGrey,linewidth=1.2pt,linestyle=dashed,dash=4pt 3pt,
-            plotstyle=line]{\dataUnif}
-  \listplot[linecolor=zissouTeal,linewidth=1.3pt,linestyle=dashed,dash=5pt 2.5pt,
-            plotstyle=line]{\dataInf}
+  \listplot[linecolor=currentV,linewidth=1.3pt,plotstyle=line]{\dataObs}
+  \listplot[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
+            linecap=1,plotstyle=line]{\dataUnif}
+  \listplot[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
+            linecap=1,plotstyle=line]{\dataInf}
 
   %% Axes
   \psaxes[Dx=0.2,Dy=0.2,ticksize=-3pt 0,
@@ -43,11 +43,11 @@
     \raisebox{-16pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
       \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
         \textsf{\scriptsize Observed $\Fobs(v)$} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=black,linewidth=1.2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
         \textsf{\scriptsize Uniform $H(p)=p$} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=1.0pt,linestyle=dashed,dash=4pt 3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
         \textsf{\scriptsize Inferred $\Htheta$} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=zissouTeal,linewidth=1.2pt,linestyle=dashed,dash=5pt 2.5pt,linecap=1](0,0)(0.65,0)}}}
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}
       \end{tabular}%
     }}}}
 \end{pspicture}
