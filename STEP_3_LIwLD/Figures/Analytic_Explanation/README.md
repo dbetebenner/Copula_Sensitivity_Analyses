@@ -1,13 +1,13 @@
 # STEP 3 Analytic Explanation Figure
 
 This folder contains a synthetic, horizontal multi-panel infographic that explains
-how STEP 3 infers a latent growth regime `H_theta` (SGPcFlow) from unlinked
+how STEP 3 infers a latent growth regime `H_S` (SGPcFlow) from unlinked
 cross-sectional pseudo-observations.
 
 The default layout is intentionally wide (`16 x 7` inches), with a left-to-right
 causal story:
 
-`A -> B -> C -> D` = observe marginals -> forward check -> invert theta -> infer regime.
+`A -> B -> C -> D` = observe marginals -> forward check -> invert `(m, kappa)` -> infer regime.
 
 ## Build
 
@@ -25,9 +25,9 @@ The script auto-runs by default and writes outputs to:
 
 - **A:** observed unlinked `U` and `V` marginal distributions
 - **B:** observed `F_obs(v)` vs prediction under a uniform growth regime and inferred regime, using  
-  `F_theta(v) = E_U[H_theta(F_0(v|U))]`
+  `F_H(v) = E_U[H(F_0(v|U))]`
 - **C:** reverse-engineering of regime parameters (`mean`, `kappa`) via minimum-distance search
-- **D:** inferred growth regime density `H_theta(p)` vs uniform baseline (and true synthetic regime)
+- **D:** inferred growth regime density `f_S(p)` vs uniform baseline (and true synthetic regime)
 
 ## Main tuning knobs
 

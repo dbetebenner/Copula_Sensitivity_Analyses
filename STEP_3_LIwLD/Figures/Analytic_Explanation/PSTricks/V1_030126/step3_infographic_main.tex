@@ -1,0 +1,97 @@
+%%%%
+%%%% step3_infographic_main.tex - 2x4 publication infographic assembler
+%%%%
+%%%% Layout: top row (4 graphic panels) + bottom row (4 text panels)
+%%%% All panel PDFs are pre-compiled; this file composes them with
+%%%% \includegraphics, following the pattern in SGPc_Explanation.tex
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=16in,paperheight=16in,margin=0in]{geometry}
+\usepackage{graphicx}
+\usepackage[svgnames]{xcolor}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+%% Master title
+\noindent
+\hspace{0.4in}%
+\raisebox{0pt}[0.55in][0pt]{%
+  \parbox{15.2in}{%
+    \vspace{0.15in}
+    {\Large\bfseries Growth as a stochastic process: From observed \textit{U} and \textit{V} to mean \SGPc}
+
+    \vspace{0.05in}
+
+    {\small\color{subtitleGrey}%
+      Synthetic low-growth case
+      (true mean $\SGPc$ \trueRegimeMean),\enspace
+      baseline $t$-copula kernel
+      ($\rho = \copulaRho$, $\mathrm{df} = \copulaDf$)}%
+
+    \vspace{0.05in}
+
+    {\small\color{subtitleGrey}%
+      $\Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{H}\bigr)$: Uniform $= \wOneUniform$,\enspace
+      Best-fit $= \wOneInferred$\enspace\enspace
+      (\wOneReduction\%\ reduction)}
+  }}
+
+\vspace{0.6in}
+
+%% --- Top row: A, B, C, D labels ---
+\noindent
+\hspace{0.5in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries A.\enspace Observed marginals: \textit{U} and \textit{V} (no pairs)}%
+\hspace{0.05in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries B.\enspace Analytic prediction of $\symbf{F_V}$ from kernel + regime}%
+\hspace{0.05in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries C.\enspace Estimate $\symbf{H_S}$: Minimize Wasserstein-1 distance over $\symbf{\mbox{Beta}(\kappa m, \kappa(1-m))}$}%
+\hspace{0.05in}%
+\parbox[t]{3.85in}{\raggedright\small\bfseries D.\enspace Recovered growth regime $\symbf{P_S}$ (latent SGPc)}%
+
+\vspace{0.1in}
+
+%% --- Middle row: graphic panels ---
+\noindent
+\hspace{0.15in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_A_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_B_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_C_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_D_graphic.pdf}%
+
+%% --- Bottom row: text panels ---
+\noindent
+\hspace{0.15in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_A_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_B_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_C_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_D_text.pdf}%
+\end{minipage}%
+
+\vspace{0.35in}
+
+\hspace{0.15in}%
+$^{1}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup. This assumption is relaxed in the full model.
+
+\hspace{0.15in}%
+$^{2}$ Other regime families considered include the truncated exponential family--the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean. 
+ 
+\end{document}

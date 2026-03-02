@@ -77,7 +77,7 @@ create_kernel_cache <- function(copula_obj,
   uv_pairs <- as.matrix(expand.grid(u = u_grid, v = v_grid))
 
   cond_cdf_vec <- tryCatch({
-    copula::cCopula(uv_pairs, copula = copula_obj, indices = 2)
+    drop(copula::cCopula(uv_pairs, copula = copula_obj, indices = 2))
   }, error = function(e) {
     stop("cCopula failed: ", e$message)
   })
@@ -86,8 +86,11 @@ create_kernel_cache <- function(copula_obj,
   conditional_cdf <- matrix(cond_cdf_vec, nrow = u_grid_size, ncol = v_grid_size,
                              byrow = FALSE)
 
-  # Clamp to [0, 1] and enforce monotonicity in v for each u-row
-  conditional_cdf <- pmax(0, pmin(1, conditional_cdf))
+  # Clamp to [0, 1] (in-place to preserve matrix dimensions)
+  conditional_cdf[conditional_cdf < 0] <- 0
+  conditional_cdf[conditional_cdf > 1] <- 1
+
+  # Enforce monotonicity in v for each u-row
   for (i in seq_len(u_grid_size)) {
     conditional_cdf[i, ] <- cummax(conditional_cdf[i, ])
   }

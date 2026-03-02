@@ -8,6 +8,10 @@
 
 **Why This Is the Centrepiece:** STEPs 1 and 2 validated the copula dependence model using actual longitudinal data. STEP 3 asks the harder question: when longitudinal pairing is unavailable (e.g., TIMSS, NAEP), can we still recover the growth signal? Because we **do** have the longitudinal pairs, we can validate the cross-sectional inference against reality — a luxury that TIMSS analysts will not have.
 
+**Guiding synthesis:** controlled canonical choices with quantified error.
+- **Canonical choice 1 (STEP 1):** baseline copula template.
+- **Canonical choice 2 (STEP 3):** stochastically fitted canonical growth regime (Beta by default).
+
 **Prerequisites:**
 - STEP 1 complete (copula family selected, parameter recommendations in `analysis_manifest.json`)
 - STEP 2 complete (SGPc sensitivity validated, publication panels generated)
@@ -27,16 +31,16 @@ Given:
 - **Current sample:** Scores {y_j} from Grade 8 (same subgroup), mapped to v_j = F_Y^ref(y_j)
 - **Baseline copula C_0** from STEP 1, defining the transition kernel F_0(v|u) = dC_0(u,v)/du
 
-We estimate a **growth regime** H_theta — a distribution on [0,1] representing the latent conditional percentiles — such that the predicted current-grade marginal matches the observed one.
+We estimate a **growth regime** $H_S$ — a distribution on [0,1] representing latent conditional percentiles for subgroup $S$ — such that the predicted current-grade marginal matches the observed one.
 
 Generative view (SGPcFlow):
 - draw U from the observed Grade 4 subgroup distribution,
-- draw latent percentile P_theta from H_theta,
-- map to current percentile using baseline quantile kernel: V = Q_0(P_theta | U).
+- draw latent percentile $P_S$ from $H_S$,
+- map to current percentile using baseline quantile kernel: $V = Q_0(P_S \mid U)$.
 
 This separates:
 - dependence template (baseline copula kernel from STEP 1), and
-- subgroup flow occupancy (the inferred H_theta).
+- subgroup flow occupancy (the inferred $H_S$).
 
 ### Deterministic vs Stochastic Clarification
 
@@ -47,11 +51,11 @@ So deterministic behavior does not imply TAMP unless the baseline dependence tem
 
 ### Key Analytic Identity
 
-If the growth-regime percentile P_theta is independent of the prior percentile U within a subgroup:
+If the growth-regime percentile $P_S$ is independent of the prior percentile $U$ within a subgroup:
 
 ```
-F_theta(v) = E[ H_theta( F_0(v | U) ) ]
-           = (1/n) * sum_i  H_theta( F_0(v | u_i) )
+F_H(v) = E[ H( F_0(v | U) ) ]
+       = (1/n) * sum_i  H( F_0(v | u_i) )
 ```
 
 This is exact (no Monte Carlo) and can be computed in milliseconds.
@@ -82,7 +86,7 @@ STEP_3_LIwLD/
     regime_families.R                    # Beta, trunc-exp, trunc-uniform (+sd/entropy)
     predict_v_cdf.R                      # Analytic predicted CDF
     distance_metrics.R                   # Wasserstein-1, CvM, KS
-    optimize_theta.R                     # Grid search + local refinement
+    optimize_regime.R                    # Grid search + local refinement
     bootstrap_uncertainty.R              # Sampling + copula uncertainty
     bucket_classification.R              # K=3/K=5 bucket probabilities
     diagnostics_plots.R                  # ggplot2 diagnostic plots
@@ -153,13 +157,13 @@ Picks one well-understood condition and one large district (configurable in `con
 3. **"Forget" the pairing** — take only independent prior and current score samples
 4. **Build reference marginals** using the full state-level ECDF (district scores expressed as state percentiles)
 5. **Build transition kernel** F_0(v|u) from the STEP 1 baseline copula
-6. **Estimate growth regime** H_theta via minimum Wasserstein-1 distance between predicted and observed CDFs
+6. **Estimate growth regime** $H_S$ via minimum Wasserstein-1 distance between predicted and observed CDFs (canonical production family: Beta)
 7. **Compare inferred vs actual** — the key validation
 8. **Bootstrap uncertainty** — 200 replicates for confidence intervals
 
 ### Key Outputs
 
-- `phase_a_summary.csv` — One-row summary with inferred vs true median SGPc, distances, and bootstrap CIs
+- `phase_a_summary.csv` — One-row summary with inferred vs true mean/median SGPc, distances, and bootstrap CIs
 - `visualizations/phase_a/` — Four diagnostic panels (CDF comparison, regime shape, residual, recovery summary)
 
 ---
@@ -174,8 +178,8 @@ Extends Phase A across multiple conditions and subgroups to assess recovery accu
 
 ### Key Outputs
 
-- `phase_b_systematic_summary.csv` — Full table of inferred vs true median SGPc for all subgroups
-- Summary statistics: median |error|, mean |error|, 90th percentile |error|, stratified by size and span
+- `phase_b_systematic_summary.csv` — Full table of inferred vs true mean/median SGPc for all subgroups
+- Summary statistics: median |error|, mean |error|, 90th percentile |error| for both median and mean SGPc, stratified by size and span
 
 ---
 
@@ -198,17 +202,20 @@ Generates the final publication figures and AI-consumable manifest files:
 
 Three families are implemented, each parameterising a distribution on [0,1]:
 
-### Beta(mean, kappa)
+### Beta(mean, kappa) — Canonical production family
 
-The default. Parameterised by mean m in (0,1) and concentration kappa (alpha + beta). Uniform(0,1) is Beta(1,1) — the baseline "no growth signal" case.
+The default canonical choice for STEP 3 production runs. Parameterised by mean m in (0,1) and concentration kappa (alpha + beta). Uniform(0,1) is Beta(1,1) — the baseline "no growth signal" case.
 
-### Truncated Exponential (max-entropy)
+### Truncated Exponential (max-entropy) — Sensitivity family
 
 On [0,1], the maximum-entropy distribution with constraint E[P] = m. Philosophically aligned with a "least-committed" stance. Mean = 0.5 gives Uniform.
 
-### Truncated Uniform(lower, upper)
+### Truncated Uniform(lower, upper) — Sensitivity/stress-test family
 
-Flat distribution on a subinterval of [0,1]. Useful for stress-testing "shifted but unpeaked" regimes.
+Flat distribution on a subinterval of [0,1]. Useful for stress-testing "shifted but unpeaked" regimes; typically slower and more likely to produce near-tie objective wins that are not best on true-median recovery.
+
+**Selection policy:** default runs use Beta only (`regime$families = c("beta")`).  
+When multiple families are enabled, near-ties are resolved with a configurable tolerance and preferred family (default preferred: Beta).
 
 ---
 
@@ -218,14 +225,20 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `regime$primary_family` | `"beta"` | Default regime family |
+| `regime$families` | `c("beta")` | Canonical production family set |
+| `regime$sensitivity_families` | `c("truncexp", "truncunif")` | Optional sensitivity families |
+| `regime$preferred_family` | `"beta"` | Tie-break preferred family |
+| `regime$tie_tolerance` | `1e-4` | Distance tie window for preferred-family selection |
+| `regime$primary_family` | `"beta"` | Single-family default for fast estimation |
 | `distance$primary` | `"wasserstein1"` | Optimiser objective |
 | `kernel$u_grid_size` | 201 | Transition kernel grid resolution |
 | `uncertainty$n_bootstrap` | 200 | Bootstrap replicates |
 | `buckets$k3` | `c(45, 55)` | K=3 bucket cutpoints (SGPc scale) |
 | `buckets$k5` | `c(40, 45, 55, 60)` | K=5 bucket cutpoints (SGPc scale) |
 | `validation$dataset_id` | `"dataset_1"` | Phase A dataset |
-| `validation$min_subgroup_n` | 100 | Minimum subgroup size |
+| `validation$content_area` | `"MATHEMATICS"` | Preferred Phase A content area |
+| `validation$min_subgroup_n` | 500 | Minimum subgroup size |
+| `validation$target_subgroup_n` | 2500 | Preferred Phase A subgroup size |
 | `systematic$n_conditions_per_dataset` | 10 | Conditions for Phase B |
 | `seed` | 20260210 | RNG seed for reproducibility |
 
@@ -267,7 +280,7 @@ After a complete run of Phases A + B + C, the following files are guaranteed in 
 
 | File | Columns | Source |
 |------|---------|--------|
-| `step3_country_estimates.csv` | subgroup_id, dataset_id, condition_id, n, regime_family, theta1, theta2, median_sgpc, mean_sgpc, dispersion_sd, dispersion_iqr, entropy, concentration, distance_min, wasserstein1, cvm | Phases A + B |
+| `step3_country_estimates.csv` | subgroup_id, dataset_id, condition_id, n, regime_family, regime_param_1, regime_param_2, m_hat, kappa_hat, median_sgpc, mean_sgpc, dispersion_sd, dispersion_iqr, entropy, concentration, distance_min, wasserstein1, cvm | Phases A + B |
 | `step3_uncertainty_decomposition.csv` | subgroup_id, var_sampling, var_copula, var_family, total_var, se_sampling, n_boot, n_converged | Phase A |
 | `step3_bucket_probabilities.csv` | subgroup_id, median_sgpc, k3_{Low,Typical,High}, k3_assigned, k3_consistency, k5_{VeryLow,...,VeryHigh}, k5_assigned, k5_consistency | Phase A |
 
@@ -331,7 +344,7 @@ STEP 3 panels follow the same visual conventions as STEP 2, enforced via `functi
 
 ### Issue: "Estimation failed" for a subgroup
 
-**Cause:** The grid search found no valid theta (e.g., observed CDF is outside the predictable range for all regimes).
+**Cause:** The grid search found no valid parameter candidate (e.g., observed CDF is outside the predictable range for all regimes).
 
 **Fix:** Check that reference marginals are built from the full state population, not the subgroup. The subgroup's U and V distributions should *not* be uniform.
 
@@ -339,7 +352,7 @@ STEP 3 panels follow the same visual conventions as STEP 2, enforced via `functi
 
 **Possible causes:**
 - Subgroup too small (n < 50): sampling noise dominates
-- Independence assumption violated: H_theta actually depends on U
+- Independence assumption violated: H_S actually depends on U
 - Copula mismatch: baseline copula does not match this subgroup's dependency
 
 ---
@@ -378,7 +391,7 @@ STEP 3 validates the inference machinery on data where ground truth is available
 | `functions/regime_families.R` | Beta, trunc-exp, trunc-uniform (sd, IQR, entropy) |
 | `functions/predict_v_cdf.R` | Analytic predicted CDF |
 | `functions/distance_metrics.R` | W1, CvM, KS |
-| `functions/optimize_theta.R` | Grid search + optim() |
+| `functions/optimize_regime.R` | Grid search + optim() |
 | `functions/bootstrap_uncertainty.R` | Sampling + copula uncertainty |
 | `functions/bucket_classification.R` | K=3/K=5 bucket probabilities + stability |
 | `functions/diagnostics_plots.R` | ggplot2 diagnostic visualisations |

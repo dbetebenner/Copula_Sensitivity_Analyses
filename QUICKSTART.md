@@ -131,7 +131,7 @@ source("master_analysis.R")
 - Validates copula-kernel growth regime inference from cross-sectional data
 - Compares inferred growth regimes to longitudinal ground truth
 - **Output:** Recovery accuracy tables, publication panels (6 panels A-F), manifests
-- **Location:** `STEP_3_LIw_LD/results/`
+- **Location:** `STEP_3_LIwLD/results/`
 - **Paper:** Chapter 4 (Growth Regime Inference)
 
 ### STEP 4: TIMSS Implementation (Placeholder)
@@ -179,7 +179,7 @@ source("master_analysis.R")
 |------|-------------------|-----------|
 | 1 | `STEP_1_Family_Selection/results/dataset_all/` | `analysis_manifest.{json,md}`, `phase1_*.{pdf,svg,png}` |
 | 2 | `STEP_2_SGPc_Sensitivity/results/` | SGPc comparison CSVs, publication panels |
-| 3 | `STEP_3_LIw_LD/results/` | `phase_a_summary.csv`, `phase_b_systematic_summary.csv`, `step3_manifest.{json,md}` |
+| 3 | `STEP_3_LIwLD/results/` | `phase_a_summary.csv`, `phase_b_systematic_summary.csv`, `step3_manifest.{json,md}` |
 | 4 | `STEP_4_TIMSS_Implementation/results/` | (Placeholder — awaiting implementation) |
 | 5 | `STEP_5_Summary_Conclusions_Next_Steps/results/` | (Placeholder — awaiting implementation) |
 

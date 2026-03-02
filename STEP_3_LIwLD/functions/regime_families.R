@@ -2,7 +2,7 @@
 ###
 ### Growth Regime Families for STEP 3: Growth Regime Inference
 ###
-### A growth regime H_theta is a distribution on [0,1] for latent
+### A growth regime H_S is a distribution on [0,1] for latent
 ### conditional percentiles. When combined with a baseline copula
 ### kernel, it determines how a subgroup's current-grade marginal
 ### arises from their prior-grade marginal.

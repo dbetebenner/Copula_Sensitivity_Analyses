@@ -9,7 +9,7 @@
 ###   2. "Forget" the pairing        ->  independent prior/current samples
 ###   3. Build reference marginals   ->  state-level ECDFs
 ###   4. Build transition kernel     ->  F_0(v|u) from baseline copula
-###   5. Estimate growth regime      ->  H_theta by minimum-distance
+###   5. Estimate growth regime      ->  H_S by minimum-distance
 ###   6. Compare inferred vs actual  ->  the key validation
 ###   7. Diagnostics + uncertainty   ->  plots + bootstrap
 ###
@@ -59,19 +59,34 @@ cat("State data loaded:", format(nrow(STATE_DATA), big.mark = ","), "rows\n")
 
 # Select condition (auto or specified)
 if (is.null(cfg$validation$condition_id)) {
-  # Auto-select: pick a 1-year span condition with large n
+  # Auto-select: prioritize 1-year span + preferred content area
   conditions <- get_phase1_conditions(dataset_id)
   if (length(conditions) == 0) stop("No Phase 1 conditions found for ", dataset_id)
 
-  # Parse to find 1-year spans
+  preferred_content <- ""
+  if (!is.null(cfg$validation$content_area)) {
+    preferred_content <- toupper(as.character(cfg$validation$content_area))
+  }
+
+  # Parse condition metadata
   cond_meta <- lapply(conditions, parse_condition_id)
   spans <- sapply(cond_meta, `[[`, "year_span")
-  one_year <- conditions[spans == 1]
+  contents <- toupper(sapply(cond_meta, `[[`, "content_area"))
 
-  if (length(one_year) > 0) {
-    condition_id <- one_year[1]  # Take first 1-year condition
+  one_year <- conditions[spans == 1]
+  one_year_contents <- contents[spans == 1]
+
+  one_year_preferred <- one_year[one_year_contents == preferred_content]
+
+  if (length(one_year_preferred) > 0) {
+    condition_id <- one_year_preferred[1]
+    cat("Auto-selected 1-year preferred content condition:", condition_id, "\n")
+  } else if (length(one_year) > 0) {
+    condition_id <- one_year[1]
+    cat("Preferred content not found in 1-year spans; using first 1-year condition:", condition_id, "\n")
   } else {
-    condition_id <- conditions[1]  # Fallback to first available
+    condition_id <- conditions[1]
+    cat("No 1-year conditions available; using first available condition:", condition_id, "\n")
   }
 } else {
   condition_id <- cfg$validation$condition_id
@@ -90,12 +105,16 @@ cat("  Content:", cond$content_area, "\n\n")
 
 cat("A.1  Extracting longitudinal pairs (ground truth)...\n")
 
+# Calculate year_prior from condition metadata
+year_prior <- as.character(as.numeric(cond$year_current) - cond$year_span)
+
 pairs <- create_longitudinal_pairs(
-  state_data    = STATE_DATA,
+  data          = STATE_DATA,
   grade_prior   = cond$grade_prior,
   grade_current = cond$grade_current,
+  year_prior    = year_prior,
   year_current  = cond$year_current,
-  content_area  = cond$content_area
+  content_prior = cond$content_area
 )
 
 cat("  Total longitudinal pairs:", format(nrow(pairs), big.mark = ","), "\n")
@@ -238,6 +257,8 @@ family_comparison <- compare_regime_families(
   kernel_cache   = kernel_cache,
   families       = cfg$regime$families,
   distance_fn    = cfg$distance$primary,
+  tie_tolerance  = cfg$regime$tie_tolerance,
+  preferred_family = cfg$regime$preferred_family,
   grid_resolution = cfg$regime$grid_resolution,
   verbose        = TRUE
 )
@@ -250,6 +271,11 @@ cat("  Estimated median SGPc:", round(best_est$regime$median * 100, 1), "\n")
 cat("  True median SGPc:     ", round(median(true_sgpc, na.rm = TRUE), 1), "\n")
 cat("  Difference:           ",
     round(best_est$regime$median * 100 - median(true_sgpc, na.rm = TRUE), 1),
+    " SGP points\n\n")
+cat("  Estimated mean SGPc:  ", round(best_est$regime$mean * 100, 1), "\n")
+cat("  True mean SGPc:       ", round(mean(true_sgpc, na.rm = TRUE), 1), "\n")
+cat("  Difference:           ",
+    round(best_est$regime$mean * 100 - mean(true_sgpc, na.rm = TRUE), 1),
     " SGP points\n\n")
 
 
@@ -270,6 +296,12 @@ boot_results <- bootstrap_regime(
   seed           = cfg$seed,
   verbose        = TRUE
 )
+cat("  Bootstrap median SGPc 95% CI:",
+    paste0("[", round(boot_results$ci_median_sgpc[1], 1), ", ",
+           round(boot_results$ci_median_sgpc[2], 1), "]"), "\n")
+cat("  Bootstrap mean SGPc 95% CI:  ",
+    paste0("[", round(boot_results$ci_mean_sgpc[1], 1), ", ",
+           round(boot_results$ci_mean_sgpc[2], 1), "]"), "\n\n")
 
 
 ############################################################################
@@ -350,18 +382,28 @@ summary_row <- data.frame(
   n_subgroup      = nrow(pairs_sg),
   regime_family   = best_family,
   median_sgpc_inferred = round(best_est$regime$median * 100, 2),
+  mean_sgpc_inferred   = round(best_est$regime$mean * 100, 2),
   median_sgpc_true     = round(median(true_sgpc, na.rm = TRUE), 2),
+  mean_sgpc_true       = round(mean(true_sgpc, na.rm = TRUE), 2),
   median_diff          = round(best_est$regime$median * 100 -
                                median(true_sgpc, na.rm = TRUE), 2),
+  mean_diff            = round(best_est$regime$mean * 100 -
+                               mean(true_sgpc, na.rm = TRUE), 2),
   wasserstein1    = round(best_est$all_distances$wasserstein1, 6),
   cvm             = round(best_est$all_distances$cramer_von_mises, 6),
   boot_ci_lo      = round(boot_results$ci_median_sgpc[1], 1),
   boot_ci_hi      = round(boot_results$ci_median_sgpc[2], 1),
+  boot_ci_mean_lo = round(boot_results$ci_mean_sgpc[1], 1),
+  boot_ci_mean_hi = round(boot_results$ci_mean_sgpc[2], 1),
   boot_se         = round(boot_results$se_median_sgpc, 2),
   stringsAsFactors = FALSE
 )
 fwrite(summary_row, file.path(RESULTS_DIR, "phase_a_summary.csv"))
 
+# Export comprehensive Phase A manifest files (JSON + MD)
+export_phase_a_manifest(phase_a_results, output_dir = RESULTS_DIR, prefix = "phase_a")
+
 cat("  Saved: phase_a_deep_dive.rds, phase_a_summary.csv\n")
+cat("  Saved: phase_a_manifest.json, phase_a_manifest.md\n")
 
 cat("\n--- Phase A complete ---\n\n")

@@ -49,17 +49,21 @@ write_dat(round(d_u$x, 6), round(d_u$y, 6), "panel_A_density_U.dat")
 write_dat(round(d_v$x, 6), round(d_v$y, 6), "panel_A_density_V.dat")
 
 
-# --- Panel B: CDF curves ----------------------------------------------------
-cat("Panel B...\n")
-write_dat(round(dat$v_grid, 6), round(dat$F_obs, 6),      "panel_B_cdf_obs.dat")
-write_dat(round(dat$v_grid, 6), round(dat$F_uniform, 6),  "panel_B_cdf_uniform.dat")
-write_dat(round(dat$v_grid, 6), round(dat$est$F_pred, 6), "panel_B_cdf_inferred.dat")
+# --- Panel B2: CDF curves ---------------------------------------------------
+cat("Panel B2...\n")
+write_dat(round(dat$v_grid, 6), round(dat$F_obs, 6),      "panel_B2_cdf_obs.dat")
+write_dat(round(dat$v_grid, 6), round(dat$F_uniform, 6),  "panel_B2_cdf_uniform.dat")
+write_dat(round(dat$v_grid, 6), round(dat$est$F_pred, 6), "panel_B2_cdf_inferred.dat")
+# Co-monotonic (TAMP) induced marginal under equi-percentile mapping:
+# F_tamp(v) = P(U <= v) = F_U(v)
+F_tamp <- stats::ecdf(dat$u_sample)(dat$v_grid)
+write_dat(round(dat$v_grid, 6), round(F_tamp, 6),         "panel_B2_cdf_tamp.dat")
 
 
-# --- Panel C: heatmap cells (generated TeX) ----------------------------------
-cat("Panel C...\n")
+# --- Panel B1: heatmap cells (generated TeX) ---------------------------------
+cat("Panel B1...\n")
 gs     <- dat$est$grid_search
-z_raw  <- with(gs, tapply(distance, list(theta2, theta1), mean))
+z_raw  <- with(gs, tapply(distance, list(regime_param_2, regime_param_1), mean))
 mean_vals  <- as.numeric(colnames(z_raw))
 kappa_vals <- as.numeric(rownames(z_raw))
 ord_m <- order(mean_vals);  ord_k <- order(kappa_vals)
@@ -103,28 +107,28 @@ for (i in seq_len(nr)) {
               tag, x0, y0, x1, y1))
   }
 }
-writeLines(heatmap_lines, file.path(data_dir, "panel_C_heatmap_cells.tex"))
-cat("   panel_C_heatmap_cells.tex\n")
+writeLines(heatmap_lines, file.path(data_dir, "panel_B1_heatmap_cells.tex"))
+cat("   panel_B1_heatmap_cells.tex\n")
 
-## Optimum point
-opt_x <- dat$est$theta_hat[1] * 100
-opt_y <- log10(dat$est$theta_hat[2])
+## Best-fit point (m_hat, kappa_hat)
+opt_x <- dat$est$m_hat * 100
+opt_y <- log10(dat$est$kappa_hat)
 writeLines(c(
   sprintf("\\newcommand{\\optX}{%s}", round(opt_x, 2)),
   sprintf("\\newcommand{\\optY}{%s}", round(opt_y, 4))
-), file.path(data_dir, "panel_C_optimum.tex"))
-cat("   panel_C_optimum.tex\n")
+), file.path(data_dir, "panel_B1_optimum.tex"))
+cat("   panel_B1_optimum.tex\n")
 
 
-# --- Panel D: regime density curves ------------------------------------------
-cat("Panel D...\n")
+# --- Panel C: regime density curves ------------------------------------------
+cat("Panel C...\n")
 p_grid <- seq(0.001, 0.999, length.out = 500)
 d_true <- dat$true_regime$density(p_grid)
 d_inf  <- dat$est$regime$density(p_grid)
 write_dat(round(p_grid * 100, 4), round(rep(1, length(p_grid)), 4),
-          "panel_D_density_uniform.dat")
-write_dat(round(p_grid * 100, 4), round(d_true, 6), "panel_D_density_true.dat")
-write_dat(round(p_grid * 100, 4), round(d_inf, 6),  "panel_D_density_inferred.dat")
+          "panel_C_density_uniform.dat")
+write_dat(round(p_grid * 100, 4), round(d_true, 6), "panel_C_density_true.dat")
+write_dat(round(p_grid * 100, 4), round(d_inf, 6),  "panel_C_density_inferred.dat")
 
 
 # --- Summary metrics (LaTeX macros) ------------------------------------------
@@ -133,17 +137,17 @@ w1_reduction <- 100 * (1 - dat$distances$inferred$wasserstein1 /
                             dat$distances$uniform$wasserstein1)
 
 metrics <- c(
-  sprintf("\\newcommand{\\trueRegimeMean}{%s}",      round(dat$true_regime$mean * 100, 1)),
-  sprintf("\\newcommand{\\trueRegimeMedian}{%s}",    round(dat$true_regime$median * 100, 1)),
-  sprintf("\\newcommand{\\inferredRegimeMean}{%s}",   round(dat$est$regime$mean * 100, 1)),
-  sprintf("\\newcommand{\\inferredRegimeMedian}{%s}", round(dat$est$regime$median * 100, 1)),
-  sprintf("\\newcommand{\\wOneUniform}{%s}",          round(dat$distances$uniform$wasserstein1, 4)),
-  sprintf("\\newcommand{\\wOneInferred}{%s}",         round(dat$distances$inferred$wasserstein1, 4)),
-  sprintf("\\newcommand{\\wOneReduction}{%s}",        round(w1_reduction, 1)),
-  sprintf("\\newcommand{\\copulaRho}{%s}",            round(dat$config$copula_rho, 2)),
+  sprintf("\\newcommand{\\trueRegimeMean}{%.1f}",      dat$true_regime$mean * 100),
+  sprintf("\\newcommand{\\trueRegimeMedian}{%.1f}",    dat$true_regime$median * 100),
+  sprintf("\\newcommand{\\inferredRegimeMean}{%.1f}",  dat$est$regime$mean * 100),
+  sprintf("\\newcommand{\\inferredRegimeMedian}{%.1f}", dat$est$regime$median * 100),
+  sprintf("\\newcommand{\\wOneUniform}{%.4f}",         dat$distances$uniform$wasserstein1),
+  sprintf("\\newcommand{\\wOneInferred}{%.4f}",        dat$distances$inferred$wasserstein1),
+  sprintf("\\newcommand{\\wOneReduction}{%.1f}",       w1_reduction),
+  sprintf("\\newcommand{\\copulaRho}{%.2f}",           dat$config$copula_rho),
   sprintf("\\newcommand{\\copulaDf}{%s}",             dat$config$copula_df),
   sprintf("\\newcommand{\\nStudents}{%s}",            dat$config$n_students),
-  sprintf("\\newcommand{\\inferredKappa}{%s}",        round(dat$est$theta_hat[2], 1)),
+  sprintf("\\newcommand{\\inferredKappa}{%.1f}",      dat$est$kappa_hat),
   sprintf("\\newcommand{\\trueRegimeKappa}{%s}",      dat$config$true_regime_kappa)
 )
 writeLines(metrics, file.path(data_dir, "summary_metrics.tex"))

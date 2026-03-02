@@ -63,7 +63,7 @@ Required files for each assessment cycle:
 
 For each country:
 - Apply STEP 3 inference pipeline using 4-year-span copula parameters
-- Estimate growth regime H_theta using Beta family
+- Estimate growth regime `H_S` using Beta family
 - Compute median SGPc, dispersion, and bucket probabilities
 - Quantify uncertainty (bootstrap + copula parameter uncertainty)
 
@@ -127,7 +127,7 @@ All STEP 3 function modules are reused directly:
 - `regime_families.R` — Growth regime families
 - `predict_v_cdf.R` — Predicted CDF
 - `distance_metrics.R` — Fitting metrics
-- `optimize_theta.R` — Estimation
+- Optimizer module — Estimation
 - `bootstrap_uncertainty.R` — Uncertainty quantification
 
 ---

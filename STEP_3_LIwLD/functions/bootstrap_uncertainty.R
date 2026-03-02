@@ -35,7 +35,7 @@ require(copula)
 #'
 #' @return List with:
 #'   \itemize{
-#'     \item theta_draws: Matrix [n_boot, n_params] of estimated parameters
+#'     \item regime_param_draws: Matrix [n_boot, n_params] of estimated parameters
 #'     \item median_sgpc_draws: Numeric vector of median SGPc from each replicate
 #'     \item mean_sgpc_draws: Numeric vector of mean SGPc from each replicate
 #'     \item distance_draws: Numeric vector of minimum distances
@@ -66,7 +66,7 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   n_v <- length(v_sample)
 
   # Storage
-  theta_list <- list()
+  regime_param_list <- list()
   median_sgpc <- numeric(n_boot)
   mean_sgpc   <- numeric(n_boot)
   distances   <- numeric(n_boot)
@@ -93,13 +93,13 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     }, error = function(e) NULL)
 
     if (!is.null(res)) {
-      theta_list[[b]] <- res$theta_hat
+      regime_param_list[[b]] <- res$regime_param_hat
       median_sgpc[b]  <- res$regime$median * 100
       mean_sgpc[b]    <- res$regime$mean * 100
       distances[b]    <- res$distance_min
       converged[b]    <- (res$convergence == 0)
     } else {
-      theta_list[[b]] <- rep(NA_real_, 2)
+      regime_param_list[[b]] <- rep(NA_real_, 2)
       median_sgpc[b]  <- NA_real_
       mean_sgpc[b]    <- NA_real_
       distances[b]    <- NA_real_
@@ -107,7 +107,7 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     }
   }
 
-  theta_draws <- do.call(rbind, theta_list)
+  regime_param_draws <- do.call(rbind, regime_param_list)
   n_converged <- sum(converged, na.rm = TRUE)
   valid <- !is.na(median_sgpc)
 
@@ -121,7 +121,7 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   }
 
   list(
-    theta_draws      = theta_draws,
+    regime_param_draws = regime_param_draws,
     median_sgpc_draws = median_sgpc,
     mean_sgpc_draws  = mean_sgpc,
     distance_draws   = distances,
@@ -155,7 +155,7 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
 #'
 #' @return List with:
 #'   \itemize{
-#'     \item theta_draws: Matrix of estimated parameters per copula draw
+#'     \item regime_param_draws: Matrix of estimated parameters per copula draw
 #'     \item median_sgpc_draws: Vector of median SGPc per copula draw
 #'     \item copula_params_used: The copula parameters used for each draw
 #'     \item var_copula: Variance in median SGPc due to copula uncertainty
@@ -176,7 +176,7 @@ copula_uncertainty <- function(u_sample, v_sample,
     v_grid <- seq(0.005, 0.995, length.out = 201)
   }
 
-  theta_list    <- list()
+  regime_param_list <- list()
   median_sgpc   <- numeric(n_draws)
   copula_used   <- list()
 
@@ -199,7 +199,7 @@ copula_uncertainty <- function(u_sample, v_sample,
     }, error = function(e) NULL)
 
     if (is.null(cop)) {
-      theta_list[[m]] <- rep(NA_real_, 2)
+      regime_param_list[[m]] <- rep(NA_real_, 2)
       median_sgpc[m]  <- NA_real_
       copula_used[[m]] <- params
       next
@@ -213,7 +213,7 @@ copula_uncertainty <- function(u_sample, v_sample,
     )
 
     if (is.null(kc)) {
-      theta_list[[m]] <- rep(NA_real_, 2)
+      regime_param_list[[m]] <- rep(NA_real_, 2)
       median_sgpc[m]  <- NA_real_
       copula_used[[m]] <- params
       next
@@ -229,16 +229,16 @@ copula_uncertainty <- function(u_sample, v_sample,
     }, error = function(e) NULL)
 
     if (!is.null(res)) {
-      theta_list[[m]] <- res$theta_hat
+      regime_param_list[[m]] <- res$regime_param_hat
       median_sgpc[m]  <- res$regime$median * 100
     } else {
-      theta_list[[m]] <- rep(NA_real_, 2)
+      regime_param_list[[m]] <- rep(NA_real_, 2)
       median_sgpc[m]  <- NA_real_
     }
     copula_used[[m]] <- params
   }
 
-  theta_draws <- do.call(rbind, theta_list)
+  regime_param_draws <- do.call(rbind, regime_param_list)
   valid <- !is.na(median_sgpc)
 
   if (verbose && sum(valid) > 2) {
@@ -249,7 +249,7 @@ copula_uncertainty <- function(u_sample, v_sample,
   }
 
   list(
-    theta_draws       = theta_draws,
+    regime_param_draws = regime_param_draws,
     median_sgpc_draws = median_sgpc,
     copula_params_used = copula_used,
     var_copula        = if (sum(valid) > 2) var(median_sgpc[valid]) else NA_real_

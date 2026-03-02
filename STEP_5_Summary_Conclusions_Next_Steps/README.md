@@ -61,7 +61,7 @@ This directory serves as the final synthesis step. It will contain:
 
 ### Assumptions and Their Consequences
 
-1. **Independence of growth regime from prior achievement** — The assumption that H_theta does not depend on U. When this fails (e.g., differential growth by prior level), the model provides an average rather than a stratified picture.
+1. **Independence of growth regime from prior achievement** — The assumption that `H_S` does not depend on U. When this fails (e.g., differential growth by prior level), the model provides an average rather than a stratified picture.
 
 2. **Baseline copula transferability** — Using a copula estimated from U.S. state data as the transition kernel for TIMSS countries. Justified by STEP 2 stability findings but worth explicit discussion.
 
@@ -90,7 +90,7 @@ This directory serves as the final synthesis step. It will contain:
 ### Near-Term Extensions
 
 1. **Multivariate copulas** — Extend to vine copulas for 3+ timepoints
-2. **Covariate-dependent regimes** — Allow H_theta(u) to vary by prior achievement bin
+2. **Covariate-dependent regimes** — Allow `H_S(u)` to vary by prior achievement bin
 3. **Multiple plausible values** — Proper integration over TIMSS PV uncertainty
 4. **Time-series application** — Track growth regimes across TIMSS cycles for SPC monitoring
 

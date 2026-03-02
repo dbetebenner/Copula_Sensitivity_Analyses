@@ -7,7 +7,7 @@ This document is the implementation plan for STEP 3 in the Copula Sensitivity An
 ## 0) Executive Summary
 
 ### What STEP 3 estimates
-- A subgroup-level growth regime distribution `H_theta` on latent conditional percentiles `P in [0,1]`.
+- A subgroup-level growth regime distribution `H_S` on latent conditional percentiles `P in [0,1]`.
 - Derived summaries: median SGPc, mean SGPc, dispersion, entropy/concentration, and bucket probabilities.
 
 ### What STEP 3 does not estimate
@@ -15,8 +15,8 @@ This document is the implementation plan for STEP 3 in the Copula Sensitivity An
 
 ### Core operator view
 - Markov matrix analogy: `mu_{t+1} = mu_t P`.
-- Copula-kernel analog: `mu_V = mu_U K_theta`.
-- STEP 3 estimates `theta` so `mu_U K_theta` reproduces the observed Grade 8 marginal.
+- Copula-kernel analog: `mu_V = mu_U K_H`.
+- STEP 3 estimates the subgroup regime so `mu_U K_H` reproduces the observed Grade 8 marginal.
 
 ---
 
@@ -41,7 +41,7 @@ Given baseline copula `C_0`:
 
 So STEP 3 separates:
 - Dependence template (from STEP 1): `C_0` / `F_0`.
-- Flow occupancy rule (to estimate): `H_theta`.
+- Flow occupancy rule (to estimate): `H_S`.
 
 ### 1.3 Deterministic boundary cases and TAMP
 - Comonotonic copula (`C^+(u,v) = min(u,v)`) implies rank-preserving deterministic mapping `V = U`.
@@ -57,11 +57,11 @@ That is deterministic for any kernel, but generally not identical to `V = U` unl
 
 ### 1.5 Anchor definition of SGPcFlow
 
-`sgpcFlow_theta: U -> V, with V = Q_0(P_theta | U), P_theta ~ H_theta`
+`sgpcFlow_S: U -> V, with V = Q_0(P_S | U), P_S ~ H_S`
 
 where `Q_0` is induced by baseline kernel `F_0(v|u) = d/du C_0(u,v)`.
 
-Point-mass `H_theta` gives deterministic trajectories; dispersed `H_theta` gives stochastic flow.
+Point-mass `H_S` gives deterministic trajectories; dispersed `H_S` gives stochastic flow.
 
 ---
 
@@ -91,33 +91,33 @@ Point-mass `H_theta` gives deterministic trajectories; dispersed `H_theta` gives
 - `Q_0(p|u) = F_0^{-1}(p|u)`.
 
 ### 3.3 Regime distribution
-- `P_theta ~ H_theta` on `[0,1]`.
-- Baseline identification assumption: `P_theta` independent of `U` within subgroup.
+- `P_S ~ H_S` on `[0,1]`.
+- Baseline identification assumption: `P_S` independent of `U` within subgroup.
 - Generated percentile:
-  - `V_theta = Q_0(P_theta | U)`.
+  - `V = Q_0(P_S | U)`.
 
 ### 3.4 Key analytic identity
-Under `P_theta independent U`:
-- `F_theta(v|u) = H_theta(F_0(v|u))`.
-- `F_theta(v) = E[H_theta(F_0(v|U))]`.
+Under `P_S independent U`:
+- `F_H(v|u) = H(F_0(v|u))`.
+- `F_H(v) = E[H(F_0(v|U))]`.
 - Sample analog with weights:
-  - `F_theta(v) ~= sum_i w_i H_theta(F_0(v|u_i)) / sum_i w_i`.
+  - `F_H(v) ~= sum_i w_i H(F_0(v|u_i)) / sum_i w_i`.
 
-This identity removes Monte Carlo noise in prediction and enables fast optimization over `theta`.
+This identity removes Monte Carlo noise in prediction and enables fast optimization over regime parameters.
 
 ---
 
 ## 4) Identification and Assumptions
 
 ### 4.1 Primary identifying assumption
-`P_theta independent U` within subgroup is the central tractability condition for unpaired marginals.
+`P_S independent U` within subgroup is the central tractability condition for unpaired marginals.
 
 ### 4.2 What is identified
-- A low-dimensional subgroup-level regime summary `H_theta`.
-- Not heterogeneous latent regimes `H_{theta(u)}` without additional constraints/data.
+- A low-dimensional subgroup-level regime summary `H_S`.
+- Not heterogeneous latent regimes `H_{S}(u)` without additional constraints/data.
 
 ### 4.3 Sensitivity extensions
-Allow `H_{theta(u)}` by `u` bins only as scenario analysis:
+Allow `H_{S}(u)` by `u` bins only as scenario analysis:
 - smoothness penalties,
 - monotonicity constraints,
 - explicit "non-identified" labeling in outputs.
@@ -145,7 +145,7 @@ Outputs:
 
 ---
 
-## 6) Regime Families `H_theta`
+## 6) Regime Families `H_S`
 
 Implement at least:
 
@@ -192,9 +192,9 @@ Optional diagnostics:
 - tail-weighted CvM.
 
 ### 7.4 Optimization workflow
-1. Coarse grid search over `theta`.
+1. Coarse grid search over regime parameters.
 2. Local refinement (`optim()` with box constraints).
-3. Return `theta_hat`, objective minimum, convergence flags.
+3. Return best-fit parameters, objective minimum, convergence flags.
 
 ---
 
@@ -202,7 +202,7 @@ Optional diagnostics:
 
 ### 8.1 Sampling uncertainty
 - Bootstrap or replicate-weight resampling of Grade 4 and Grade 8 samples.
-- Estimate `theta_hat_b` per replicate.
+- Estimate best-fit parameters per replicate.
 
 ### 8.2 Copula structural uncertainty
 - Draw baseline parameters `phi^(m)` from STEP 1 uncertainty objects.
@@ -267,7 +267,7 @@ STEP_3_LIwLD/
     regime_families.R
     predict_v_cdf.R
     distance_metrics.R
-    optimize_theta.R
+    optimize_regime.R
     bootstrap_uncertainty.R
     diagnostics_plots.R
     manifest_export.R
@@ -306,7 +306,7 @@ Publication panels:
 Before deployment:
 1. Simulate `U`.
 2. Choose baseline `C_0`.
-3. Choose known `H_theta`.
+3. Choose known `H_S`.
 4. Generate `V` then discard pairing.
 5. Re-estimate with STEP 3.
 6. Quantify recovery vs sample size and year span.
@@ -368,15 +368,15 @@ outputs:
 - Copula: dependence structure on uniform marginals.
 - Baseline kernel `F_0(v|u)`: conditional CDF induced by baseline copula.
 - Quantile kernel `Q_0(p|u)`: inverse conditional map.
-- Growth regime `H_theta`: subgroup distribution over latent conditional percentiles.
-- SGPcFlow: generated map `V = Q_0(P_theta|U)` with `P_theta ~ H_theta`.
+- Growth regime `H_S`: subgroup distribution over latent conditional percentiles.
+- SGPcFlow: generated map `V = Q_0(P_S|U)` with `P_S ~ H_S`.
 
 ---
 
 ## 17) Explicit Assumptions
 
 - Fixed-reference percentile mapping is used.
-- Primary target is subgroup regime `H_theta`, not individual SGPc.
+- Primary target is subgroup regime `H_S`, not individual SGPc.
 - Baseline copula uncertainty is propagated from STEP 1 recommendations.
 - Report probabilistic bucket assignments instead of deterministic labels.
 - Heterogeneous-by-prior regimes are treated as sensitivity scenarios unless additional identification structure is introduced.

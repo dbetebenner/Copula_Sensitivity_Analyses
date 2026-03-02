@@ -83,10 +83,10 @@ load_phase1_condition <- function(
         result$best_fit_copula <- tCopula(
           param = best_result$parameter,
           df = best_result$df,
-          dispstr = "un"
+          dim = 2
         )
       } else if (best_family == "gaussian" && !is.null(best_result$parameter)) {
-        result$best_fit_copula <- normalCopula(param = best_result$parameter)
+        result$best_fit_copula <- normalCopula(param = best_result$parameter, dim = 2)
       }
       # Add other families as needed
     }
@@ -322,21 +322,22 @@ create_canonical_copula <- function(year_span_val, content_area_val, canonical_p
   })
   
   # Create copula object based on recommended family
+  # NOTE: For bivariate copulas, no dispstr parameter needed (it's only for dim > 2)
   if (family == "t") {
     copula_obj <- tCopula(
       param = rho_val,
       df = df_val,
-      dispstr = "un"
+      dim = 2
     )
   } else if (family == "gaussian") {
-    copula_obj <- normalCopula(param = rho_val)
+    copula_obj <- normalCopula(param = rho_val, dim = 2)
   } else {
     # Default to t-copula if other families (e.g., Frank recommended but
     # canonical CSV currently always reports t; see canonical_validation.R)
     copula_obj <- tCopula(
       param = rho_val,
       df = 30,  # Reasonable default for non-t families
-      dispstr = "un"
+      dim = 2
     )
   }
   

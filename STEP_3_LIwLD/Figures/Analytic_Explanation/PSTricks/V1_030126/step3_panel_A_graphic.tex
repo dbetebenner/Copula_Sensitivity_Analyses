@@ -1,0 +1,64 @@
+%%%%
+%%%% Panel A graphic: Independent U and V marginal densities
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+
+\pagestyle{empty}
+\begin{document}
+\psset{xunit=3.3in,yunit=1.28in}
+\begin{pspicture}(-0.12,-0.42)(1.12,\panelAymax)
+
+  %% Read curve data
+  \readdata{\dataU}{data/panel_A_density_U.dat}
+  \readdata{\dataV}{data/panel_A_density_V.dat}
+
+  %% Filled area under U density
+  \pscustom[fillstyle=solid,fillcolor=priorU,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataU}%
+    \psline(1,0)%
+    \closepath}
+
+  %% Filled area under V density
+  \pscustom[fillstyle=solid,fillcolor=currentV,opacity=0.14,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataV}%
+    \psline(1,0)%
+    \closepath}
+
+  %% Curve lines
+  \listplot[linecolor=priorU,linewidth=1.3pt,plotstyle=line]{\dataU}
+  \listplot[linecolor=currentV,linewidth=1.3pt,plotstyle=line]{\dataV}
+
+  %% Axes
+  \psaxes[Dx=0.2,Dy=0.5,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(1.0,\panelAymax)
+
+  %% Axis labels
+  \rput[t](0.5,-0.26){\textsf{\small Reference quantile ($u$ or $v$)}}
+  \rput[b]{90}(-0.12,1.2){\textsf{\small Density}}
+
+  %% Legend
+  \rput[tr](0.98,\panelAymax){%
+    \raisebox{-28pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize Prior sample $U$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=priorU,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Current sample $V$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[2pt]
+        \multicolumn{2}{@{}l@{}}{\textsf{\tiny\textcolor{subtitleGrey}{NOTE: No student-level pair IDs available}}}
+      \end{tabular}%
+    }}}}
+%
+\end{pspicture}
+\end{document}

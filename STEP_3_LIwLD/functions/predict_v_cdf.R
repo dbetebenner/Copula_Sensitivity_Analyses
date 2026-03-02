@@ -4,11 +4,11 @@
 ###
 ### Implements the key analytic identity that removes Monte Carlo noise:
 ###
-###   F_theta(v) = E[ H_theta( F_0(v | U) ) ]
-###             ~= sum_i  w_i * H_theta( F_0(v | u_i) )  /  sum_i w_i
+###   F_H(v) = E[ H( F_0(v | U) ) ]
+###          ~= sum_i  w_i * H( F_0(v | u_i) )  /  sum_i w_i
 ###
 ### where {u_i, w_i} is the prior-grade sample (expressed as reference
-### percentiles) and H_theta is the growth regime CDF.
+### percentiles) and H is the growth regime CDF.
 ###
 ### This is the analytic predicted CDF of current-grade scores under a
 ### candidate growth regime, given the prior-grade distribution and a
@@ -25,9 +25,9 @@
 #'
 #' The core analytic computation. For each v on a grid, computes:
 #'
-#'   F_theta(v) = (1/sum(w)) * sum_i  w_i * H_theta( F_0(v | u_i) )
+#'   F_H(v) = (1/sum(w)) * sum_i  w_i * H( F_0(v | u_i) )
 #'
-#' This is exact (no simulation) when P_theta is independent of U within
+#' This is exact (no simulation) when P is independent of U within
 #' the subgroup.
 #'
 #' @param v_grid Numeric vector. Grid of current-grade pseudo-observation
@@ -39,7 +39,7 @@
 #' @param regime A growth_regime object (from regime_families.R).
 #' @param kernel_cache A kernel_cache object (from copula_kernel_cache.R).
 #'
-#' @return Numeric vector of predicted CDF values F_theta(v_grid).
+#' @return Numeric vector of predicted CDF values F_H(v_grid).
 #'   Same length as v_grid, values in [0,1].
 #'
 #' @details
@@ -49,7 +49,7 @@
 #'
 #' The computation proceeds as follows for each v in v_grid:
 #' 1. Evaluate F_0(v | u_i) for all u_i via kernel_conditional_cdf()
-#' 2. Apply H_theta() to each value (the growth regime CDF)
+#' 2. Apply H() to each value (the growth regime CDF)
 #' 3. Take weighted average
 #'
 #' @export
@@ -78,29 +78,29 @@ predict_marginal_cdf <- function(v_grid, u_sample, weights = NULL,
   w_sum <- sum(weights)
 
   # Preallocate result
-  F_theta <- numeric(n_v)
+  F_H <- numeric(n_v)
 
-  # For each v, compute the weighted average of H_theta(F_0(v|u_i))
+  # For each v, compute the weighted average of H(F_0(v|u_i))
   for (j in seq_len(n_v)) {
     v_j <- rep(v_grid[j], n_u)
 
     # F_0(v | u_i) for all u_i
     f0_vals <- kernel_conditional_cdf(v = v_j, u = u_sample, cache = kernel_cache)
 
-    # H_theta(F_0(v | u_i))
+    # H(F_0(v | u_i))
     h_vals <- regime$cdf(f0_vals)
 
     # Weighted average
-    F_theta[j] <- sum(weights * h_vals) / w_sum
+    F_H[j] <- sum(weights * h_vals) / w_sum
   }
 
   # Enforce monotonicity (should be automatic but guards against numerical noise)
-  F_theta <- cummax(F_theta)
+  F_H <- cummax(F_H)
 
   # Clamp to [0, 1]
-  F_theta <- pmax(0, pmin(1, F_theta))
+  F_H <- pmax(0, pmin(1, F_H))
 
-  return(F_theta)
+  return(F_H)
 }
 
 
@@ -142,7 +142,7 @@ observed_marginal_cdf <- function(v_grid, v_sample, weights = NULL) {
 
 #' Predict Conditional CDF for an Individual
 #'
-#' Computes F_theta(v | u) = H_theta( F_0(v | u) ) for a single
+#' Computes F_H(v | u) = H( F_0(v | u) ) for a single
 #' individual with prior percentile u. This is the modified conditional
 #' CDF under the growth regime.
 #'
@@ -151,7 +151,7 @@ observed_marginal_cdf <- function(v_grid, v_sample, weights = NULL) {
 #' @param regime A growth_regime object
 #' @param kernel_cache A kernel_cache object
 #'
-#' @return Numeric vector of F_theta(v | u) values
+#' @return Numeric vector of F_H(v | u) values
 #'
 #' @export
 predict_conditional_cdf <- function(v, u, regime, kernel_cache) {

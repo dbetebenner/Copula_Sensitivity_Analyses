@@ -1,0 +1,44 @@
+\documentclass[10pt]{article}
+\usepackage[paperwidth=15.55in,paperheight=1.05in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{tikz}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\pagestyle{empty}
+\begin{document}
+\noindent
+\begin{tikzpicture}[x=1in,y=1in]
+  \definecolor{headerDark}{RGB}{210,210,208}
+  \definecolor{headerLight}{RGB}{225,225,223}
+
+  % Base darker band.
+  \fill[headerDark] (0,0.1) rectangle (15.55,0.95);
+
+  % Lighter middle section with subtle chevrons.
+  \fill[headerLight]
+    (3.85,0.1)
+    -- (11.51,0.1)
+    -- (11.81,0.525)
+    -- (11.51,0.95)
+    -- (3.7,0.95)
+    -- (4.0,0.525)
+    -- (3.7,0.1)
+    -- cycle;
+
+  % A header block.
+  \node[anchor=west,align=left,text width=3.35in] at (0.30,0.55) {%
+    {\normalsize\bfseries A. Map Scores to Pseudo-Observations}\\[-1pt]
+    {\small Observed marginals: \textit{U} and \textit{V} (no pairs)}};
+
+  % Combined B1+B2 header block.
+  \node[anchor=west,align=left,text width=7.20in] at (4.15,0.55) {%
+    {\normalsize\bfseries B1 \& B2. Fit stochastic growth regime using canonical copula and observed \textit{U} and \textit{V}}\\[-1pt]
+    {\small Minimize Wasserstein-1 distance over $\mathrm{Beta}(\kappa m,\kappa(1-m))$ between induced $F_H(v)$ and observed $F_{\mathrm{obs}}(V)$}};
+
+  % C header block.
+  \node[anchor=west,align=left,text width=3.35in] at (12.00,0.55) {%
+    {\normalsize\bfseries C. Recover growth regime $\symbf{P_S}$ (latent SGPc)}\\[-1pt]
+    {\small SGPc distribution based upon fit CDF}};
+\end{tikzpicture}
+
+\end{document}

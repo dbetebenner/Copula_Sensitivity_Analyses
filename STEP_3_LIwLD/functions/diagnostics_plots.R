@@ -50,8 +50,8 @@ plot_observed_vs_predicted_cdf <- function(est,
   regime <- est$regime
   d <- est$all_distances
   subtitle <- sprintf(
-    "Regime: %s | Median SGPc: %.1f | W1: %.4f | CvM: %.6f",
-    regime$family, regime$median * 100, d$wasserstein1, d$cramer_von_mises
+    "Regime: %s | Mean SGPc: %.1f | Median SGPc: %.1f | W1: %.4f | CvM: %.6f",
+    regime$family, regime$mean * 100, regime$median * 100, d$wasserstein1, d$cramer_von_mises
   )
 
   p_upper <- ggplot(df, aes(x = v, y = cdf, color = source, linetype = source)) +
@@ -71,7 +71,7 @@ plot_observed_vs_predicted_cdf <- function(est,
     geom_ref_hline(yintercept = 0) +
     geom_hline(yintercept = c(-0.02, 0.02), linetype = "dotted", color = "grey70") +
     labs(x = "v (current-grade reference percentile)",
-         y = expression(F[theta](v) - F[obs](v))) +
+         y = expression(F[H](v) - F[obs](v))) +
     theme_publication()
 
   combined <- p_upper / p_lower + plot_layout(heights = c(3, 1))
@@ -84,7 +84,7 @@ plot_observed_vs_predicted_cdf <- function(est,
 
 #' Plot Inferred Regime Shape vs True SGPc Distribution
 #'
-#' Compares the estimated H_theta density with the actual SGPc
+#' Compares the estimated H_S density with the actual SGPc
 #' distribution from longitudinal data.
 #'
 #' @param regime A growth_regime object (estimated)
@@ -117,15 +117,20 @@ plot_regime_shape <- function(regime, true_sgpc = NULL,
   cols <- c("Inferred" = STEP3_COLORS$inferred, "Actual" = STEP3_COLORS$actual)
 
   subtitle <- if (!is.null(true_sgpc)) {
-    sprintf("Inferred median: %.1f | Actual median: %.1f | Diff: %.1f",
-            regime$median * 100, median(true_sgpc),
-            regime$median * 100 - median(true_sgpc))
-  } else NULL
+    sprintf("Mean (Inf/Act): %.1f / %.1f | Median (Inf/Act): %.1f / %.1f",
+            regime$mean * 100, mean(true_sgpc),
+            regime$median * 100, median(true_sgpc))
+  } else {
+    sprintf("Inferred mean: %.1f | Inferred median: %.1f",
+            regime$mean * 100, regime$median * 100)
+  }
 
   p <- ggplot(df_all, aes(x = sgpc, y = density, fill = source, color = source)) +
     geom_area(alpha = 0.15, position = "identity") +
     geom_line(linewidth = 0.9) +
     geom_ref_vline(xintercept = 50) +
+    geom_vline(xintercept = regime$mean * 100, linetype = "dotdash",
+               color = STEP3_COLORS$inferred, linewidth = 0.6) +
     geom_vline(xintercept = regime$median * 100, linetype = "dashed",
                color = STEP3_COLORS$inferred, linewidth = 0.6) +
     scale_color_manual(values = cols) +
@@ -136,6 +141,14 @@ plot_regime_shape <- function(regime, true_sgpc = NULL,
     coord_cartesian(xlim = c(0, 100)) +
     theme_publication() +
     theme(legend.position = c(0.88, 0.88))
+
+  if (!is.null(true_sgpc)) {
+    p <- p +
+      geom_vline(xintercept = mean(true_sgpc), linetype = "dotdash",
+                 color = STEP3_COLORS$actual, linewidth = 0.6) +
+      geom_vline(xintercept = median(true_sgpc), linetype = "dashed",
+                 color = STEP3_COLORS$actual, linewidth = 0.6)
+  }
 
   save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
 
@@ -171,7 +184,7 @@ plot_residual_curve <- function(est,
                         guide = "none") +
     labs(title = "CDF Residual Curve",
          x = "v (current-grade reference percentile)",
-         y = expression(F[theta](v) - F[obs](v))) +
+         y = expression(F[H](v) - F[obs](v))) +
     theme_publication()
 
   save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = 5)
@@ -230,10 +243,22 @@ plot_recovery_summary <- function(est, true_sgpc = NULL,
 
   pB <- ggplot(df_B, aes(x = sgpc, y = density, color = source)) +
     geom_line(linewidth = 0.8) +
+    geom_vline(xintercept = est$regime$mean * 100, linetype = "dotdash",
+               color = STEP3_COLORS$inferred, linewidth = 0.5) +
+    geom_vline(xintercept = est$regime$median * 100, linetype = "dashed",
+               color = STEP3_COLORS$inferred, linewidth = 0.5) +
     scale_color_manual(values = cols_B) +
     labs(title = "B. Regime Shape", x = "SGPc", y = "Density", color = NULL) +
     theme_publication(base_size = 9) +
     theme(legend.position = c(0.80, 0.85))
+
+  if (!is.null(true_sgpc)) {
+    pB <- pB +
+      geom_vline(xintercept = mean(true_sgpc), linetype = "dotdash",
+                 color = STEP3_COLORS$actual, linewidth = 0.5) +
+      geom_vline(xintercept = median(true_sgpc), linetype = "dashed",
+                 color = STEP3_COLORS$actual, linewidth = 0.5)
+  }
 
   # --- Panel C: Q-Q plot ---
   n_qq <- min(99, length(est$v_grid))
@@ -251,27 +276,32 @@ plot_recovery_summary <- function(est, true_sgpc = NULL,
 
   # --- Panel D: Grid search landscape ---
   gs <- est$grid_search
-  if (!is.null(gs) && nrow(gs) > 0 && "theta1" %in% names(gs)) {
+  if (!is.null(gs) && nrow(gs) > 0 &&
+      ("regime_param_1" %in% names(gs) || "theta1" %in% names(gs))) {
     valid_gs <- gs[is.finite(gs$distance), ]
-    if (nrow(valid_gs) > 0 && "theta2" %in% names(valid_gs)) {
-      opt_pt <- data.frame(theta1 = est$theta_hat[1], theta2 = est$theta_hat[2])
-      pD <- ggplot(valid_gs, aes(x = theta1, y = theta2, color = distance)) +
+    x_col <- if ("regime_param_1" %in% names(valid_gs)) "regime_param_1" else "theta1"
+    y_col <- if ("regime_param_2" %in% names(valid_gs)) "regime_param_2" else if ("theta2" %in% names(valid_gs)) "theta2" else NULL
+    est_params <- if (!is.null(est$regime_param_hat)) est$regime_param_hat else est$theta_hat
+
+    if (nrow(valid_gs) > 0 && !is.null(y_col)) {
+      opt_pt <- data.frame(x = est_params[1], y = est_params[2])
+      pD <- ggplot(valid_gs, aes_string(x = x_col, y = y_col, color = "distance")) +
         geom_point(size = 0.8) +
         scale_color_gradientn(colours = c(STEP3_COLORS$predicted, "#FEC44F",
                                            STEP3_COLORS$residual_pos)) +
-        geom_point(data = opt_pt, aes(x = theta1, y = theta2),
+        geom_point(data = opt_pt, aes(x = x, y = y),
                    shape = 4, size = 3, stroke = 1.5, color = "black",
                    inherit.aes = FALSE) +
-        labs(title = "D. Grid Search", x = "theta1 (mean)", y = "theta2 (kappa)") +
+        labs(title = "D. Grid Search", x = "m", y = "kappa") +
         theme_publication(base_size = 9) +
         theme(legend.position = "none")
     } else if (nrow(valid_gs) > 0) {
-      opt_pt <- data.frame(theta = est$theta_hat[1])
-      pD <- ggplot(valid_gs, aes(x = theta1, y = distance)) +
+      opt_pt <- data.frame(param = est_params[1])
+      pD <- ggplot(valid_gs, aes_string(x = x_col, y = "distance")) +
         geom_line(linewidth = 0.8, color = STEP3_COLORS$predicted) +
-        geom_vline(data = opt_pt, aes(xintercept = theta),
+        geom_vline(data = opt_pt, aes(xintercept = param),
                    linetype = "dashed", color = STEP3_COLORS$residual_pos) +
-        labs(title = "D. Grid Search", x = "theta (mean)", y = "Distance") +
+        labs(title = "D. Grid Search", x = "regime parameter", y = "Distance") +
         theme_publication(base_size = 9)
     } else {
       pD <- ggplot() + annotate("text", x = 0.5, y = 0.5,

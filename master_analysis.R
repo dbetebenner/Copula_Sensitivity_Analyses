@@ -140,7 +140,7 @@ cat("Total datasets:", length(DATASETS_TO_RUN), "\n\n")
 # Step mapping:
 #   STEP 1 — STEP_1_Family_Selection     (copula family selection)
 #   STEP 2 — STEP_2_SGPc_Sensitivity     (SGPc sensitivity analysis)
-#   STEP 3 — STEP_3_LIw_LD              (growth regime inference — Longitudinal Inference w/o LD)
+#   STEP 3 — STEP_3_LIwLD               (growth regime inference — Longitudinal Inference w/o LD)
 #   STEP 4 — STEP_4_TIMSS_Implementation (TIMSS application — placeholder)
 #   STEP 5 — STEP_5_Summary_Conclusions_Next_Steps (synthesis — placeholder)
 
@@ -982,7 +982,7 @@ if (should_run_step(3)) {
   cat("Objective: Validate copula-kernel growth regime inference against longitudinal truth\n")
   cat("Estimated time: 30-90 minutes\n\n")
   
-  step3_results_dir <- "STEP_3_LIw_LD/results"
+  step3_results_dir <- "STEP_3_LIwLD/results"
   step3_summary <- file.path(step3_results_dir, "phase_a_summary.csv")
   
   if (SKIP_COMPLETED && file.exists(step3_summary)) {
@@ -990,7 +990,7 @@ if (should_run_step(3)) {
     cat("  Results:", step3_results_dir, "\n\n")
   } else {
     result_3 <- time_phase("Step 3: Growth Regime Inference (LIw_LD)", {
-      source("STEP_3_LIw_LD/run_step3.R")
+      source("STEP_3_LIwLD/run_step3.R")
     })
     
     if (!result_3$success) {
@@ -1038,8 +1038,8 @@ if (should_run_step(3)) {
   
   pause_for_review(
     paste0("Review Step 3 results (Growth Regime Inference):\n",
-           "  - STEP_3_LIw_LD/results/\n",
-           "  - STEP_3_LIw_LD/results/visualizations/\n\n",
+           "  - STEP_3_LIwLD/results/\n",
+           "  - STEP_3_LIwLD/results/visualizations/\n\n",
            "If validation passed, proceed to Step 4 (TIMSS application)."),
     "Step 3 Complete"
   )
@@ -1701,8 +1701,8 @@ if (should_run_step(2) && length(ALL_DATASET_RESULTS$step2) > 0) {
 if (should_run_step(3) && length(ALL_DATASET_RESULTS$step3) > 0) {
   cat("Combining STEP 3 results from", length(ALL_DATASET_RESULTS$step3), "datasets...\n")
   step3_combined <- rbindlist(ALL_DATASET_RESULTS$step3, fill = TRUE)
-  output_file <- "STEP_3_Application_Implementation/results/exp5_transformation_validation_all_datasets.csv"
-  dir.create("STEP_3_Application_Implementation/results", showWarnings = FALSE, recursive = TRUE)
+  output_file <- "STEP_3_LIwLD/results/exp5_transformation_validation_all_datasets.csv"
+  dir.create("STEP_3_LIwLD/results", showWarnings = FALSE, recursive = TRUE)
   fwrite(step3_combined, output_file)
   cat("✓ Combined STEP 3 results saved to:", output_file, "\n\n")
 }
@@ -1741,7 +1741,7 @@ cat("Output Locations:\n")
 cat("-----------------\n")
 if (should_run_step(1)) cat("  Step 1: STEP_1_Family_Selection/results/\n")
 if (should_run_step(2)) cat("  Step 2: STEP_2_Copula_Sensitivity_Analyses/results/ (CORE)\n")
-if (should_run_step(3)) cat("  Step 3: STEP_3_Application_Implementation/results/\n")
+if (should_run_step(3)) cat("  Step 3: STEP_3_LIwLD/results/\n")
 if (should_run_step(4)) cat("  Step 4: STEP_4_Deep_Dive_Reporting/results/\n")
 cat("\n")
 

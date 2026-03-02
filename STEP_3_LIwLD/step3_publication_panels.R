@@ -275,15 +275,29 @@ est_rows <- list()
 
 if (!is.null(phase_a)) {
   regime <- phase_a$best_estimate$regime
+  best_params <- if (!is.null(phase_a$best_estimate$regime_param_hat)) {
+    phase_a$best_estimate$regime_param_hat
+  } else {
+    phase_a$best_estimate$theta_hat
+  }
+  m_hat <- if (!is.null(phase_a$best_estimate$m_hat)) phase_a$best_estimate$m_hat else best_params[1]
+  kappa_hat <- if (!is.null(phase_a$best_estimate$kappa_hat) && length(best_params) > 1) {
+    phase_a$best_estimate$kappa_hat
+  } else if (length(best_params) > 1) {
+    best_params[2]
+  } else {
+    NA_real_
+  }
   est_rows[["phase_a"]] <- data.frame(
     subgroup_id          = paste0(phase_a$condition_id, "__", phase_a$subgroup_id),
     dataset_id           = phase_a$dataset_id,
     condition_id         = phase_a$condition_id,
     n                    = phase_a$n_subgroup,
     regime_family        = regime$family,
-    theta1               = round(phase_a$best_estimate$theta_hat[1], 4),
-    theta2               = if (length(phase_a$best_estimate$theta_hat) > 1)
-                             round(phase_a$best_estimate$theta_hat[2], 4) else NA_real_,
+    regime_param_1       = round(best_params[1], 4),
+    regime_param_2       = if (length(best_params) > 1) round(best_params[2], 4) else NA_real_,
+    m_hat                = round(m_hat, 4),
+    kappa_hat            = round(kappa_hat, 4),
     median_sgpc          = round(regime$median * 100, 2),
     mean_sgpc            = round(regime$mean * 100, 2),
     dispersion_sd        = round(regime$sd * 100, 2),
@@ -306,8 +320,10 @@ if (!is.null(phase_b) && nrow(phase_b) > 0) {
       condition_id   = row$condition_id,
       n              = row$n_subgroup,
       regime_family  = row$regime_family,
-      theta1         = row$theta1,
-      theta2         = if ("theta2" %in% names(row)) row$theta2 else NA_real_,
+      regime_param_1 = if ("regime_param_1" %in% names(row)) row$regime_param_1 else row$theta1,
+      regime_param_2 = if ("regime_param_2" %in% names(row)) row$regime_param_2 else if ("theta2" %in% names(row)) row$theta2 else NA_real_,
+      m_hat          = if ("m_hat" %in% names(row)) row$m_hat else if ("regime_param_1" %in% names(row)) row$regime_param_1 else row$theta1,
+      kappa_hat      = if ("kappa_hat" %in% names(row)) row$kappa_hat else if ("regime_param_2" %in% names(row)) row$regime_param_2 else if ("theta2" %in% names(row)) row$theta2 else NA_real_,
       median_sgpc    = row$median_sgpc_inferred,
       mean_sgpc      = row$mean_sgpc_inferred,
       dispersion_sd  = NA_real_,

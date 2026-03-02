@@ -55,12 +55,12 @@ This analysis proceeds in **5 sequential steps**:
 - **Directory:** `STEP_2_SGPc_Sensitivity/`
 - **Paper Section:** Chapter 3, Section 3.2
 
-### STEP 3: Growth Regime Inference — LIw_LD ⭐ **PIÈCE DE RÉSISTANCE**
+### STEP 3: Growth Regime Inference — LIwLD ⭐ **PIÈCE DE RÉSISTANCE**
 - **Objective:** Validate that group-level growth regimes can be inferred from cross-sectional data alone
-- **Method:** Copula-kernel transition framework; estimate growth regime H_theta by minimum-distance matching; validate against known longitudinal ground truth
+- **Method:** Copula-kernel transition framework; estimate growth regime `H_S` by minimum-distance matching; validate against known longitudinal ground truth
 - **Output:** Recovery accuracy of median SGPc vs subgroup size and year span; uncertainty decomposition
 - **Runtime:** 30-90 minutes
-- **Directory:** `STEP_3_LIw_LD/`
+- **Directory:** `STEP_3_LIwLD/`
 - **Paper Section:** Chapter 4 (Growth Regime Inference)
 
 ### STEP 4: TIMSS Implementation
@@ -113,9 +113,9 @@ Copula_Sensitivity_Analyses/
 │   ├── phase1_data_loader.R
 │   └── results/                   # Step 2 outputs
 │
-├── STEP_3_LIw_LD/                     # ⭐ PIÈCE DE RÉSISTANCE
+├── STEP_3_LIwLD/                      # ⭐ PIÈCE DE RÉSISTANCE
 │   ├── README.md                  # Step 3 documentation
-│   ├── Growth_Regime_Inference_Plan.md
+│   ├── SGPcFlow_Inference_Plan.md
 │   ├── config_step3.R             # Configuration
 │   ├── run_step3.R                # Master runner
 │   ├── step3_validation_deep_dive.R   # Phase A
@@ -289,7 +289,7 @@ For TIMSS-like applications (cross-sectional, Grade 4→8, Mathematics):
 
 ## Current Status (February 2026)
 
-**Implementation Phase:** STEP 3 (LIw_LD) Implemented — Awaiting Validation Run
+**Implementation Phase:** STEP 3 (LIwLD) Implemented — Awaiting Validation Run
 
 ### Step Completion Status
 
@@ -297,13 +297,13 @@ For TIMSS-like applications (cross-sectional, Grade 4→8, Mathematics):
 |------|------|--------|
 | STEP 1 | Copula Family Selection | **Complete** — 966 conditions, 38.7 hours (Feb 6, 2026) |
 | STEP 2 | SGPc Sensitivity | **Complete** — SGPc variants computed and validated |
-| STEP 3 | Growth Regime Inference (LIw_LD) | **Code complete** — Awaiting validation run |
+| STEP 3 | Growth Regime Inference (LIwLD) | **Code complete** — Awaiting validation run |
 | STEP 4 | TIMSS Implementation | **Placeholder** — Awaiting STEP 3 + TIMSS data |
 | STEP 5 | Summary & Conclusions | **Placeholder** — Awaiting upstream completion |
 
 ### Recent Updates
 
-1. **STEP 3: Growth Regime Inference (LIw_LD)** (Feb 2026)
+1. **STEP 3: Growth Regime Inference (LIwLD)** (Feb 2026)
    - Full analytic pipeline implemented: 9 modular function files, 3-phase runner
    - Phase A: Single-condition deep validation (showcase)
    - Phase B: Systematic validation across conditions and subgroups
@@ -315,7 +315,7 @@ For TIMSS-like applications (cross-sectional, Grade 4→8, Mathematics):
    - Key validation: inferred growth regime vs actual SGPc distribution
 
 2. **Project Restructuring** (Feb 2026)
-   - STEP 3 directory renamed from `STEP_3_Application_Implementation` to `STEP_3_LIw_LD`
+   - STEP 3 directory standardized as `STEP_3_LIwLD`
    - STEP 4 repurposed from "Deep Dive Reporting" to "TIMSS Implementation"
    - STEP 5 added: "Summary, Conclusions, and Next Steps"
    - Legacy files archived in `STEP_4_TIMSS_Implementation/Archive/` and `STEP_5_Summary_Conclusions_Next_Steps/Archive/`
@@ -427,7 +427,7 @@ source("master_analysis.R")
 | 1 | `STEP_1_Family_Selection/results/dataset_all/` | `phase1_*.csv`, `phase1_*.{pdf,svg,png}`, `analysis_manifest.{json,md}` |
 | 1 | `STEP_1_Family_Selection/results/dataset_*/` | Per-dataset results + contour plots |
 | 2 | `STEP_2_SGPc_Sensitivity/results/` | `*.csv`, `*.{pdf,svg,png}`, publication panels |
-| 3 | `STEP_3_LIw_LD/results/` | `phase_a_*.csv`, `phase_b_*.csv`, `step3_manifest.{json,md}`, visualizations |
+| 3 | `STEP_3_LIwLD/results/` | `phase_a_*.csv`, `phase_b_*.csv`, `step3_manifest.{json,md}`, visualizations |
 | 4 | `STEP_4_TIMSS_Implementation/results/` | (Placeholder — awaiting implementation) |
 | 5 | `STEP_5_Summary_Conclusions_Next_Steps/results/` | (Placeholder — awaiting implementation) |
 
@@ -509,14 +509,14 @@ source("master_analysis.R")
 ### Step-Specific
 - **STEP_1_Family_Selection/README.md** - Copula family selection
 - **STEP_2_SGPc_Sensitivity/README.md** - SGPc sensitivity analysis (CORE CONTRIBUTION)
-- **STEP_3_LIw_LD/README.md** - Growth regime inference (PIÈCE DE RÉSISTANCE)
+- **STEP_3_LIwLD/README.md** - Growth regime inference (PIÈCE DE RÉSISTANCE)
 - **STEP_4_TIMSS_Implementation/README.md** - TIMSS application (placeholder)
 - **STEP_5_Summary_Conclusions_Next_Steps/README.md** - Summary and conclusions (placeholder)
 
 ### Methodological
 - **TWO_STAGE_TRANSFORMATION_METHODOLOGY.md** - Two-stage approach justification (implementation detail)
 - **STEP_1_Family_Selection/BUG_FIX_SUMMARY.txt** - Critical bug documentation
-- **STEP_3_Application_Implementation/SPLINE_CONVERSATION_ChatGPT.md** - Smoothing discussion
+- **STEP_3_LIwLD/SPLINE_CONVERSATION_ChatGPT.md** - Smoothing discussion
 
 ---
 
@@ -531,15 +531,15 @@ The paper draft is located at:
 
 - **Chapter 3, Section 3.1:** STEP 1 (Copula Family Selection)
 - **Chapter 3, Section 3.2:** STEP 2 (SGPc Sensitivity — Core Contribution)
-- **Chapter 4:** STEP 3 (Growth Regime Inference — LIw_LD)
+- **Chapter 4:** STEP 3 (Growth Regime Inference — LIwLD)
 - **Chapter 5:** STEP 4 (TIMSS Implementation — Placeholder)
 - **Chapters 6-7:** STEP 5 (Discussion, Conclusions — Placeholder)
 
 ### Generating Paper Materials
 
 Once STEP 3 validation is complete:
-1. Review results: `STEP_3_LIw_LD/results/`
-2. Review visualizations: `STEP_3_LIw_LD/results/visualizations/`
+1. Review results: `STEP_3_LIwLD/results/`
+2. Review visualizations: `STEP_3_LIwLD/results/visualizations/`
 3. Review manifests: `step3_manifest.json` and `step3_manifest.md`
 4. Copy publication panels to paper figures directory
 5. Extract key findings for text

@@ -258,7 +258,7 @@ After running Step 1 with `CALCULATE_SGPC = TRUE`, the data files contain:
 ### Summary Grid Statistics (NEW - January 2026)
 
 The summary grid PDF now displays in the statistics box:
-- Copula parameters (ρ, df, θ depending on family)
+- Copula parameters (ρ, df, and family-specific dependence parameters)
 - Kendall's τ
 - AIC / BIC
 - **Tail dependence: λ_L and λ_U** (NEW)
@@ -470,7 +470,7 @@ V <- rank(scores_current) / (n + 1)
 
 **Trade-off:** No invertibility, but not needed for family selection. By Sklar's theorem, copulas are invariant to monotone marginal transformations, so the copula dependence structure estimated here is valid regardless of which marginal transformation is later used for applications.
 
-For the complete two-stage approach justification, see top-level `TWO_STAGE_TRANSFORMATION_METHODOLOGY.md`. Note that the focus of this project has evolved from transformation methods (old STEP 3) to growth regime inference (new **STEP_3_LIw_LD**), which uses empirical ranks for pseudo-observation creation.
+For the complete two-stage approach justification, see top-level `TWO_STAGE_TRANSFORMATION_METHODOLOGY.md`. Note that the focus of this project has evolved from transformation methods (old STEP 3) to growth regime inference (new **STEP_3_LIwLD**), which uses empirical ranks for pseudo-observation creation.
 
 ---
 

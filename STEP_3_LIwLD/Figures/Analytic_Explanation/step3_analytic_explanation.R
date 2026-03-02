@@ -4,14 +4,14 @@
 ###
 ### Purpose:
 ###   Create a single wide mathematical infographic that explains how STEP 3
-###   infers a latent growth regime H_theta from unlinked cross-sectional
+###   infers a latent growth regime H_S from unlinked cross-sectional
 ###   pseudo-observations (U sample, V sample).
 ###
 ### Figure flow (left -> right):
 ###   A) Observe unlinked U and V marginals
 ###   B) Forward check under random-uniform regime vs observed V CDF
-###   C) Reverse-engineer theta by minimizing distance
-###   D) Recovered growth regime H_theta
+###   C) Reverse-engineer regime parameters by minimizing distance
+###   D) Recovered growth regime H_S
 ###
 ### Outputs are written to:
 ###   STEP_3_LIwLD/Figures/Analytic_Explanation/outputs/
@@ -109,7 +109,7 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
     file.path(step3_dir, "functions", "regime_families.R"),
     file.path(step3_dir, "functions", "predict_v_cdf.R"),
     file.path(step3_dir, "functions", "distance_metrics.R"),
-    file.path(step3_dir, "functions", "optimize_theta.R"),
+    file.path(step3_dir, "functions", "optimize_regime.R"),
     file.path(project_root, "functions", "export_plot_utils.R")
   )
 
@@ -219,7 +219,7 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
   v_sample <- sample(v_linked, length(v_linked), replace = FALSE)
 
   # -------------------------------------------------------------------------
-  # 2) Infer H(theta) from unlinked U and V
+  # 2) Infer H_S from unlinked U and V
   # -------------------------------------------------------------------------
   v_grid <- seq(cfg$boundary_buffer, 1 - cfg$boundary_buffer, length.out = cfg$v_grid_size)
 
@@ -340,7 +340,7 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
     lines(v_grid, F_uniform, lwd = cfg$line_width - 0.1, lty = 3, col = STEP3_FIG_COLORS$uniform)
     lines(v_grid, est$F_pred, lwd = cfg$line_width, lty = 2, col = STEP3_FIG_COLORS$inferred)
     legend("bottomright",
-           legend = c("Observed F_obs(v)", "Uniform H(p)=p prediction", "Inferred H_theta prediction"),
+           legend = c("Observed F_obs(v)", "Uniform H(p)=p prediction", "Inferred H_S prediction"),
            col = c(STEP3_FIG_COLORS$observed, STEP3_FIG_COLORS$uniform, STEP3_FIG_COLORS$inferred),
            lwd = c(cfg$line_width, cfg$line_width - 0.1, cfg$line_width),
            lty = c(1, 3, 2),
@@ -348,14 +348,14 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
            cex = 0.80)
     text(0.03, 0.96, labels = "Uniform misses.\nInference closes gap.",
          adj = c(0, 1), cex = 0.80, col = STEP3_FIG_COLORS$subtitle)
-    text(0.03, 0.84, labels = "F_theta(v) = E_U[ H_theta(F_0(v | U)) ]",
+    text(0.03, 0.84, labels = "F_H(v) = E_U[ H(F_0(v | U)) ]",
          adj = c(0, 1), cex = 0.76, col = STEP3_FIG_COLORS$body)
     box(col = STEP3_FIG_COLORS$border)
 
-    # Panel C: Reverse-engineering objective over theta
+    # Panel C: Reverse-engineering objective over (m, kappa)
     par(mar = c(4.5, 5.0, 4.2, 0.8))
     gs <- est$grid_search
-    z_raw <- with(gs, tapply(distance, list(theta2, theta1), mean))
+    z_raw <- with(gs, tapply(distance, list(regime_param_2, regime_param_1), mean))
     mean_vals <- as.numeric(colnames(z_raw))
     kappa_vals <- as.numeric(rownames(z_raw))
     ord_m <- order(mean_vals)
@@ -370,9 +370,9 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
       y = log10(kappa_vals),
       z = z_log,
       col = hcl.colors(90, "YlOrRd", rev = TRUE),
-      xlab = "Mean of H_theta (SGPc)",
+      xlab = "Mean of H (SGPc)",
       ylab = expression(log[10](kappa)),
-      main = "C. Reverse-engineer theta",
+      main = "C. Reverse-engineer regime",
       useRaster = TRUE
     )
     contour(
@@ -384,14 +384,14 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
       col = STEP3_FIG_COLORS$contour,
       lwd = 0.8
     )
-    points(est$theta_hat[1] * 100, log10(est$theta_hat[2]),
+    points(est$m_hat * 100, log10(est$kappa_hat),
            pch = 4, lwd = 2.2, cex = 1.2, col = "black")
-    text(est$theta_hat[1] * 100, log10(est$theta_hat[2]),
-         labels = "  optimum theta_hat", pos = 4, cex = 0.78)
+    text(est$m_hat * 100, log10(est$kappa_hat),
+         labels = "  optimum (m_hat, kappa_hat)", pos = 4, cex = 0.78)
     mtext("Color = log10 distance", side = 3, line = 0.2, cex = 0.72, col = "grey35")
     box(col = STEP3_FIG_COLORS$border)
 
-    # Panel D: Inferred growth regime
+    # Panel D: Inferred growth regime density
     par(mar = c(4.5, 4.6, 4.2, 0.8))
     p_grid <- seq(0.001, 0.999, length.out = 500)
     d_unif <- rep(1, length(p_grid))
@@ -403,7 +403,7 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
          xlim = c(0, 100), ylim = c(0, y_max_d),
          xlab = "Latent growth percentile p (SGPc scale)",
          ylab = "Density",
-         main = "D. Inferred H_theta")
+         main = "D. Inferred H_S")
     polygon(c(p_grid * 100, rev(p_grid * 100)),
             c(d_inf, rep(0, length(d_inf))),
             col = adjustcolor(STEP3_FIG_COLORS$inferred, alpha.f = 0.20), border = NA)
@@ -438,7 +438,7 @@ run_step3_analytic_explanation <- function(cfg = STEP3_ANALYTIC_EXPLANATION_CONF
     )
     mtext(
       sprintf(
-        "Flow A -> B -> C -> D | W1(F_obs, F_theta): uniform = %.4f, inferred = %.4f (%.1f%% reduction)",
+        "Flow A -> B -> C -> D | W1(F_obs, F_H): uniform = %.4f, inferred = %.4f (%.1f%% reduction)",
         d_uniform$wasserstein1, d_inferred$wasserstein1, w1_reduction_pct
       ),
       side = 1, outer = TRUE, line = -0.2, cex = 0.86, col = STEP3_FIG_COLORS$subtitle

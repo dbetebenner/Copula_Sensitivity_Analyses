@@ -61,9 +61,9 @@ cat("\n")
 # Set an entry to NULL (or remove it) to keep dvips/Ghostscript auto-cropping.
 custom_bounding_boxes <- list(
   step3_panel_A_graphic = c(0, 522, 295, 802),
-  step3_panel_B_graphic = c(21, 510, 315, 780),
-  step3_panel_C_graphic = c(10, 505, 305, 780),
-  step3_panel_D_graphic = c(0, 577, 285, 801)
+  step3_panel_B1_graphic = c(10, 505, 305, 780),
+  step3_panel_B2_graphic = c(21, 510, 315, 780),
+  step3_panel_C_graphic = c(0, 577, 285, 801)
 )
 
 apply_custom_bounding_box <- function(ps_file, bbox) {
@@ -165,8 +165,8 @@ compile_xelatex <- function(name) {
 
 cat("--- Step 2: Compile panels ---\n")
 
-graphic_panels <- paste0("step3_panel_", c("A","B","C","D"), "_graphic")
-text_panels    <- paste0("step3_panel_", c("A","B","C","D"), "_text")
+graphic_panels <- paste0("step3_panel_", c("A","B1","B2","C"), "_graphic")
+text_panels    <- paste0("step3_panel_", c("A","B1","B2","C"), "_text")
 
 ok <- TRUE
 for (p in graphic_panels) ok <- compile_pstricks(p)  && ok
@@ -180,6 +180,7 @@ if (!ok) warning("One or more panels failed to compile.")
 # ---------------------------------------------------------------------------
 
 cat("\n--- Step 3: Assemble infographic ---\n")
+compile_xelatex("step3_header_band")
 compile_xelatex("step3_infographic_main")
 
 final_pdf <- file.path(output_dir, "step3_infographic_main.pdf")
@@ -215,7 +216,7 @@ if (file.exists(final_pdf)) {
 # ---------------------------------------------------------------------------
 
 cat("\n--- Cleanup ---\n")
-all_stems <- c(graphic_panels, text_panels, "step3_infographic_main")
+all_stems <- c(graphic_panels, text_panels, "step3_header_band", "step3_infographic_main")
 cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
 old_wd <- setwd(pstricks_dir)
 for (stem in all_stems) {

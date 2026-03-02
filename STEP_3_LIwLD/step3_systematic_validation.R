@@ -134,10 +134,16 @@ for (ds_id in cfg_sys$datasets) {
     cat("  Condition", ci, "/", length(conditions), ":", condition_id, "\n")
 
     # Extract longitudinal pairs
+    year_prior <- as.character(as.numeric(cond$year_current) - cond$year_span)
+    
     pairs <- tryCatch({
       create_longitudinal_pairs(
-        STATE_DATA, cond$grade_prior, cond$grade_current,
-        cond$year_current, cond$content_area
+        data          = STATE_DATA,
+        grade_prior   = cond$grade_prior,
+        grade_current = cond$grade_current,
+        year_prior    = year_prior,
+        year_current  = cond$year_current,
+        content_prior = cond$content_area
       )
     }, error = function(e) {
       cat("    ERROR extracting pairs:", e$message, "\n")
@@ -248,11 +254,15 @@ for (ds_id in cfg_sys$datasets) {
         mean_sgpc_true      = round(mean(true_sgpc, na.rm = TRUE), 2),
         median_diff         = round(est$regime$median * 100 -
                                     median(true_sgpc, na.rm = TRUE), 2),
+        mean_diff           = round(est$regime$mean * 100 -
+                                    mean(true_sgpc, na.rm = TRUE), 2),
         wasserstein1        = round(est$all_distances$wasserstein1, 6),
         cvm                 = round(est$all_distances$cramer_von_mises, 6),
         ks                  = round(est$all_distances$ks_distance, 6),
-        theta1              = round(est$theta_hat[1], 4),
-        theta2              = if (length(est$theta_hat) > 1) round(est$theta_hat[2], 4) else NA_real_,
+        regime_param_1      = round(est$regime_param_hat[1], 4),
+        regime_param_2      = if (length(est$regime_param_hat) > 1) round(est$regime_param_hat[2], 4) else NA_real_,
+        m_hat               = round(est$m_hat, 4),
+        kappa_hat           = round(est$kappa_hat, 4),
         stringsAsFactors    = FALSE
       )
 
@@ -290,8 +300,14 @@ if (length(summary_rows) > 0) {
       "SGP points\n")
   cat("Mean of |median_diff|:", round(mean(abs(phase_b_summary$median_diff)), 2),
       "SGP points\n")
+  cat("Median of |mean_diff|:", round(median(abs(phase_b_summary$mean_diff)), 2),
+      "SGP points\n")
+  cat("Mean of |mean_diff|:", round(mean(abs(phase_b_summary$mean_diff)), 2),
+      "SGP points\n")
   cat("90th percentile of |median_diff|:",
       round(quantile(abs(phase_b_summary$median_diff), 0.90), 2), "SGP points\n")
+  cat("90th percentile of |mean_diff|:",
+      round(quantile(abs(phase_b_summary$mean_diff), 0.90), 2), "SGP points\n")
 
   # By year span
   if ("year_span" %in% names(phase_b_summary)) {
@@ -300,6 +316,8 @@ if (length(summary_rows) > 0) {
       n_subgroups   = .N,
       median_abs_diff = round(median(abs(median_diff)), 2),
       mean_abs_diff   = round(mean(abs(median_diff)), 2),
+      median_abs_mean_diff = round(median(abs(mean_diff)), 2),
+      mean_abs_mean_diff   = round(mean(abs(mean_diff)), 2),
       median_W1       = round(median(wasserstein1), 6)
     ), by = year_span][order(year_span)]
     print(by_span)
@@ -314,7 +332,9 @@ if (length(summary_rows) > 0) {
   by_size <- phase_b_summary[, .(
     n_subgroups   = .N,
     median_abs_diff = round(median(abs(median_diff)), 2),
-    mean_abs_diff   = round(mean(abs(median_diff)), 2)
+    mean_abs_diff   = round(mean(abs(median_diff)), 2),
+    median_abs_mean_diff = round(median(abs(mean_diff)), 2),
+    mean_abs_mean_diff   = round(mean(abs(mean_diff)), 2)
   ), by = size_bin][order(size_bin)]
   print(by_size)
 

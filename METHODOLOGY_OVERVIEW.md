@@ -16,7 +16,7 @@ STEP_1: Copula Family Selection
    ↓ (Selected family: t-copula with parameter recommendations)
 STEP_2: SGPc Sensitivity Analysis  ⭐ CORE CONTRIBUTION
    ↓ (SGPc variants compared; copula robustness validated)
-STEP_3: Growth Regime Inference (LIw_LD)  ⭐ PIÈCE DE RÉSISTANCE
+STEP_3: Growth Regime Inference (LIwLD)  ⭐ PIÈCE DE RÉSISTANCE
    ↓ (Cross-sectional inference validated against longitudinal truth)
 STEP_4: TIMSS Implementation (Placeholder)
    ↓ (Country-level growth regime estimates from real TIMSS data)
@@ -46,7 +46,7 @@ PAPER: Chapters 3-7
 - Goodness-of-fit testing via Cramér-von Mises with parametric bootstrap
 ```
 Given the uniform pseudo-samples {(Ui, Vi)}, we proceed to choose and fit 
-a parametric copula C_θ. Our guiding principles are:
+a parametric baseline copula C. Our guiding principles are:
 1. Rank-based dependence (Kendall's τ, Spearman's ρ)
 2. Tail dependence coefficients
 3. Information criteria (AIC, BIC)
@@ -142,8 +142,8 @@ classification agreement, and distributional comparisons."
 
 ---
 
-### STEP 3: Growth Regime Inference (LIw_LD) ⭐ **PIÈCE DE RÉSISTANCE**
-**Directory:** `STEP_3_LIw_LD/`  
+### STEP 3: Growth Regime Inference (LIwLD) ⭐ **PIÈCE DE RÉSISTANCE**
+**Directory:** `STEP_3_LIwLD/`  
 **Runtime:** 30-90 minutes
 
 #### Maps to Chapter 4:
@@ -157,12 +157,12 @@ We formulate the growth regime inference problem as follows. Given:
 - Independent samples of current scores {y_j} at Grade 8
 - A baseline copula C_0 from STEP 1 defining the transition kernel F_0(v|u)
 
-We estimate a growth regime H_θ — a distribution on [0,1] representing the 
+We estimate a growth regime `H_S` — a distribution on [0,1] representing the 
 latent conditional percentiles — such that the predicted current-grade marginal 
 matches the observed distribution.
 
 Key analytic identity (no simulation required):
-  F_θ(v) = E[ H_θ( F_0(v | U) ) ] = (1/n) Σ_i H_θ( F_0(v | u_i) )
+  F_H(v) = E[ H( F_0(v | U) ) ] = (1/n) Σ_i H( F_0(v | u_i) )
 ```
 
 **Section 4.2: Validation Methodology**
@@ -187,12 +187,12 @@ Phase B: Systematic validation across subgroups
 
 **Table:** Phase A deep validation summary
 ```r
-phase_a <- fread("STEP_3_LIw_LD/results/phase_a_summary.csv")
+phase_a <- fread("STEP_3_LIwLD/results/phase_a_summary.csv")
 ```
 
 **Table:** Phase B systematic validation
 ```r
-phase_b <- fread("STEP_3_LIw_LD/results/phase_b_systematic_summary.csv")
+phase_b <- fread("STEP_3_LIwLD/results/phase_b_systematic_summary.csv")
 ```
 
 **Figures:** Publication panels (6 panels A-F)
@@ -333,8 +333,8 @@ fread("STEP_2_SGPc_Sensitivity/results/sgpc_comparison_summary.csv")
 **STEP 3:**
 ```r
 # Growth regime inference validation
-fread("STEP_3_LIw_LD/results/phase_a_summary.csv")
-fread("STEP_3_LIw_LD/results/phase_b_systematic_summary.csv")
+fread("STEP_3_LIwLD/results/phase_a_summary.csv")
+fread("STEP_3_LIwLD/results/phase_b_systematic_summary.csv")
 ```
 
 ### 3. Copy Figures to Paper Directory
@@ -342,7 +342,7 @@ fread("STEP_3_LIw_LD/results/phase_b_systematic_summary.csv")
 # Copy publication figures (after running STEPs 1-3)
 cp STEP_1_Family_Selection/results/dataset_all/*.{pdf,svg,png} ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
 cp STEP_2_SGPc_Sensitivity/results/*.{pdf,svg,png} ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
-cp STEP_3_LIw_LD/results/visualizations/*.{pdf,svg,png} ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
+cp STEP_3_LIwLD/results/visualizations/*.{pdf,svg,png} ~/Research/Papers/Betebenner_Braun/Paper_1/Figures/
 ```
 
 ### 4. Extract Key Findings
@@ -350,7 +350,7 @@ cp STEP_3_LIw_LD/results/visualizations/*.{pdf,svg,png} ~/Research/Papers/Betebe
 Each step produces AI-consumable manifests (JSON + Markdown) that summarize results. Read these for paper text:
 - `STEP_1_Family_Selection/results/dataset_all/analysis_manifest.md`
 - `STEP_2_SGPc_Sensitivity/results/*.md`
-- `STEP_3_LIw_LD/results/step3_manifest.md`
+- `STEP_3_LIwLD/results/step3_manifest.md`
 
 ---
 
@@ -363,10 +363,10 @@ Each step produces AI-consumable manifests (JSON + Markdown) that summarize resu
 | Parameter recommendations | `STEP_1_Family_Selection/results/dataset_all/analysis_manifest.{json,md}` |
 | SGPc variant comparison | `STEP_2_SGPc_Sensitivity/results/*.csv` |
 | SGPc publication panels | `STEP_2_SGPc_Sensitivity/results/publication_figure_*.{pdf,svg,png}` |
-| STEP 3 Phase A summary | `STEP_3_LIw_LD/results/phase_a_summary.csv` |
-| STEP 3 Phase B summary | `STEP_3_LIw_LD/results/phase_b_systematic_summary.csv` |
-| STEP 3 publication panels | `STEP_3_LIw_LD/results/visualizations/panel_*.{pdf,svg,png}` |
-| STEP 3 manifest | `STEP_3_LIw_LD/results/step3_manifest.{json,md}` |
+| STEP 3 Phase A summary | `STEP_3_LIwLD/results/phase_a_summary.csv` |
+| STEP 3 Phase B summary | `STEP_3_LIwLD/results/phase_b_systematic_summary.csv` |
+| STEP 3 publication panels | `STEP_3_LIwLD/results/visualizations/panel_*.{pdf,svg,png}` |
+| STEP 3 manifest | `STEP_3_LIwLD/results/step3_manifest.{json,md}` |
 | TIMSS results | `STEP_4_TIMSS_Implementation/results/` (placeholder) |
 | Summary synthesis | `STEP_5_Summary_Conclusions_Next_Steps/results/` (placeholder) |
 
@@ -405,9 +405,9 @@ Copula_Sensitivity_Analyses/
 │   ├── README.md
 │   └── results/
 │
-├── STEP_3_LIw_LD/             ← Growth regime inference (PIÈCE DE RÉSISTANCE)
+├── STEP_3_LIwLD/              ← Growth regime inference (PIÈCE DE RÉSISTANCE)
 │   ├── README.md
-│   ├── Growth_Regime_Inference_Plan.md
+│   ├── SGPcFlow_Inference_Plan.md
 │   ├── functions/              ← 9 modular function files
 │   └── results/
 │

@@ -2,7 +2,7 @@
 ###
 ### Distance Metrics for STEP 3: Growth Regime Inference
 ###
-### Compares predicted CDF F_theta(v) to observed CDF F_obs(v).
+### Compares predicted CDF F_H(v) to observed CDF F_obs(v).
 ### Used as objective functions in the optimizer.
 ###
 ### Metrics:

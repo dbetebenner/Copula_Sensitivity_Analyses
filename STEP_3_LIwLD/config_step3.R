@@ -45,8 +45,13 @@ STEP3_CONFIG <- list(
   # 3. Growth regime families
   # ===========================================================================
   regime = list(
-    families       = c("beta", "truncexp", "truncunif"),
-    primary_family = "beta",     # Default for single-family estimation
+    # Canonical production choice (fast, stable, interpretable)
+    families       = c("beta"),
+    # Optional sensitivity families (run manually when needed)
+    sensitivity_families = c("truncexp", "truncunif"),
+    primary_family = "beta",
+    preferred_family = "beta",
+    tie_tolerance  = 1e-4,       # Prefer beta when distances are nearly tied
 
     # Grid search resolution (per parameter dimension)
     grid_resolution = 30
@@ -77,10 +82,11 @@ STEP3_CONFIG <- list(
     # Dataset and condition for the single-condition showcase
     dataset_id     = "dataset_1",
     condition_id   = NULL,       # NULL = auto-select large condition
+    content_area   = "MATHEMATICS",  # Preferred content area for auto-selection
     # Subgroup selection
     subgroup_col   = "DISTRICT_NUMBER",  # Column to use for subgroups
-    min_subgroup_n = 100,        # Minimum students in subgroup
-    target_subgroup_n = 500      # Preferred subgroup size
+    min_subgroup_n = 500,        # Minimum students in subgroup
+    target_subgroup_n = 2500      # Preferred subgroup size
   ),
 
   # ===========================================================================

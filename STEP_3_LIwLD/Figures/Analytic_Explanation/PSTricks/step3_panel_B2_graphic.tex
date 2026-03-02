@@ -1,5 +1,5 @@
 %%%%
-%%%% Panel B graphic: Forward CDF check in v-space
+%%%% Panel B2 graphic: Forward CDF check in v-space
 %%%%
 \documentclass[10pt]{article}
 \usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
@@ -18,9 +18,10 @@
 \psset{xunit=3.3in,yunit=3.1in}
 \begin{pspicture}(-0.22,-0.18)(1.1,1.1)
   %% Read CDF data
-  \readdata{\dataObs}{data/panel_B_cdf_obs.dat}
-  \readdata{\dataUnif}{data/panel_B_cdf_uniform.dat}
-  \readdata{\dataInf}{data/panel_B_cdf_inferred.dat}
+  \readdata{\dataObs}{data/panel_B2_cdf_obs.dat}
+  \readdata{\dataUnif}{data/panel_B2_cdf_uniform.dat}
+  \readdata{\dataInf}{data/panel_B2_cdf_inferred.dat}
+  \readdata{\dataTamp}{data/panel_B2_cdf_tamp.dat}
 
   %% CDF curves
   \listplot[linecolor=currentV,linewidth=1.3pt,plotstyle=line]{\dataObs}
@@ -28,6 +29,7 @@
             linecap=1,plotstyle=line]{\dataUnif}
   \listplot[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
             linecap=1,plotstyle=line]{\dataInf}
+  \listplot[linecolor=priorU,linewidth=0.9pt,linestyle=dotted,plotstyle=line]{\dataTamp}
 
   %% Axes
   \psaxes[Dx=0.2,Dy=0.2,ticksize=-3pt 0,
@@ -39,15 +41,17 @@
   \rput[b]{90}(-0.12,0.5){\textsf{\small CDF}}
 
   %% Legend
-  \rput[tr](0.98,0.2){%
-    \raisebox{-16pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+  \rput[tr](0.98,0.24){%
+    \raisebox{-18pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
       \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
         \textsf{\scriptsize Observed $\Fobs(v)$} &
         {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
-        \textsf{\scriptsize Uniform $H(p)=p$} &
+        \textsf{\scriptsize Uniform $F_{H(p)=p}(v)$} &
         {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
-        \textsf{\scriptsize Inferred $\Htheta$} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}
+        \textsf{\scriptsize Best-fit $F_{\HShat}(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Co-monotonic (TAMP) $F_U(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=priorU,linewidth=0.9pt,linestyle=dotted,linecap=1](0,0)(0.65,0)}}}
       \end{tabular}%
     }}}}
 \end{pspicture}

@@ -1,5 +1,5 @@
 %%%%
-%%%% Panel D graphic: Inferred growth regime H_theta
+%%%% Panel D graphic: Inferred growth regime density
 %%%%
 \documentclass[10pt]{article}
 \usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
@@ -23,19 +23,22 @@
   \readdata{\dataTrue}{data/panel_D_density_true.dat}
   \readdata{\dataInf}{data/panel_D_density_inferred.dat}
 
-  %% Filled area under inferred density
-  \pscustom[fillstyle=solid,fillcolor=zissouTeal,opacity=0.18,linestyle=none]{%
+  %% Filled area under true and inferred density
+  \pscustom[fillstyle=solid,fillcolor=zissouAmber,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataTrue}%
+    \psline(100,0)%
+    \closepath}
+  \pscustom[fillstyle=solid,fillcolor=inferredV,opacity=0.18,linestyle=none]{%
     \psline(0,0)%
     \listplot[plotstyle=line]{\dataInf}%
     \psline(100,0)%
     \closepath}
 
   %% Density curves
-  \listplot[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
-            plotstyle=line]{\dataUnif}
-  \listplot[linecolor=inferredV,linewidth=1.2pt,plotstyle=line]{\dataInf}
-  \listplot[linecolor=zissouAmber,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
-            plotstyle=line]{\dataTrue}
+  \listplot[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,plotstyle=line,linecap=1]{\dataUnif}
+  \listplot[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,plotstyle=line,linecap=1]{\dataInf}
+  \listplot[linecolor=zissouAmber,linewidth=1.2pt,linestyle=solid,plotstyle=line]{\dataTrue}
 
   %% Reference lines
   \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.8pt](50,0)(50,\panelDymax)
@@ -66,16 +69,19 @@
   \rput[tr](97,\panelDymax){%
     \raisebox{-30pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
       \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize True} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=zissouAmber,linewidth=1.2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
         \textsf{\scriptsize Uniform} &
         {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
-        \textsf{\scriptsize True synthetic} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=zissouAmber,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
-        \textsf{\scriptsize Inferred} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=1.2pt,linecap=1](0,0)(0.65,0)}}}
+        \textsf{\scriptsize Best-fit} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}
       \end{tabular}%
     }}}}
 
   %% Recovery annotation
+  \rput[tl](62.2,\panelDymax){%
+    \raisebox{-67pt}{\textsf{\scriptsize\textcolor{zissouAmber}{%
+      True mean $\SGPc = \trueRegimeMean$}}}}
   \rput[tl](55,\panelDymax){%
     \raisebox{-75pt}{\textsf{\scriptsize\textcolor{inferredV}{%
       Recovered mean $\SGPc = \inferredRegimeMean$}}}}
