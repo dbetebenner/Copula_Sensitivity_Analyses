@@ -316,6 +316,15 @@ if (!dir.exists(viz_dir)) dir.create(viz_dir, recursive = TRUE)
 sg_label <- paste0(condition_id, " / ", sg_col, " = ", subgroup_id)
 
 # CDF comparison
+best_est$F_uniform <- predict_marginal_cdf(
+  v_grid = best_est$v_grid,
+  u_sample = u_cross,
+  regime = regime_beta(0.5, 2),
+  kernel_cache = kernel_cache
+)
+best_est$F_tamp <- ecdf(u_cross)(best_est$v_grid)
+best_est$w1_uniform <- wasserstein1(best_est$F_uniform, best_est$F_obs, best_est$v_grid)
+
 plot_observed_vs_predicted_cdf(
   best_est,
   title = paste0("CDF Comparison — ", sg_label),
@@ -323,19 +332,29 @@ plot_observed_vs_predicted_cdf(
   filename = "panel_a_cdf_comparison"
 )
 
+# Objective surface (B1)
+plot_objective_surface(
+  best_est,
+  output_dir = viz_dir,
+  filename = "panel_b1_objective_surface",
+  title = paste0("Objective Surface — ", sg_label)
+)
+
 # Regime shape vs true SGPc
 plot_regime_shape(
   best_est$regime, true_sgpc,
   title = paste0("Growth Regime Recovery — ", sg_label),
   output_dir = viz_dir,
-  filename = "panel_b_regime_comparison"
+  filename = "panel_c_regime_comparison",
+  bootstrap = boot_results
 )
 
 # Residual curve
 plot_residual_curve(
   best_est,
   output_dir = viz_dir,
-  filename = "panel_c_residual_curve"
+  filename = "panel_b2_residual_curve",
+  title = paste0("Residual Diagnostics — ", sg_label)
 )
 
 # Multi-panel recovery summary
@@ -367,6 +386,9 @@ phase_a_results <- list(
   best_family        = best_family,
   best_estimate      = best_est,
   bootstrap          = boot_results,
+  u_sample           = u_cross,
+  v_sample           = v_cross,
+  kernel_cache       = kernel_cache,
   references         = list(n_prior = refs$n_prior, n_current = refs$n_current),
   copula_used        = list(family = kernel_cache$copula_family,
                             params = kernel_cache$copula_params),
@@ -389,6 +411,10 @@ summary_row <- data.frame(
                                median(true_sgpc, na.rm = TRUE), 2),
   mean_diff            = round(best_est$regime$mean * 100 -
                                mean(true_sgpc, na.rm = TRUE), 2),
+  w1_uniform      = round(best_est$w1_uniform, 6),
+  w1_reduction_pct = round(100 * (1 - (best_est$all_distances$wasserstein1 / best_est$w1_uniform)), 2),
+  max_abs_residual = round(max(abs(best_est$F_pred - best_est$F_obs), na.rm = TRUE), 6),
+  mean_abs_residual = round(mean(abs(best_est$F_pred - best_est$F_obs), na.rm = TRUE), 6),
   wasserstein1    = round(best_est$all_distances$wasserstein1, 6),
   cvm             = round(best_est$all_distances$cramer_von_mises, 6),
   boot_ci_lo      = round(boot_results$ci_median_sgpc[1], 1),
@@ -400,10 +426,24 @@ summary_row <- data.frame(
 )
 fwrite(summary_row, file.path(RESULTS_DIR, "phase_a_summary.csv"))
 
+# Export notation-aligned analytic payload + tidy figure data
+phase_a_exports <- export_phase_a_figure_data(
+  phase_a_results = phase_a_results,
+  output_dir = RESULTS_DIR,
+  write_files = TRUE
+)
+phase_a_results$figure_exports <- list(
+  cdf_rows = nrow(phase_a_exports$cdf_curves),
+  objective_rows = nrow(phase_a_exports$objective_surface),
+  density_rows = nrow(phase_a_exports$regime_density)
+)
+saveRDS(phase_a_results, file.path(RESULTS_DIR, "phase_a_deep_dive.rds"))
+
 # Export comprehensive Phase A manifest files (JSON + MD)
 export_phase_a_manifest(phase_a_results, output_dir = RESULTS_DIR, prefix = "phase_a")
 
 cat("  Saved: phase_a_deep_dive.rds, phase_a_summary.csv\n")
+cat("  Saved: phase_a_analytic_payload.rds and exports/phase_a/*.csv\n")
 cat("  Saved: phase_a_manifest.json, phase_a_manifest.md\n")
 
 cat("\n--- Phase A complete ---\n\n")

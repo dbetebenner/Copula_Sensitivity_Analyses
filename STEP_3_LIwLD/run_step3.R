@@ -76,6 +76,8 @@ source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
 source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
 source(file.path(STEP3_ROOT, "functions/bucket_classification.R"))
 source(file.path(STEP3_ROOT, "functions/manifest_export.R"))
+source(file.path(STEP3_ROOT, "functions/export_phase_a_figure_data.R"))
+source(file.path(STEP3_ROOT, "functions/validate_output_contract.R"))
 
 # Load configuration
 source(file.path(STEP3_ROOT, "config_step3.R"))

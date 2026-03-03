@@ -1,5 +1,9 @@
 # STEP 3 PSTricks Infographic
 
+> Archived snapshot (`V1_030126`) kept for historical comparison.
+> Active development and REPOMIX/AI context packaging target the parent `PSTricks/` directory.
+> Canonical active-theme title in parent directory: **Longitudinal Inference Without Longitudinal Data**.
+
 Publication-grade 2×4 PSTricks/LaTeX infographic explaining how STEP 3 infers a latent growth regime $\widehat{H}_S$ from unlinked cross-sectional data.
 
 Framing used in STEP 3: **controlled canonical choices with quantified error**:

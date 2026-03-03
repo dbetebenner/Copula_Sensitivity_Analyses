@@ -6,7 +6,7 @@
 %%%% \includegraphics, following the pattern in SGPc_Explanation.tex
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=16in,paperheight=18in,margin=0in]{geometry}
+\usepackage[paperwidth=16in,paperheight=22.0in,margin=0in]{geometry}
 \usepackage{graphicx}
 \usepackage[svgnames]{xcolor}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
@@ -20,28 +20,28 @@
 %% Master title
 \noindent
 \hspace{0.4in}%
-\raisebox{0pt}[0.55in][0pt]{%
-  \parbox{15.2in}{%
-    \vspace{0.15in}
-    {\huge\bfseries Growth as a Stochastic Process: From Observed \textit{U} and \textit{V} to Mean \SGPc}
+\raisebox{0pt}[0.8in][0pt]{%
+  \parbox{15.0in}{%
+    \vspace{0.5in}
+    {\Huge\bfseries Longitudinal Inference Without Longitudinal Data}
 
-    \vspace{0.15in}
+    \vspace{0.05in}
+    {\huge\bfseries Estimating Mean \SGPc~Without Linked Data using Copula-Based Stochastic Growth Regimes}
 
+    \vspace{0.1in}
     {\Large\color{subtitleGrey}%
-      Synthetic low-growth case
-      (true mean $\SGPc$ \trueRegimeMean),\enspace
-      baseline $t$-copula kernel
+      Synthetic low-growth example:
+      True mean $\SGPc = \trueRegimeMean$,\enspace
+      baseline $t$-copula
       ($\rho = \copulaRho$, $\mathrm{df} = \copulaDf$)}%
 
     \vspace{0.05in}
-
     {\Large\color{subtitleGrey}%
-      $\Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{H}\bigr)$: Uniform $= \wOneUniform$,\enspace
-      Best-fit $= \wOneInferred$\enspace\enspace
+      $\Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{H}\bigr)$: Uniform $= \wOneUniform \; \rightarrow \;$ Best-fit $= \wOneInferred$\enspace\enspace
       (\wOneReduction\%\ reduction)}
   }}
 
-\vspace{0.7in}
+\vspace{1.15in}
 
 %% --- Top row: header band with overlaid labels ---
 \noindent
@@ -68,24 +68,43 @@
   \includegraphics[width=\linewidth]{outputs/step3_panel_A_text.pdf}%
 \end{minipage}%
 \hspace{0.05in}%
-\begin{minipage}[t]{3.85in}\vspace{0pt}%
-  \includegraphics[width=\linewidth]{outputs/step3_panel_B1_text.pdf}%
-\end{minipage}%
-\hspace{0.05in}%
-\begin{minipage}[t]{3.85in}\vspace{0pt}%
-  \includegraphics[width=\linewidth]{outputs/step3_panel_B2_text.pdf}%
+\begin{minipage}[t]{7.75in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_B1B2_text.pdf}%
 \end{minipage}%
 \hspace{0.05in}%
 \begin{minipage}[t]{3.85in}\vspace{0pt}%
   \includegraphics[width=\linewidth]{outputs/step3_panel_C_text.pdf}%
 \end{minipage}%
 
-\vspace{0.35in}
+\vspace{0.60in}
 
 \hspace{0.15in}%
-$^{1}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup. This assumption is relaxed in the full model.
+$^{1}$%
+\begin{minipage}[t]{15.2in}
+The baseline copula used for inference is selected from canonical STEP 1 sensitivity analyses over 966 longitudinal conditions across four datasets: the $t$-copula is best by AIC in 63.6\% of conditions (Frank: 30.7\%). In the cross-stratified canonical table below (content area $\times$ year span), the recommended family is $t$ in every cell; entries report $(\rho,\mathrm{df})$ medians.
+\vspace{2pt}
 
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\textbf{Content area} & \textbf{1-year} & \textbf{2-year} & \textbf{3-year} & \textbf{4-year} \\
+\hline
+MATHEMATICS & (0.85, 25.26) & (0.81, 27.40) & (0.78, 28.38) & (0.76, 27.34) \\
+READING     & (0.84, 28.33) & (0.80, 29.34) & (0.77, 26.63) & (0.76, 28.22) \\
+WRITING     & (0.85, 23.72) & (0.82, 27.58) & (0.80, 27.22) & (0.77, 23.86) \\
+ELA         & (0.84, 41.95) & (0.79, 46.41) & (0.76, 51.57) & (0.72, 42.04) \\
+\end{tabular}
+\end{center}
+\end{minipage}
+
+\vspace{6pt}
 \hspace{0.15in}%
 $^{2}$ Other regime families considered include the truncated exponential family (the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean) and the truncated uniform family. 
- 
+
+\vspace{4pt}
+\hspace{0.15in}%
+$^{3}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup. That is, that there is no correlation between the starting point and the growth regime. This assumption is investigated more deeply in the full paper.
+
+\vspace{4pt}
+\hspace{0.15in}%
+$^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P]$ (the regime center, mean \SGPc on the 0--1 scale) and $\kappa = \alpha + \beta$ (the concentration parameter).
 \end{document}

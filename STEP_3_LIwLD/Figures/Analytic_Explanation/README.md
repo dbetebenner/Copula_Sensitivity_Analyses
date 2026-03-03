@@ -4,10 +4,12 @@ This folder contains a synthetic, horizontal multi-panel infographic that explai
 how STEP 3 infers a latent growth regime `H_S` (SGPcFlow) from unlinked
 cross-sectional pseudo-observations.
 
+Canonical figure theme/title: **Longitudinal Inference Without Longitudinal Data**.
+
 The default layout is intentionally wide (`16 x 7` inches), with a left-to-right
 causal story:
 
-`A -> B -> C -> D` = observe marginals -> forward check -> invert `(m, kappa)` -> infer regime.
+`A -> B1 -> B2 -> C` = observe marginals -> invert `(m, kappa)` -> forward check -> infer regime.
 
 ## Build
 
@@ -24,10 +26,10 @@ The script auto-runs by default and writes outputs to:
 ## What the figure shows
 
 - **A:** observed unlinked `U` and `V` marginal distributions
-- **B:** observed `F_obs(v)` vs prediction under a uniform growth regime and inferred regime, using  
+- **B1:** reverse-engineering of regime parameters (`mean`, `kappa`) via minimum-distance search
+- **B2:** observed `F_obs(v)` vs prediction under uniform, inferred, and TAMP references, using  
   `F_H(v) = E_U[H(F_0(v|U))]`
-- **C:** reverse-engineering of regime parameters (`mean`, `kappa`) via minimum-distance search
-- **D:** inferred growth regime density `f_S(p)` vs uniform baseline (and true synthetic regime)
+- **C:** inferred growth regime density `f_S(p)` vs uniform baseline (and true synthetic regime)
 
 ## Main tuning knobs
 
@@ -58,8 +60,8 @@ Edit `STEP3_ANALYTIC_EXPLANATION_CONFIG` in the script:
 ## PSTricks publication version
 
 A publication-grade PSTricks/LaTeX version of this infographic is in the `PSTricks/` subfolder.
-It renders the same 4-panel story as a 2x4 layout (top: graphic panels, bottom: text explanations)
-with crisp mathematical typesetting. Build with:
+It renders the same 4-column story as a 2x4 layout (top graphics: `A/B1/B2/C`,
+bottom text: `A/B1B2/C`) with crisp mathematical typesetting. Build with:
 
 ```bash
 cd PSTricks/

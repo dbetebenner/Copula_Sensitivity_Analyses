@@ -8,6 +8,7 @@
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
 
 \input{step3_styles}
+\input{data/summary_metrics}
 
 \pagestyle{empty}
 \begin{document}
@@ -19,38 +20,38 @@
   \begin{minipage}{3.45in}
     \small\raggedright\color{bodyGrey}
 
-    The output of Panel~B1 is a subgroup-specific \emph{growth regime} $H_S$, 
-    where $H_S$ is a cumulative distribution function (CDF) on $[0,1]$ for a 
-    latent conditional-percentile random variable $P_S$ (SGPc on the $0$--$1$ 
-    scale):
+    The output of Panels~B1--B2 is a subgroup-specific \emph{estimated growth regime}
+    $\widehat{H}_S$, where $\widehat{H}_S$ is a cumulative distribution function (CDF) on $[0,1]$
+    for a latent conditional-percentile random variable $P_S$ (SGPc on the $0$--$1$ scale):
     \[
-      H_S(p)\;=\;\Pr(P_S \le p),\qquad 0\le p\le 1.
+      \widehat{H}_S(p)\;=\;\Pr(P_S \le p),\qquad 0\le p\le 1.
     \]
     
     \vspace{1pt}
-    In words, $H_S$ describes how subgroup $S$ allocates conditional ranks 
+    In words, $\widehat{H}_S$ describes how subgroup $S$ allocates conditional ranks
     \emph{within} the baseline dependence template $F_0(\cdot\mid u)$.
     
     \vspace{4pt}
-    Panel~C shows the \emph{distribution of} $P_S$ (typically via its density 
-    $f_S(p)=H_S'(p)$ when $H_S$ is smooth), not the CDF itself. Thus the ``Best-fit'' 
-    curve is the density corresponding to the fitted CDF $H_S$ (i.e., $P_S\sim H_S$).
-    The dashed grey ``Uniform'' reference corresponds to the uniform regime $H(p)=p$ 
-    (equivalently $P\sim\mathrm{Unif}(0,1)$), which places no tilt on conditional 
-    percentiles relative to the baseline kernel.
+    Panel~C displays the \emph{distribution of} $P_S$ (typically via its density
+    $f_{\widehat{H}_S}(p)=\widehat{H}_S'(p)$ when $\widehat{H}_S$ is smooth), not the CDF itself.
+    Thus the ``Best-fit'' curve is the density corresponding to the fitted CDF
+    (i.e., $P_S \sim \widehat{H}_S$). The dashed grey ``Uniform'' reference corresponds to the
+    uniform regime $H(p)=p$ (equivalently $P\sim\mathrm{Unif}(0,1)$), which places no tilt on
+    conditional percentiles relative to the baseline kernel.
     
     \vspace{4pt}
-    Because we restrict $\mathbold{H}$ to the Beta family in Panel~B1, 
-    $P_S\sim\mathrm{Beta}(\kappa m,\kappa(1-m))$: the mean $m$ sets the 
-    regime center (reported on the SGPc scale as $100m$) and $\kappa$ 
-    controls concentration (dispersion of latent SGPc).
-
+    Because we restrict the candidate regime class $\mathcal{H}$ to the Beta family in Panel~B1,
+    the fitted regime implies
+    $P_S\sim\mathrm{Beta}(\kappa m,\kappa(1-m))$:
+    the mean $m=\mathbb{E}[P_S]$ sets the regime center (reported as mean SGPc $=100m$),
+    and $\kappa$ controls concentration (dispersion of latent SGPc).
+    
     \vspace{4pt}
-    The vertical reference lines mark the mean SGPc under the uniform 
-    regime (50), the generating ``True'' regime ($\trueRegimeMean$), and the recovered 
-    best-fit regime ($\inferredRegimeMean$). In applications, the primary outputs are 
-    $H_S$ (and uncertainty bands) and summary functionals such as mean/median 
-    SGPc and bucket membership probabilities.
+    The vertical reference lines mark mean SGPc under the uniform regime (50),
+    the generating ``True'' regime ($\trueRegimeMean$), and the recovered best-fit regime
+    ($\inferredRegimeMean$). In applications, the primary outputs are $\widehat{H}_S$
+    (with uncertainty bands) and summary functionals such as mean/median SGPc and
+    tail/bucket probabilities.
 
   \end{minipage}
   \vspace{0.1in}

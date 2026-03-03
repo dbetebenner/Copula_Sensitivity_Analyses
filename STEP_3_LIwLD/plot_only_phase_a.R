@@ -1,0 +1,125 @@
+############################################################################
+###
+### STEP 3 — Plot-Only Regeneration for Phase A
+###
+### Regenerates Phase A diagnostic plots from saved results without rerunning
+### longitudinal extraction, kernel fitting, optimization, or bootstrap.
+###
+### Usage:
+###   # From project root
+###   source("STEP_3_LIwLD/plot_only_phase_a.R")
+###
+###   # Or from STEP_3_LIwLD directory
+###   source("plot_only_phase_a.R")
+###
+### Author: dataimago
+### Date: February 2026
+### Project: Copula Sensitivity Analyses — STEP 3 (LIwLD)
+###
+############################################################################
+
+cat("--- STEP 3 Phase A Plot-Only Regeneration ---\n\n")
+
+# Resolve paths from either project root or STEP_3_LIwLD directory
+if (grepl("STEP_3_LIwLD$", getwd())) {
+  STEP3_ROOT <- getwd()
+  PROJECT_ROOT <- dirname(STEP3_ROOT)
+} else {
+  PROJECT_ROOT <- getwd()
+  STEP3_ROOT <- file.path(PROJECT_ROOT, "STEP_3_LIwLD")
+}
+
+RESULTS_DIR <- file.path(STEP3_ROOT, "results")
+PHASE_A_RDS <- file.path(RESULTS_DIR, "phase_a_deep_dive.rds")
+PHASE_A_PAYLOAD <- file.path(RESULTS_DIR, "phase_a_analytic_payload.rds")
+VIZ_DIR <- file.path(RESULTS_DIR, "visualizations", "phase_a")
+
+if (!file.exists(PHASE_A_RDS)) {
+  stop("Phase A results file not found: ", PHASE_A_RDS,
+       "\nRun Phase A first with run_step3.R, then rerun this script.")
+}
+
+if (!file.exists(PHASE_A_PAYLOAD)) {
+  stop("Phase A analytic payload not found: ", PHASE_A_PAYLOAD,
+       "\nRun Phase A first with run_step3.R to generate export payloads.")
+}
+
+# Plot dependencies
+require(ggplot2)
+require(patchwork)
+require(wesanderson)
+
+source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
+source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
+
+if (!dir.exists(VIZ_DIR)) {
+  dir.create(VIZ_DIR, recursive = TRUE)
+}
+
+phase_a <- readRDS(PHASE_A_RDS)
+payload <- readRDS(PHASE_A_PAYLOAD)
+
+if (is.null(phase_a$best_estimate) || is.null(phase_a$true_sgpc)) {
+  stop("phase_a_deep_dive.rds is missing required objects ",
+       "(best_estimate and/or true_sgpc).")
+}
+
+best_est <- phase_a$best_estimate
+if (!is.null(payload$F_uniform)) best_est$F_uniform <- payload$F_uniform
+if (!is.null(payload$F_tamp)) best_est$F_tamp <- payload$F_tamp
+if (!is.null(payload$fit_metrics$w1_uniform)) best_est$w1_uniform <- payload$fit_metrics$w1_uniform[1]
+true_sgpc <- phase_a$true_sgpc
+condition_id <- phase_a$condition_id
+subgroup_id <- phase_a$subgroup_id
+sg_col <- phase_a$subgroup_col
+
+sg_label <- paste0(condition_id, " / ", sg_col, " = ", subgroup_id)
+
+cat("Loaded:", PHASE_A_RDS, "\n")
+cat("Regenerating plots for:", sg_label, "\n")
+cat("Output dir:", VIZ_DIR, "\n\n")
+
+# A. CDF comparison
+plot_observed_vs_predicted_cdf(
+  best_est,
+  title = paste0("CDF Comparison — ", sg_label),
+  output_dir = VIZ_DIR,
+  filename = "panel_a_cdf_comparison"
+)
+
+# B1. Objective surface
+plot_objective_surface(
+  best_est,
+  title = paste0("Objective Surface — ", sg_label),
+  output_dir = VIZ_DIR,
+  filename = "panel_b1_objective_surface"
+)
+
+# B2. Residual curve
+plot_residual_curve(
+  best_est,
+  output_dir = VIZ_DIR,
+  filename = "panel_b2_residual_curve",
+  title = paste0("Residual Diagnostics — ", sg_label)
+)
+
+# C. Regime shape comparison
+plot_regime_shape(
+  best_est$regime,
+  true_sgpc = true_sgpc,
+  title = paste0("Growth Regime Recovery — ", sg_label),
+  output_dir = VIZ_DIR,
+  filename = "panel_c_regime_comparison",
+  bootstrap = phase_a$bootstrap
+)
+
+# D. Multi-panel recovery summary
+plot_recovery_summary(
+  best_est,
+  true_sgpc = true_sgpc,
+  title = paste0("Recovery Summary — ", sg_label),
+  output_dir = VIZ_DIR,
+  filename = "panel_d_recovery_summary"
+)
+
+cat("\nDone. Phase A diagnostic plots regenerated.\n")

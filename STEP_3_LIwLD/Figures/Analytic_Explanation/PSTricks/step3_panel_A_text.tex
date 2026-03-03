@@ -2,7 +2,7 @@
 %%%% Panel A text: Explanation of independent U and V marginals
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=3.75in,paperheight=3.0in,margin=0in]{geometry}
+\usepackage[paperwidth=3.75in,paperheight=4.5in,margin=0in]{geometry}
 \usepackage[svgnames]{xcolor}
 \usepackage{amsmath}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
@@ -19,9 +19,16 @@
   \begin{minipage}{3.45in}
     \small\raggedright\color{bodyGrey}
 
-    We observe two independent samples: prior- and current-scores, $X$ and $Y$, 
-    respectively, for the same subgroup $S$ (e.g., a TIMSS country or a NAEP state). 
-    We map scores to reference-quantiles using fixed reference marginals:
+    We observe two independent cross-sectional, non-longitudinal samples of the same subgroup 
+    $S$ (e.g., a TIMSS country or a NAEP state): prior scores $X$ at time $t_1$ 
+    and comparison scores $Y$ at time $t_2$. The design does not require that 
+    $t_2$ represent a later measurement of the same cohort: $(t_1,t_2)$ may index 
+    different grades within the same year (e.g., Grade~4 vs.\ Grade~8), or the same 
+    grade measured in different years (often interpreted as $t_2=t_1+4$ under a 
+    same-cohort, four-year-later convention).
+
+    \vspace{4pt}
+    We map scores to reference-quantiles (pseudo-observations) using fixed reference marginal CDFs:
 
     \vspace{4pt}
     \hspace{5pt}1.~Prior reference quantiles $U = F_X^{\mathrm{ref}}(x_i)$ and
@@ -35,12 +42,13 @@
 
     \vspace{4pt}
     Panel~A shows the two \emph{univariate} marginals plotted on the same 
-    reference-quantile axis (``$u$ or $v$''). This is the situation 
-    faced by TIMSS/NAEP-style designs when cohorts are sampled independently.
-
+    reference-quantile axis (``$u$ or $v$'' in $[0,1]$). This is the 
+    information available in TIMSS/NAEP-style designs when cohorts are 
+    sampled independently (with survey weights, when applicable).
+    
     \vspace{4pt}
-    The distributions $U$ and $V$ are the only observables. All subsequent 
-    inference proceeds from these marginals plus an externally supplied 
+    After the reference-quantile transform, $U$ and $V$ summarize the observable evidence.
+    All subsequent inference proceeds from these marginals plus an externally supplied
     copula dependence structure.
 
   \end{minipage}

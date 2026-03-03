@@ -1,0 +1,2171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<repomix_fallback>
+  <root>/Users/conet/Research/Graphics_Visualizations/Copula_Sensitivity_Analyses/STEP_3_LIwLD/Figures/Analytic_Explanation/PSTricks</root>
+  <files>
+    <file path="README.md"><![CDATA[
+# STEP 3 PSTricks Infographic (V2)
+
+## Figure Theme
+
+**Longitudinal Inference Without Longitudinal Data**
+
+This title/theme is the canonical framing for the current infographic and should be preserved in downstream AI context artifacts.
+
+Publication-grade 2x4 PSTricks/LaTeX infographic explaining how STEP 3 infers a latent growth regime $\widehat{H}_S$ from unlinked cross-sectional data.
+
+Framing used in STEP 3: **controlled canonical choices with quantified error**:
+- Canonical baseline copula (from STEP 1),
+- Canonical stochastically fitted growth regime (Beta family in STEP 3 production runs).
+
+## Active panel layout
+
+The current V2 assembly uses:
+- **Top graphic row:** `A`, `B1`, `B2`, `C`
+- **Bottom explanatory row:** `A`, `B1B2` (shared), `C`
+
+| Conceptual column | Top row (graphic) | Bottom row (text artifact) |
+|-------------------|-------------------|----------------------------|
+| **A** | Independent U & V marginal densities (no student-level pairs) | `step3_panel_A_text.tex` |
+| **B1** | Reverse-engineer regime landscape over $(m,\kappa)$ | `step3_panel_B1B2_text.tex` (shared B1/B2 narrative) |
+| **B2** | Forward CDF check in v-space | `step3_panel_B1B2_text.tex` (shared B1/B2 narrative) |
+| **C** | Inferred growth regime density $f_S(p)$ | `step3_panel_C_text.tex` |
+
+## Workflow
+
+1. **Panel A:** Observe unlinked marginals $F_U(u)$ and $F_V(v)$ (no student-level pairs).
+2. **Panel B1:** Estimate subgroup regime by minimum distance over canonical Beta family:
+   $\widehat{H}_S=\arg\min_{H\in\mathcal{H}_{\mathrm{Beta}}}\,W_1(F^{\mathrm{obs}}_{V,S},F_H)$.
+3. **Panel B2:** Forward map with baseline kernel and candidate regime:
+   $F_H(v)=\mathbb{E}_{U}\!\left[H\!\left(F_0(v\mid U)\right)\right]$.
+4. **Panel C:** Display recovered density $f_S(p)=H_S'(p)$ and summary mean SGPc.
+
+Key identifying assumption in this infographic: $P\perp U$ within subgroup.
+
+## Quick start
+
+```bash
+cd PSTricks/
+Rscript step3_build_pstricks.R
+```
+
+The build takes ~5 seconds and writes deliverables to `outputs/`:
+`step3_infographic_main.pdf`, `Longitudinal_Inference_Without_Longitudinal_Data_v<version>.pdf`, `step3_infographic_main.png`, and (if a converter is installed) `step3_infographic_main.svg`.
+
+## Prerequisites
+
+- **R** (>= 4.0) with the `copula` package
+- **TeX Live** with PSTricks packages (`pstricks`, `pst-plot`, `pst-node`)
+- **Ghostscript** (`gs`) for EPS->PDF conversion
+- **XeLaTeX** (`xelatex`) for text panels and final assembly
+- Access to `dataimago.sty` at `../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago.sty`
+
+The analytic data RDS must exist at `../outputs/step3_growth_regime_analytic_infographic_data.rds`. If it does not, first run:
+
+```bash
+cd ..
+Rscript step3_analytic_explanation.R
+```
+
+## Build pipeline
+
+```
+step3_export_data.R          # 1. Load RDS -> export .dat + .tex to data/
+    ↓
+latex -> dvips -E -> gs      # 2. Compile graphic panels (PSTricks)
+xelatex + dataimago          # 3. Compile text panels (A, B1B2, C)
+    ↓
+xelatex + dataimago          # 4. Compile header band
+    ↓
+xelatex + dataimago          # 5. Assemble 2x4 main infographic
+    ↓
+gs -sDEVICE=png16m           # 6. Optional PNG export
+```
+
+This mirrors the compile chain in `Betebenner_Braun/Paper_1/Figures/Copulas/copula_R_script.R`.
+
+## AI context pipeline
+
+Generate AI-ready context artifacts for REPOMIX-style distillation:
+
+```bash
+cd PSTricks/
+Rscript step3_build_ai_context.R
+```
+
+Outputs:
+- `AI_CONTEXT_OVERVIEW.md` (human-readable build/context map)
+- `AI_CONTEXT_REPOMIX.txt` (default plain-text packed context)
+- Optional XML output: `Rscript step3_build_ai_context.R --style xml`
+
+Notes:
+- If `repomix` is installed, the script uses it.
+- If not, the script falls back to an internal deterministic packer.
+- Inclusion/exclusion defaults are defined in `repomix.config.json`.
+
+## File inventory
+
+### Source files
+
+| File | Purpose |
+|------|---------|
+| `step3_build_pstricks.R` | Master figure build orchestrator |
+| `step3_export_data.R` | R->TeX data export (curves, heatmap, metrics) |
+| `step3_build_ai_context.R` | AI context artifact build orchestrator |
+| `repomix.config.json` | REPOMIX include/ignore rules for this directory |
+| `step3_styles.tex` | Shared colors and notation macros |
+| `step3_panel_A_graphic.tex` | PSTricks: U & V density curves |
+| `step3_panel_B1_graphic.tex` | PSTricks: objective heatmap over $(m,\kappa)$ |
+| `step3_panel_B2_graphic.tex` | PSTricks: CDF comparison (includes TAMP curve) |
+| `step3_panel_C_graphic.tex` | PSTricks: inferred regime density |
+| `step3_panel_A_text.tex` | Text: cross-sectional inputs |
+| `step3_panel_B1B2_text.tex` | Text: shared B1/B2 narrative and identities |
+| `step3_panel_C_text.tex` | Text: recovered growth regime interpretation |
+| `step3_header_band.tex` | XeLaTeX header band (background + A/B1&B2/C labels) |
+| `step3_infographic_main.tex` | Main assembler using precompiled panel PDFs |
+| `step3_panel_B1_text.tex` | Legacy split text panel (not assembled in current V2) |
+| `step3_panel_B2_text.tex` | Legacy split text panel (not assembled in current V2) |
+
+### Generated data (`data/`)
+
+| File | Contents |
+|------|----------|
+| `panel_A_density_U.dat` | Prior density curve (x y) |
+| `panel_A_density_V.dat` | Current density curve (x y) |
+| `panel_B1_heatmap_cells.tex` | R-generated `\psframe*` heatmap |
+| `panel_B1_optimum.tex` | Best-fit $(\hat m,\hat\kappa)$ coordinates |
+| `panel_B2_cdf_obs.dat` | Observed CDF |
+| `panel_B2_cdf_uniform.dat` | Uniform-regime CDF prediction |
+| `panel_B2_cdf_inferred.dat` | Inferred-regime CDF prediction |
+| `panel_B2_cdf_tamp.dat` | Co-monotonic (TAMP) induced CDF, $F_U(v)$ |
+| `panel_C_density_*.dat` | Regime density curves |
+| `summary_metrics.tex` | LaTeX macros with computed values |
+| `axis_limits.tex` | LaTeX macros with axis ranges |
+
+### Outputs (`outputs/`)
+
+| File | Format |
+|------|--------|
+| `step3_infographic_main.pdf` | Final publication infographic |
+| `Longitudinal_Inference_Without_Longitudinal_Data_v<version>.pdf` | Versioned release copy of final publication infographic |
+| `step3_infographic_main.png` | 300 DPI raster export |
+| `step3_infographic_main.svg` | Optional vector export |
+| `step3_panel_*_graphic.pdf` | Individual graphic panels |
+| `step3_panel_*_text.pdf` | Individual text panels |
+| `step3_header_band.pdf` | Header band artifact used by main assembler |
+
+### AI artifacts
+
+| File | Purpose |
+|------|---------|
+| `AI_CONTEXT_OVERVIEW.md` | Human-auditable context summary for agents |
+| `AI_CONTEXT_REPOMIX.txt` | Plain-text packed source context (default) |
+| `AI_CONTEXT_REPOMIX.xml` | Optional XML packed source context |
+
+## Color palette
+
+Aligned with the STEP 3 Zissou-based publication style:
+
+- **Teal** `#3B9AB2` - prior sample / inferred regime
+- **Red** `#F21A00` - current sample
+- **Amber** `#E1AF00` - true synthetic regime
+- **Grey** - uniform baseline and annotations
+
+## Notation
+
+Canonical macros defined in `step3_styles.tex`:
+
+| Macro | Renders |
+|-------|---------|
+| `\HS` | $H_S$ |
+| `\HShat` | $\widehat{H}_S$ |
+| `\FH` | $F_H$ |
+| `\FHhat` | $\widehat{F}_H$ |
+| `\Fobs` | $F_{\mathrm{obs}}$ |
+| `\Fzero` | $F_0$ |
+| `\SGPcFlow` | SGPcFlow |
+| `\Wone` | $W_1$ |
+
+### Mathematical notation
+
+- $U,V$: prior/current reference quantiles (pseudo-observations)
+- $P,P_S$: latent conditional percentile (SGPc on $[0,1]$)
+- $H_S(p)=\Pr(P_S\le p)$: subgroup growth-regime CDF
+- $F_0(v\mid u)=\frac{\partial}{\partial u}C_0(u,v)$: baseline conditional CDF kernel
+- $Q_0(p\mid u)=F_0^{-1}(p\mid u)$: baseline conditional quantile kernel
+- $F_H(v)=\mathbb{E}_{U}[H(F_0(v\mid U))]$: predicted current marginal under regime $H$
+- $\mathcal{H}_{\mathrm{Beta}}=\{H_{m,\kappa}:P\sim\mathrm{Beta}(\kappa m,\kappa(1-m))\}$: candidate family
+- $\widehat{H}_S=\arg\min_{H\in\mathcal{H}_{\mathrm{Beta}}}W_1(F^{\mathrm{obs}}_{V,S},F_H)$
+
+Uniform baseline in this parameterization is $H(p)=p$ at $(m,\kappa)=(0.5,2)$, i.e. $\mathrm{Beta}(1,1)$.
+
+## Font behavior
+
+The final composite is intentionally hybrid, mirroring the Copula pipeline:
+
+- Bottom-row explanatory panels, header band, and master title/footer use XeLaTeX + `dataimago.sty` (`Noto Sans` + `Noto Sans Math`).
+- Top-row PSTricks graphic panels remain on the classic `latex -> dvips -> gs` path and therefore keep Computer Modern / `sansmathfonts` glyphs for panel-internal labels.
+]]></file>
+    <file path="step3_build_pstricks.R"><![CDATA[
+###############################################################################
+###
+### step3_build_pstricks.R - Master build script for STEP 3 PSTricks infographic
+###
+### Mirrors the compile-chain pattern from:
+###   Betebenner_Braun/Paper_1/Figures/Copulas/copula_R_script.R
+###
+### Pipeline:
+###   1. Export panel-ready data files to PSTricks/data/
+###   2. Compile graphic panels via latex -> dvips -E -> gs -> PDF
+###   3. Compile text panels via xelatex -> PDF
+###   4. Compile main assembler via xelatex
+###   5. Export PNG/SVG, clean intermediates
+###
+### Usage (from the PSTricks/ directory):
+###   source("step3_build_pstricks.R")
+###
+###############################################################################
+
+# ---------------------------------------------------------------------------
+# 0. Resolve paths
+# ---------------------------------------------------------------------------
+
+pstricks_dir <- tryCatch({
+  normalizePath(dirname(sys.frame(1)$ofile), winslash = "/", mustWork = TRUE)
+}, error = function(e) {
+  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+})
+
+data_dir   <- file.path(pstricks_dir, "data")
+output_dir <- file.path(pstricks_dir, "outputs")
+
+if (!dir.exists(data_dir))   dir.create(data_dir, recursive = TRUE)
+if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+# ---------------------------------------------------------------------------
+# Build configuration
+# ---------------------------------------------------------------------------
+# Update this version string when issuing a new release artifact.
+infographic_release_version <- "1.0.0"
+infographic_release_stem <- "Longitudinal_Inference_Without_Longitudinal_Data"
+infographic_release_pdf <- file.path(
+  output_dir,
+  sprintf("%s_v%s.pdf", infographic_release_stem, infographic_release_version)
+)
+
+cat("\n=== STEP 3 PSTricks Infographic Build ===\n")
+cat("  PSTricks dir :", pstricks_dir, "\n")
+cat("  Data dir     :", data_dir, "\n")
+cat("  Output dir   :", output_dir, "\n\n")
+
+if (Sys.which("xelatex") == "") {
+  stop("XeLaTeX is required but not found on PATH. ",
+       "Install TeX Live XeLaTeX and retry.")
+}
+
+
+# ---------------------------------------------------------------------------
+# 1. Export panel data (delegates to step3_export_data.R)
+# ---------------------------------------------------------------------------
+
+cat("--- Step 1: Data export ---\n")
+source(file.path(pstricks_dir, "step3_export_data.R"))
+cat("\n")
+
+
+# ---------------------------------------------------------------------------
+# 2. Compile graphic panels (PSTricks: latex -> dvips -E -> gs -> PDF)
+# ---------------------------------------------------------------------------
+#stop("I'm stopping here")
+# Optional manual BoundingBox override (llx, lly, urx, ury) per panel.
+# Set an entry to NULL (or remove it) to keep dvips/Ghostscript auto-cropping.
+custom_bounding_boxes <- list(
+  step3_panel_A_graphic = c(0, 522, 295, 802),
+  step3_panel_B1_graphic = c(10, 505, 305, 780),
+  step3_panel_B2_graphic = c(21, 510, 315, 780),
+  step3_panel_C_graphic = c(0, 577, 285, 801)
+)
+
+apply_custom_bounding_box <- function(ps_file, bbox) {
+  if (is.null(bbox)) return(TRUE)
+  if (length(bbox) != 4 || any(!is.finite(bbox))) return(FALSE)
+
+  bbox <- as.integer(round(bbox))
+  if (bbox[1] >= bbox[3] || bbox[2] >= bbox[4]) return(FALSE)
+
+  ps_lines <- readLines(ps_file, warn = FALSE, encoding = "UTF-8")
+  bb_idx <- grep("^%%BoundingBox:", ps_lines)
+  hr_idx <- grep("^%%HiResBoundingBox:", ps_lines)
+
+  if (length(bb_idx) == 0 && length(hr_idx) == 0) return(FALSE)
+
+  if (length(bb_idx) > 0) {
+    ps_lines[bb_idx] <- sprintf(
+      "%%%%BoundingBox: %d %d %d %d",
+      bbox[1], bbox[2], bbox[3], bbox[4]
+    )
+  }
+
+  if (length(hr_idx) > 0) {
+    ps_lines[hr_idx] <- sprintf(
+      "%%%%HiResBoundingBox: %.6f %.6f %.6f %.6f",
+      bbox[1], bbox[2], bbox[3], bbox[4]
+    )
+  }
+
+  writeLines(ps_lines, ps_file, useBytes = TRUE)
+  TRUE
+}
+
+compile_pstricks <- function(name) {
+  cat(sprintf("  [PSTricks] %s ...", name))
+
+  old_wd <- setwd(pstricks_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  rc <- system2("latex", c("-interaction=nonstopmode", name),
+                stdout = FALSE, stderr = FALSE)
+  if (rc != 0) { cat(" FAIL (latex)\n"); return(FALSE) }
+
+  system2("dvips", c("-E", name, "-o"), stdout = FALSE, stderr = FALSE)
+
+  ps_file  <- paste0(name, ".ps")
+  pdf_file <- paste0(name, ".pdf")
+
+  if (!file.exists(ps_file)) { cat(" FAIL (dvips)\n"); return(FALSE) }
+
+  bbox <- custom_bounding_boxes[[name]]
+  if (!is.null(bbox)) {
+    ok_bbox <- apply_custom_bounding_box(ps_file, bbox)
+    if (!ok_bbox) {
+      cat(" FAIL (BoundingBox)\n")
+      return(FALSE)
+    }
+    cat(sprintf(" bbox[%d %d %d %d]", bbox[1], bbox[2], bbox[3], bbox[4]))
+  }
+
+  system2("gs", c("-q", "-dALLOWPSTRANSPARENCY", "-dBATCH", "-dNOPAUSE",
+                  "-dEPSCrop", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
+                  paste0("-sOutputFile=", pdf_file), ps_file),
+          stdout = FALSE, stderr = FALSE)
+
+  if (!file.exists(pdf_file)) { cat(" FAIL (gs)\n"); return(FALSE) }
+
+  file.copy(pdf_file, file.path(output_dir, pdf_file), overwrite = TRUE)
+  cat(sprintf(" OK (%s bytes)\n", format(file.size(pdf_file), big.mark = ",")))
+  TRUE
+}
+
+
+# ---------------------------------------------------------------------------
+# 3. Compile text panels (xelatex)
+# ---------------------------------------------------------------------------
+
+compile_xelatex <- function(name) {
+  cat(sprintf("  [xelatex] %s ...", name))
+
+  old_wd <- setwd(pstricks_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  system2("xelatex", c("-interaction=nonstopmode", name),
+          stdout = FALSE, stderr = FALSE)
+  pdf_file <- paste0(name, ".pdf")
+
+  if (!file.exists(pdf_file)) { cat(" FAIL\n"); return(FALSE) }
+
+  file.copy(pdf_file, file.path(output_dir, pdf_file), overwrite = TRUE)
+  cat(sprintf(" OK (%s bytes)\n", format(file.size(pdf_file), big.mark = ",")))
+  TRUE
+}
+
+
+# ---------------------------------------------------------------------------
+# 4. Build all panels
+# ---------------------------------------------------------------------------
+
+cat("--- Step 2: Compile panels ---\n")
+
+graphic_panels <- paste0("step3_panel_", c("A","B1","B2","C"), "_graphic")
+text_panels    <- paste0("step3_panel_", c("A","B1B2","C"), "_text")
+
+ok <- TRUE
+for (p in graphic_panels) ok <- compile_pstricks(p)  && ok
+for (p in text_panels)    ok <- compile_xelatex(p) && ok
+
+if (!ok) warning("One or more panels failed to compile.")
+
+
+# ---------------------------------------------------------------------------
+# 5. Assemble final infographic
+# ---------------------------------------------------------------------------
+
+cat("\n--- Step 3: Assemble infographic ---\n")
+compile_xelatex("step3_header_band")
+compile_xelatex("step3_infographic_main")
+
+final_pdf <- file.path(output_dir, "step3_infographic_main.pdf")
+if (file.exists(final_pdf)) {
+  copied <- file.copy(final_pdf, infographic_release_pdf, overwrite = TRUE)
+  if (copied && file.exists(infographic_release_pdf)) {
+    cat("  Release PDF:", infographic_release_pdf, "\n")
+  } else {
+    warning("Could not create release-named PDF copy: ", infographic_release_pdf)
+  }
+
+  png_out <- file.path(output_dir, "step3_infographic_main.png")
+  system2("gs", c("-q", "-dBATCH", "-dNOPAUSE", "-sDEVICE=png16m",
+                  "-r300", paste0("-sOutputFile=", png_out), final_pdf),
+          stdout = FALSE, stderr = FALSE)
+  if (file.exists(png_out)) cat("  PNG:", png_out, "\n")
+
+  svg_out <- file.path(output_dir, "step3_infographic_main.svg")
+  if (Sys.which("pdf2svg") != "") {
+    system2("pdf2svg", c(final_pdf, svg_out), stdout = FALSE, stderr = FALSE)
+    if (file.exists(svg_out)) cat("  SVG:", svg_out, "\n")
+  } else if (Sys.which("mutool") != "") {
+    system2("mutool", c("convert", "-o", svg_out, final_pdf),
+            stdout = FALSE, stderr = FALSE)
+    if (file.exists(svg_out)) cat("  SVG:", svg_out, "\n")
+  } else if (Sys.which("inkscape") != "") {
+    system2("inkscape", c("--export-type=svg",
+                          paste0("--export-filename=", svg_out),
+                          final_pdf),
+            stdout = FALSE, stderr = FALSE)
+    if (file.exists(svg_out)) cat("  SVG:", svg_out, "\n")
+  } else {
+    cat("  SVG: skipped (install pdf2svg, mutool, or inkscape)\n")
+  }
+}
+
+
+# ---------------------------------------------------------------------------
+# 6. Cleanup
+# ---------------------------------------------------------------------------
+
+cat("\n--- Cleanup ---\n")
+all_stems <- c(graphic_panels, text_panels, "step3_header_band", "step3_infographic_main")
+#cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
+cleanup_suffixes <- c(".aux",".log",".dvi",".fls",".fdb_latexmk",".out",".pdf")
+old_wd <- setwd(pstricks_dir)
+for (stem in all_stems) {
+  for (ext in cleanup_suffixes) {
+    f <- paste0(stem, ext)
+    if (file.exists(f)) file.remove(f)
+  }
+}
+setwd(old_wd)
+
+cat("\n=== Build complete ===\n")
+cat("Final PDF :", file.path(output_dir, "step3_infographic_main.pdf"), "\n")
+cat("Final PNG :", file.path(output_dir, "step3_infographic_main.png"), "\n\n")
+]]></file>
+    <file path="step3_export_data.R"><![CDATA[
+###############################################################################
+###
+### step3_export_data.R - Export panel-ready data files for PSTricks
+###
+### Reads the saved RDS from the analytic explanation and writes:
+###   - .dat files (space-separated x y) for curve plotting
+###   - .tex snippets (LaTeX macros, heatmap cells)
+###
+### Usage: Rscript step3_export_data.R  (from the PSTricks/ directory)
+###
+###############################################################################
+
+pstricks_dir <- tryCatch({
+  normalizePath(dirname(sys.frame(1)$ofile), winslash = "/", mustWork = TRUE)
+}, error = function(e) {
+  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+})
+
+analytic_dir <- normalizePath(file.path(pstricks_dir, ".."), winslash = "/")
+data_dir     <- file.path(pstricks_dir, "data")
+
+if (!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
+
+rds_path <- file.path(analytic_dir, "outputs",
+                      "step3_growth_regime_analytic_infographic_data.rds")
+
+if (!file.exists(rds_path)) {
+  stop("RDS not found at: ", rds_path,
+       "\nRun step3_analytic_explanation.R first.")
+}
+
+dat <- readRDS(rds_path)
+cat("Loaded:", rds_path, "\n\n")
+
+
+# --- helper -----------------------------------------------------------------
+write_dat <- function(x, y, filename) {
+  out <- file.path(data_dir, filename)
+  writeLines(paste(x, y), out)
+  cat("  ", filename, "\n")
+}
+
+
+# --- Panel A: density curves for U and V ------------------------------------
+cat("Panel A...\n")
+d_u <- density(dat$u_sample, from = 0, to = 1, n = 256, bw = "SJ")
+d_v <- density(dat$v_sample, from = 0, to = 1, n = 256, bw = "SJ")
+write_dat(round(d_u$x, 6), round(d_u$y, 6), "panel_A_density_U.dat")
+write_dat(round(d_v$x, 6), round(d_v$y, 6), "panel_A_density_V.dat")
+
+
+# --- Panel B2: CDF curves ---------------------------------------------------
+cat("Panel B2...\n")
+write_dat(round(dat$v_grid, 6), round(dat$F_obs, 6),      "panel_B2_cdf_obs.dat")
+write_dat(round(dat$v_grid, 6), round(dat$F_uniform, 6),  "panel_B2_cdf_uniform.dat")
+write_dat(round(dat$v_grid, 6), round(dat$est$F_pred, 6), "panel_B2_cdf_inferred.dat")
+# Co-monotonic (TAMP) induced marginal under equi-percentile mapping:
+# F_tamp(v) = P(U <= v) = F_U(v)
+F_tamp <- stats::ecdf(dat$u_sample)(dat$v_grid)
+write_dat(round(dat$v_grid, 6), round(F_tamp, 6),         "panel_B2_cdf_tamp.dat")
+
+
+# --- Panel B1: heatmap cells (generated TeX) ---------------------------------
+cat("Panel B1...\n")
+gs     <- dat$est$grid_search
+z_raw  <- with(gs, tapply(distance, list(regime_param_2, regime_param_1), mean))
+mean_vals  <- as.numeric(colnames(z_raw))
+kappa_vals <- as.numeric(rownames(z_raw))
+ord_m <- order(mean_vals);  ord_k <- order(kappa_vals)
+mean_vals  <- mean_vals[ord_m]
+kappa_vals <- kappa_vals[ord_k]
+z_raw <- z_raw[ord_k, ord_m, drop = FALSE]
+z_log <- log10(z_raw)
+
+z_min <- min(z_log, na.rm = TRUE)
+z_max <- max(z_log, na.rm = TRUE)
+
+pal <- colorRampPalette(c(
+  "#FCFCF4",  # close (low log10 distance)
+  "#E2E4C8",
+  "#B7BA87",
+  "#8A9048"   # far (high log10 distance)
+))(256)
+
+nr <- length(kappa_vals);  nc <- length(mean_vals)
+dx <- if (nc > 1) diff(mean_vals[1:2]) else 0.01
+dy <- if (nr > 1) diff(log10(kappa_vals[1:2])) else 0.01
+
+heatmap_lines <- character()
+for (i in seq_len(nr)) {
+  for (j in seq_len(nc)) {
+    val <- z_log[i, j]
+    if (is.na(val)) next
+    idx <- max(1, min(256, round(1 + 255 * (val - z_min) / (z_max - z_min))))
+    hex <- pal[idx]
+    r <- round(strtoi(substr(hex, 2, 3), 16L) / 255, 3)
+    g <- round(strtoi(substr(hex, 4, 5), 16L) / 255, 3)
+    b <- round(strtoi(substr(hex, 6, 7), 16L) / 255, 3)
+    x0 <- mean_vals[j] * 100 - dx * 50
+    x1 <- mean_vals[j] * 100 + dx * 50
+    y0 <- log10(kappa_vals[i]) - dy / 2
+    y1 <- log10(kappa_vals[i]) + dy / 2
+    tag <- paste0("hc", i, "x", j)
+    heatmap_lines <- c(heatmap_lines,
+      sprintf("\\definecolor{%s}{rgb}{%s,%s,%s}%%", tag, r, g, b),
+      sprintf("\\psframe*[linecolor=%s](%.4f,%.4f)(%.4f,%.4f)%%",
+              tag, x0, y0, x1, y1))
+  }
+}
+writeLines(heatmap_lines, file.path(data_dir, "panel_B1_heatmap_cells.tex"))
+cat("   panel_B1_heatmap_cells.tex\n")
+
+## Best-fit point (m_hat, kappa_hat)
+opt_x <- dat$est$m_hat * 100
+opt_y <- log10(dat$est$kappa_hat)
+writeLines(c(
+  sprintf("\\newcommand{\\optX}{%s}", round(opt_x, 2)),
+  sprintf("\\newcommand{\\optY}{%s}", round(opt_y, 4))
+), file.path(data_dir, "panel_B1_optimum.tex"))
+cat("   panel_B1_optimum.tex\n")
+
+
+# --- Panel C: regime density curves ------------------------------------------
+cat("Panel C...\n")
+p_grid <- seq(0.001, 0.999, length.out = 500)
+d_true <- dat$true_regime$density(p_grid)
+d_inf  <- dat$est$regime$density(p_grid)
+write_dat(round(p_grid * 100, 4), round(rep(1, length(p_grid)), 4),
+          "panel_C_density_uniform.dat")
+write_dat(round(p_grid * 100, 4), round(d_true, 6), "panel_C_density_true.dat")
+write_dat(round(p_grid * 100, 4), round(d_inf, 6),  "panel_C_density_inferred.dat")
+
+
+# --- Summary metrics (LaTeX macros) ------------------------------------------
+cat("Summary metrics...\n")
+w1_reduction <- 100 * (1 - dat$distances$inferred$wasserstein1 /
+                            dat$distances$uniform$wasserstein1)
+
+metrics <- c(
+  sprintf("\\newcommand{\\trueRegimeMean}{%.1f}",      dat$true_regime$mean * 100),
+  sprintf("\\newcommand{\\trueRegimeMedian}{%.1f}",    dat$true_regime$median * 100),
+  sprintf("\\newcommand{\\inferredRegimeMean}{%.1f}",  dat$est$regime$mean * 100),
+  sprintf("\\newcommand{\\inferredRegimeMedian}{%.1f}", dat$est$regime$median * 100),
+  sprintf("\\newcommand{\\wOneUniform}{%.4f}",         dat$distances$uniform$wasserstein1),
+  sprintf("\\newcommand{\\wOneInferred}{%.4f}",        dat$distances$inferred$wasserstein1),
+  sprintf("\\newcommand{\\wOneReduction}{%.1f}",       w1_reduction),
+  sprintf("\\newcommand{\\copulaRho}{%.2f}",           dat$config$copula_rho),
+  sprintf("\\newcommand{\\copulaDf}{%s}",             dat$config$copula_df),
+  sprintf("\\newcommand{\\nStudents}{%s}",            dat$config$n_students),
+  sprintf("\\newcommand{\\inferredKappa}{%.1f}",      dat$est$kappa_hat),
+  sprintf("\\newcommand{\\trueRegimeKappa}{%s}",      dat$config$true_regime_kappa)
+)
+writeLines(metrics, file.path(data_dir, "summary_metrics.tex"))
+cat("   summary_metrics.tex\n")
+
+
+# --- Axis limits (LaTeX macros) ----------------------------------------------
+cat("Axis limits...\n")
+y_max_a <- max(c(d_u$y, d_v$y)) * 1.15
+y_max_d <- max(c(1, d_true, d_inf)) * 1.12
+x_min_c <- min(mean_vals) * 100 - dx * 50
+x_max_c <- max(mean_vals) * 100 + dx * 50
+y_min_c <- min(log10(kappa_vals)) - dy / 2
+y_max_c <- max(log10(kappa_vals)) + dy / 2
+
+axes <- c(
+  sprintf("\\newcommand{\\panelAymax}{%s}", ceiling(y_max_a * 10) / 10),
+  sprintf("\\newcommand{\\panelDymax}{%s}", ceiling(y_max_d * 10) / 10),
+  sprintf("\\newcommand{\\panelCxmin}{%s}", floor(x_min_c)),
+  sprintf("\\newcommand{\\panelCxmax}{%s}", ceiling(x_max_c)),
+  sprintf("\\newcommand{\\panelCymin}{%s}", round(y_min_c, 2)),
+  sprintf("\\newcommand{\\panelCymax}{%s}", round(y_max_c, 2)),
+  sprintf("\\newcommand{\\inferredMeanVline}{%s}", round(dat$est$regime$mean * 100, 1)),
+  sprintf("\\newcommand{\\trueMeanVline}{%s}", round(dat$true_regime$mean * 100, 1))
+)
+writeLines(axes, file.path(data_dir, "axis_limits.tex"))
+cat("   axis_limits.tex\n")
+
+cat("\nExport complete. Files in:", data_dir, "\n")
+]]></file>
+    <file path="step3_build_ai_context.R"><![CDATA[
+###############################################################################
+###
+### step3_build_ai_context.R - Build AI context artifacts for PSTricks
+###
+### Artifacts:
+###   1) AI_CONTEXT_OVERVIEW.md   (human-readable context map)
+###   2) AI_CONTEXT_REPOMIX.*     (packed source context for AI agents)
+###
+### Usage:
+###   Rscript step3_build_ai_context.R
+###   Rscript step3_build_ai_context.R --style xml
+###   Rscript step3_build_ai_context.R --include-archive-v1 --max-chars 1500000
+###
+###############################################################################
+
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0 || is.na(x[1])) y else x
+
+pstricks_dir <- tryCatch({
+  normalizePath(dirname(sys.frame(1)$ofile), winslash = "/", mustWork = TRUE)
+}, error = function(e) {
+  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+})
+
+old_wd <- setwd(pstricks_dir)
+on.exit(setwd(old_wd), add = TRUE)
+
+args <- commandArgs(trailingOnly = TRUE)
+style <- "plain"
+include_archive_v1 <- FALSE
+max_chars <- 1000000L
+figure_theme_title <- "Longitudinal Inference Without Longitudinal Data"
+
+i <- 1L
+while (i <= length(args)) {
+  arg <- args[[i]]
+
+  if (arg == "--style" && i < length(args)) {
+    style <- tolower(args[[i + 1L]])
+    i <- i + 1L
+  } else if (grepl("^--style=", arg)) {
+    style <- tolower(sub("^--style=", "", arg))
+  } else if (arg == "--include-archive-v1") {
+    include_archive_v1 <- TRUE
+  } else if (arg == "--max-chars" && i < length(args)) {
+    max_chars <- suppressWarnings(as.integer(args[[i + 1L]]))
+    i <- i + 1L
+  } else if (grepl("^--max-chars=", arg)) {
+    max_chars <- suppressWarnings(as.integer(sub("^--max-chars=", "", arg)))
+  } else {
+    stop("Unknown argument: ", arg)
+  }
+
+  i <- i + 1L
+}
+
+if (!style %in% c("plain", "xml")) {
+  stop("Invalid --style value: ", style, ". Use 'plain' or 'xml'.")
+}
+
+if (is.na(max_chars) || max_chars < 10000L) {
+  stop("--max-chars must be >= 10000")
+}
+
+overview_path <- file.path(pstricks_dir, "AI_CONTEXT_OVERVIEW.md")
+repomix_ext <- if (style == "xml") "xml" else "txt"
+repomix_path <- file.path(pstricks_dir, paste0("AI_CONTEXT_REPOMIX.", repomix_ext))
+
+manifest_json <- normalizePath(
+  file.path(pstricks_dir, "../../../../STEP_1_Family_Selection/results/dataset_all/analysis_manifest.json"),
+  winslash = "/",
+  mustWork = FALSE
+)
+
+build_script <- file.path(pstricks_dir, "step3_build_pstricks.R")
+main_tex <- file.path(pstricks_dir, "step3_infographic_main.tex")
+
+source_files <- c(
+  "README.md",
+  "step3_build_pstricks.R",
+  "step3_export_data.R",
+  "step3_build_ai_context.R",
+  "step3_infographic_main.tex",
+  "step3_header_band.tex",
+  "step3_styles.tex",
+  "step3_panel_A_graphic.tex",
+  "step3_panel_B1_graphic.tex",
+  "step3_panel_B2_graphic.tex",
+  "step3_panel_C_graphic.tex",
+  "step3_panel_A_text.tex",
+  "step3_panel_B1B2_text.tex",
+  "step3_panel_C_text.tex",
+  "repomix.config.json",
+  "data/summary_metrics.tex",
+  "data/axis_limits.tex",
+  "data/panel_B2_cdf_tamp.dat"
+)
+
+if (include_archive_v1) {
+  source_files <- c(source_files, "V1_030126/README.md")
+}
+
+existing_files <- source_files[file.exists(file.path(pstricks_dir, source_files))]
+missing_files <- setdiff(source_files, existing_files)
+
+extract_panel_suffixes <- function(line) {
+  if (is.na(line) || !nzchar(line)) return(character())
+  c_match <- regmatches(line, regexpr("c\\([^\\)]*\\)", line))
+  if (length(c_match) == 0 || !nzchar(c_match)) return(character())
+  quoted <- regmatches(c_match, gregexpr("\"[^\"]+\"", c_match))[[1]]
+  gsub("\"", "", quoted)
+}
+
+build_lines <- readLines(build_script, warn = FALSE, encoding = "UTF-8")
+graphic_line <- build_lines[grepl("^graphic_panels\\s*<-", build_lines)][1] %||% ""
+text_line <- build_lines[grepl("^text_panels\\s*<-", build_lines)][1] %||% ""
+graphic_suffixes <- extract_panel_suffixes(graphic_line)
+text_suffixes <- extract_panel_suffixes(text_line)
+
+main_lines <- readLines(main_tex, warn = FALSE, encoding = "UTF-8")
+uses_header_band <- any(grepl("step3_header_band\\.pdf", main_lines))
+uses_b1b2_text <- any(grepl("step3_panel_B1B2_text\\.pdf", main_lines))
+
+canonical <- list(
+  available = FALSE,
+  n_conditions = NA_integer_,
+  n_datasets = NA_integer_,
+  t_pct = NA_real_,
+  frank_pct = NA_real_,
+  cross = NULL
+)
+
+if (file.exists(manifest_json) && requireNamespace("jsonlite", quietly = TRUE)) {
+  manifest <- jsonlite::fromJSON(manifest_json)
+
+  canonical$available <- TRUE
+  canonical$n_conditions <- manifest$metadata$n_conditions %||% NA_integer_
+  canonical$n_datasets <- manifest$metadata$n_datasets %||% NA_integer_
+
+  fam <- manifest$family_selection_summary
+  t_row <- fam[fam$family == "t", , drop = FALSE]
+  f_row <- fam[fam$family == "frank", , drop = FALSE]
+  canonical$t_pct <- if (nrow(t_row) > 0) as.numeric(t_row$pct_best[1]) else NA_real_
+  canonical$frank_pct <- if (nrow(f_row) > 0) as.numeric(f_row$pct_best[1]) else NA_real_
+
+  cross_entries <- manifest$parameter_recommendations$cross_stratified
+  canonical$cross <- do.call(rbind, lapply(cross_entries, function(x) {
+    data.frame(
+      content_area = as.character(x$content_area %||% NA_character_),
+      year_span = as.integer(x$year_span %||% NA_integer_),
+      recommended_family = as.character(x$recommended_family %||% NA_character_),
+      rho = as.numeric(x$rho$median %||% NA_real_),
+      df = as.numeric(x$df$median %||% NA_real_),
+      stringsAsFactors = FALSE
+    )
+  }))
+}
+
+format_cross_table <- function(cross_df) {
+  if (is.null(cross_df) || nrow(cross_df) == 0) {
+    return(c(
+      "| Content area | 1-year | 2-year | 3-year | 4-year |",
+      "|---|---|---|---|---|",
+      "| unavailable | - | - | - | - |"
+    ))
+  }
+
+  spans <- sort(unique(cross_df$year_span))
+  preferred_area_order <- c("MATHEMATICS", "READING", "WRITING", "ELA")
+  areas <- unique(cross_df$content_area)
+  areas <- c(intersect(preferred_area_order, areas), setdiff(sort(areas), preferred_area_order))
+
+  header <- c("| Content area |", paste(sprintf("%d-year", spans), collapse = " | "), "|")
+  sep <- c("|---|", paste(rep("---", length(spans)), collapse = "|"), "|")
+  lines <- c(paste0(header, collapse = ""), paste0(sep, collapse = ""))
+
+  for (area in areas) {
+    cells <- c()
+    for (span in spans) {
+      row <- cross_df[cross_df$content_area == area & cross_df$year_span == span, , drop = FALSE]
+      if (nrow(row) == 0) {
+        cells <- c(cells, "-")
+      } else {
+        cells <- c(cells, sprintf("(%.2f, %.2f)", row$rho[1], row$df[1]))
+      }
+    }
+    lines <- c(lines, sprintf("| %s | %s |", area, paste(cells, collapse = " | ")))
+  }
+
+  lines
+}
+
+cross_table_lines <- format_cross_table(canonical$cross)
+
+fmt_pct <- function(x) ifelse(is.na(x), "NA", sprintf("%.1f%%", x))
+fmt_int <- function(x) ifelse(is.na(x), "NA", format(x, big.mark = ","))
+
+overview_lines <- c(
+  "# AI Context Overview: STEP 3 PSTricks",
+  "",
+  "This file is auto-generated by `step3_build_ai_context.R` to support AI-agent onboarding and REPOMIX distillation.",
+  "",
+  "## Scope",
+  "",
+  sprintf("- Figure theme/title: `%s`", figure_theme_title),
+  "- Directory: `STEP_3_LIwLD/Figures/Analytic_Explanation/PSTricks`",
+  "- Story model: infer subgroup growth regime from unlinked marginals using canonical copula kernel",
+  "- Active visual grammar: top graphics `A/B1/B2/C`, bottom text `A/B1B2/C`",
+  "",
+  "## Build Topology (Source of Truth)",
+  "",
+  sprintf("- `step3_build_pstricks.R` graphic suffixes: `%s`", paste(graphic_suffixes, collapse = ", ")),
+  sprintf("- `step3_build_pstricks.R` text suffixes: `%s`", paste(text_suffixes, collapse = ", ")),
+  sprintf("- Main assembler uses `step3_header_band.pdf`: `%s`", ifelse(uses_header_band, "yes", "no")),
+  sprintf("- Main assembler uses `step3_panel_B1B2_text.pdf`: `%s`", ifelse(uses_b1b2_text, "yes", "no")),
+  "",
+  "## Panel Map",
+  "",
+  "| Concept | Graphic artifact | Text artifact |",
+  "|---|---|---|",
+  "| A | `step3_panel_A_graphic.tex` | `step3_panel_A_text.tex` |",
+  "| B1 | `step3_panel_B1_graphic.tex` | `step3_panel_B1B2_text.tex` (shared) |",
+  "| B2 | `step3_panel_B2_graphic.tex` | `step3_panel_B1B2_text.tex` (shared) |",
+  "| C | `step3_panel_C_graphic.tex` | `step3_panel_C_text.tex` |",
+  "",
+  "## Data Artifacts Used by Panels",
+  "",
+  "- `data/panel_A_density_U.dat`, `data/panel_A_density_V.dat`",
+  "- `data/panel_B1_heatmap_cells.tex`, `data/panel_B1_optimum.tex`",
+  "- `data/panel_B2_cdf_obs.dat`, `data/panel_B2_cdf_uniform.dat`, `data/panel_B2_cdf_inferred.dat`, `data/panel_B2_cdf_tamp.dat`",
+  "- `data/panel_C_density_uniform.dat`, `data/panel_C_density_true.dat`, `data/panel_C_density_inferred.dat`",
+  "- `data/summary_metrics.tex`, `data/axis_limits.tex`",
+  "",
+  "## Canonical Copula Provenance (STEP 1)",
+  "",
+  sprintf(
+    "Canonical baseline selection is based on %s longitudinal conditions across %s datasets.",
+    fmt_int(canonical$n_conditions),
+    fmt_int(canonical$n_datasets)
+  ),
+  sprintf(
+    "Family selection rates: `t` = %s, `frank` = %s (best AIC share).",
+    fmt_pct(canonical$t_pct),
+    fmt_pct(canonical$frank_pct)
+  ),
+  "",
+  "Cross-stratified canonical `t` parameters by content area x year span (cell = `(rho, df)` medians):",
+  ""
+)
+
+overview_lines <- c(overview_lines, cross_table_lines, "")
+
+overview_lines <- c(
+  overview_lines,
+  "## AI Context Packaging",
+  "",
+  "- Primary artifact: `AI_CONTEXT_REPOMIX.txt` (`--style plain`, best default for broad agent compatibility).",
+  "- Optional structured artifact: `AI_CONTEXT_REPOMIX.xml` (`--style xml`).",
+  "- Preferred include/ignore behavior is encoded in `repomix.config.json`.",
+  "",
+  "## Regeneration",
+  "",
+  "```bash",
+  "cd PSTricks/",
+  "Rscript step3_build_ai_context.R",
+  "Rscript step3_build_ai_context.R --style xml",
+  "```",
+  ""
+)
+
+if (length(missing_files) > 0) {
+  overview_lines <- c(
+    overview_lines,
+    "## Missing Files During Build",
+    "",
+    paste0("- `", missing_files, "`"),
+    ""
+  )
+}
+
+writeLines(overview_lines, overview_path, useBytes = TRUE)
+
+build_plain_fallback <- function(rel_files, max_len) {
+  out <- c(
+    "# AI_CONTEXT_REPOMIX (Fallback Plain Pack)",
+    "",
+    "Generated by `step3_build_ai_context.R` because `repomix` was unavailable or failed.",
+    "",
+    sprintf("Root: %s", pstricks_dir),
+    ""
+  )
+
+  bytes_used <- sum(nchar(out, type = "bytes")) + length(out)
+  truncated <- FALSE
+
+  for (rel in rel_files) {
+    abs <- file.path(pstricks_dir, rel)
+    if (!file.exists(abs)) next
+    lines <- readLines(abs, warn = FALSE, encoding = "UTF-8")
+    block <- c(
+      sprintf("===== BEGIN FILE: %s =====", rel),
+      lines,
+      sprintf("===== END FILE: %s =====", rel),
+      ""
+    )
+    block_bytes <- sum(nchar(block, type = "bytes")) + length(block)
+    if ((bytes_used + block_bytes) > max_len) {
+      truncated <- TRUE
+      break
+    }
+    out <- c(out, block)
+    bytes_used <- bytes_used + block_bytes
+  }
+
+  if (truncated) {
+    out <- c(
+      out,
+      sprintf(
+        "[TRUNCATED] Bundle reached --max-chars limit (%s bytes).",
+        format(max_len, big.mark = ",")
+      )
+    )
+  }
+
+  out
+}
+
+xml_cdata_safe <- function(x) {
+  gsub("]]]]><![CDATA[>", "]]]]]]><![CDATA[><![CDATA[>", x, fixed = TRUE)
+}
+
+build_xml_fallback <- function(rel_files, max_len) {
+  body <- c(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    "<repomix_fallback>",
+    sprintf("  <root>%s</root>", pstricks_dir),
+    "  <files>"
+  )
+
+  bytes_used <- sum(nchar(body, type = "bytes")) + length(body)
+  truncated <- FALSE
+
+  for (rel in rel_files) {
+    abs <- file.path(pstricks_dir, rel)
+    if (!file.exists(abs)) next
+
+    txt <- paste(readLines(abs, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+    txt <- xml_cdata_safe(txt)
+
+    block <- c(
+      sprintf("    <file path=\"%s\"><![CDATA[", rel),
+      txt,
+      "]]]]><![CDATA[></file>"
+    )
+
+    block_bytes <- sum(nchar(block, type = "bytes")) + length(block)
+    if ((bytes_used + block_bytes) > max_len) {
+      truncated <- TRUE
+      break
+    }
+
+    body <- c(body, block)
+    bytes_used <- bytes_used + block_bytes
+  }
+
+  body <- c(body, "  </files>")
+  if (truncated) {
+    body <- c(
+      body,
+      sprintf("  <note>TRUNCATED at %s bytes (--max-chars).</note>", format(max_len, big.mark = ","))
+    )
+  }
+  body <- c(body, "</repomix_fallback>")
+  body
+}
+
+repomix_bin <- Sys.which("repomix")
+used_repomix <- FALSE
+
+if (nzchar(repomix_bin)) {
+  repomix_args <- c("--style", style, "--output", basename(repomix_path))
+  status <- suppressWarnings(system2(repomix_bin, repomix_args, stdout = FALSE, stderr = FALSE))
+  used_repomix <- is.integer(status) && status == 0L && file.exists(repomix_path)
+}
+
+if (!used_repomix) {
+  fallback_lines <- if (style == "xml") {
+    build_xml_fallback(existing_files, max_chars)
+  } else {
+    build_plain_fallback(existing_files, max_chars)
+  }
+  writeLines(fallback_lines, repomix_path, useBytes = TRUE)
+}
+
+cat("\n=== STEP 3 AI Context Build ===\n")
+cat("PSTricks dir          :", pstricks_dir, "\n")
+cat("Overview artifact     :", overview_path, "\n")
+cat("Packed context artifact:", repomix_path, "\n")
+cat("Pack method           :", if (used_repomix) "repomix" else "fallback", "\n")
+cat("Style                 :", style, "\n")
+cat("Include archive V1    :", include_archive_v1, "\n")
+cat("Max chars             :", format(max_chars, big.mark = ","), "\n\n")
+]]></file>
+    <file path="step3_infographic_main.tex"><![CDATA[
+%%%%
+%%%% step3_infographic_main.tex - 2x4 publication infographic assembler
+%%%%
+%%%% Layout: top row (4 graphic panels) + bottom row (4 text panels)
+%%%% All panel PDFs are pre-compiled; this file composes them with
+%%%% \includegraphics, following the pattern in SGPc_Explanation.tex
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=16in,paperheight=22.0in,margin=0in]{geometry}
+\usepackage{graphicx}
+\usepackage[svgnames]{xcolor}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+%% Master title
+\noindent
+\hspace{0.4in}%
+\raisebox{0pt}[0.8in][0pt]{%
+  \parbox{15.0in}{%
+    \vspace{0.5in}
+    {\Huge\bfseries Longitudinal Inference Without Longitudinal Data}
+
+    \vspace{0.05in}
+    {\huge\bfseries Estimating Mean \SGPc~Without Linked Data using Copula-Based Stochastic Growth Regimes}
+
+    \vspace{0.1in}
+    {\Large\color{subtitleGrey}%
+      Synthetic low-growth example:
+      True mean $\SGPc = \trueRegimeMean$,\enspace
+      baseline $t$-copula
+      ($\rho = \copulaRho$, $\mathrm{df} = \copulaDf$)}%
+
+    \vspace{0.05in}
+    {\Large\color{subtitleGrey}%
+      $\Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{H}\bigr)$: Uniform $= \wOneUniform \; \rightarrow \;$ Best-fit $= \wOneInferred$\enspace\enspace
+      (\wOneReduction\%\ reduction)}
+  }}
+
+\vspace{1.15in}
+
+%% --- Top row: header band with overlaid labels ---
+\noindent
+\hspace{0.15in}%
+\includegraphics[width=15.55in,height=1.05in]{outputs/step3_header_band.pdf}%
+
+\vspace{0.08in}
+
+%% --- Middle row: graphic panels ---
+\noindent
+\hspace{0.15in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_A_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_B1_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_B2_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_C_graphic.pdf}%
+
+%% --- Bottom row: text panels ---
+\noindent
+\hspace{0.15in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_A_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{7.75in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_B1B2_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_C_text.pdf}%
+\end{minipage}%
+
+\vspace{0.60in}
+
+\hspace{0.15in}%
+$^{1}$%
+\begin{minipage}[t]{15.2in}
+The baseline copula used for inference is selected from canonical STEP 1 sensitivity analyses over 966 longitudinal conditions across four datasets: the $t$-copula is best by AIC in 63.6\% of conditions (Frank: 30.7\%). In the cross-stratified canonical table below (content area $\times$ year span), the recommended family is $t$ in every cell; entries report $(\rho,\mathrm{df})$ medians.
+\vspace{2pt}
+
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\textbf{Content area} & \textbf{1-year} & \textbf{2-year} & \textbf{3-year} & \textbf{4-year} \\
+\hline
+MATHEMATICS & (0.85, 25.26) & (0.81, 27.40) & (0.78, 28.38) & (0.76, 27.34) \\
+READING     & (0.84, 28.33) & (0.80, 29.34) & (0.77, 26.63) & (0.76, 28.22) \\
+WRITING     & (0.85, 23.72) & (0.82, 27.58) & (0.80, 27.22) & (0.77, 23.86) \\
+ELA         & (0.84, 41.95) & (0.79, 46.41) & (0.76, 51.57) & (0.72, 42.04) \\
+\end{tabular}
+\end{center}
+\end{minipage}
+
+\vspace{6pt}
+\hspace{0.15in}%
+$^{2}$ Other regime families considered include the truncated exponential family (the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean) and the truncated uniform family. 
+
+\vspace{4pt}
+\hspace{0.15in}%
+$^{3}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup. That is, that there is no correlation between the starting point and the growth regime. This assumption is investigated more deeply in the full paper.
+
+\vspace{4pt}
+\hspace{0.15in}%
+$^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P]$ (the regime center, mean \SGPc on the 0--1 scale) and $\kappa = \alpha + \beta$ (the concentration parameter).
+\end{document}
+]]></file>
+    <file path="step3_header_band.tex"><![CDATA[
+\documentclass[10pt]{article}
+\usepackage[paperwidth=15.55in,paperheight=1.05in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{tikz}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+\noindent
+\begin{tikzpicture}[x=1in,y=1in]
+  \definecolor{headerDark}{RGB}{210,210,208}
+  \definecolor{headerLight}{RGB}{225,225,223}
+
+  % Base darker band.
+  \fill[headerDark] (0,0.1) rectangle (15.55,0.95);
+
+  % Lighter middle section with subtle chevrons.
+  \fill[headerLight]
+    (3.85,0.1)
+    -- (11.51,0.1)
+    -- (11.81,0.525)
+    -- (11.51,0.95)
+    -- (3.7,0.95)
+    -- (4.0,0.525)
+    -- (3.7,0.1)
+    -- cycle;
+
+  % A header block.
+  \node[anchor=west,align=left,text width=3.35in] at (0.25,0.51) {%
+    {\normalsize\bfseries A. Convert scores to reference quantiles}\\[-1pt]
+    {\small Observed, non-linked marginals: \textit{U} (prior) and \textit{V} (current)}};
+
+  % Combined B1+B2 header block.
+  \node[anchor=west,align=left,text width=7.20in] at (4.15,0.55) {%
+    {\normalsize\bfseries B1 \& B2. Estimate subgroup growth regime $\symbf{\HShat}$ (copula + regime $\; \Rightarrow \;$ induced marginal)}\\[-1pt]
+    \vspace{2.0pt}
+    {\small Choose $H \in \mathcal{H}_{\mathrm{Beta}}$ to minimize $\Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{H}\bigr)$, where $F_H(v) = \mathbb{E}_{U}\left[\,H\bigl(\Fzero(v\mid U)\bigr)\right]$}};
+
+  % C header block.
+  \node[anchor=west,align=left,text width=3.35in] at (12.00,0.55) {%
+    {\normalsize\bfseries C. Recover inferred latent SGPc density $\symbf{P_S} \sim \symbf{\HShat}$}\\[-1pt]
+    {\small Report density/summary: $\mbox{mean} \SGPc = 100\hat{m}$}};
+\end{tikzpicture}
+
+\end{document}
+]]></file>
+    <file path="step3_styles.tex"><![CDATA[
+%%%%
+%%%% step3_styles.tex - Shared PSTricks/LaTeX definitions for STEP 3 infographic
+%%%%
+%%%% Canonical notation, colors, and macros used across all 8 panel files.
+%%%% INPUT this file in each panel document.
+%%%%
+
+%%% Zissou-aligned color palette (matching STEP 3 publication style)
+\definecolor{zissouTeal}{HTML}{3B9AB2}
+\definecolor{zissouRed}{HTML}{F21A00}
+\definecolor{zissouAmber}{HTML}{E1AF00}
+\definecolor{priorU}{HTML}{009292}
+\definecolor{currentV}{HTML}{B66DFF}
+\definecolor{inferredV}{HTML}{000000}
+\definecolor{panelGrey}{gray}{0.65}
+\definecolor{bodyGrey}{gray}{0.25}
+\definecolor{subtitleGrey}{gray}{0.30}
+\definecolor{borderGrey}{gray}{0.85}
+\definecolor{gridLight}{gray}{0.92}
+\definecolor{fillGrey}{gray}{0.95}
+
+%%% Canonical notation macros
+\newcommand{\HS}{H_S}
+\newcommand{\HShat}{\widehat{H}_S}
+\newcommand{\HU}{H_U}
+\newcommand{\FH}{F_H}
+\newcommand{\FHhat}{\widehat{F}_H}
+\newcommand{\Fobs}{F_{obs}}
+\newcommand{\Fzero}{F_0}
+\newcommand{\SGPcFlow}{\textit{\textsf{SGPcFlow}}}
+\newcommand{\SGPc}{\textit{SGPc}}
+\newcommand{\Wone}{W_1}
+]]></file>
+    <file path="step3_panel_A_graphic.tex"><![CDATA[
+%%%%
+%%%% Panel A graphic: Independent U and V marginal densities
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+
+\pagestyle{empty}
+\begin{document}
+\psset{xunit=3.3in,yunit=1.28in}
+\begin{pspicture}(-0.12,-0.42)(1.12,\panelAymax)
+
+  %% Read curve data
+  \readdata{\dataU}{data/panel_A_density_U.dat}
+  \readdata{\dataV}{data/panel_A_density_V.dat}
+
+  %% Filled area under U density
+  \pscustom[fillstyle=solid,fillcolor=priorU,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataU}%
+    \psline(1,0)%
+    \closepath}
+
+  %% Filled area under V density
+  \pscustom[fillstyle=solid,fillcolor=currentV,opacity=0.14,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataV}%
+    \psline(1,0)%
+    \closepath}
+
+  %% Curve lines
+  \listplot[linecolor=priorU,linewidth=1.3pt,plotstyle=line]{\dataU}
+  \listplot[linecolor=currentV,linewidth=1.3pt,plotstyle=line]{\dataV}
+
+  %% Axes
+  \psaxes[Dx=0.2,Dy=0.5,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(1.0,\panelAymax)
+
+  %% Axis labels
+  \rput[t](0.5,-0.26){\textsf{\small Reference quantile ($u$ or $v$)}}
+  \rput[b]{90}(-0.12,1.2){\textsf{\small Density}}
+
+  %% Legend
+  \rput[tr](0.98,\panelAymax){%
+    \raisebox{-28pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize Prior sample $U$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=priorU,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Current sample $V$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[2pt]
+        \multicolumn{2}{@{}l@{}}{\textsf{\tiny\textcolor{subtitleGrey}{NOTE: No student-level pair IDs available}}}
+      \end{tabular}%
+    }}}}
+%
+\end{pspicture}
+\end{document}
+]]></file>
+    <file path="step3_panel_B1_graphic.tex"><![CDATA[
+%%%%
+%%%% Panel B1 graphic: Reverse-engineer regime parameters (objective landscape)
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.4in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage[svgnames,dvips]{xcolor}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+\input{data/panel_B1_optimum}
+
+\pagestyle{empty}
+\begin{document}
+
+%% Axis limits are generated by step3_export_data.R from the current grid.
+\psset{xunit=0.061in,yunit=1.3in}
+\begin{pspicture}(15,0.0)(85,2.6)
+
+  %% Heatmap cells (R-generated colored rectangles)
+  \input{data/panel_B1_heatmap_cells}
+
+  %% Optimum marker
+  \rput(\optX,\optY){\textsf{\scriptsize $\HShat$}}
+  \rput(50,0.30103){\textsf{\scriptsize $U(0,1)$}} %% uniform regime: kappa = 2
+
+  %% Axes overlay
+  \psaxes[Ox=20,Oy=0,Dx=10,Dy=0.5,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          labels=y, %keep only y-axis labels
+          axesstyle=frame,linecolor=borderGrey]{-}%
+          (\panelCxmin,\panelCymin)(\panelCxmax,\panelCymax)
+
+  % Custom x labels (0.2 to 0.7 by 0.1)
+  \uput[d](23,-0.1){\textsf{\small 0.2}}
+  \uput[d](33,-0.1){\textsf{\small 0.3}}
+  \uput[d](43,-0.1){\textsf{\small 0.4}}
+  \uput[d](53,-0.1){\textsf{\small 0.5}}
+  \uput[d](63,-0.1){\textsf{\small 0.6}}
+  \uput[d](73,-0.1){\textsf{\small 0.7}}
+
+  %% Axis labels
+  \rput[t](50,-0.3){\textsf{\small $m$ (mean of $H$, $\SGPc/100$)}}
+  \rput[b]{90}(17.5,1.30){\textsf{\small $\log_{10}(\kappa)$}}
+
+  %% Color legend annotation
+  \rput[tr](72,\panelCymax){%
+    \raisebox{-20pt}{\textsf{\scriptsize\textcolor{subtitleGrey}{Color $=\log_{10}$ distance}}}}
+
+\end{pspicture}
+
+\end{document}
+]]></file>
+    <file path="step3_panel_B2_graphic.tex"><![CDATA[
+%%%%
+%%%% Panel B2 graphic: Forward CDF check in v-space
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage[svgnames,dvips]{xcolor}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\psset{xunit=3.3in,yunit=3.1in}
+\begin{pspicture}(-0.22,-0.18)(1.1,1.1)
+  %% Read CDF data
+  \readdata{\dataObs}{data/panel_B2_cdf_obs.dat}
+  \readdata{\dataUnif}{data/panel_B2_cdf_uniform.dat}
+  \readdata{\dataInf}{data/panel_B2_cdf_inferred.dat}
+  \readdata{\dataTamp}{data/panel_B2_cdf_tamp.dat}
+
+  %% CDF curves
+  \listplot[linecolor=currentV,linewidth=1.3pt,plotstyle=line]{\dataObs}
+  \listplot[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
+            linecap=1,plotstyle=line]{\dataUnif}
+  \listplot[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
+            linecap=1,plotstyle=line]{\dataInf}
+  \listplot[linecolor=priorU,linewidth=0.9pt,linestyle=dotted,plotstyle=line]{\dataTamp}
+
+  %% Axes
+  \psaxes[Dx=0.2,Dy=0.2,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(1.0,1.0)
+
+  %% Axis labels
+  \rput[t](0.5,-0.1){\textsf{\small $v$ (current pseudo-observation)}}
+  \rput[b]{90}(-0.12,0.5){\textsf{\small CDF}}
+
+  %% Legend
+  \rput[tr](0.98,0.24){%
+    \raisebox{-18pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize Observed $\Fobs(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Uniform $F_{H(p)=p}(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Best-fit $F_{\HShat}(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Co-monotonic (TAMP) $F_U(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=priorU,linewidth=0.9pt,linestyle=dotted,linecap=1](0,0)(0.65,0)}}}
+      \end{tabular}%
+    }}}}
+\end{pspicture}
+\end{document}
+]]></file>
+    <file path="step3_panel_C_graphic.tex"><![CDATA[
+%%%%
+%%%% Panel C graphic: Inferred growth regime density
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage[svgnames,dvips]{xcolor}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\psset{xunit=0.033in,yunit=0.65in}
+\begin{pspicture}(-7,-0.85)(108,\panelDymax)
+  %% Read density data
+  \readdata{\dataUnif}{data/panel_C_density_uniform.dat}
+  \readdata{\dataTrue}{data/panel_C_density_true.dat}
+  \readdata{\dataInf}{data/panel_C_density_inferred.dat}
+
+  %% Filled area under true and inferred density
+  \pscustom[fillstyle=solid,fillcolor=zissouAmber,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataTrue}%
+    \psline(100,0)%
+    \closepath}
+  \pscustom[fillstyle=solid,fillcolor=inferredV,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataInf}%
+    \psline(100,0)%
+    \closepath}
+
+  %% Density curves
+  \listplot[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,plotstyle=line,linecap=1]{\dataUnif}
+  \listplot[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,plotstyle=line,linecap=1]{\dataInf}
+  \listplot[linecolor=zissouAmber,linewidth=1.2pt,linestyle=solid,plotstyle=line]{\dataTrue}
+
+  %% Reference lines
+  \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.8pt](50,0)(50,\panelDymax)
+  \psline[linecolor=zissouAmber,linestyle=dotted,linewidth=0.8pt]%
+         (\trueMeanVline,0)(\trueMeanVline,\panelDymax)
+  \psline[linecolor=inferredV,linestyle=dotted,linewidth=0.8pt]%
+         (\inferredMeanVline,0)(\inferredMeanVline,\panelDymax)
+
+  %% Axes
+  \psaxes[Dx=20,Dy=1,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          labels=y, %keep only y-axis labels
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(100,\panelDymax)
+
+  % Custom x labels (0..1 by 0.2)
+  \uput[d](0,0){\textsf{\small 0}}
+  \uput[d](20,0){\textsf{\small 0.2}}
+  \uput[d](40,0){\textsf{\small 0.4}}
+  \uput[d](60,0){\textsf{\small 0.6}}
+  \uput[d](80,0){\textsf{\small 0.8}}
+  \uput[d](100,0){\textsf{\small 1.0}}
+
+  %% Axis labels
+  \rput[t](50,-0.4){\textsf{\footnotesize Latent $\SGPc/100$}}
+  \rput[b]{90}(-7,2.0){\textsf{\small Density}}
+
+  %% Legend
+  \rput[tr](97,\panelDymax){%
+    \raisebox{-30pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize True} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=zissouAmber,linewidth=1.2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Uniform} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Best-fit} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}
+      \end{tabular}%
+    }}}}
+
+  %% Recovery annotation
+  \rput[tl](62.2,\panelDymax){%
+    \raisebox{-67pt}{\textsf{\scriptsize\textcolor{zissouAmber}{%
+      True mean $\SGPc = \trueRegimeMean$}}}}
+  \rput[tl](55,\panelDymax){%
+    \raisebox{-75pt}{\textsf{\scriptsize\textcolor{inferredV}{%
+      Recovered mean $\SGPc = \inferredRegimeMean$}}}}
+
+\end{pspicture}
+
+\end{document}
+]]></file>
+    <file path="step3_panel_A_text.tex"><![CDATA[
+%%%%
+%%%% Panel A text: Explanation of independent U and V marginals
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=4.5in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    We observe two independent cross-sectional, non-longitudinal samples of the same subgroup 
+    $S$ (e.g., a TIMSS country or a NAEP state): prior scores $X$ at time $t_1$ 
+    and comparison scores $Y$ at time $t_2$. The design does not require that 
+    $t_2$ represent a later measurement of the same cohort: $(t_1,t_2)$ may index 
+    different grades within the same year (e.g., Grade~4 vs.\ Grade~8), or the same 
+    grade measured in different years (often interpreted as $t_2=t_1+4$ under a 
+    same-cohort, four-year-later convention).
+
+    \vspace{4pt}
+    We map scores to reference-quantiles (pseudo-observations) using fixed reference marginal CDFs:
+
+    \vspace{4pt}
+    \hspace{5pt}1.~Prior reference quantiles $U = F_X^{\mathrm{ref}}(x_i)$ and
+
+    \vspace{1pt}
+    \hspace{5pt}2.~Current reference quantiles $V = F_Y^{\mathrm{ref}}(y_j)$.
+
+    \vspace{4pt}
+    Crucially, there is \emph{no student-level linkage} between these 
+    samples---we cannot match any $u_i$ to its corresponding $v_j$.
+
+    \vspace{4pt}
+    Panel~A shows the two \emph{univariate} marginals plotted on the same 
+    reference-quantile axis (``$u$ or $v$'' in $[0,1]$). This is the 
+    information available in TIMSS/NAEP-style designs when cohorts are 
+    sampled independently (with survey weights, when applicable).
+    
+    \vspace{4pt}
+    After the reference-quantile transform, $U$ and $V$ summarize the observable evidence.
+    All subsequent inference proceeds from these marginals plus an externally supplied
+    copula dependence structure.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}
+]]></file>
+    <file path="step3_panel_B1B2_text.tex"><![CDATA[
+%%%%
+%%%% Panel B1 text: Explanation of regime reverse-engineering
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=7.65in,paperheight=11.4in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{7.65in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{7.35in}
+    \small\raggedright\color{bodyGrey}
+
+    The mathematical bridge connecting the observed, unlinked marginals (Panel~A) and the recovered latent SGPc regime (Panel~C)
+    has two ingredients:
+    \begin{enumerate}
+      \item A baseline copula $C_0$ providing a dependence template from prior reference-quantiles $U$ to current reference-quantiles $V$.$^\mbox{1}$
+      \item A stochastic growth regime $H$ that governs how subgroup $S$ allocates conditional percentiles within that template.$^\mbox{2}$
+    \end{enumerate}
+    
+    \vspace{1pt}
+    Together, $C_0$ and $H$ define a \emph{forward map} from a candidate regime to a \emph{predicted} current-grade marginal CDF.
+    Panel~B2 visualizes this map via the induced $F_H(v)$, and Panel~B1 \emph{inverts} it by choosing the regime whose $F_H$
+    best matches the observed current marginal $F^{\mathrm{obs}}_{V,S}$.
+
+    \vspace{4pt}
+    Let $C_0$ be a baseline copula. $C_0$ induces the conditional CDF (transition kernel)
+    \[
+      \Fzero(v\mid u)\;=\;\Pr(V\le v\mid U=u)\;=\;\frac{\partial}{\partial u}C_0(u,v).
+    \]
+
+    \vspace{1pt}
+    Its inverse in $v$ (the conditional quantile kernel) is
+    \[
+      Q_0(p\mid u)=\Fzero^{-1}(p\mid u).
+    \]
+
+    \vspace{1pt}
+    Intuitively, for each starting quantile $u$, the kernel $\Fzero(\cdot\mid u)$ 
+    describes the distribution of possible ending quantiles $V$ under the baseline 
+    dependence structure $C_0$.
+
+    \vspace{4pt}
+    Let $P\in[0,1]$ be a random variable (a latent SGPc on the $0$--$1$ scale) 
+    and let $p$ denote a realization in $[0,1]$. A \emph{growth regime} $H$ is the 
+    distribution of $P$, represented by its CDF
+    \[
+      H(p)\;:=\;\Pr(P\le p),\qquad p\in[0,1].
+    \]
+    
+    \vspace{1pt}
+    Given $U=u$ and a draw $P=p$, the model generates an outcome percentile by$^\mbox{3}$
+    \[
+      V \;=\; Q_0(P\mid U=u).
+    \]
+
+    \vspace{1pt}
+    The uniform regime $H(p)=p$ (i.e., $P\sim\mathrm{Uniform}(0,1)$) corresponds to occupying the 
+    baseline kernel with no tilt. Departures from $H(p)=p$ tilt the growth regime mass toward 
+    lower or higher conditional percentiles relative to the baseline regime.
+
+    \vspace{4pt}
+    Although we do not observe linked pairs $(u,v)$ in TIMSS- or NAEP-style settings, 
+    the model implies a forward map from the observed prior marginal $F_U$ to the 
+    predicted current marginal $F_H$. For any fixed $u$,
+    \begin{eqnarray*}
+      \Pr(V\le v\mid U=u)
+      &=& \Pr\bigl(Q_0(P\mid u)\le v\bigr) \\
+      &=& \Pr\bigl(P\le \Fzero(v\mid u)\bigr) \\
+      &=& H\bigl(\Fzero(v\mid u)\bigr).
+    \end{eqnarray*}
+
+    \vspace{4pt}
+    Therefore, by the law of total probability, the subgroup's predicted current-grade 
+    marginal CDF is
+    \begin{eqnarray*}
+      \FH(v)
+      &=& \Pr(V\le v) \\
+      &=& \mathbb{E}_{U}\left[\,H\bigl(\Fzero(v\mid U)\bigr)\right] \\
+      &=& \int_0^1 H\bigl(\Fzero(v\mid u)\bigr)\,dF_U(u) \\
+      &\approx& \frac{\sum_{i=1}^{n} w_i\,H\bigl(\Fzero(v\mid u_i)\bigr)}{\sum_{i=1}^{n} w_i},
+    \end{eqnarray*}
+
+    \vspace{1pt}
+    where $\{u_i,w_i\}$ are the observed prior pseudo-observations and 
+    survey weights for the subgroup (i.e., a weighted empirical approximation to $F_U$).
+
+    \vspace{4pt}
+    We estimate the subgroup's growth regime by searching over an admissible 
+    class $\mathcal{H}$ of candidate CDFs on $[0,1]$. Panel~B1 shows the heat 
+    map of $\mathcal{H}$ over the \emph{Beta regime family}
+    \[
+      \mathcal{H}_{\mathrm{Beta}}
+      =\left\{\,H_{m,\kappa}(\cdot)\;:\;P\sim\mathrm{Beta}(\kappa m,\kappa(1-m)),\;0<m<1,\;\kappa>0\,\right\},
+    \]
+    
+    \vspace{1pt}
+    where $m=\mathbb{E}[P]$ controls the regime center (mean SGPc on the 0--1 scale) and
+    $\kappa$ controls concentration (dispersion of latent SGPc).$^\mbox{4}$
+    
+    \vspace{4pt}
+    For each candidate $H\in\mathcal{H}$, Panel~B2 provides the 
+    induced \emph{predicted} current-grade marginal
+    \[
+      F_{H}(v)\;=\;\mathbb{E}_{U}\left[\,H\bigl(\Fzero(v\mid U)\bigr)\right].
+    \]
+
+    \vspace{4pt}
+    The growth regime estimate for subgroup $S$ is defined by the minimum-distance problem
+    \[
+      \widehat{H}_S \;=\;
+      \argmin_{H\in\mathcal{H}_{\mathrm{Beta}}}\;
+      \Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{H}\bigr),
+    \]
+
+    \vspace{1pt}
+    where
+    \[
+      \Wone(F,G)=\int_0^1 \bigl|F(v)-G(v)\bigr|\,dv
+    \]
+
+    \vspace{1pt}
+    is the Wasserstein-1 (earth mover's) distance between the observed and predicted current-grade marginal CDFs.
+    
+    \vspace{4pt}
+    The heat map displays $\log_{10}$ Wasserstein--1 distance over $(m,\log_{10}\kappa)$: lighter 
+    regions indicate candidate regimes whose induced $F_H$ more closely matches $F^{\mathrm{obs}}_{V,S}$.
+    The marked optimum corresponds to $\widehat{H}_S$ (equivalently, $(\hat m,\hat\kappa)$).
+    For reference, the uniform regime $H(p)=p$ occurs at $m=0.5$ and $\kappa=2$ (i.e., $\mathrm{Beta}(1,1)$),
+    indicated by the $U(0,1)$ marker.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}
+]]></file>
+    <file path="step3_panel_C_text.tex"><![CDATA[
+%%%%
+%%%% Panel C text: Explanation of the inferred growth regime
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=4.6in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    The output of Panels~B1--B2 is a subgroup-specific \emph{estimated growth regime}
+    $\widehat{H}_S$, where $\widehat{H}_S$ is a cumulative distribution function (CDF) on $[0,1]$
+    for a latent conditional-percentile random variable $P_S$ (SGPc on the $0$--$1$ scale):
+    \[
+      \widehat{H}_S(p)\;=\;\Pr(P_S \le p),\qquad 0\le p\le 1.
+    \]
+    
+    \vspace{1pt}
+    In words, $\widehat{H}_S$ describes how subgroup $S$ allocates conditional ranks
+    \emph{within} the baseline dependence template $F_0(\cdot\mid u)$.
+    
+    \vspace{4pt}
+    Panel~C displays the \emph{distribution of} $P_S$ (typically via its density
+    $f_{\widehat{H}_S}(p)=\widehat{H}_S'(p)$ when $\widehat{H}_S$ is smooth), not the CDF itself.
+    Thus the ``Best-fit'' curve is the density corresponding to the fitted CDF
+    (i.e., $P_S \sim \widehat{H}_S$). The dashed grey ``Uniform'' reference corresponds to the
+    uniform regime $H(p)=p$ (equivalently $P\sim\mathrm{Unif}(0,1)$), which places no tilt on
+    conditional percentiles relative to the baseline kernel.
+    
+    \vspace{4pt}
+    Because we restrict the candidate regime class $\mathcal{H}$ to the Beta family in Panel~B1,
+    the fitted regime implies
+    $P_S\sim\mathrm{Beta}(\kappa m,\kappa(1-m))$:
+    the mean $m=\mathbb{E}[P_S]$ sets the regime center (reported as mean SGPc $=100m$),
+    and $\kappa$ controls concentration (dispersion of latent SGPc).
+    
+    \vspace{4pt}
+    The vertical reference lines mark mean SGPc under the uniform regime (50),
+    the generating ``True'' regime ($\trueRegimeMean$), and the recovered best-fit regime
+    ($\inferredRegimeMean$). In applications, the primary outputs are $\widehat{H}_S$
+    (with uncertainty bands) and summary functionals such as mean/median SGPc and
+    tail/bucket probabilities.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}
+]]></file>
+    <file path="repomix.config.json"><![CDATA[
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 2000000
+  },
+  "output": {
+    "filePath": "AI_CONTEXT_REPOMIX.txt",
+    "style": "plain",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "showLineNumbers": false,
+    "truncateBase64": true,
+    "includeFullDirectoryStructure": false,
+    "git": {
+      "sortByChanges": false,
+      "includeDiffs": false,
+      "includeLogs": false
+    }
+  },
+  "include": [
+    "README.md",
+    "step3_*.R",
+    "step3_*.tex",
+    "repomix.config.json",
+    "data/summary_metrics.tex",
+    "data/axis_limits.tex",
+    "data/panel_B2_cdf_tamp.dat"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDotIgnore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "outputs/**",
+      "V1_030126/**",
+      "*.pdf",
+      "*.png",
+      "*.svg",
+      "*.ps",
+      "*.eps",
+      "*.aux",
+      "*.log",
+      "*.dvi",
+      "*.fls",
+      "*.fdb_latexmk",
+      "*.out"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}
+]]></file>
+    <file path="data/summary_metrics.tex"><![CDATA[
+\newcommand{\trueRegimeMean}{39.0}
+\newcommand{\trueRegimeMedian}{38.6}
+\newcommand{\inferredRegimeMean}{39.4}
+\newcommand{\inferredRegimeMedian}{39.0}
+\newcommand{\wOneUniform}{0.0915}
+\newcommand{\wOneInferred}{0.0019}
+\newcommand{\wOneReduction}{97.9}
+\newcommand{\copulaRho}{0.72}
+\newcommand{\copulaDf}{8}
+\newcommand{\nStudents}{3500}
+\newcommand{\inferredKappa}{18.2}
+\newcommand{\trueRegimeKappa}{18}
+]]></file>
+    <file path="data/axis_limits.tex"><![CDATA[
+\newcommand{\panelAymax}{2.5}
+\newcommand{\panelDymax}{3.9}
+\newcommand{\panelCxmin}{23}
+\newcommand{\panelCxmax}{77}
+\newcommand{\panelCymin}{-0.08}
+\newcommand{\panelCymax}{2.38}
+\newcommand{\inferredMeanVline}{39.4}
+\newcommand{\trueMeanVline}{39}
+]]></file>
+    <file path="data/panel_B2_cdf_tamp.dat"><![CDATA[
+0.005 0
+0.0083 0
+0.0116 0
+0.0149 0
+0.0182 0
+0.0215 0
+0.0248 0.000286
+0.0281 0.000286
+0.0314 0.000286
+0.0347 0.000571
+0.038 0.000571
+0.0413 0.000571
+0.0446 0.000571
+0.0479 0.000857
+0.0512 0.000857
+0.0545 0.001143
+0.0578 0.001143
+0.0611 0.001429
+0.0644 0.001429
+0.0677 0.002286
+0.071 0.002571
+0.0743 0.002857
+0.0776 0.003714
+0.0809 0.004286
+0.0842 0.004857
+0.0875 0.005429
+0.0908 0.005714
+0.0941 0.005714
+0.0974 0.006286
+0.1007 0.006571
+0.104 0.007429
+0.1073 0.008
+0.1106 0.008571
+0.1139 0.009714
+0.1172 0.010571
+0.1205 0.011429
+0.1238 0.012
+0.1271 0.012571
+0.1304 0.012857
+0.1337 0.014286
+0.137 0.014571
+0.1403 0.016
+0.1436 0.017714
+0.1469 0.018286
+0.1502 0.020571
+0.1535 0.020571
+0.1568 0.022286
+0.1601 0.022571
+0.1634 0.024857
+0.1667 0.026286
+0.17 0.027429
+0.1733 0.028571
+0.1766 0.029714
+0.1799 0.031714
+0.1832 0.032857
+0.1865 0.034571
+0.1898 0.037714
+0.1931 0.041429
+0.1964 0.043429
+0.1997 0.046286
+0.203 0.048286
+0.2063 0.05
+0.2096 0.053143
+0.2129 0.055143
+0.2162 0.058
+0.2195 0.059429
+0.2228 0.062
+0.2261 0.064
+0.2294 0.067714
+0.2327 0.070857
+0.236 0.074
+0.2393 0.077429
+0.2426 0.079714
+0.2459 0.082286
+0.2492 0.085143
+0.2525 0.087714
+0.2558 0.090286
+0.2591 0.092571
+0.2624 0.096
+0.2657 0.098571
+0.269 0.102
+0.2723 0.104857
+0.2756 0.109429
+0.2789 0.114571
+0.2822 0.118286
+0.2855 0.120857
+0.2888 0.123714
+0.2921 0.127429
+0.2954 0.130571
+0.2987 0.135143
+0.302 0.138286
+0.3053 0.140286
+0.3086 0.143143
+0.3119 0.146857
+0.3152 0.151714
+0.3185 0.154286
+0.3218 0.158286
+0.3251 0.161714
+0.3284 0.163429
+0.3317 0.169429
+0.335 0.170857
+0.3383 0.174571
+0.3416 0.178571
+0.3449 0.185143
+0.3482 0.188286
+0.3515 0.191143
+0.3548 0.196571
+0.3581 0.2
+0.3614 0.204286
+0.3647 0.207429
+0.368 0.211714
+0.3713 0.216
+0.3746 0.220857
+0.3779 0.224571
+0.3812 0.229143
+0.3845 0.232857
+0.3878 0.235429
+0.3911 0.239429
+0.3944 0.243143
+0.3977 0.248
+0.401 0.253714
+0.4043 0.26
+0.4076 0.264
+0.4109 0.268857
+0.4142 0.271714
+0.4175 0.274286
+0.4208 0.279143
+0.4241 0.283714
+0.4274 0.288286
+0.4307 0.294
+0.434 0.3
+0.4373 0.303429
+0.4406 0.309143
+0.4439 0.314
+0.4472 0.319714
+0.4505 0.325714
+0.4538 0.331143
+0.4571 0.337714
+0.4604 0.344857
+0.4637 0.352857
+0.467 0.356286
+0.4703 0.360286
+0.4736 0.368571
+0.4769 0.374
+0.4802 0.38
+0.4835 0.385143
+0.4868 0.390571
+0.4901 0.396
+0.4934 0.402286
+0.4967 0.407714
+0.5 0.412571
+0.5033 0.418857
+0.5066 0.422571
+0.5099 0.427143
+0.5132 0.432571
+0.5165 0.438571
+0.5198 0.442571
+0.5231 0.447714
+0.5264 0.454286
+0.5297 0.459714
+0.533 0.466286
+0.5363 0.471143
+0.5396 0.476571
+0.5429 0.483143
+0.5462 0.489429
+0.5495 0.494857
+0.5528 0.499143
+0.5561 0.505429
+0.5594 0.510857
+0.5627 0.517714
+0.566 0.523714
+0.5693 0.53
+0.5726 0.536857
+0.5759 0.544286
+0.5792 0.55
+0.5825 0.559714
+0.5858 0.565429
+0.5891 0.571143
+0.5924 0.577143
+0.5957 0.586857
+0.599 0.592857
+0.6023 0.600571
+0.6056 0.608
+0.6089 0.614857
+0.6122 0.620571
+0.6155 0.626
+0.6188 0.631714
+0.6221 0.638
+0.6254 0.644286
+0.6287 0.649429
+0.632 0.652571
+0.6353 0.66
+0.6386 0.664286
+0.6419 0.668857
+0.6452 0.672857
+0.6485 0.678857
+0.6518 0.682857
+0.6551 0.688
+0.6584 0.692571
+0.6617 0.697143
+0.665 0.702571
+0.6683 0.710286
+0.6716 0.713429
+0.6749 0.719714
+0.6782 0.725143
+0.6815 0.73
+0.6848 0.733714
+0.6881 0.739143
+0.6914 0.743714
+0.6947 0.747429
+0.698 0.752
+0.7013 0.756857
+0.7046 0.760857
+0.7079 0.765714
+0.7112 0.769714
+0.7145 0.774857
+0.7178 0.780571
+0.7211 0.785429
+0.7244 0.79
+0.7277 0.795143
+0.731 0.801429
+0.7343 0.804571
+0.7376 0.810571
+0.7409 0.814286
+0.7442 0.817429
+0.7475 0.821143
+0.7508 0.826286
+0.7541 0.83
+0.7574 0.834
+0.7607 0.839429
+0.764 0.844571
+0.7673 0.849714
+0.7706 0.852857
+0.7739 0.857143
+0.7772 0.860571
+0.7805 0.864571
+0.7838 0.869143
+0.7871 0.872857
+0.7904 0.876286
+0.7937 0.880571
+0.797 0.884286
+0.8003 0.888
+0.8036 0.893429
+0.8069 0.896571
+0.8102 0.899143
+0.8135 0.901714
+0.8168 0.904857
+0.8201 0.908
+0.8234 0.914857
+0.8267 0.918
+0.83 0.922
+0.8333 0.926857
+0.8366 0.930857
+0.8399 0.934286
+0.8432 0.937714
+0.8465 0.94
+0.8498 0.942857
+0.8531 0.945714
+0.8564 0.950286
+0.8597 0.952286
+0.863 0.954857
+0.8663 0.956857
+0.8696 0.959429
+0.8729 0.961429
+0.8762 0.962286
+0.8795 0.964286
+0.8828 0.965429
+0.8861 0.968286
+0.8894 0.969429
+0.8927 0.971714
+0.896 0.972857
+0.8993 0.974857
+0.9026 0.978286
+0.9059 0.978857
+0.9092 0.980571
+0.9125 0.982286
+0.9158 0.984857
+0.9191 0.985714
+0.9224 0.986571
+0.9257 0.987143
+0.929 0.987714
+0.9323 0.988286
+0.9356 0.988571
+0.9389 0.99
+0.9422 0.991429
+0.9455 0.992857
+0.9488 0.993429
+0.9521 0.994
+0.9554 0.994857
+0.9587 0.996857
+0.962 0.997429
+0.9653 0.998571
+0.9686 0.998857
+0.9719 0.999143
+0.9752 0.999143
+0.9785 0.999429
+0.9818 0.999714
+0.9851 0.999714
+0.9884 1
+0.9917 1
+0.995 1
+]]></file>
+  </files>
+</repomix_fallback>

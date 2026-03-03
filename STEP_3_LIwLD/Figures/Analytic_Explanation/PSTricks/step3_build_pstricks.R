@@ -33,6 +33,17 @@ output_dir <- file.path(pstricks_dir, "outputs")
 if (!dir.exists(data_dir))   dir.create(data_dir, recursive = TRUE)
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
+# ---------------------------------------------------------------------------
+# Build configuration
+# ---------------------------------------------------------------------------
+# Update this version string when issuing a new release artifact.
+infographic_release_version <- "1.0.0"
+infographic_release_stem <- "Longitudinal_Inference_Without_Longitudinal_Data"
+infographic_release_pdf <- file.path(
+  output_dir,
+  sprintf("%s_v%s.pdf", infographic_release_stem, infographic_release_version)
+)
+
 cat("\n=== STEP 3 PSTricks Infographic Build ===\n")
 cat("  PSTricks dir :", pstricks_dir, "\n")
 cat("  Data dir     :", data_dir, "\n")
@@ -166,7 +177,7 @@ compile_xelatex <- function(name) {
 cat("--- Step 2: Compile panels ---\n")
 
 graphic_panels <- paste0("step3_panel_", c("A","B1","B2","C"), "_graphic")
-text_panels    <- paste0("step3_panel_", c("A","B1","B2","C"), "_text")
+text_panels    <- paste0("step3_panel_", c("A","B1B2","C"), "_text")
 
 ok <- TRUE
 for (p in graphic_panels) ok <- compile_pstricks(p)  && ok
@@ -185,6 +196,13 @@ compile_xelatex("step3_infographic_main")
 
 final_pdf <- file.path(output_dir, "step3_infographic_main.pdf")
 if (file.exists(final_pdf)) {
+  copied <- file.copy(final_pdf, infographic_release_pdf, overwrite = TRUE)
+  if (copied && file.exists(infographic_release_pdf)) {
+    cat("  Release PDF:", infographic_release_pdf, "\n")
+  } else {
+    warning("Could not create release-named PDF copy: ", infographic_release_pdf)
+  }
+
   png_out <- file.path(output_dir, "step3_infographic_main.png")
   system2("gs", c("-q", "-dBATCH", "-dNOPAUSE", "-sDEVICE=png16m",
                   "-r300", paste0("-sOutputFile=", png_out), final_pdf),
@@ -217,7 +235,8 @@ if (file.exists(final_pdf)) {
 
 cat("\n--- Cleanup ---\n")
 all_stems <- c(graphic_panels, text_panels, "step3_header_band", "step3_infographic_main")
-cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
+#cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
+cleanup_suffixes <- c(".aux",".log",".dvi",".fls",".fdb_latexmk",".out",".pdf")
 old_wd <- setwd(pstricks_dir)
 for (stem in all_stems) {
   for (ext in cleanup_suffixes) {

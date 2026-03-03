@@ -93,9 +93,11 @@ STEP_3_LIwLD/
     manifest_export.R                    # JSON/MD manifest output
   results/                               # Generated outputs
     phase_a_deep_dive.rds                # Phase A full results
+    phase_a_analytic_payload.rds          # Notation-aligned payload for figure assembly
     phase_a_summary.csv                  # Phase A key metrics
     phase_b_systematic_summary.csv       # Phase B summary table
     phase_b_all_results.rds              # Phase B full results
+    district_summary_grade.csv            # District-level model-health scorecard
     step3_country_estimates.csv          # Unified subgroup estimates
     step3_uncertainty_decomposition.csv  # Variance decomposition
     step3_bucket_probabilities.csv       # K=3 and K=5 bucket memberships
@@ -103,13 +105,29 @@ STEP_3_LIwLD/
     step3_manifest.json                  # AI-consumable manifest
     step3_manifest.md                    # Human-readable manifest
     run_metadata.json                    # Reproducibility metadata
+    output_contract_check.json            # Contract/schema validation report
     CONFORMANCE_MATRIX.md                # Audit matrix vs SGPcFlow plan
     visualizations/                      # Publication panels
       phase_a/                           # Phase A diagnostic plots
-      panel_c_recovery_by_size.*         # Phase B: accuracy vs n
-      panel_d_recovery_by_span.*         # Phase B: accuracy vs year span
-      panel_e_family_comparison.*        # Phase A: regime family comparison
-      panel_f_bootstrap_uncertainty.*    # Phase A: bootstrap distribution
+        panel_a_cdf_comparison.*         # A: observed vs inferred CDF (+ baselines)
+        panel_b1_objective_surface.*     # B1: objective over (m, kappa)
+        panel_b2_residual_curve.*        # B2: residual diagnostics
+        panel_c_regime_comparison.*      # C: regime density comparison
+        panel_d_recovery_summary.*       # Recovery summary composite
+      panel_d_recovery_by_size.*         # D: Phase B accuracy vs n
+      panel_e_recovery_by_span.*         # E: Phase B accuracy vs year span
+      panel_f_family_comparison.*        # F: regime family comparison
+      panel_g_bootstrap_uncertainty.*    # G: bootstrap distribution
+      panel_g_district_summary_grade.*   # H: district summary grade panel
+    exports/phase_a/                     # Tidy export bridge for figure assembly
+      step3_cdf_curves.csv
+      step3_objective_surface.csv
+      step3_regime_density.csv
+      step3_fit_metrics.csv
+      step3_bootstrap_draws.csv
+      step3_bootstrap_summary.csv
+      step3_kernel_slices.csv
+      step3_quantile_slices.csv
 ```
 
 ---
@@ -164,7 +182,9 @@ Picks one well-understood condition and one large district (configurable in `con
 ### Key Outputs
 
 - `phase_a_summary.csv` — One-row summary with inferred vs true mean/median SGPc, distances, and bootstrap CIs
-- `visualizations/phase_a/` — Four diagnostic panels (CDF comparison, regime shape, residual, recovery summary)
+- `phase_a_analytic_payload.rds` — notation-aware payload (U/V samples, `F_obs`, `F_H`, objective surface, kernel slices)
+- `results/exports/phase_a/*.csv` — tidy exports for downstream plotting / assembly
+- `visualizations/phase_a/` — A/B1/B2/C diagnostic panels + recovery summary
 
 ---
 
@@ -190,11 +210,14 @@ Generates the final publication figures and AI-consumable manifest files:
 | Panel | Description | Source |
 |-------|-------------|--------|
 | A | Observed vs predicted CDF | Phase A |
-| B | Inferred regime vs actual SGPc | Phase A |
-| C | Recovery accuracy by subgroup size | Phase B |
-| D | Recovery accuracy by year span | Phase B |
-| E | Regime family comparison | Phase A |
-| F | Bootstrap uncertainty distribution | Phase A |
+| B1 | Objective landscape over `(m, log10(kappa))` | Phase A |
+| B2 | Residual diagnostics (`F_H - F_obs`) | Phase A |
+| C | Inferred regime vs actual SGPc | Phase A |
+| D | Recovery accuracy by subgroup size | Phase B |
+| E | Recovery accuracy by year span | Phase B |
+| F | Regime family comparison | Phase A |
+| G | Bootstrap uncertainty distribution | Phase A |
+| H | District summary grade panel | Phase A |
 
 ---
 
@@ -280,9 +303,16 @@ After a complete run of Phases A + B + C, the following files are guaranteed in 
 
 | File | Columns | Source |
 |------|---------|--------|
+| `district_summary_grade.csv` | subgroup metadata, inferred/true means and medians, W1 vs uniform, residual metrics, CI width, buckets, quality flags | Phase A |
 | `step3_country_estimates.csv` | subgroup_id, dataset_id, condition_id, n, regime_family, regime_param_1, regime_param_2, m_hat, kappa_hat, median_sgpc, mean_sgpc, dispersion_sd, dispersion_iqr, entropy, concentration, distance_min, wasserstein1, cvm | Phases A + B |
 | `step3_uncertainty_decomposition.csv` | subgroup_id, var_sampling, var_copula, var_family, total_var, se_sampling, n_boot, n_converged | Phase A |
 | `step3_bucket_probabilities.csv` | subgroup_id, median_sgpc, k3_{Low,Typical,High}, k3_assigned, k3_consistency, k5_{VeryLow,...,VeryHigh}, k5_assigned, k5_consistency | Phase A |
+| `exports/phase_a/step3_cdf_curves.csv` | subgroup_id, v, F_obs, F_pred, F_uniform, F_tamp, residual | Phase A |
+| `exports/phase_a/step3_objective_surface.csv` | subgroup_id, m, kappa, log10_kappa, distance_w1, is_optimum | Phase A |
+| `exports/phase_a/step3_regime_density.csv` | subgroup_id, p, density_hat, density_uniform, density_true | Phase A |
+| `exports/phase_a/step3_fit_metrics.csv` | subgroup_id, w1_uniform, w1_best, w1_reduction_pct, cvm, max_abs_residual, mean_abs_residual | Phase A |
+| `exports/phase_a/step3_bootstrap_draws.csv` | subgroup_id, boot_id, m_hat, kappa_hat, median_sgpc, mean_sgpc, converged | Phase A |
+| `exports/phase_a/step3_bootstrap_summary.csv` | subgroup_id, ci95_median_lo, ci95_median_hi, ci95_mean_lo, ci95_mean_hi, se_median, n_boot, n_converged | Phase A |
 
 ### Machine-Readable Manifests
 
@@ -292,12 +322,14 @@ After a complete run of Phases A + B + C, the following files are guaranteed in 
 | `step3_manifest.md` | Human-readable manifest with output file table |
 | `bucket_stability_summary.json` | Classification consistency by subgroup |
 | `run_metadata.json` | Timestamp, config snapshot, R session info |
+| `output_contract_check.json` | File-contract and schema-consistency validation report |
 
 ### Validation Checks
 
 - All bucket probabilities sum to ~1 per subgroup (tolerance: 0.001)
 - Uncertainty decomposition fields are populated (NA only when source data is unavailable)
 - Every publication panel is exported as PDF + SVG + PNG
+- Output contract check (`output_contract_check.json`) passes required file and manifest integrity checks
 
 ---
 

@@ -4,6 +4,8 @@
 \usepackage{tikz}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
 
+\input{step3_styles}
+
 \pagestyle{empty}
 \begin{document}
 \noindent
@@ -26,19 +28,20 @@
     -- cycle;
 
   % A header block.
-  \node[anchor=west,align=left,text width=3.35in] at (0.30,0.55) {%
-    {\normalsize\bfseries A. Map Scores to Pseudo-Observations}\\[-1pt]
-    {\small Observed marginals: \textit{U} and \textit{V} (no pairs)}};
+  \node[anchor=west,align=left,text width=3.35in] at (0.25,0.51) {%
+    {\normalsize\bfseries A. Convert scores to reference quantiles}\\[-1pt]
+    {\small Observed, non-linked marginals: \textit{U} (prior) and \textit{V} (current)}};
 
   % Combined B1+B2 header block.
   \node[anchor=west,align=left,text width=7.20in] at (4.15,0.55) {%
-    {\normalsize\bfseries B1 \& B2. Fit stochastic growth regime using canonical copula and observed \textit{U} and \textit{V}}\\[-1pt]
-    {\small Minimize Wasserstein-1 distance over $\mathrm{Beta}(\kappa m,\kappa(1-m))$ between induced $F_H(v)$ and observed $F_{\mathrm{obs}}(V)$}};
+    {\normalsize\bfseries B1 \& B2. Estimate subgroup growth regime $\symbf{\HShat}$ (copula + regime $\; \Rightarrow \;$ induced marginal)}\\[-1pt]
+    \vspace{2.0pt}
+    {\small Choose $H \in \mathcal{H}_{\mathrm{Beta}}$ to minimize $\Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{H}\bigr)$, where $F_H(v) = \mathbb{E}_{U}\left[\,H\bigl(\Fzero(v\mid U)\bigr)\right]$}};
 
   % C header block.
   \node[anchor=west,align=left,text width=3.35in] at (12.00,0.55) {%
-    {\normalsize\bfseries C. Recover growth regime $\symbf{P_S}$ (latent SGPc)}\\[-1pt]
-    {\small SGPc distribution based upon fit CDF}};
+    {\normalsize\bfseries C. Recover inferred latent SGPc density $\symbf{P_S} \sim \symbf{\HShat}$}\\[-1pt]
+    {\small Report density/summary: $\mbox{mean} \SGPc = 100\hat{m}$}};
 \end{tikzpicture}
 
 \end{document}

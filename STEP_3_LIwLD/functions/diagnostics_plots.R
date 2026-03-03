@@ -33,31 +33,44 @@ plot_observed_vs_predicted_cdf <- function(est,
                                             output_dir = "results/visualizations",
                                             filename = "cdf_comparison") {
 
-  df <- data.frame(
-    v        = rep(est$v_grid, 2),
-    cdf      = c(est$F_obs, est$F_pred),
-    source   = rep(c("Observed", "Predicted"), each = length(est$v_grid))
+  base_df <- list(
+    data.frame(v = est$v_grid, cdf = est$F_obs, source = "Observed"),
+    data.frame(v = est$v_grid, cdf = est$F_pred, source = "Best-fit")
   )
+  if (!is.null(est$F_uniform)) {
+    base_df[[length(base_df) + 1]] <- data.frame(v = est$v_grid, cdf = est$F_uniform, source = "Uniform")
+  }
+  if (!is.null(est$F_tamp)) {
+    base_df[[length(base_df) + 1]] <- data.frame(v = est$v_grid, cdf = est$F_tamp, source = "TAMP")
+  }
+  df <- do.call(rbind, base_df)
 
   residual_df <- data.frame(
     v        = est$v_grid,
     residual = est$F_pred - est$F_obs
   )
 
-  cols <- c("Observed" = STEP3_COLORS$observed, "Predicted" = STEP3_COLORS$predicted)
-  ltys <- c("Observed" = "solid", "Predicted" = "dashed")
+  cols <- c(
+    "Observed" = STEP3_COLORS$observed,
+    "Best-fit" = STEP3_COLORS$predicted,
+    "Uniform" = STEP3_COLORS$reference,
+    "TAMP" = STEP3_COLORS$actual
+  )
+  ltys <- c("Observed" = "solid", "Best-fit" = "solid", "Uniform" = "dashed", "TAMP" = "dotdash")
 
   regime <- est$regime
   d <- est$all_distances
-  subtitle <- sprintf(
-    "Regime: %s | Mean SGPc: %.1f | Median SGPc: %.1f | W1: %.4f | CvM: %.6f",
-    regime$family, regime$mean * 100, regime$median * 100, d$wasserstein1, d$cramer_von_mises
-  )
+  subtitle <- sprintf("Regime: %s | Mean SGPc: %.1f | Median SGPc: %.1f | W1: %.4f | CvM: %.6f",
+                      regime$family, regime$mean * 100, regime$median * 100, d$wasserstein1, d$cramer_von_mises)
+  if (!is.null(est$w1_uniform) && is.finite(est$w1_uniform) && est$w1_uniform > 0) {
+    red_pct <- 100 * (1 - (d$wasserstein1 / est$w1_uniform))
+    subtitle <- paste0(subtitle, sprintf(" | W1 reduction vs uniform: %.1f%%", red_pct))
+  }
 
   p_upper <- ggplot(df, aes(x = v, y = cdf, color = source, linetype = source)) +
     geom_line(linewidth = 0.9) +
-    scale_color_manual(values = cols) +
-    scale_linetype_manual(values = ltys) +
+    scale_color_manual(values = cols[names(cols) %in% unique(df$source)]) +
+    scale_linetype_manual(values = ltys[names(ltys) %in% unique(df$source)]) +
     labs(title = title, subtitle = subtitle,
          x = NULL, y = "CDF", color = NULL, linetype = NULL) +
     theme_publication() +
@@ -99,7 +112,8 @@ plot_observed_vs_predicted_cdf <- function(est,
 plot_regime_shape <- function(regime, true_sgpc = NULL,
                                title = "Growth Regime: Inferred vs Actual",
                                output_dir = "results/visualizations",
-                               filename = "regime_comparison") {
+                               filename = "regime_comparison",
+                               bootstrap = NULL) {
 
   p_grid <- seq(0.01, 0.99, length.out = 200)
   inferred_d <- regime$density(p_grid)
@@ -150,6 +164,20 @@ plot_regime_shape <- function(regime, true_sgpc = NULL,
                  color = STEP3_COLORS$actual, linewidth = 0.6)
   }
 
+  if (!is.null(bootstrap) && !is.null(bootstrap$ci_mean_sgpc)) {
+    p <- p +
+      annotate("text",
+               x = 2,
+               y = Inf,
+               hjust = 0,
+               vjust = 1.6,
+               size = 3,
+               color = "grey35",
+               label = sprintf("Bootstrap mean CI: [%.1f, %.1f]",
+                               bootstrap$ci_mean_sgpc[1],
+                               bootstrap$ci_mean_sgpc[2]))
+  }
+
   save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
 
   invisible(p)
@@ -166,7 +194,8 @@ plot_regime_shape <- function(regime, true_sgpc = NULL,
 #' @export
 plot_residual_curve <- function(est,
                                  output_dir = "results/visualizations",
-                                 filename = "residual_curve") {
+                                 filename = "residual_curve",
+                                 title = "CDF Residual Curve") {
 
   residual <- est$F_pred - est$F_obs
   df <- data.frame(v = est$v_grid, residual = residual,
@@ -182,13 +211,124 @@ plot_residual_curve <- function(est,
     scale_color_manual(values = c("positive" = STEP3_COLORS$residual_pos,
                                    "negative" = STEP3_COLORS$residual_neg),
                         guide = "none") +
-    labs(title = "CDF Residual Curve",
+    labs(title = title,
          x = "v (current-grade reference percentile)",
          y = expression(F[H](v) - F[obs](v))) +
     theme_publication()
 
   save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = 5)
 
+  invisible(p)
+}
+
+
+#' Plot Objective Surface Over (m, log10(kappa))
+#'
+#' @param est Result from estimate_regime()
+#' @param output_dir Character directory
+#' @param filename Character base filename
+#' @param title Character title
+#'
+#' @return The ggplot object (invisible)
+#' @export
+plot_objective_surface <- function(est,
+                                   output_dir = "results/visualizations",
+                                   filename = "objective_surface",
+                                   title = "B1. Objective Landscape") {
+  gs <- est$grid_search
+  if (is.null(gs) || nrow(gs) == 0) {
+    p <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5, label = "No grid search data available", size = 4) +
+      theme_void()
+    save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    return(invisible(p))
+  }
+
+  m_col <- if ("m" %in% names(gs)) "m" else if ("regime_param_1" %in% names(gs)) "regime_param_1" else "theta1"
+  k_col <- if ("kappa" %in% names(gs)) "kappa" else if ("regime_param_2" %in% names(gs)) "regime_param_2" else "theta2"
+
+  gs_plot <- gs[is.finite(gs$distance), ]
+  if (nrow(gs_plot) == 0) {
+    p <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5, label = "No finite objective values", size = 4) +
+      theme_void()
+    save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    return(invisible(p))
+  }
+
+  gs_plot$log10_kappa <- log10(as.numeric(gs_plot[[k_col]]))
+  gs_plot$distance_log10 <- log10(pmax(gs_plot$distance, 1e-12))
+  uniform_pt <- data.frame(m = 0.5, log10_kappa = log10(2))
+  optimum_pt <- data.frame(m = est$m_hat, log10_kappa = log10(est$kappa_hat))
+
+  p <- ggplot(gs_plot, aes(x = .data[[m_col]], y = .data[["log10_kappa"]], fill = .data[["distance_log10"]])) +
+    geom_tile() +
+    scale_fill_gradientn(colours = c("#FCFCF4", "#E2E4C8", "#B7BA87", "#8A9048")) +
+    geom_point(data = optimum_pt, aes(x = m, y = log10_kappa), inherit.aes = FALSE,
+               shape = 4, size = 3, stroke = 1.2, color = "black") +
+    geom_point(data = uniform_pt, aes(x = m, y = log10_kappa), inherit.aes = FALSE,
+               shape = 21, size = 2.5, stroke = 0.7, fill = "white", color = "grey30") +
+    annotate("text", x = uniform_pt$m + 0.01, y = uniform_pt$log10_kappa + 0.08,
+             label = "U(0,1)", size = 3, hjust = 0, color = "grey35") +
+    labs(title = title, x = "m (mean SGPc on 0-1 scale)", y = expression(log[10](kappa)),
+         fill = expression(log[10](W[1]))) +
+    theme_publication()
+
+  save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+  invisible(p)
+}
+
+
+#' Plot District Summary Grade Panel
+#'
+#' @param summary_row One-row data.frame with district summary metrics
+#' @param output_dir Character directory
+#' @param filename Character base filename
+#'
+#' @return The ggplot object (invisible)
+#' @export
+plot_district_summary_grade <- function(summary_row,
+                                        output_dir = "results/visualizations",
+                                        filename = "panel_g_district_summary_grade") {
+  stopifnot(nrow(summary_row) >= 1)
+  sr <- summary_row[1, , drop = FALSE]
+
+  labels <- c(
+    sprintf("Dataset: %s", sr$dataset_id),
+    sprintf("Condition: %s", sr$condition_id),
+    sprintf("Subgroup: %s", sr$subgroup_id),
+    sprintf("n = %s", sr$n_subgroup),
+    sprintf("Regime family: %s", sr$regime_family),
+    sprintf("Mean SGPc (inf/true): %.1f / %.1f", sr$mean_sgpc_inferred, sr$mean_sgpc_true),
+    sprintf("Median SGPc (inf/true): %.1f / %.1f", sr$median_sgpc_inferred, sr$median_sgpc_true),
+    sprintf("W1 (best/uniform): %.4f / %.4f", sr$w1_best, sr$w1_uniform),
+    sprintf("W1 reduction: %.1f%%", sr$w1_reduction_pct),
+    sprintf("Residual max |F_H - F_obs|: %.4f", sr$max_abs_residual),
+    sprintf("Median 95%% CI: [%.1f, %.1f]", sr$ci95_median_lo, sr$ci95_median_hi),
+    sprintf("K3/K5 buckets: %s / %s", sr$k3_assigned, sr$k5_assigned),
+    sprintf("K3/K5 consistency: %.3f / %.3f", sr$k3_consistency, sr$k5_consistency),
+    sprintf("Flags: %s", sr$quality_flags)
+  )
+
+  text_df <- data.frame(
+    x = 1,
+    y = rev(seq_along(labels)),
+    label = labels
+  )
+
+  p <- ggplot(text_df, aes(x = x, y = y, label = label)) +
+    geom_text(hjust = 0, size = 3.8, family = "", color = "grey20") +
+    scale_x_continuous(limits = c(1, 1.02), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0.5, length(labels) + 0.8), expand = c(0, 0)) +
+    labs(title = "D. District Summary Grade (Model Health)") +
+    theme_void() +
+    theme(
+      plot.title = element_text(face = "bold", size = 14, hjust = 0),
+      plot.margin = margin(15, 15, 15, 15),
+      panel.border = element_rect(color = "grey80", fill = NA, linewidth = 0.6)
+    )
+
+  save_plot_multi(p, filename, output_dir, width = 10, height = 6)
   invisible(p)
 }
 
@@ -285,7 +425,7 @@ plot_recovery_summary <- function(est, true_sgpc = NULL,
 
     if (nrow(valid_gs) > 0 && !is.null(y_col)) {
       opt_pt <- data.frame(x = est_params[1], y = est_params[2])
-      pD <- ggplot(valid_gs, aes_string(x = x_col, y = y_col, color = "distance")) +
+      pD <- ggplot(valid_gs, aes(x = .data[[x_col]], y = .data[[y_col]], color = .data[["distance"]])) +
         geom_point(size = 0.8) +
         scale_color_gradientn(colours = c(STEP3_COLORS$predicted, "#FEC44F",
                                            STEP3_COLORS$residual_pos)) +
@@ -297,7 +437,7 @@ plot_recovery_summary <- function(est, true_sgpc = NULL,
         theme(legend.position = "none")
     } else if (nrow(valid_gs) > 0) {
       opt_pt <- data.frame(param = est_params[1])
-      pD <- ggplot(valid_gs, aes_string(x = x_col, y = "distance")) +
+      pD <- ggplot(valid_gs, aes(x = .data[[x_col]], y = .data[["distance"]])) +
         geom_line(linewidth = 0.8, color = STEP3_COLORS$predicted) +
         geom_vline(data = opt_pt, aes(xintercept = param),
                    linetype = "dashed", color = STEP3_COLORS$residual_pos) +
@@ -327,4 +467,5 @@ plot_recovery_summary <- function(est, true_sgpc = NULL,
 
 cat("STEP 3 diagnostics_plots.R loaded.\n")
 cat("  Functions: plot_observed_vs_predicted_cdf, plot_regime_shape,\n")
-cat("             plot_residual_curve, plot_recovery_summary\n")
+cat("             plot_residual_curve, plot_objective_surface,\n")
+cat("             plot_district_summary_grade, plot_recovery_summary\n")

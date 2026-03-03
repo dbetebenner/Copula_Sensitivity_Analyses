@@ -8,12 +8,14 @@
 ###
 ### Panel Map:
 ###   A. Observed vs predicted CDF (Phase A showcase)
-###   B. Inferred regime vs actual SGPc (Phase A showcase)
-###   C. Recovery accuracy by subgroup size (Phase B)
-###   D. Recovery accuracy by year span (Phase B)
-###   E. Regime family comparison (Phase A)
-###   F. Bootstrap uncertainty distribution (Phase A)
-###   G. Summary grid combining key panels
+###   B1. Objective landscape over (m, kappa) (Phase A showcase)
+###   B2. Residual diagnostics in v-space (Phase A showcase)
+###   C. Inferred regime vs actual SGPc (Phase A showcase)
+###   D. Recovery accuracy by subgroup size (Phase B)
+###   E. Recovery accuracy by year span (Phase B)
+###   F. Regime family comparison (Phase A)
+###   G. Bootstrap uncertainty distribution (Phase A)
+###   H. District summary grade panel
 ###
 ### Sourced by run_step3.R (Phase C) or can be run standalone.
 ###
@@ -57,10 +59,10 @@ cat("\n")
 
 
 ############################################################################
-### Panel A: Observed vs Predicted CDF (Phase A showcase — already exists)
+### Panel A: Observed vs Predicted CDF (Phase A showcase)
 ############################################################################
 
-cat("Panel A: CDF Comparison (from Phase A)... ")
+cat("Panel A: CDF Comparison... ")
 # Already generated in Phase A as panel_a_cdf_comparison.*
 if (file.exists(file.path(viz_dir, "phase_a", "panel_a_cdf_comparison.pdf"))) {
   cat("exists.\n")
@@ -68,7 +70,7 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_a_cdf_comparison.pdf"))) {
   plot_observed_vs_predicted_cdf(
     phase_a$best_estimate,
     title = paste0("Observed vs Predicted — ", phase_a$condition_id),
-    output_dir = viz_dir,
+    output_dir = file.path(viz_dir, "phase_a"),
     filename = "panel_a_cdf_comparison"
   )
   cat("generated.\n")
@@ -78,19 +80,18 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_a_cdf_comparison.pdf"))) {
 
 
 ############################################################################
-### Panel B: Regime Shape vs Actual SGPc (Phase A showcase — already exists)
+### Panel B1: Objective Surface (Phase A showcase)
 ############################################################################
 
-cat("Panel B: Regime Shape Comparison (from Phase A)... ")
-if (file.exists(file.path(viz_dir, "phase_a", "panel_b_regime_comparison.pdf"))) {
+cat("Panel B1: Objective Surface... ")
+if (file.exists(file.path(viz_dir, "phase_a", "panel_b1_objective_surface.pdf"))) {
   cat("exists.\n")
 } else if (!is.null(phase_a)) {
-  plot_regime_shape(
-    phase_a$best_estimate$regime,
-    phase_a$true_sgpc,
-    title = paste0("Growth Regime Recovery — ", phase_a$condition_id),
-    output_dir = viz_dir,
-    filename = "panel_b_regime_comparison"
+  plot_objective_surface(
+    phase_a$best_estimate,
+    title = paste0("Objective Surface — ", phase_a$condition_id),
+    output_dir = file.path(viz_dir, "phase_a"),
+    filename = "panel_b1_objective_surface"
   )
   cat("generated.\n")
 } else {
@@ -99,10 +100,52 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_b_regime_comparison.pdf")))
 
 
 ############################################################################
-### Panel C: Recovery Accuracy by Subgroup Size (Phase B)
+### Panel B2: Residual Diagnostics (Phase A showcase)
 ############################################################################
 
-cat("Panel C: Recovery Accuracy by Subgroup Size... ")
+cat("Panel B2: Residual Diagnostics... ")
+if (file.exists(file.path(viz_dir, "phase_a", "panel_b2_residual_curve.pdf"))) {
+  cat("exists.\n")
+} else if (!is.null(phase_a)) {
+  plot_residual_curve(
+    phase_a$best_estimate,
+    output_dir = file.path(viz_dir, "phase_a"),
+    filename = "panel_b2_residual_curve",
+    title = paste0("Residual Diagnostics — ", phase_a$condition_id)
+  )
+  cat("generated.\n")
+} else {
+  cat("skipped.\n")
+}
+
+
+############################################################################
+### Panel C: Regime Shape vs Actual SGPc (Phase A showcase)
+############################################################################
+
+cat("Panel C: Regime Shape Comparison... ")
+if (file.exists(file.path(viz_dir, "phase_a", "panel_c_regime_comparison.pdf"))) {
+  cat("exists.\n")
+} else if (!is.null(phase_a)) {
+  plot_regime_shape(
+    phase_a$best_estimate$regime,
+    phase_a$true_sgpc,
+    title = paste0("Growth Regime Recovery — ", phase_a$condition_id),
+    output_dir = file.path(viz_dir, "phase_a"),
+    filename = "panel_c_regime_comparison",
+    bootstrap = phase_a$bootstrap
+  )
+  cat("generated.\n")
+} else {
+  cat("skipped.\n")
+}
+
+
+############################################################################
+### Panel D: Recovery Accuracy by Subgroup Size (Phase B)
+############################################################################
+
+cat("Panel D: Recovery Accuracy by Subgroup Size... ")
 if (!is.null(phase_b) && nrow(phase_b) > 0) {
 
   pb_plot <- data.frame(
@@ -125,7 +168,7 @@ if (!is.null(phase_b) && nrow(phase_b) > 0) {
          x = "Subgroup Size (n)", y = "|Inferred - True Median SGPc|") +
     theme_publication()
 
-  save_plot_multi(pC, "panel_c_recovery_by_size", viz_dir)
+  save_plot_multi(pC, "panel_d_recovery_by_size", viz_dir)
   cat("generated.\n")
 
 } else {
@@ -134,10 +177,10 @@ if (!is.null(phase_b) && nrow(phase_b) > 0) {
 
 
 ############################################################################
-### Panel D: Recovery Accuracy by Year Span (Phase B)
+### Panel E: Recovery Accuracy by Year Span (Phase B)
 ############################################################################
 
-cat("Panel D: Recovery Accuracy by Year Span... ")
+cat("Panel E: Recovery Accuracy by Year Span... ")
 if (!is.null(phase_b) && nrow(phase_b) > 0 &&
     "year_span" %in% names(phase_b)) {
 
@@ -156,7 +199,7 @@ if (!is.null(phase_b) && nrow(phase_b) > 0 &&
          x = "Year Span", y = "|Inferred - True Median SGPc|") +
     theme_publication()
 
-  save_plot_multi(pD, "panel_d_recovery_by_span", viz_dir, width = 7, height = PLOT_HEIGHT)
+  save_plot_multi(pD, "panel_e_recovery_by_span", viz_dir, width = 7, height = PLOT_HEIGHT)
   cat("generated.\n")
 
 } else {
@@ -165,10 +208,10 @@ if (!is.null(phase_b) && nrow(phase_b) > 0 &&
 
 
 ############################################################################
-### Panel E: Regime Family Comparison (Phase A)
+### Panel F: Regime Family Comparison (Phase A)
 ############################################################################
 
-cat("Panel E: Regime Family Comparison... ")
+cat("Panel F: Regime Family Comparison... ")
 if (!is.null(phase_a) && !is.null(phase_a$family_comparison)) {
 
   comp <- phase_a$family_comparison$comparison
@@ -209,7 +252,7 @@ if (!is.null(phase_a) && !is.null(phase_a$family_comparison)) {
     coord_cartesian(xlim = c(0, 100)) +
     theme_publication()
 
-  save_plot_multi(pE, "panel_e_family_comparison", viz_dir)
+  save_plot_multi(pE, "panel_f_family_comparison", viz_dir)
   cat("generated.\n")
 
 } else {
@@ -218,10 +261,10 @@ if (!is.null(phase_a) && !is.null(phase_a$family_comparison)) {
 
 
 ############################################################################
-### Panel F: Bootstrap Uncertainty Distribution (Phase A)
+### Panel G: Bootstrap Uncertainty Distribution (Phase A)
 ############################################################################
 
-cat("Panel F: Bootstrap Uncertainty... ")
+cat("Panel G: Bootstrap Uncertainty... ")
 if (!is.null(phase_a) && !is.null(phase_a$bootstrap)) {
 
   boot <- phase_a$bootstrap
@@ -254,7 +297,7 @@ if (!is.null(phase_a) && !is.null(phase_a$bootstrap)) {
            x = "Median SGPc (bootstrap draws)", y = "Frequency") +
       theme_publication()
 
-    save_plot_multi(pF, "panel_f_bootstrap_uncertainty", viz_dir)
+    save_plot_multi(pF, "panel_g_bootstrap_uncertainty", viz_dir)
     cat("generated.\n")
   } else {
     cat("skipped (insufficient bootstrap draws).\n")
@@ -442,6 +485,93 @@ if (length(subgroup_results) > 0) {
 
 
 ############################################################################
+### Generate district_summary_grade.csv + Panel H
+############################################################################
+
+cat("Generating district summary grade artifact...\n")
+
+if (!is.null(phase_a)) {
+  sg_key <- paste0(phase_a$condition_id, "__", phase_a$subgroup_id)
+  fit_path <- file.path(RESULTS_DIR, "exports", "phase_a", "step3_fit_metrics.csv")
+  fit_dt <- if (file.exists(fit_path)) fread(fit_path) else data.table()
+
+  bucket_path <- file.path(RESULTS_DIR, "step3_bucket_probabilities.csv")
+  bucket_dt <- if (file.exists(bucket_path)) fread(bucket_path) else data.table()
+  bucket_row <- if (nrow(bucket_dt) > 0) bucket_dt[subgroup_id == sg_key][1] else NULL
+
+  fit_row <- if (nrow(fit_dt) > 0) fit_dt[subgroup_id == sg_key][1] else NULL
+  if (is.null(fit_row) || nrow(fit_row) == 0) {
+    fit_row <- data.table(
+      subgroup_id = sg_key,
+      w1_uniform = NA_real_,
+      w1_best = phase_a$best_estimate$all_distances$wasserstein1,
+      w1_reduction_pct = NA_real_,
+      cvm = phase_a$best_estimate$all_distances$cramer_von_mises,
+      max_abs_residual = max(abs(phase_a$best_estimate$F_pred - phase_a$best_estimate$F_obs), na.rm = TRUE),
+      mean_abs_residual = mean(abs(phase_a$best_estimate$F_pred - phase_a$best_estimate$F_obs), na.rm = TRUE)
+    )
+  }
+
+  boot <- phase_a$bootstrap
+  ci_lo <- if (!is.null(boot)) boot$ci_median_sgpc[1] else NA_real_
+  ci_hi <- if (!is.null(boot)) boot$ci_median_sgpc[2] else NA_real_
+  ci_width <- if (is.finite(ci_lo) && is.finite(ci_hi)) ci_hi - ci_lo else NA_real_
+
+  quality_flags <- character(0)
+  if (phase_a$n_subgroup < 200) quality_flags <- c(quality_flags, "small_n")
+  if (!is.null(phase_a$best_estimate$convergence) && phase_a$best_estimate$convergence != 0) quality_flags <- c(quality_flags, "optimizer_warning")
+  if (is.finite(ci_width) && ci_width > 12) quality_flags <- c(quality_flags, "wide_ci")
+  if (is.finite(fit_row$max_abs_residual) && fit_row$max_abs_residual > 0.05) quality_flags <- c(quality_flags, "high_residual")
+  if (!is.null(boot) && !is.na(boot$n_boot) && !is.na(boot$n_converged) && boot$n_converged < (0.85 * boot$n_boot)) {
+    quality_flags <- c(quality_flags, "bootstrap_instability")
+  }
+  if (length(quality_flags) == 0) quality_flags <- "none"
+
+  summary_grade <- data.frame(
+    subgroup_id = sg_key,
+    dataset_id = phase_a$dataset_id,
+    condition_id = phase_a$condition_id,
+    subgroup_col = phase_a$subgroup_col,
+    subgroup_value = phase_a$subgroup_id,
+    n_subgroup = phase_a$n_subgroup,
+    regime_family = phase_a$best_family,
+    mean_sgpc_inferred = round(phase_a$best_estimate$regime$mean * 100, 2),
+    mean_sgpc_true = round(mean(phase_a$true_sgpc, na.rm = TRUE), 2),
+    median_sgpc_inferred = round(phase_a$best_estimate$regime$median * 100, 2),
+    median_sgpc_true = round(median(phase_a$true_sgpc, na.rm = TRUE), 2),
+    w1_best = round(fit_row$w1_best, 6),
+    w1_uniform = round(fit_row$w1_uniform, 6),
+    w1_reduction_pct = round(fit_row$w1_reduction_pct, 2),
+    cvm = round(fit_row$cvm, 6),
+    max_abs_residual = round(fit_row$max_abs_residual, 6),
+    mean_abs_residual = round(fit_row$mean_abs_residual, 6),
+    ci95_median_lo = round(ci_lo, 2),
+    ci95_median_hi = round(ci_hi, 2),
+    ci95_width = round(ci_width, 2),
+    bootstrap_n = if (!is.null(boot)) boot$n_boot else NA_integer_,
+    bootstrap_converged = if (!is.null(boot)) boot$n_converged else NA_integer_,
+    k3_assigned = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.character(bucket_row$k3_assigned) else NA_character_,
+    k3_consistency = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.numeric(bucket_row$k3_consistency) else NA_real_,
+    k5_assigned = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.character(bucket_row$k5_assigned) else NA_character_,
+    k5_consistency = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.numeric(bucket_row$k5_consistency) else NA_real_,
+    quality_flags = paste(quality_flags, collapse = "|"),
+    stringsAsFactors = FALSE
+  )
+
+  fwrite(summary_grade, file.path(RESULTS_DIR, "district_summary_grade.csv"))
+  plot_district_summary_grade(
+    summary_row = summary_grade,
+    output_dir = viz_dir,
+    filename = "panel_g_district_summary_grade"
+  )
+  cat("  Saved: district_summary_grade.csv\n")
+  cat("  Saved: panel_g_district_summary_grade.{pdf,svg,png}\n")
+} else {
+  cat("  Skipped (no Phase A deep-dive results).\n")
+}
+
+
+############################################################################
 ### Manifest Export
 ############################################################################
 
@@ -463,5 +593,8 @@ if (!is.null(phase_a)) {
 }
 
 export_step3_manifest(manifest_results, output_dir = RESULTS_DIR)
+
+cat("Running output contract validation...\n")
+validate_step3_output_contract(results_dir = RESULTS_DIR, strict = FALSE, verbose = TRUE)
 
 cat("\n--- Phase C complete ---\n\n")

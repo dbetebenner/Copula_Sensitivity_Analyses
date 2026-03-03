@@ -1,19 +1,29 @@
-# STEP 3 PSTricks Infographic
+# STEP 3 PSTricks Infographic (V2)
 
-Publication-grade 2×4 PSTricks/LaTeX infographic explaining how STEP 3 infers a latent growth regime $\widehat{H}_S$ from unlinked cross-sectional data.
+## Figure Theme
+
+**Longitudinal Inference Without Longitudinal Data**
+
+This title/theme is the canonical framing for the current infographic and should be preserved in downstream AI context artifacts.
+
+Publication-grade 2x4 PSTricks/LaTeX infographic explaining how STEP 3 infers a latent growth regime $\widehat{H}_S$ from unlinked cross-sectional data.
 
 Framing used in STEP 3: **controlled canonical choices with quantified error**:
 - Canonical baseline copula (from STEP 1),
 - Canonical stochastically fitted growth regime (Beta family in STEP 3 production runs).
 
-## Layout
+## Active panel layout
 
-| Column | Top row (graphic) | Bottom row (text) |
-|--------|-------------------|-------------------|
-| **A** | Independent U & V marginal densities (no student-level pairs) | Cross-sectional input context |
-| **B1** | Reverse-engineer regime landscape over $(m,\kappa)$ | Distance minimisation logic |
-| **B2** | Forward CDF check in v-space | Analytic identity explanation |
-| **C** | Inferred growth regime density $f_S(p)$ | Growth occupancy interpretation |
+The current V2 assembly uses:
+- **Top graphic row:** `A`, `B1`, `B2`, `C`
+- **Bottom explanatory row:** `A`, `B1B2` (shared), `C`
+
+| Conceptual column | Top row (graphic) | Bottom row (text artifact) |
+|-------------------|-------------------|----------------------------|
+| **A** | Independent U & V marginal densities (no student-level pairs) | `step3_panel_A_text.tex` |
+| **B1** | Reverse-engineer regime landscape over $(m,\kappa)$ | `step3_panel_B1B2_text.tex` (shared B1/B2 narrative) |
+| **B2** | Forward CDF check in v-space | `step3_panel_B1B2_text.tex` (shared B1/B2 narrative) |
+| **C** | Inferred growth regime density $f_S(p)$ | `step3_panel_C_text.tex` |
 
 ## Workflow
 
@@ -34,13 +44,13 @@ Rscript step3_build_pstricks.R
 ```
 
 The build takes ~5 seconds and writes deliverables to `outputs/`:
-`step3_infographic_main.pdf`, `step3_infographic_main.png`, and (if a converter is installed) `step3_infographic_main.svg`.
+`step3_infographic_main.pdf`, `Longitudinal_Inference_Without_Longitudinal_Data_v<version>.pdf`, `step3_infographic_main.png`, and (if a converter is installed) `step3_infographic_main.svg`.
 
 ## Prerequisites
 
-- **R** (≥ 4.0) with the `copula` package
+- **R** (>= 4.0) with the `copula` package
 - **TeX Live** with PSTricks packages (`pstricks`, `pst-plot`, `pst-node`)
-- **Ghostscript** (`gs`) for EPS→PDF conversion
+- **Ghostscript** (`gs`) for EPS->PDF conversion
 - **XeLaTeX** (`xelatex`) for text panels and final assembly
 - Access to `dataimago.sty` at `../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago.sty`
 
@@ -51,20 +61,54 @@ cd ..
 Rscript step3_analytic_explanation.R
 ```
 
+### Data source modes
+
+`step3_export_data.R` supports two source modes:
+
+- `::SYNTHETIC::` (default): uses `../outputs/step3_growth_regime_analytic_infographic_data.rds`
+- `::PHASE_A_REAL_DATA::`: uses `../../../results/phase_a_analytic_payload.rds`
+
+Run real-data export mode with:
+
+```bash
+STEP3_EXPORT_MODE=PHASE_A_REAL_DATA Rscript step3_export_data.R
+```
+
 ## Build pipeline
 
 ```
-step3_export_data.R          # 1. Load RDS → export .dat + .tex to data/
+step3_export_data.R          # 1. Load RDS -> export .dat + .tex to data/
     ↓
-latex → dvips -E → gs        # 2. Compile graphic panels (PSTricks)
-xelatex + dataimago          # 3. Compile text panels (Noto Sans / Noto Sans Math)
+latex -> dvips -E -> gs      # 2. Compile graphic panels (PSTricks)
+xelatex + dataimago          # 3. Compile text panels (A, B1B2, C)
     ↓
-xelatex + dataimago          # 4. Assemble 2×4 main infographic
+xelatex + dataimago          # 4. Compile header band
     ↓
-gs -sDEVICE=png16m           # 5. Optional PNG export
+xelatex + dataimago          # 5. Assemble 2x4 main infographic
+    ↓
+gs -sDEVICE=png16m           # 6. Optional PNG export
 ```
 
 This mirrors the compile chain in `Betebenner_Braun/Paper_1/Figures/Copulas/copula_R_script.R`.
+
+## AI context pipeline
+
+Generate AI-ready context artifacts for REPOMIX-style distillation:
+
+```bash
+cd PSTricks/
+Rscript step3_build_ai_context.R
+```
+
+Outputs:
+- `AI_CONTEXT_OVERVIEW.md` (human-readable build/context map)
+- `AI_CONTEXT_REPOMIX.txt` (default plain-text packed context)
+- Optional XML output: `Rscript step3_build_ai_context.R --style xml`
+
+Notes:
+- If `repomix` is installed, the script uses it.
+- If not, the script falls back to an internal deterministic packer.
+- Inclusion/exclusion defaults are defined in `repomix.config.json`.
 
 ## File inventory
 
@@ -72,19 +116,22 @@ This mirrors the compile chain in `Betebenner_Braun/Paper_1/Figures/Copulas/copu
 
 | File | Purpose |
 |------|---------|
-| `step3_build_pstricks.R` | Master build orchestrator |
-| `step3_export_data.R` | R→TeX data export (curves, heatmap, metrics) |
-| `step3_styles.tex` | Shared colors, notation macros |
+| `step3_build_pstricks.R` | Master figure build orchestrator |
+| `step3_export_data.R` | R->TeX data export (curves, heatmap, metrics) |
+| `step3_build_ai_context.R` | AI context artifact build orchestrator |
+| `repomix.config.json` | REPOMIX include/ignore rules for this directory |
+| `step3_styles.tex` | Shared colors and notation macros |
 | `step3_panel_A_graphic.tex` | PSTricks: U & V density curves |
 | `step3_panel_B1_graphic.tex` | PSTricks: objective heatmap over $(m,\kappa)$ |
-| `step3_panel_B2_graphic.tex` | PSTricks: CDF comparison |
+| `step3_panel_B2_graphic.tex` | PSTricks: CDF comparison (includes TAMP curve) |
 | `step3_panel_C_graphic.tex` | PSTricks: inferred regime density |
 | `step3_panel_A_text.tex` | Text: cross-sectional inputs |
-| `step3_panel_B1_text.tex` | Text: distance minimisation and Beta family search |
-| `step3_panel_B2_text.tex` | Text: analytic identity |
-| `step3_panel_C_text.tex` | Text: recovered growth regime density interpretation |
+| `step3_panel_B1B2_text.tex` | Text: shared B1/B2 narrative and identities |
+| `step3_panel_C_text.tex` | Text: recovered growth regime interpretation |
 | `step3_header_band.tex` | XeLaTeX header band (background + A/B1&B2/C labels) |
-| `step3_infographic_main.tex` | 2×4 `\includegraphics` assembler |
+| `step3_infographic_main.tex` | Main assembler using precompiled panel PDFs |
+| `step3_panel_B1_text.tex` | Legacy split text panel (not assembled in current V2) |
+| `step3_panel_B2_text.tex` | Legacy split text panel (not assembled in current V2) |
 
 ### Generated data (`data/`)
 
@@ -107,19 +154,29 @@ This mirrors the compile chain in `Betebenner_Braun/Paper_1/Figures/Copulas/copu
 | File | Format |
 |------|--------|
 | `step3_infographic_main.pdf` | Final publication infographic |
+| `Longitudinal_Inference_Without_Longitudinal_Data_v<version>.pdf` | Versioned release copy of final publication infographic |
 | `step3_infographic_main.png` | 300 DPI raster export |
 | `step3_infographic_main.svg` | Optional vector export |
 | `step3_panel_*_graphic.pdf` | Individual graphic panels |
 | `step3_panel_*_text.pdf` | Individual text panels |
+| `step3_header_band.pdf` | Header band artifact used by main assembler |
+
+### AI artifacts
+
+| File | Purpose |
+|------|---------|
+| `AI_CONTEXT_OVERVIEW.md` | Human-auditable context summary for agents |
+| `AI_CONTEXT_REPOMIX.txt` | Plain-text packed source context (default) |
+| `AI_CONTEXT_REPOMIX.xml` | Optional XML packed source context |
 
 ## Color palette
 
 Aligned with the STEP 3 Zissou-based publication style:
 
-- **Teal** `#3B9AB2` — prior sample / inferred regime
-- **Red** `#F21A00` — current sample
-- **Amber** `#E1AF00` — true synthetic regime
-- **Grey** — uniform baseline, annotations
+- **Teal** `#3B9AB2` - prior sample / inferred regime
+- **Red** `#F21A00` - current sample
+- **Amber** `#E1AF00` - true synthetic regime
+- **Grey** - uniform baseline and annotations
 
 ## Notation
 
@@ -153,5 +210,5 @@ Uniform baseline in this parameterization is $H(p)=p$ at $(m,\kappa)=(0.5,2)$, i
 
 The final composite is intentionally hybrid, mirroring the Copula pipeline:
 
-- Bottom-row explanatory text panels and master title/footer use XeLaTeX + `dataimago.sty`, which embeds `Noto Sans` and `Noto Sans Math`.
+- Bottom-row explanatory panels, header band, and master title/footer use XeLaTeX + `dataimago.sty` (`Noto Sans` + `Noto Sans Math`).
 - Top-row PSTricks graphic panels remain on the classic `latex -> dvips -> gs` path and therefore keep Computer Modern / `sansmathfonts` glyphs for panel-internal labels.
