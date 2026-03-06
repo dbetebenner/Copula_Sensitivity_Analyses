@@ -89,17 +89,20 @@ STEP_3_LIwLD/
     optimize_regime.R                    # Grid search + local refinement
     bootstrap_uncertainty.R              # Sampling + copula uncertainty
     bucket_classification.R              # K=3/K=5 bucket probabilities
-    build_cluster_pools.R                # Growth-stratified super-district pools
+    build_cluster_pools.R               # Growth-stratified super-district pools
     diagnostics_plots.R                  # ggplot2 diagnostic plots
     manifest_export.R                    # JSON/MD manifest output
   results/                               # Generated outputs
     phase_a_deep_dive.rds                # Phase A full results
     phase_a_analytic_payload.rds          # Notation-aligned payload for figure assembly
     phase_a_summary.csv                  # Phase A key metrics
+    phase_a_precision_anchor.csv         # Phase A baseline N0/SE0/CI-width anchor
     phase_b_systematic_summary.csv       # Phase B summary table
-    phase_b_pool_registry.csv            # Phase B pool registry + eligibility
-    phase_b_precision_by_n.csv           # Phase B precision operating table by N bucket
-    phase_b_replicates.RData             # Phase B replicate-level artifact
+    phase_b_pool_registry.csv            # Pool construction and eligibility metadata
+    phase_b_precision_by_n.csv           # Precision operating characteristics by N bucket
+    phase_b_replicates.RData             # Replicate-level Phase B artifact
+    phase_b_copula_sensitivity.csv       # Phase B2: copula parameter sensitivity
+    phase_b_independence_sensitivity.csv # Phase B3: stratified-vs-single sensitivity
     phase_b_all_results.rds              # Phase B full results
     district_summary_grade.csv            # District-level model-health scorecard
     step3_country_estimates.csv          # Unified subgroup estimates
@@ -109,21 +112,27 @@ STEP_3_LIwLD/
     step3_manifest.json                  # AI-consumable manifest
     step3_manifest.md                    # Human-readable manifest
     run_metadata.json                    # Reproducibility metadata
+    uncertainty_methodology.md           # Runtime methodology snapshot
     output_contract_check.json            # Contract/schema validation report
     CONFORMANCE_MATRIX.md                # Audit matrix vs SGPcFlow plan
     visualizations/                      # Publication panels
       phase_a/                           # Phase A diagnostic plots
-        panel_a_cdf_comparison.*         # A: observed vs inferred CDF (+ baselines)
-        panel_b1_objective_surface.*     # B1: objective over (m, kappa)
-        panel_b2_residual_curve.*        # B2: residual diagnostics
-        panel_c_regime_comparison.*      # C: regime density comparison
-        panel_d_recovery_summary.*       # Recovery summary composite
+        phasea_01_marginals_uv_density.* # 01: U/V marginal densities
+        phasea_02a_objective_surface.*   # 02a: objective over (m, kappa)
+        phasea_02b_forward_cdf_check.*   # 02b: observed vs inferred CDF
+        phasea_02c_residual_diagnostics.*# 02c: residual diagnostics
+        phasea_03a_regime_density.*      # 03a: induced SGPc density
+        phasea_03b_bootstrap_median_sgpc.* # 03b: bootstrap median SGPc
+        phasea_03c_bootstrap_mean_sgpc.* # 03c: bootstrap mean SGPc
+        phasea_03d_bootstrap_combined.*  # 03d: bootstrap combined panel
+        phasea_03e_recovery_summary.*    # 03e: recovery summary composite
+        phasea_04_independence_diagnostic.* # 04: SGPc_true vs U
       panel_d_recovery_by_size.*         # D: Phase B precision vs N buckets
       panel_e_recovery_by_span.*         # E: Phase B accuracy vs year span
       panel_f_family_comparison.*        # F: regime family comparison
       panel_g_bootstrap_uncertainty.*    # G: bootstrap distribution
       panel_h_district_summary_grade.*   # H: district summary grade panel
-      panel_i_independence_diagnostic.*  # I: independence diagnostic
+      panel_i_independence_diagnostic.*  # I: assumption diagnostics
       panel_j_sensitivity_summary.*      # J: sensitivity summary
     exports/phase_a/                     # Tidy export bridge for figure assembly
       step3_cdf_curves.csv
@@ -134,6 +143,7 @@ STEP_3_LIwLD/
       step3_bootstrap_summary.csv
       step3_kernel_slices.csv
       step3_quantile_slices.csv
+      step3_independence_diagnostics.csv
 ```
 
 ---
@@ -196,11 +206,11 @@ Picks one well-understood condition and one large district (configurable in `con
 
 ## Phase B: Systematic Validation
 
-Extends Phase A across multiple conditions and subgroups to assess precision operating characteristics under diverse settings:
+Extends Phase A across multiple conditions and subgroups to estimate precision operating characteristics under diverse settings:
 
 - **N buckets:** 1000, 2500, 5000, 7500, 10000
-- **Eligibility:** `N_pool >= N_bucket * (1 + 0.10)`
-- **Outer reps:** 200 per eligible `pool x N` cell (default)
+- **Eligibility:** a pool is eligible for bucket N if `N_pool >= N * (1 + eligibility_buffer)` (default buffer 10%)
+- **Replicates:** outer Monte Carlo replicates per eligible `pool x N` cell (default 200)
 - **Pool design:** district pools + growth-stratified cluster pools (Low/Typical/High)
 - **Execution:** optional pool-level `mirai` parallelization (`systematic$use_parallel`)
 - **Year span:** 1-year, 2-year, 4-year gaps
@@ -209,10 +219,12 @@ Extends Phase A across multiple conditions and subgroups to assess precision ope
 ### Key Outputs
 
 - `phase_b_systematic_summary.csv` — Full table of inferred vs true mean/median SGPc for all subgroups
-- `phase_b_pool_registry.csv` — Pool definitions and eligibility metadata
-- `phase_b_replicates.RData` — Replicate-level outputs for `pool x n_bucket x outer_rep`
-- `phase_b_precision_by_n.csv` — Precision-by-N metrics (`bias`, `MAE`, `RMSE`, empirical CI widths)
-- Summary statistics: median |error|, mean |error|, 90th percentile |error| for both median and mean SGPc, stratified by size and span
+- `phase_b_pool_registry.csv` — pool definitions (`pool_id`, `pool_type`, `span`, `content`, `N_pool_raw`, `N_pool_eff`)
+- `phase_b_replicates.RData` — canonical replicate-level artifact for `pool x n_bucket x outer_rep`
+- `phase_b_precision_by_n.csv` — aggregated operating metrics by N bucket (`bias`, `MAE`, `RMSE`, empirical CI widths)
+- `phase_b_copula_sensitivity.csv` — Inference sensitivity under copula parameter perturbations
+- `phase_b_independence_sensitivity.csv` — Sensitivity of subgroup estimates under stratified-by-U regimes
+- Summary statistics: median/mean `bias`, `MAE`, `RMSE`, and empirical 90/95 interval widths for both median and mean SGPc
 
 ---
 
@@ -226,11 +238,13 @@ Generates the final publication figures and AI-consumable manifest files:
 | B1 | Objective landscape over `(m, log10(kappa))` | Phase A |
 | B2 | Residual diagnostics (`F_H - F_obs`) | Phase A |
 | C | Inferred regime vs actual SGPc | Phase A |
-| D | Recovery precision by N bucket (CI width + MAE) | Phase B |
+| D | Recovery accuracy by subgroup size | Phase B |
 | E | Recovery accuracy by year span | Phase B |
 | F | Regime family comparison | Phase A |
 | G | Bootstrap uncertainty distribution | Phase A |
 | H | District summary grade panel | Phase A |
+| I | Independence diagnostic (`SGPc_true` vs `U`) | Phase A |
+| J | Sensitivity summary (copula + stratified regime deltas) | Phase B2/B3 |
 
 ---
 
@@ -279,6 +293,7 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 | `systematic$n_buckets` | `c(1000, 2500, 5000, 7500, 10000)` | Phase B sample-size buckets |
 | `systematic$eligibility_buffer` | `0.10` | Eligibility margin for bucket sampling |
 | `systematic$outer_reps` | 200 | Outer Monte Carlo replicates per eligible cell |
+| `systematic$use_inner_bootstrap` | `FALSE` | Inner bootstrap disabled by default in Phase B |
 | `systematic$allow_cluster_pools` | `TRUE` | Enable growth-stratified super-district pools |
 | `systematic$n_growth_strata` | 3 | Number of growth strata for cluster pooling |
 | `systematic$cluster_min_pool_n` | 500 | Minimum pooled N required for a cluster stratum |
@@ -324,6 +339,9 @@ After a complete run of Phases A + B + C, the following files are guaranteed in 
 | File | Columns | Source |
 |------|---------|--------|
 | `district_summary_grade.csv` | subgroup metadata, inferred/true means and medians, W1 vs uniform, residual metrics, CI width, buckets, quality flags | Phase A |
+| `phase_a_precision_anchor.csv` | dataset_id, condition_id, subgroup_id, n0, measure, estimate, se0, ci95_lo, ci95_hi, ci95_width | Phase A |
+| `phase_b_pool_registry.csv` | pool_id, pool_type, span, content, dataset_id, condition_id, subgroup_id, n_pool_raw, n_pool_eff, eligibility_buffer | Phase B |
+| `phase_b_precision_by_n.csv` | pool_id, pool_type, span, content, n_bucket, N_eff_bucket, bias/MAE/RMSE and CI widths (median/mean SGPc) | Phase B |
 | `step3_country_estimates.csv` | subgroup_id, dataset_id, condition_id, n, regime_family, regime_param_1, regime_param_2, m_hat, kappa_hat, median_sgpc, mean_sgpc, dispersion_sd, dispersion_iqr, entropy, concentration, distance_min, wasserstein1, cvm | Phases A + B |
 | `step3_uncertainty_decomposition.csv` | subgroup_id, var_sampling, var_copula, var_family, total_var, se_sampling, n_boot, n_converged | Phase A |
 | `step3_bucket_probabilities.csv` | subgroup_id, median_sgpc, k3_{Low,Typical,High}, k3_assigned, k3_consistency, k5_{VeryLow,...,VeryHigh}, k5_assigned, k5_consistency | Phase A |
@@ -350,6 +368,7 @@ After a complete run of Phases A + B + C, the following files are guaranteed in 
 - Uncertainty decomposition fields are populated (NA only when source data is unavailable)
 - Every publication panel is exported as PDF + SVG + PNG
 - Output contract check (`output_contract_check.json`) passes required file and manifest integrity checks
+- Precision-vs-N contract check confirms required fields in `phase_b_precision_by_n.csv`
 
 ---
 

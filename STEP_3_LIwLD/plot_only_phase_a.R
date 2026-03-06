@@ -50,7 +50,9 @@ require(patchwork)
 require(wesanderson)
 
 source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
+source(file.path(STEP3_ROOT, "functions/figure_naming.R"))
 source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
+source(file.path(STEP3_ROOT, "config_step3.R"))
 
 if (!dir.exists(VIZ_DIR)) {
   dir.create(VIZ_DIR, recursive = TRUE)
@@ -73,53 +75,104 @@ condition_id <- phase_a$condition_id
 subgroup_id <- phase_a$subgroup_id
 sg_col <- phase_a$subgroup_col
 
-sg_label <- paste0(condition_id, " / ", sg_col, " = ", subgroup_id)
+sg_label <- format_step3_condition_label(condition_id, sg_col, subgroup_id)
+phasea_fig <- get_phasea_figure_map()
 
 cat("Loaded:", PHASE_A_RDS, "\n")
 cat("Regenerating plots for:", sg_label, "\n")
 cat("Output dir:", VIZ_DIR, "\n\n")
 
-# A. CDF comparison
+# 01. Marginal U/V panel
+plot_marginal_uv_density(
+  u_sample = phase_a$u_sample,
+  v_sample = phase_a$v_sample,
+  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "A."),
+  output_dir = VIZ_DIR,
+  filename = phasea_fig$marginal_uv_density
+)
+
+# 02b. CDF comparison
 plot_observed_vs_predicted_cdf(
   best_est,
-  title = paste0("CDF Comparison — ", sg_label),
+  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "B2."),
   output_dir = VIZ_DIR,
-  filename = "panel_a_cdf_comparison"
+  filename = phasea_fig$forward_cdf_check
 )
 
-# B1. Objective surface
+# 02a. Objective surface
 plot_objective_surface(
   best_est,
-  title = paste0("Objective Surface — ", sg_label),
+  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "B1."),
   output_dir = VIZ_DIR,
-  filename = "panel_b1_objective_surface"
+  filename = phasea_fig$objective_surface
 )
 
-# B2. Residual curve
-plot_residual_curve(
-  best_est,
-  output_dir = VIZ_DIR,
-  filename = "panel_b2_residual_curve",
-  title = paste0("Residual Diagnostics — ", sg_label)
-)
-
-# C. Regime shape comparison
+# 03a. Regime shape comparison
 plot_regime_shape(
   best_est$regime,
   true_sgpc = true_sgpc,
-  title = paste0("Growth Regime Recovery — ", sg_label),
+  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "C."),
   output_dir = VIZ_DIR,
-  filename = "panel_c_regime_comparison",
+  filename = phasea_fig$regime_density,
   bootstrap = phase_a$bootstrap
 )
 
-# D. Multi-panel recovery summary
+# 03e. Multi-panel recovery summary
 plot_recovery_summary(
   best_est,
   true_sgpc = true_sgpc,
-  title = paste0("Recovery Summary — ", sg_label),
+  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Growth Regime Recovery Summary —"),
   output_dir = VIZ_DIR,
-  filename = "panel_d_recovery_summary"
+  filename = phasea_fig$recovery_summary
+)
+
+# 04. Independence diagnostics
+plot_independence_diagnostic(
+  u_sample = phase_a$u_sample,
+  true_sgpc = true_sgpc,
+  n_bins = STEP3_CONFIG$assumptions$independence$u_bins,
+  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "I."),
+  output_dir = VIZ_DIR,
+  filename = phasea_fig$independence_diagnostic
+)
+
+# E. Bootstrap uncertainty — Median SGPc
+if (!is.null(phase_a$bootstrap)) {
+  plot_bootstrap_sgpc(
+    phase_a$bootstrap,
+    measure = "median",
+    true_sgpc = true_sgpc,
+    title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Bootstrap Median SGPc —"),
+    output_dir = VIZ_DIR,
+    filename = phasea_fig$bootstrap_median
+  )
+
+  # F. Bootstrap uncertainty — Mean SGPc
+  plot_bootstrap_sgpc(
+    phase_a$bootstrap,
+    measure = "mean",
+    true_sgpc = true_sgpc,
+    title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Bootstrap Mean SGPc —"),
+    output_dir = VIZ_DIR,
+    filename = phasea_fig$bootstrap_mean
+  )
+
+  # G. Combined median + mean bootstrap panel
+  plot_bootstrap_sgpc_combined(
+    phase_a$bootstrap,
+    true_sgpc = true_sgpc,
+    title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Bootstrap Uncertainty —"),
+    output_dir = VIZ_DIR,
+    filename = phasea_fig$bootstrap_combined
+  )
+} else {
+  cat("  Skipping bootstrap panels (no bootstrap data).\n")
+}
+
+write_phasea_legacy_aliases(
+  output_dir = VIZ_DIR,
+  enable_alias = isTRUE(STEP3_CONFIG$output$phase_a_legacy_alias_plots),
+  formats = STEP3_CONFIG$output$export_formats
 )
 
 cat("\nDone. Phase A diagnostic plots regenerated.\n")

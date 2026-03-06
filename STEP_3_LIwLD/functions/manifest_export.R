@@ -101,6 +101,14 @@ export_step3_manifest <- function(results,
     )
   }
 
+  if (!is.null(results$assumption_diagnostics)) {
+    manifest$assumption_diagnostics <- results$assumption_diagnostics
+  }
+
+  if (!is.null(results$sensitivity)) {
+    manifest$sensitivity <- results$sensitivity
+  }
+
   # Run metadata
   if (!is.null(results$metadata)) {
     manifest$run_metadata <- results$metadata
@@ -166,8 +174,14 @@ export_step3_manifest <- function(results,
     "| `step3_country_estimates.csv` | Subgroup estimates with dispersion and entropy |",
     "| `step3_uncertainty_decomposition.csv` | Variance decomposition (sampling, copula, family) |",
     "| `step3_bucket_probabilities.csv` | K=3 and K=5 bucket membership probabilities |",
+    "| `phase_b_copula_sensitivity.csv` | Phase B2 sensitivity to copula parameter variants |",
+    "| `phase_b_independence_sensitivity.csv` | Phase B3 sensitivity to stratified-by-U regimes |",
+    "| `phase_b_pool_registry.csv` | Phase B pooled-source registry with eligibility metadata |",
+    "| `phase_b_replicates.RData` | Phase B replicate-level operating-characteristics artifact |",
+    "| `phase_b_precision_by_n.csv` | Phase B precision operating characteristics by N bucket |",
     "| `phase_a_analytic_payload.rds` | Notation-aligned figure payload for Step 3 Phase A |",
-    "| `exports/phase_a/*.csv` | Tidy figure-data exports (CDF, objective, density, fit, bootstrap) |",
+    "| `phase_a_precision_anchor.csv` | Phase A baseline N0/SE0/CI-width anchor for scaling narrative |",
+    "| `exports/phase_a/*.csv` | Tidy figure-data exports (CDF, objective, density, fit, bootstrap, independence) |",
     "| `output_contract_check.json` | Output contract validation report |",
     "| `bucket_stability_summary.json` | Classification consistency summary |",
     "| `step3_manifest.json` | This manifest (machine-readable) |",
@@ -312,6 +326,19 @@ export_phase_a_manifest <- function(phase_a_results,
         median_diff = round(inferred_median - true_median, 2)
       )
     ),
+    assumption_diagnostics = list(
+      flag_independence_violation = isTRUE(phase_a_results$flag_independence_violation),
+      spearman_rho = if (!is.null(phase_a_results$independence_diagnostics)) {
+        as.numeric(phase_a_results$independence_diagnostics[phase_a_results$independence_diagnostics$metric == "spearman_rho", "value"][1])
+      } else {
+        NA_real_
+      },
+      kruskal_p_value = if (!is.null(phase_a_results$independence_diagnostics)) {
+        as.numeric(phase_a_results$independence_diagnostics[phase_a_results$independence_diagnostics$metric == "kruskal_p_value", "value"][1])
+      } else {
+        NA_real_
+      }
+    ),
     uncertainty = list(
       sampling = list(
         n_boot = boot$n_boot,
@@ -326,11 +353,15 @@ export_phase_a_manifest <- function(phase_a_results,
       phase_a_rds = file.path(output_dir, "phase_a_deep_dive.rds"),
       phase_a_analytic_payload = file.path(output_dir, "phase_a_analytic_payload.rds"),
       phase_a_summary_csv = file.path(output_dir, "phase_a_summary.csv"),
-      panel_a_cdf = file.path(output_dir, "visualizations", "phase_a", "panel_a_cdf_comparison.pdf"),
-      panel_b1_objective = file.path(output_dir, "visualizations", "phase_a", "panel_b1_objective_surface.pdf"),
-      panel_b2_residual = file.path(output_dir, "visualizations", "phase_a", "panel_b2_residual_curve.pdf"),
-      panel_c_regime = file.path(output_dir, "visualizations", "phase_a", "panel_c_regime_comparison.pdf"),
-      panel_d_recovery = file.path(output_dir, "visualizations", "phase_a", "panel_d_recovery_summary.pdf")
+      phase_a_precision_anchor_csv = file.path(output_dir, "phase_a_precision_anchor.csv"),
+      independence_diagnostics_csv = file.path(output_dir, "exports", "phase_a", "step3_independence_diagnostics.csv"),
+      phasea_01_marginals = file.path(output_dir, "visualizations", "phase_a", "phasea_01_marginals_uv_density.pdf"),
+      phasea_02a_objective = file.path(output_dir, "visualizations", "phase_a", "phasea_02a_objective_surface.pdf"),
+      phasea_02b_cdf = file.path(output_dir, "visualizations", "phase_a", "phasea_02b_forward_cdf_check.pdf"),
+      phasea_02c_residual = file.path(output_dir, "visualizations", "phase_a", "phasea_02c_residual_diagnostics.pdf"),
+      phasea_03a_regime = file.path(output_dir, "visualizations", "phase_a", "phasea_03a_regime_density.pdf"),
+      phasea_03e_recovery = file.path(output_dir, "visualizations", "phase_a", "phasea_03e_recovery_summary.pdf"),
+      phasea_04_independence = file.path(output_dir, "visualizations", "phase_a", "phasea_04_independence_diagnostic.pdf")
     ),
     config = phase_a_results$config
   )
@@ -373,6 +404,12 @@ export_phase_a_manifest <- function(phase_a_results,
     paste0("- **True median SGPc:** ", manifest$sgpc_summary$true$median),
     paste0("- **Median difference:** ", manifest$sgpc_summary$differences$median_diff),
     "",
+    "## Assumption Diagnostics (P ⟂ U)",
+    "",
+    paste0("- **Flag independence violation:** ", manifest$assumption_diagnostics$flag_independence_violation),
+    paste0("- **Spearman rho(U,SGPc_true):** ", round(manifest$assumption_diagnostics$spearman_rho, 4)),
+    paste0("- **Kruskal-Wallis p-value:** ", signif(manifest$assumption_diagnostics$kruskal_p_value, 4)),
+    "",
     "## Uncertainty (Bootstrap)",
     "",
     paste0("- **Replicates:** ", manifest$uncertainty$sampling$n_boot,
@@ -409,6 +446,7 @@ export_phase_a_manifest <- function(phase_a_results,
     "|------|-------------|",
     "| `phase_a_deep_dive.rds` | Full Phase A results object |",
     "| `phase_a_analytic_payload.rds` | Notation-aligned payload for figure assembly |",
+    "| `exports/phase_a/step3_independence_diagnostics.csv` | Independence diagnostics and U-bin summaries |",
     "| `phase_a_summary.csv` | One-row summary for reporting |",
     "| `phase_a_manifest.json` | Machine-readable Phase A manifest |",
     "| `phase_a_manifest.md` | Human-readable Phase A manifest |",

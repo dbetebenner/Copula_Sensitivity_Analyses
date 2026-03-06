@@ -64,7 +64,28 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
                              u_weights = NULL,
                              v_weights = NULL,
                              grid_resolution = 30,
-                             verbose = TRUE) {
+                             verbose = TRUE,
+                             stratify_by_u = FALSE,
+                             stratify_bins = 5) {
+
+  if (isTRUE(stratify_by_u)) {
+    if (!exists("estimate_regime_stratified", mode = "function")) {
+      stop("estimate_regime_stratified() is not available; source optimize_regime_stratified.R first")
+    }
+    return(estimate_regime_stratified(
+      u_sample = u_sample,
+      v_sample = v_sample,
+      kernel_cache = kernel_cache,
+      regime_family = regime_family,
+      distance_fn = distance_fn,
+      v_grid = v_grid,
+      u_weights = u_weights,
+      v_weights = v_weights,
+      n_bins = stratify_bins,
+      grid_resolution = grid_resolution,
+      verbose = verbose
+    ))
+  }
 
   # Defaults
   if (is.null(v_grid)) {

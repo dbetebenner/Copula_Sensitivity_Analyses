@@ -256,6 +256,8 @@ export_phase_a_figure_data <- function(phase_a_results,
     quantile_slices = quantile_slices,
     regime_density = regime_density,
     bootstrap_summary = bootstrap_summary,
+    independence_diagnostics = phase_a_results$independence_diagnostics,
+    flag_independence_violation = isTRUE(phase_a_results$flag_independence_violation),
     copula_used = phase_a_results$copula_used,
     seed = phase_a_results$config$seed
   )
@@ -271,6 +273,9 @@ export_phase_a_figure_data <- function(phase_a_results,
     fwrite(fit_metrics, file.path(export_dir, "step3_fit_metrics.csv"))
     fwrite(bootstrap_draws, file.path(export_dir, "step3_bootstrap_draws.csv"))
     fwrite(bootstrap_summary, file.path(export_dir, "step3_bootstrap_summary.csv"))
+    if (!is.null(phase_a_results$independence_diagnostics)) {
+      fwrite(as.data.table(phase_a_results$independence_diagnostics), file.path(export_dir, "step3_independence_diagnostics.csv"))
+    }
     if (nrow(kernel_slices) > 0) fwrite(kernel_slices, file.path(export_dir, "step3_kernel_slices.csv"))
     if (nrow(quantile_slices) > 0) fwrite(quantile_slices, file.path(export_dir, "step3_quantile_slices.csv"))
   }

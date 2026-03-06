@@ -54,7 +54,9 @@ STEP3_CONFIG <- list(
     tie_tolerance  = 1e-4,       # Prefer beta when distances are nearly tied
 
     # Grid search resolution (per parameter dimension)
-    grid_resolution = 30
+    grid_resolution = 30,
+    stratify_by_u = FALSE,
+    stratify_bins = 5
   ),
 
   # ===========================================================================
@@ -72,7 +74,20 @@ STEP3_CONFIG <- list(
   uncertainty = list(
     n_bootstrap     = 200,       # Sampling uncertainty replicates
     n_copula_draws  = 25,        # Copula parameter uncertainty draws
-    bootstrap_grid_resolution = 20   # Faster grid for bootstrap replicates
+    bootstrap_grid_resolution = 20,  # Faster grid for bootstrap replicates
+    resample_scheme = "srs_bootstrap" # srs_bootstrap|weighted_bootstrap|replicate_weights
+  ),
+
+  # ===========================================================================
+  # 5b. Assumption diagnostics (P ⟂ U in subgroup)
+  # ===========================================================================
+  assumptions = list(
+    independence = list(
+      u_bins = 5,
+      test = "kruskal",
+      alpha = 0.05,
+      max_abs_spearman = 0.10
+    )
   ),
 
   # ===========================================================================
@@ -97,6 +112,17 @@ STEP3_CONFIG <- list(
     n_conditions_per_dataset = 10,  # Limit for speed
     n_subgroups_per_condition = 5,  # Top N largest subgroups
     min_subgroup_n = 50,
+    min_n = 1000,
+    n_buckets = c(1000, 2500, 5000, 7500, 10000),
+    eligibility_buffer = 0.10,
+    outer_reps = 200,
+    use_inner_bootstrap = FALSE,
+    audit_inner_bootstrap_fraction = 0.05,
+    pool_types = c("district", "cluster"),
+    allow_cluster_pools = TRUE,
+    n_growth_strata = 3,
+    cluster_min_pool_n = 500,
+    use_parallel = TRUE,
     year_spans  = c(1, 2, 4),       # Test these spans
     content_areas = NULL             # NULL = all available
   ),
@@ -110,13 +136,53 @@ STEP3_CONFIG <- list(
   ),
 
   # ===========================================================================
+  # 8b. Model-health thresholds
+  # ===========================================================================
+  thresholds = list(
+    point_accuracy = list(
+      good = 2.0,
+      warn = 5.0
+    ),
+    w1_reduction_pct = list(
+      good = 20,
+      warn = 10
+    ),
+    residual = list(
+      max_abs_good = 0.03,
+      max_abs_warn = 0.05,
+      mean_abs_good = 0.01,
+      mean_abs_warn = 0.02
+    ),
+    cvm = list(
+      good = 0.0010,
+      warn = 0.0025
+    ),
+    bootstrap = list(
+      max_ci_width_good = 8,
+      max_ci_width_warn = 12,
+      min_converged_rate_good = 0.90,
+      min_converged_rate_warn = 0.85
+    )
+  ),
+
+  # ===========================================================================
+  # 8c. Sensitivity settings
+  # ===========================================================================
+  sensitivity = list(
+    copula_param_quantiles = c(0.25, 0.50, 0.75),
+    include_alternative_copula_families = FALSE,
+    phase_b_subset_max_subgroups = 25
+  ),
+
+  # ===========================================================================
   # 9. Output settings
   # ===========================================================================
   output = list(
     export_formats     = c("pdf", "svg", "png"),
     make_publication_panels = TRUE,
     make_manifests     = TRUE,
-    results_dir        = "STEP_3_LIwLD/results"
+    results_dir        = "STEP_3_LIwLD/results",
+    phase_a_legacy_alias_plots = TRUE
   ),
 
   # ===========================================================================

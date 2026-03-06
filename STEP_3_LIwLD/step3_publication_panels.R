@@ -8,14 +8,16 @@
 ###
 ### Panel Map:
 ###   A. Observed vs predicted CDF (Phase A showcase)
-###   B1. Objective landscape over (m, kappa) (Phase A showcase)
+###   B1. Objective growth regime landscape over (m, kappa) (Phase A showcase)
 ###   B2. Residual diagnostics in v-space (Phase A showcase)
 ###   C. Inferred regime vs actual SGPc (Phase A showcase)
-###   D. Recovery accuracy by subgroup size (Phase B)
+###   D. Precision operating curves by N bucket (Phase B)
 ###   E. Recovery accuracy by year span (Phase B)
 ###   F. Regime family comparison (Phase A)
 ###   G. Bootstrap uncertainty distribution (Phase A)
 ###   H. District summary grade panel
+###   I. Independence diagnostic (Phase A)
+###   J. Sensitivity summary (Phase B2/B3)
 ###
 ### Sourced by run_step3.R (Phase C) or can be run standalone.
 ###
@@ -28,7 +30,47 @@
 cat("--- Phase C: Publication Panels and Manifest ---\n\n")
 
 ############################################################################
-### C.0  Load Results from Phases A and B
+### C.0a Standalone Mode Setup (if not run via run_step3.R)
+############################################################################
+
+# Check if we're running standalone (RESULTS_DIR not defined)
+if (!exists("RESULTS_DIR")) {
+  # Determine STEP3_ROOT based on current working directory
+  if (grepl("STEP_3_LIwLD$", getwd())) {
+    STEP3_ROOT <- getwd()
+  } else if (file.exists("STEP_3_LIwLD")) {
+    STEP3_ROOT <- file.path(getwd(), "STEP_3_LIwLD")
+  } else {
+    stop("Cannot determine STEP3_ROOT. Please run from STEP_3_LIwLD directory or project root.")
+  }
+  
+  # Load required packages
+  if (!requireNamespace("data.table", quietly = TRUE)) stop("Package 'data.table' required")
+  if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Package 'ggplot2' required")
+  if (!requireNamespace("patchwork", quietly = TRUE)) stop("Package 'patchwork' required")
+  if (!requireNamespace("wesanderson", quietly = TRUE)) stop("Package 'wesanderson' required")
+  
+  require(data.table)
+  require(ggplot2)
+  require(patchwork)
+  require(wesanderson)
+  
+  # Source required function files
+  source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
+  source(file.path(STEP3_ROOT, "functions/figure_naming.R"))
+  source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
+  source(file.path(STEP3_ROOT, "functions/bucket_classification.R"))
+  source(file.path(STEP3_ROOT, "functions/manifest_export.R"))
+  source(file.path(STEP3_ROOT, "config_step3.R"))
+  
+  # Set paths
+  RESULTS_DIR <- file.path(STEP3_ROOT, "results")
+  
+  cat("Running in standalone mode from:", STEP3_ROOT, "\n\n")
+}
+
+############################################################################
+### C.0b  Load Results from Phases A and B
 ############################################################################
 
 # Phase A results
@@ -51,6 +93,15 @@ if (file.exists(phase_b_csv)) {
   phase_b <- NULL
 }
 
+phase_b_copula_csv <- file.path(RESULTS_DIR, "phase_b_copula_sensitivity.csv")
+phase_b_copula <- if (file.exists(phase_b_copula_csv)) fread(phase_b_copula_csv) else data.table()
+phase_b_indep_csv <- file.path(RESULTS_DIR, "phase_b_independence_sensitivity.csv")
+phase_b_indep <- if (file.exists(phase_b_indep_csv)) fread(phase_b_indep_csv) else data.table()
+phase_b_precision_csv <- file.path(RESULTS_DIR, "phase_b_precision_by_n.csv")
+phase_b_precision <- if (file.exists(phase_b_precision_csv)) fread(phase_b_precision_csv) else data.table()
+phase_b_pool_registry_csv <- file.path(RESULTS_DIR, "phase_b_pool_registry.csv")
+phase_b_pool_registry <- if (file.exists(phase_b_pool_registry_csv)) fread(phase_b_pool_registry_csv) else data.table()
+
 viz_dir <- file.path(RESULTS_DIR, "visualizations")
 if (!dir.exists(viz_dir)) dir.create(viz_dir, recursive = TRUE)
 
@@ -69,7 +120,7 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_a_cdf_comparison.pdf"))) {
 } else if (!is.null(phase_a)) {
   plot_observed_vs_predicted_cdf(
     phase_a$best_estimate,
-    title = paste0("Observed vs Predicted — ", phase_a$condition_id),
+    title = format_step3_condition_label(phase_a$condition_id, phase_a$subgroup_col, phase_a$subgroup_id, "A."),
     output_dir = file.path(viz_dir, "phase_a"),
     filename = "panel_a_cdf_comparison"
   )
@@ -80,16 +131,16 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_a_cdf_comparison.pdf"))) {
 
 
 ############################################################################
-### Panel B1: Objective Surface (Phase A showcase)
+### Panel B1: Growth Regime Surface (Phase A showcase)
 ############################################################################
 
-cat("Panel B1: Objective Surface... ")
+cat("Panel B1: Growth Regime Surface... ")
 if (file.exists(file.path(viz_dir, "phase_a", "panel_b1_objective_surface.pdf"))) {
   cat("exists.\n")
 } else if (!is.null(phase_a)) {
   plot_objective_surface(
     phase_a$best_estimate,
-    title = paste0("Objective Surface — ", phase_a$condition_id),
+    title = format_step3_condition_label(phase_a$condition_id, phase_a$subgroup_col, phase_a$subgroup_id, "Growth Regime Surface"),
     output_dir = file.path(viz_dir, "phase_a"),
     filename = "panel_b1_objective_surface"
   )
@@ -100,25 +151,11 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_b1_objective_surface.pdf"))
 
 
 ############################################################################
-### Panel B2: Residual Diagnostics (Phase A showcase)
+### Panel A: CDF Comparison (with integrated residual panel)
+###   Note: plot_observed_vs_predicted_cdf now includes the detailed residual
+###   panel below the CDF overlay; panel_b2_residual_curve is no longer generated
+###   as a separate file.
 ############################################################################
-
-cat("Panel B2: Residual Diagnostics... ")
-if (file.exists(file.path(viz_dir, "phase_a", "panel_b2_residual_curve.pdf"))) {
-  cat("exists.\n")
-} else if (!is.null(phase_a)) {
-  plot_residual_curve(
-    phase_a$best_estimate,
-    output_dir = file.path(viz_dir, "phase_a"),
-    filename = "panel_b2_residual_curve",
-    title = paste0("Residual Diagnostics — ", phase_a$condition_id)
-  )
-  cat("generated.\n")
-} else {
-  cat("skipped.\n")
-}
-
-
 ############################################################################
 ### Panel C: Regime Shape vs Actual SGPc (Phase A showcase)
 ############################################################################
@@ -130,7 +167,7 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_c_regime_comparison.pdf")))
   plot_regime_shape(
     phase_a$best_estimate$regime,
     phase_a$true_sgpc,
-    title = paste0("Growth Regime Recovery — ", phase_a$condition_id),
+    title = format_step3_condition_label(phase_a$condition_id, phase_a$subgroup_col, phase_a$subgroup_id, "C."),
     output_dir = file.path(viz_dir, "phase_a"),
     filename = "panel_c_regime_comparison",
     bootstrap = phase_a$bootstrap
@@ -145,34 +182,25 @@ if (file.exists(file.path(viz_dir, "phase_a", "panel_c_regime_comparison.pdf")))
 ### Panel D: Recovery Accuracy by Subgroup Size (Phase B)
 ############################################################################
 
-cat("Panel D: Recovery Accuracy by Subgroup Size... ")
-if (!is.null(phase_b) && nrow(phase_b) > 0) {
-
-  pb_plot <- data.frame(
-    n_subgroup = phase_b$n_subgroup,
-    abs_diff   = abs(phase_b$median_diff)
+cat("Panel D: Recovery Precision vs N Buckets... ")
+if (!is.null(phase_b_precision) && nrow(phase_b_precision) > 0) {
+  precision_plot_dt <- phase_b_precision[, .(
+    n_bucket,
+    median_ci_width_90 = mean(median_ci_width_90, na.rm = TRUE),
+    median_ci_width_95 = mean(median_ci_width_95, na.rm = TRUE),
+    median_mae = mean(median_mae, na.rm = TRUE),
+    mean_mae = mean(mean_mae, na.rm = TRUE)
+  ), by = .(n_bucket)]
+  precision_plot_dt <- precision_plot_dt[order(n_bucket)]
+  plot_precision_vs_n(
+    precision_dt = precision_plot_dt,
+    output_dir = viz_dir,
+    filename = "panel_d_recovery_by_size",
+    title = "Recovery Precision vs Sample Size"
   )
-
-  pC <- ggplot(pb_plot, aes(x = n_subgroup, y = abs_diff)) +
-    geom_point(size = 1.5, alpha = 0.5, color = STEP3_COLORS$point_est) +
-    {if (nrow(pb_plot) > 10) geom_smooth(method = "loess", span = 0.75,
-      se = FALSE, linewidth = 1.2, color = STEP3_COLORS$loess_trend)} +
-    geom_hline(yintercept = 2, linetype = "dashed", color = "grey60") +
-    geom_hline(yintercept = 5, linetype = "dotted", color = "grey70") +
-    annotate("text", x = max(pb_plot$n_subgroup) * 0.7, y = 2.3,
-             label = "2 SGP points", size = 3, color = "grey50") +
-    annotate("text", x = max(pb_plot$n_subgroup) * 0.7, y = 5.3,
-             label = "5 SGP points", size = 3, color = "grey60") +
-    scale_x_log10() +
-    labs(title = "Recovery Accuracy vs Subgroup Size",
-         x = "Subgroup Size (n)", y = "|Inferred - True Median SGPc|") +
-    theme_publication()
-
-  save_plot_multi(pC, "panel_d_recovery_by_size", viz_dir)
   cat("generated.\n")
-
 } else {
-  cat("skipped (no Phase B data).\n")
+  cat("skipped (no precision-by-N data).\n")
 }
 
 
@@ -196,6 +224,7 @@ if (!is.null(phase_b) && nrow(phase_b) > 0 &&
                 color = STEP3_COLORS$loess_trend) +
     geom_hline(yintercept = 2, linetype = "dashed", color = "grey60") +
     labs(title = "Recovery Accuracy by Year Span",
+         subtitle = "Does recovery error worsen as elapsed year span increases?\nStatistic: |inferred - true median SGPc| distribution by span",
          x = "Year Span", y = "|Inferred - True Median SGPc|") +
     theme_publication()
 
@@ -240,7 +269,10 @@ if (!is.null(phase_a) && !is.null(phase_a$family_comparison)) {
   fam_ltys   <- c(REGIME_FAMILY_LINETYPES, "Actual" = "solid")
 
   dist_labels <- paste0(comp$family, ": W1=", round(comp$distance, 4))
-  subtitle_e <- paste(dist_labels, collapse = " | ")
+  subtitle_e <- paste0(
+    "Does regime family choice materially change recovered growth distribution?\n",
+    "Statistics: ", paste(dist_labels, collapse = " | ")
+  )
 
   pE <- ggplot(df_fam, aes(x = sgpc, y = density, color = source, linetype = source)) +
     geom_line(linewidth = 0.9) +
@@ -266,43 +298,97 @@ if (!is.null(phase_a) && !is.null(phase_a$family_comparison)) {
 
 cat("Panel G: Bootstrap Uncertainty... ")
 if (!is.null(phase_a) && !is.null(phase_a$bootstrap)) {
-
-  boot <- phase_a$bootstrap
-  valid <- !is.na(boot$median_sgpc_draws)
-
-  if (sum(valid) > 10) {
-    boot_df <- data.frame(median_sgpc = boot$median_sgpc_draws[valid])
-    true_med   <- median(phase_a$true_sgpc, na.rm = TRUE)
-    point_est  <- phase_a$best_estimate$regime$median * 100
-    ci         <- boot$ci_median_sgpc
-
-    pF <- ggplot(boot_df, aes(x = median_sgpc)) +
-      geom_histogram(bins = 30, fill = alpha(STEP3_COLORS$bootstrap, 0.3),
-                     color = STEP3_COLORS$bootstrap) +
-      geom_vline(aes(xintercept = true_med, color = "True (longitudinal)"),
-                 linewidth = 0.9) +
-      geom_vline(aes(xintercept = point_est, color = "Point estimate"),
-                 linetype = "dashed", linewidth = 0.9) +
-      geom_vline(xintercept = ci, linetype = "dotted",
-                 color = STEP3_COLORS$ci_line, linewidth = 0.6) +
-      scale_color_manual(
-        name = NULL,
-        values = c("True (longitudinal)" = STEP3_COLORS$true_value,
-                   "Point estimate" = STEP3_COLORS$point_est)
-      ) +
-      annotate("text", x = mean(ci), y = Inf, vjust = 1.5,
-               label = sprintf("95%% CI [%.1f, %.1f]", ci[1], ci[2]),
-               size = 3, color = "grey40") +
-      labs(title = "Bootstrap Distribution of Median SGPc",
-           x = "Median SGPc (bootstrap draws)", y = "Frequency") +
-      theme_publication()
-
-    save_plot_multi(pF, "panel_g_bootstrap_uncertainty", viz_dir)
+  if (sum(!is.na(phase_a$bootstrap$median_sgpc_draws)) > 10) {
+    plot_bootstrap_sgpc_combined(
+      bootstrap = phase_a$bootstrap,
+      true_sgpc = phase_a$true_sgpc,
+      title = format_step3_condition_label(phase_a$condition_id, phase_a$subgroup_col, phase_a$subgroup_id, "G."),
+      output_dir = file.path(viz_dir, "phase_a"),
+      filename = "panel_g_bootstrap_uncertainty"
+    )
     cat("generated.\n")
   } else {
     cat("skipped (insufficient bootstrap draws).\n")
   }
 
+} else {
+  cat("skipped.\n")
+}
+
+
+############################################################################
+### Panel I: Independence Diagnostic (Phase A)
+############################################################################
+
+cat("Panel I: Independence Diagnostic... ")
+if (!is.null(phase_a) && !is.null(phase_a$u_sample) && !is.null(phase_a$true_sgpc)) {
+  plot_independence_diagnostic(
+    u_sample = phase_a$u_sample,
+    true_sgpc = phase_a$true_sgpc,
+    n_bins = STEP3_CONFIG$assumptions$independence$u_bins,
+    output_dir = file.path(viz_dir, "phase_a"),
+    filename = "panel_i_independence_diagnostic",
+    title = format_step3_condition_label(phase_a$condition_id, phase_a$subgroup_col, phase_a$subgroup_id, "I.")
+  )
+  cat("generated.\n")
+} else {
+  cat("skipped.\n")
+}
+
+
+############################################################################
+### Panel J: Sensitivity Summary (Phase B2/B3)
+############################################################################
+
+cat("Panel J: Sensitivity Summary... ")
+if (nrow(phase_b_copula) > 0 || nrow(phase_b_indep) > 0) {
+  p_list <- list()
+  if (nrow(phase_b_copula) > 0) {
+    p1 <- ggplot(phase_b_copula, aes(x = delta_median_vs_base)) +
+      geom_histogram(bins = 30, fill = alpha(STEP3_COLORS$predicted, 0.35), color = STEP3_COLORS$predicted) +
+      geom_ref_vline(xintercept = 0) +
+      labs(
+        title = "Copula parameter sensitivity",
+        subtitle = paste0(
+          "How sensitive is median SGPc to plausible copula-parameter shifts?\n",
+          "Statistic: distribution of delta median SGPc relative to baseline"
+        ),
+        x = "Delta median SGPc vs baseline",
+        y = "Count"
+      ) +
+      theme_publication(base_size = 9)
+    p_list[[length(p_list) + 1]] <- p1
+  }
+  if (nrow(phase_b_indep) > 0) {
+    p2 <- ggplot(phase_b_indep, aes(x = delta_median)) +
+      geom_histogram(bins = 30, fill = alpha(STEP3_COLORS$actual, 0.35), color = STEP3_COLORS$actual) +
+      geom_ref_vline(xintercept = 0) +
+      labs(
+        title = "Independence stratification sensitivity",
+        subtitle = paste0(
+          "How much does relaxing a single pooled independence assumption shift results?\n",
+          "Statistic: distribution of delta median SGPc (stratified - pooled)"
+        ),
+        x = "Delta median SGPc (stratified - single)",
+        y = "Count"
+      ) +
+      theme_publication(base_size = 9)
+    p_list[[length(p_list) + 1]] <- p2
+  }
+  if (length(p_list) == 1) {
+    pJ <- p_list[[1]]
+  } else {
+    pJ <- p_list[[1]] | p_list[[2]]
+  }
+  pJ <- pJ + patchwork::plot_annotation(
+    title = "Sensitivity Summary",
+    subtitle = paste0(
+      "Are STEP 3 subgroup estimates robust to key modeling assumptions?\n",
+      "Statistics: histogrammed deltas around zero for copula and independence perturbations"
+    )
+  )
+  save_plot_multi(pJ, "panel_j_sensitivity_summary", viz_dir, width = 12, height = 6)
+  cat("generated.\n")
 } else {
   cat("skipped.\n")
 }
@@ -525,7 +611,25 @@ if (!is.null(phase_a)) {
   if (!is.null(boot) && !is.na(boot$n_boot) && !is.na(boot$n_converged) && boot$n_converged < (0.85 * boot$n_boot)) {
     quality_flags <- c(quality_flags, "bootstrap_instability")
   }
+  if (isTRUE(phase_a$flag_independence_violation)) {
+    quality_flags <- c(quality_flags, "independence_violation")
+  }
   if (length(quality_flags) == 0) quality_flags <- "none"
+  health <- "good"
+  if ("independence_violation" %in% quality_flags ||
+      "high_residual" %in% quality_flags ||
+      "bootstrap_instability" %in% quality_flags) {
+    health <- "bad"
+  } else if ("wide_ci" %in% quality_flags || "optimizer_warning" %in% quality_flags) {
+    health <- "warn"
+  }
+  fit_failure_reason <- if (!is.null(phase_a$best_estimate$convergence) && phase_a$best_estimate$convergence != 0) {
+    "optimizer_nonzero_convergence"
+  } else if ("high_residual" %in% quality_flags) {
+    "kernel_or_family_mismatch"
+  } else {
+    "none"
+  }
 
   summary_grade <- data.frame(
     subgroup_id = sg_key,
@@ -545,15 +649,19 @@ if (!is.null(phase_a)) {
     cvm = round(fit_row$cvm, 6),
     max_abs_residual = round(fit_row$max_abs_residual, 6),
     mean_abs_residual = round(fit_row$mean_abs_residual, 6),
+    n_effective = phase_a$n_subgroup,
     ci95_median_lo = round(ci_lo, 2),
     ci95_median_hi = round(ci_hi, 2),
     ci95_width = round(ci_width, 2),
     bootstrap_n = if (!is.null(boot)) boot$n_boot else NA_integer_,
     bootstrap_converged = if (!is.null(boot)) boot$n_converged else NA_integer_,
+    flag_independence_violation = isTRUE(phase_a$flag_independence_violation),
     k3_assigned = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.character(bucket_row$k3_assigned) else NA_character_,
     k3_consistency = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.numeric(bucket_row$k3_consistency) else NA_real_,
     k5_assigned = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.character(bucket_row$k5_assigned) else NA_character_,
     k5_consistency = if (!is.null(bucket_row) && nrow(bucket_row) > 0) as.numeric(bucket_row$k5_consistency) else NA_real_,
+    health = health,
+    fit_failure_reason = fit_failure_reason,
     quality_flags = paste(quality_flags, collapse = "|"),
     stringsAsFactors = FALSE
   )
@@ -562,10 +670,10 @@ if (!is.null(phase_a)) {
   plot_district_summary_grade(
     summary_row = summary_grade,
     output_dir = viz_dir,
-    filename = "panel_g_district_summary_grade"
+    filename = "panel_h_district_summary_grade"
   )
   cat("  Saved: district_summary_grade.csv\n")
-  cat("  Saved: panel_g_district_summary_grade.{pdf,svg,png}\n")
+  cat("  Saved: panel_h_district_summary_grade.{pdf,svg,png}\n")
 } else {
   cat("  Skipped (no Phase A deep-dive results).\n")
 }
@@ -580,10 +688,34 @@ cat("\nExporting manifests...\n")
 manifest_results <- list(
   subgroup_estimates = list(),
   bootstrap_results = if (!is.null(phase_a)) phase_a$bootstrap else NULL,
+  assumption_diagnostics = if (!is.null(phase_a)) phase_a$independence_diagnostics else NULL,
+  sensitivity = list(
+    precision_by_n = if (nrow(phase_b_precision) > 0) list(
+      n_rows = nrow(phase_b_precision),
+      n_buckets = sort(unique(phase_b_precision$n_bucket)),
+      median_ci95_by_bucket = as.list(phase_b_precision[, .(
+        median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4)
+      ), by = n_bucket][order(n_bucket)]),
+      median_mae_by_bucket = as.list(phase_b_precision[, .(
+        median_mae = round(mean(median_mae, na.rm = TRUE), 4)
+      ), by = n_bucket][order(n_bucket)])
+    ) else NULL,
+    copula_param_range = if (nrow(phase_b_copula) > 0) list(
+      rho = range(phase_b_copula$rho, na.rm = TRUE),
+      df = range(phase_b_copula$df, na.rm = TRUE)
+    ) else NULL,
+    independence_stratified = if (nrow(phase_b_indep) > 0) list(
+      n_rows = nrow(phase_b_indep),
+      mean_delta_median = mean(phase_b_indep$delta_median, na.rm = TRUE),
+      mean_delta_mean = mean(phase_b_indep$delta_mean, na.rm = TRUE)
+    ) else NULL
+  ),
   config = STEP3_CONFIG,
   metadata = list(
     timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
-    n_phase_b_subgroups = if (!is.null(phase_b)) nrow(phase_b) else 0
+    n_phase_b_subgroups = if (!is.null(phase_b)) nrow(phase_b) else 0,
+    n_phase_b_pools = nrow(phase_b_pool_registry),
+    n_phase_b_precision_rows = nrow(phase_b_precision)
   )
 )
 

@@ -30,6 +30,7 @@ STEP3_COLORS <- list(
   predicted    = ZISSOU1_BASE[1],   # teal   (#3B9AB2)
   inferred     = ZISSOU1_BASE[1],   # teal
   actual       = ZISSOU1_BASE[4],   # amber  (#E1AF00)
+  comonot      = ZISSOU1_BASE[2],   # steel-blue (#78B7C5) — co-monotonic reference curve
   residual_pos = ZISSOU1_BASE[5],   # red    (#F21A00)
   residual_neg = ZISSOU1_BASE[1],   # teal
   bootstrap    = ZISSOU1_BASE[1],   # teal

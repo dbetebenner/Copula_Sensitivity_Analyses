@@ -162,6 +162,42 @@ predict_conditional_cdf <- function(v, u, regime, kernel_cache) {
 }
 
 
+#' Predict marginal CDF using a list of stratified regimes
+#'
+#' @param v_grid Numeric vector of evaluation points.
+#' @param u_sample Numeric vector of prior percentiles.
+#' @param regime_list Named list of growth_regime objects keyed by bin level.
+#' @param u_bins Factor/character vector assigning each u_sample to a bin.
+#' @param kernel_cache kernel_cache object.
+#' @param weights Optional numeric weights over u_sample.
+#'
+#' @return Numeric vector of predicted CDF values on v_grid.
+#' @export
+predict_marginal_cdf_stratified <- function(v_grid, u_sample, regime_list, u_bins,
+                                            kernel_cache, weights = NULL) {
+  if (is.null(weights)) weights <- rep(1, length(u_sample))
+  stopifnot(length(u_sample) == length(u_bins), length(weights) == length(u_sample))
+  lvls <- unique(as.character(u_bins))
+  F_total <- rep(0, length(v_grid))
+  w_total <- sum(weights)
+
+  for (lv in lvls) {
+    idx <- which(as.character(u_bins) == lv)
+    if (length(idx) == 0 || is.null(regime_list[[lv]])) next
+    w_bin <- sum(weights[idx])
+    F_bin <- predict_marginal_cdf(
+      v_grid = v_grid,
+      u_sample = u_sample[idx],
+      weights = weights[idx],
+      regime = regime_list[[lv]],
+      kernel_cache = kernel_cache
+    )
+    F_total <- F_total + (w_bin / w_total) * F_bin
+  }
+  F_total
+}
+
+
 cat("STEP 3 predict_v_cdf.R loaded.\n")
 cat("  Functions: predict_marginal_cdf, observed_marginal_cdf,\n")
-cat("             predict_conditional_cdf\n")
+cat("             predict_conditional_cdf, predict_marginal_cdf_stratified\n")

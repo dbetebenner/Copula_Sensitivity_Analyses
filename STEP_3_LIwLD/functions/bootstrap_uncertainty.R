@@ -41,7 +41,8 @@ require(copula)
 #'     \item distance_draws: Numeric vector of minimum distances
 #'     \item ci_median_sgpc: 95 percent percentile CI for median SGPc
 #'     \item ci_mean_sgpc: 95 percent percentile CI for mean SGPc
-#'     \item se_median_sgpc: Bootstrap standard error
+#'     \item se_median_sgpc: Bootstrap standard error of median SGPc
+#'     \item se_mean_sgpc: Bootstrap standard error of mean SGPc
 #'     \item n_boot: Number of replicates
 #'     \item n_converged: Number that converged
 #'   }
@@ -54,6 +55,9 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
                               v_grid = NULL,
                               grid_resolution = 20,
                               seed = NULL,
+                              u_weights = NULL,
+                              v_weights = NULL,
+                              resample_scheme = "srs_bootstrap",
                               verbose = TRUE) {
 
   if (!is.null(seed)) set.seed(seed)
@@ -64,6 +68,11 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
 
   n_u <- length(u_sample)
   n_v <- length(v_sample)
+  resample_scheme <- tolower(resample_scheme)
+  if (is.null(u_weights)) u_weights <- rep(1, n_u)
+  if (is.null(v_weights)) v_weights <- rep(1, n_v)
+  u_prob <- u_weights / sum(u_weights)
+  v_prob <- v_weights / sum(v_weights)
 
   # Storage
   regime_param_list <- list()
@@ -80,14 +89,29 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     }
 
     # Resample independently
-    u_boot <- sample(u_sample, n_u, replace = TRUE)
-    v_boot <- sample(v_sample, n_v, replace = TRUE)
+    if (resample_scheme == "weighted_bootstrap") {
+      u_idx <- sample.int(n_u, n_u, replace = TRUE, prob = u_prob)
+      v_idx <- sample.int(n_v, n_v, replace = TRUE, prob = v_prob)
+    } else if (resample_scheme == "replicate_weights") {
+      warning("replicate_weights is not implemented in STEP 3 yet; falling back to srs_bootstrap")
+      u_idx <- sample.int(n_u, n_u, replace = TRUE)
+      v_idx <- sample.int(n_v, n_v, replace = TRUE)
+    } else {
+      u_idx <- sample.int(n_u, n_u, replace = TRUE)
+      v_idx <- sample.int(n_v, n_v, replace = TRUE)
+    }
+    u_boot <- u_sample[u_idx]
+    v_boot <- v_sample[v_idx]
+    uw_boot <- u_weights[u_idx]
+    vw_boot <- v_weights[v_idx]
 
     res <- tryCatch({
       estimate_regime(u_boot, v_boot, kernel_cache,
                       regime_family = regime_family,
                       distance_fn = distance_fn,
                       v_grid = v_grid,
+                      u_weights = uw_boot,
+                      v_weights = vw_boot,
                       grid_resolution = grid_resolution,
                       verbose = FALSE)
     }, error = function(e) NULL)
@@ -130,8 +154,10 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     ci_mean_sgpc     = if (sum(valid) > 2)
                          quantile(mean_sgpc[valid], c(0.025, 0.975)) else c(NA, NA),
     se_median_sgpc   = if (sum(valid) > 2) sd(median_sgpc[valid]) else NA_real_,
+    se_mean_sgpc     = if (sum(valid) > 2) sd(mean_sgpc[valid]) else NA_real_,
     n_boot           = n_boot,
-    n_converged      = n_converged
+    n_converged      = n_converged,
+    resample_scheme  = resample_scheme
   )
 }
 

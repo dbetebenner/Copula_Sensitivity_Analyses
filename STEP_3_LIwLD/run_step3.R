@@ -71,10 +71,13 @@ source(file.path(STEP3_ROOT, "functions/regime_families.R"))
 source(file.path(STEP3_ROOT, "functions/predict_v_cdf.R"))
 source(file.path(STEP3_ROOT, "functions/distance_metrics.R"))
 source(file.path(STEP3_ROOT, "functions/optimize_regime.R"))
+source(file.path(STEP3_ROOT, "functions/optimize_regime_stratified.R"))
 source(file.path(STEP3_ROOT, "functions/bootstrap_uncertainty.R"))
 source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
+source(file.path(STEP3_ROOT, "functions/figure_naming.R"))
 source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
 source(file.path(STEP3_ROOT, "functions/bucket_classification.R"))
+source(file.path(STEP3_ROOT, "functions/build_cluster_pools.R"))
 source(file.path(STEP3_ROOT, "functions/manifest_export.R"))
 source(file.path(STEP3_ROOT, "functions/export_phase_a_figure_data.R"))
 source(file.path(STEP3_ROOT, "functions/validate_output_contract.R"))
@@ -98,6 +101,34 @@ set.seed(STEP3_CONFIG$seed)
 # Export run metadata
 export_run_metadata(STEP3_CONFIG, output_dir = RESULTS_DIR,
                     seed = STEP3_CONFIG$seed)
+
+# Runtime methodology snapshot for uncertainty decomposition and reproducibility
+unc_method_path <- file.path(RESULTS_DIR, "uncertainty_methodology.md")
+unc_lines <- c(
+  "# STEP 3 Uncertainty Methodology",
+  "",
+  paste0("Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
+  "",
+  "## Sampling uncertainty",
+  paste0("- resample_scheme: `", STEP3_CONFIG$uncertainty$resample_scheme, "`"),
+  paste0("- n_bootstrap: ", STEP3_CONFIG$uncertainty$n_bootstrap),
+  paste0("- bootstrap_grid_resolution: ", STEP3_CONFIG$uncertainty$bootstrap_grid_resolution),
+  "",
+  "## Copula uncertainty",
+  paste0("- n_copula_draws: ", STEP3_CONFIG$uncertainty$n_copula_draws),
+  paste0("- copula_family: ", STEP3_CONFIG$copula$family),
+  paste0("- params_source: ", STEP3_CONFIG$copula$params_source),
+  "",
+  "## Regime families",
+  paste0("- primary_family: ", STEP3_CONFIG$regime$primary_family),
+  paste0("- sensitivity_families: ", paste(STEP3_CONFIG$regime$sensitivity_families, collapse = ", ")),
+  "",
+  "## Assumption diagnostics",
+  paste0("- independence test: ", STEP3_CONFIG$assumptions$independence$test),
+  paste0("- U bins: ", STEP3_CONFIG$assumptions$independence$u_bins),
+  paste0("- alpha: ", STEP3_CONFIG$assumptions$independence$alpha)
+)
+writeLines(unc_lines, unc_method_path)
 
 cat("\n--- Setup complete ---\n\n")
 
