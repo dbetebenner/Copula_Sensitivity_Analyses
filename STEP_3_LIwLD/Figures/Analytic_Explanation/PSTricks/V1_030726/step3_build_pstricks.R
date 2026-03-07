@@ -37,7 +37,7 @@ if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 # Build configuration
 # ---------------------------------------------------------------------------
 # Update this version string when issuing a new release artifact.
-infographic_release_version <- "2.0.0"
+infographic_release_version <- "1.0.0"
 infographic_release_stem <- "Longitudinal_Inference_Without_Longitudinal_Data"
 infographic_release_pdf <- file.path(
   output_dir,

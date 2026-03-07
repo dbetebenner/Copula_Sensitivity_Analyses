@@ -35,8 +35,7 @@
     "useDefaultPatterns": true,
     "customPatterns": [
       "outputs/**",
-      "V0_030126/**",
-      "V1_030726/**",
+      "V1_030126/**",
       "*.pdf",
       "*.png",
       "*.svg",
