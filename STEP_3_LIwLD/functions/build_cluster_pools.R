@@ -53,9 +53,9 @@ build_cluster_pools <- function(
     sgpc <- sgpc_engine(u_full[sg_idx], v_full[sg_idx], p1_copula, scale = scale)
     list(
       idx = idx,
-      n_district = n_district,
-      true_mean_sgpc = mean(sgpc, na.rm = TRUE),
-      true_median_sgpc = median(sgpc, na.rm = TRUE)
+      n_district = as.double(n_district),
+      true_mean_sgpc = as.double(mean(sgpc, na.rm = TRUE)),
+      true_median_sgpc = as.double(median(sgpc, na.rm = TRUE))
     )
   }, by = sg_col]
 
@@ -81,10 +81,10 @@ build_cluster_pools <- function(
     list(
       idx = list(pooled_idx),
       constituent_districts = paste(as.character(get(sg_col)), collapse = ","),
-      n_constituent_districts = .N,
-      n_pool_raw = length(pooled_idx),
-      true_mean_sgpc = mean(true_mean_sgpc, na.rm = TRUE),
-      true_median_sgpc = median(true_median_sgpc, na.rm = TRUE)
+      n_constituent_districts = as.double(.N),
+      n_pool_raw = as.double(length(pooled_idx)),
+      true_mean_sgpc = as.double(mean(true_mean_sgpc, na.rm = TRUE)),
+      true_median_sgpc = as.double(median(true_median_sgpc, na.rm = TRUE))
     )
   }, by = .(stratum_id, strata_label)]
 

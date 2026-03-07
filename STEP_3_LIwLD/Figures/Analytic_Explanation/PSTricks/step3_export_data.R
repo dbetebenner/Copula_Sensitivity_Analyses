@@ -57,6 +57,11 @@ d_v <- density(dat$v_sample, from = 0, to = 1, n = 256, bw = "SJ")
 write_dat(round(d_u$x, 6), round(d_u$y, 6), "panel_A_density_U.dat")
 write_dat(round(d_v$x, 6), round(d_v$y, 6), "panel_A_density_V.dat")
 
+# Best-fit induced density: numerically differentiate F_pred over v_grid,
+# then smooth with a Gaussian kernel for a clean illustration.
+# Done after Panel B2 CDF is resolved so F_pred / F_inferred is available.
+# (Deferred below -- see "Panel A inferred density" block after Panel B2.)
+
 
 # --- Panel B2: CDF curves ---------------------------------------------------
 cat("Panel B2...\n")
@@ -73,6 +78,28 @@ if (export_mode == "PHASE_A_REAL_DATA") {
 # F_tamp(v) = P(U <= v) = F_U(v)
 F_tamp <- if (!is.null(dat$F_tamp)) dat$F_tamp else stats::ecdf(dat$u_sample)(dat$v_grid)
 write_dat(round(dat$v_grid, 6), round(F_tamp, 6),         "panel_B2_cdf_tamp.dat")
+
+
+# --- Panel A: best-fit induced density (deferred until F_pred is resolved) ---
+cat("Panel A (inferred density)...\n")
+# Retrieve the same F_pred that was just written for Panel B2
+F_pred_for_density <- if (export_mode == "PHASE_A_REAL_DATA") dat$F_pred else dat$est$F_pred
+v_grid_for_density <- dat$v_grid
+
+# Numerical derivative on midpoint grid
+dv       <- diff(v_grid_for_density)[1]
+v_mid    <- (v_grid_for_density[-1] + v_grid_for_density[-length(v_grid_for_density)]) / 2
+f_raw    <- diff(F_pred_for_density) / dv
+
+# Gaussian-kernel smooth (bandwidth 0.04 gives a clean illustrative curve)
+sm <- stats::ksmooth(v_mid, f_raw, kernel = "normal", bandwidth = 0.04,
+                     n.points = 256, x.points = seq(0, 1, length.out = 256))
+
+# Trim boundary artefacts and clamp to non-negative
+keep  <- sm$x >= 0.01 & sm$x <= 0.99
+x_out <- round(sm$x[keep], 6)
+y_out <- pmax(round(sm$y[keep], 6), 0)
+write_dat(x_out, y_out, "panel_A_density_inferred.dat")
 
 
 # --- Panel B1: heatmap cells (generated TeX) ---------------------------------

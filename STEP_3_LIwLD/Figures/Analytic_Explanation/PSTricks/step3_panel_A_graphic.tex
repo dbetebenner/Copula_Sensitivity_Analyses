@@ -20,6 +20,7 @@
   %% Read curve data
   \readdata{\dataU}{data/panel_A_density_U.dat}
   \readdata{\dataV}{data/panel_A_density_V.dat}
+  \readdata{\dataInferred}{data/panel_A_density_inferred.dat}
 
   %% Filled area under U density
   \pscustom[fillstyle=solid,fillcolor=priorU,opacity=0.18,linestyle=none]{%
@@ -38,6 +39,7 @@
   %% Curve lines
   \listplot[linecolor=priorU,linewidth=1.3pt,plotstyle=line]{\dataU}
   \listplot[linecolor=currentV,linewidth=1.3pt,plotstyle=line]{\dataV}
+  \listplot[linecolor=inferredV,linewidth=1.0pt,linestyle=dashed,dash=3pt 2pt,linecap=1,plotstyle=line]{\dataInferred}
 
   %% Axes
   \psaxes[Dx=0.2,Dy=0.5,ticksize=-3pt 0,
@@ -50,13 +52,15 @@
 
   %% Legend
   \rput[tr](0.98,\panelAymax){%
-    \raisebox{-28pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+    \raisebox{-32pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
       \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
         \textsf{\scriptsize Prior sample $U$} &
         {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=priorU,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
         \textsf{\scriptsize Current sample $V$} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[2pt]
-        \multicolumn{2}{@{}l@{}}{\textsf{\tiny\textcolor{subtitleGrey}{NOTE: No student-level pair IDs available}}}
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Best-fit $f_{\HShat}(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=1.0pt,linestyle=dashed,dash=3pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[2pt]
+        \multicolumn{2}{@{}l@{}}{\textsf{\tiny\textcolor{subtitleGrey}{NOTE: Best-fit density from Panel B2}}}
       \end{tabular}%
     }}}}
 %
