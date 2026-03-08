@@ -31,7 +31,10 @@ STEP3_CONFIG <- list(
     family        = "t",                    # From STEP 1 selection
     params_source = "STEP_1_manifest",      # Load from Phase 1 manifest
     year_span     = NULL,                   # NULL = detect from condition
-    n_param_draws = 25                      # For copula uncertainty
+    n_param_draws = 25,                     # For copula uncertainty
+    # "canonical_only" = always use canonical copula (honest NAEP/TIMSS setting)
+    # "phase1_best_fit" = use per-condition best-fit copula (oracle benchmark)
+    mode          = "canonical_only"
   ),
 
   kernel = list(
@@ -125,7 +128,11 @@ STEP3_CONFIG <- list(
     use_parallel = TRUE,
     rep_batch_size = 25L,       # replicates per parallel task (tune for granularity vs overhead)
     year_spans  = c(1, 2, 4),       # Test these spans
-    content_areas = NULL             # NULL = all available
+    content_areas = NULL,            # NULL = all available
+    # "step2_empirical" = load sgpc_emp from STEP 2 outputs (no recomputation)
+    # "recompute" = compute true SGPc on-the-fly via sgpc_engine (fallback)
+    truth_source = "step2_empirical",
+    step2_results_dir = "STEP_2_SGPc_Sensitivity/results"
   ),
 
   # ===========================================================================

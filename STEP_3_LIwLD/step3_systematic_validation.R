@@ -226,7 +226,8 @@ process_pool_setup <- function(
   n_buckets, eligibility_buffer, seed_base,
   buckets_cfg,
   enable_copula_sensitivity = TRUE,
-  enable_independence_sensitivity = TRUE
+  enable_independence_sensitivity = TRUE,
+  true_sgpc_full = NULL
 ) {
   sg_id      <- as.character(pool$id)
   sg_idx     <- pool$idx
@@ -238,7 +239,11 @@ process_pool_setup <- function(
   n_pool_raw <- n_sg
   n_pool_eff <- n_sg
 
-  true_sgpc <- sgpc_engine(u_full[sg_idx], v_full[sg_idx], p1_copula, scale = "percentile")
+  if (!is.null(true_sgpc_full)) {
+    true_sgpc <- true_sgpc_full[sg_idx]
+  } else {
+    true_sgpc <- sgpc_engine(u_full[sg_idx], v_full[sg_idx], p1_copula, scale = "percentile")
+  }
   u_cross   <- reference_cdf(pairs$SCALE_SCORE_PRIOR[sg_idx],   refs$ref_prior)
   v_cross   <- reference_cdf(pairs$SCALE_SCORE_CURRENT[sg_idx], refs$ref_current)
 
@@ -584,6 +589,37 @@ for (ds_id in cfg_sys$datasets) {
   .plog("  Conditions selected: ", length(conditions))
   canonical <- tryCatch(load_canonical_parameters(), error = function(e) NULL)
 
+  # Load STEP 2 pre-computed SGPc variants for truth (sgpc_emp) reuse
+  truth_source   <- cfg_sys$truth_source %||% "recompute"
+  copula_mode    <- STEP3_CONFIG$copula$mode %||% "phase1_best_fit"
+  step2_variants <- NULL
+  if (identical(truth_source, "step2_empirical")) {
+    step2_dir_raw <- cfg_sys$step2_results_dir %||% "STEP_2_SGPc_Sensitivity/results"
+    step2_dir <- if (startsWith(step2_dir_raw, "/")) {
+      step2_dir_raw
+    } else {
+      file.path(PROJECT_ROOT_ABS, step2_dir_raw)
+    }
+    step2_file <- file.path(step2_dir, paste0("sgpc_all_variants_", ds_id, ".rds"))
+    if (file.exists(step2_file)) {
+      cat("  Loading STEP 2 variants from:", step2_file, "\n")
+      step2_variants <- readRDS(step2_file)
+      data.table::setDT(step2_variants)
+      data.table::setkey(step2_variants, condition_id, ID)
+      cat("  STEP 2 variants loaded:", format(nrow(step2_variants), big.mark = ","),
+          "rows,", length(unique(step2_variants$condition_id)), "conditions\n")
+      .plog("  STEP 2 truth source loaded: ", format(nrow(step2_variants), big.mark = ","), " rows")
+    } else {
+      cat("  WARNING: STEP 2 file not found:", step2_file, " — will recompute truth\n")
+      truth_source <- "recompute"
+    }
+  }
+  if (identical(copula_mode, "canonical_only")) {
+    cat("  Copula mode: CANONICAL ONLY (honest NAEP/TIMSS setting)\n")
+  } else {
+    cat("  Copula mode:", copula_mode, "\n")
+  }
+
   n_conditions_ds <- length(conditions)
 
   for (ci in seq_along(conditions)) {
@@ -618,15 +654,25 @@ for (ds_id in cfg_sys$datasets) {
     )
     if (is.null(refs)) next
 
+    # --- Copula selection: canonical_only vs phase1_best_fit ---
     p1 <- tryCatch(load_phase1_condition(ds_id, condition_id), error = function(e) NULL)
-    if (is.null(p1) || is.null(p1$best_fit_copula)) {
+    if (identical(copula_mode, "canonical_only")) {
       if (!is.null(canonical)) {
         p1_copula <- create_canonical_copula(cond$year_span, cond$content_area, canonical$canonical_params)
+        cat("    Copula: canonical (", cond$content_area, ", span=", cond$year_span, ")\n")
+      } else {
+        cat("    No canonical params available. Skipping.\n"); next
+      }
+    } else {
+      if (!is.null(p1) && !is.null(p1$best_fit_copula)) {
+        p1_copula <- p1$best_fit_copula
+        cat("    Copula: phase1 best-fit\n")
+      } else if (!is.null(canonical)) {
+        p1_copula <- create_canonical_copula(cond$year_span, cond$content_area, canonical$canonical_params)
+        cat("    Copula: canonical fallback\n")
       } else {
         cat("    No copula available. Skipping.\n"); next
       }
-    } else {
-      p1_copula <- p1$best_fit_copula
     }
 
     kernel_cache <- tryCatch(
@@ -637,6 +683,61 @@ for (ds_id in cfg_sys$datasets) {
 
     u_full <- rank(pairs$SCALE_SCORE_PRIOR)   / (nrow(pairs) + 1)
     v_full <- rank(pairs$SCALE_SCORE_CURRENT) / (nrow(pairs) + 1)
+
+    # --- Truth alignment: load pre-computed sgpc_emp from STEP 2 or recompute ---
+    true_sgpc_full <- NULL
+    if (identical(truth_source, "step2_empirical") && !is.null(step2_variants)) {
+      cond_id_match <- condition_id
+      s2_cond <- step2_variants[condition_id == cond_id_match]
+      if (nrow(s2_cond) > 0 && "sgpc_emp" %in% names(s2_cond)) {
+        s2_cols <- c("ID", "sgpc_emp")
+        if (all(c("SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT") %in% names(s2_cond)))
+          s2_cols <- c(s2_cols, "SCALE_SCORE_PRIOR", "SCALE_SCORE_CURRENT")
+        aligned <- merge(
+          data.table::data.table(
+            ID = pairs$ID, row_idx = seq_len(nrow(pairs)),
+            ss_prior_s3 = pairs$SCALE_SCORE_PRIOR,
+            ss_current_s3 = pairs$SCALE_SCORE_CURRENT),
+          s2_cond[, ..s2_cols],
+          by = "ID", all.x = TRUE, sort = FALSE)
+        data.table::setorder(aligned, row_idx)
+        pct_matched <- mean(!is.na(aligned$sgpc_emp))
+        if (pct_matched >= 0.95) {
+          if ("SCALE_SCORE_PRIOR" %in% names(aligned)) {
+            score_ok <- aligned[!is.na(sgpc_emp),
+              mean(ss_prior_s3 == SCALE_SCORE_PRIOR & ss_current_s3 == SCALE_SCORE_CURRENT,
+                   na.rm = TRUE)]
+            if (!is.na(score_ok) && score_ok < 0.99) {
+              cat(sprintf("    QA FAIL: %.1f%% score mismatch between STEP 2 and STEP 3 pairs — recomputing\n",
+                          (1 - score_ok) * 100))
+              pct_matched <- 0
+            }
+          }
+        }
+        if (pct_matched >= 0.95) {
+          true_sgpc_full <- aligned$sgpc_emp
+          if (pct_matched < 1.0) {
+            n_miss <- sum(is.na(true_sgpc_full))
+            cat(sprintf("    STEP 2 truth: %.1f%% matched (%d missing, imputed via sgpc_engine)\n",
+                        pct_matched * 100, n_miss))
+            miss_idx <- which(is.na(true_sgpc_full))
+            true_sgpc_full[miss_idx] <- sgpc_engine(
+              u_full[miss_idx], v_full[miss_idx], p1_copula, scale = "percentile")
+          } else {
+            cat(sprintf("    STEP 2 truth: 100%% matched (n=%d)\n", length(true_sgpc_full)))
+          }
+        } else if (pct_matched > 0) {
+          cat(sprintf("    STEP 2 truth: only %.1f%% matched — falling back to recompute\n",
+                      pct_matched * 100))
+        }
+      } else {
+        cat("    STEP 2 truth: condition not found in STEP 2 data — recomputing\n")
+      }
+    }
+    if (is.null(true_sgpc_full)) {
+      cat("    Computing true SGPc via sgpc_engine (recompute mode)\n")
+      true_sgpc_full <- sgpc_engine(u_full, v_full, p1_copula, scale = "percentile")
+    }
 
     # Build pools
     district_pools <- list()
@@ -714,7 +815,8 @@ for (ds_id in cfg_sys$datasets) {
         n_buckets = n_buckets, eligibility_buffer = eligibility_buffer,
         seed_base = seed_base, buckets_cfg = STEP3_CONFIG$buckets,
         enable_copula_sensitivity     = identical(pool$pool_type, "district"),
-        enable_independence_sensitivity = identical(pool$pool_type, "district")
+        enable_independence_sensitivity = identical(pool$pool_type, "district"),
+        true_sgpc_full = true_sgpc_full
       )
       ps_elapsed <- proc.time()[["elapsed"]] - ps_t0
       if (!is.null(setup)) {
@@ -805,8 +907,11 @@ for (ds_id in cfg_sys$datasets) {
 
     if (b1_daemons_live && n_tasks > 1L) {
       # Push condition data to all daemons (shared, not per-task)
+      # When true_sgpc_full is pre-loaded from STEP 2, push it instead of
+      # u_full/v_full/p1_copula (which are only needed for truth recomputation).
       push_ok <- tryCatch({
         cond_push <- mirai::everywhere({
+          .PHASEB_TRUE_SGPC_FULL <- true_sgpc_push
           .PHASEB_U_FULL       <- u_full_push
           .PHASEB_V_FULL       <- v_full_push
           .PHASEB_SS_PRIOR     <- ss_prior_push
@@ -819,6 +924,7 @@ for (ds_id in cfg_sys$datasets) {
           .PHASEB_CFG_DIST     <- cfg_dist_push
           TRUE
         },
+        true_sgpc_push     = true_sgpc_full,
         u_full_push        = u_full,
         v_full_push        = v_full,
         ss_prior_push      = pairs$SCALE_SCORE_PRIOR,
@@ -896,6 +1002,7 @@ for (ds_id in cfg_sys$datasets) {
     # Sequential fallback for Stage 2
     if (length(batch_results) == 0) {
       # Populate daemon globals in main session for sequential run
+      .PHASEB_TRUE_SGPC_FULL <- true_sgpc_full
       .PHASEB_U_FULL       <- u_full
       .PHASEB_V_FULL       <- v_full
       .PHASEB_SS_PRIOR     <- pairs$SCALE_SCORE_PRIOR

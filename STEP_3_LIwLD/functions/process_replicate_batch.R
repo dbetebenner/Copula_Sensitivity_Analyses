@@ -1,6 +1,10 @@
 # Worker function for Phase B replicate-batch parallelisation.
 # Sourced into each mirai daemon via the daemon-init everywhere() block.
 # Relies on .PHASEB_* globals pushed per-condition via everywhere().
+#
+# Truth source: when .PHASEB_TRUE_SGPC_FULL exists (pre-loaded from STEP 2
+# sgpc_emp), truth is an indexed lookup — no sgpc_engine call needed.
+# Falls back to sgpc_engine if the global is NULL/missing.
 
 process_replicate_batch <- function(
 
@@ -17,15 +21,22 @@ process_replicate_batch <- function(
   reps   <- seq.int(rep_start, rep_end)
   rows   <- vector("list", length(reps))
 
+  has_preloaded_truth <- exists(".PHASEB_TRUE_SGPC_FULL", inherits = TRUE) &&
+                         !is.null(.PHASEB_TRUE_SGPC_FULL)
+
   for (ri in seq_along(reps)) {
     rep_idx <- reps[[ri]]
     set.seed(pool_seed_base + as.integer(n_bucket) * 1000L + rep_idx)
     rep_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
 
-    true_rep <- sgpc_engine(
-      .PHASEB_U_FULL[rep_obs_idx], .PHASEB_V_FULL[rep_obs_idx],
-      .PHASEB_P1_COPULA, scale = "percentile"
-    )
+    if (has_preloaded_truth) {
+      true_rep <- .PHASEB_TRUE_SGPC_FULL[rep_obs_idx]
+    } else {
+      true_rep <- sgpc_engine(
+        .PHASEB_U_FULL[rep_obs_idx], .PHASEB_V_FULL[rep_obs_idx],
+        .PHASEB_P1_COPULA, scale = "percentile"
+      )
+    }
     u_rep <- reference_cdf(.PHASEB_SS_PRIOR[rep_obs_idx],   .PHASEB_REFS$ref_prior)
     v_rep <- reference_cdf(.PHASEB_SS_CURRENT[rep_obs_idx], .PHASEB_REFS$ref_current)
 

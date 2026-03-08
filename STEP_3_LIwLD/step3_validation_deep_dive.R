@@ -23,6 +23,10 @@
 
 cat("--- Phase A: Single-Condition Deep Validation ---\n\n")
 
+if (!exists("%||%", mode = "function")) {
+  `%||%` <- function(x, y) if (!is.null(x)) x else y
+}
+
 ############################################################################
 ### A.0  Resolve configuration
 ############################################################################
@@ -161,34 +165,77 @@ cat("\n")
 
 cat("A.2  Computing true SGPc distribution from longitudinal data...\n")
 
-# Load the Phase 1 fitted copula for this condition
-p1 <- load_phase1_condition(dataset_id, condition_id)
+# Copula selection: respect copula.mode config
+copula_mode <- STEP3_CONFIG$copula$mode %||% "phase1_best_fit"
+p1 <- tryCatch(load_phase1_condition(dataset_id, condition_id), error = function(e) NULL)
 
-if (is.null(p1$best_fit_copula)) {
+if (identical(copula_mode, "canonical_only")) {
+  canonical <- load_canonical_parameters()
+  p1_copula <- create_canonical_copula(cond$year_span, cond$content_area,
+                                        canonical$canonical_params)
+  cat("  Copula: canonical (", cond$content_area, ", span=", cond$year_span, ")\n")
+} else if (!is.null(p1) && !is.null(p1$best_fit_copula)) {
+  p1_copula <- p1$best_fit_copula
+  cat("  Loaded Phase 1 copula:", class(p1_copula)[1], "\n")
+} else {
   cat("  WARNING: No Phase 1 copula found. Using canonical t-copula.\n")
   canonical <- load_canonical_parameters()
   p1_copula <- create_canonical_copula(cond$year_span, cond$content_area,
                                         canonical$canonical_params)
-} else {
-  p1_copula <- p1$best_fit_copula
-  cat("  Loaded Phase 1 copula:", class(p1_copula)[1], "\n")
 }
 
 # Compute pseudo-observations (state-normed ranks) for the full condition
 u_full <- rank(pairs$SCALE_SCORE_PRIOR) / (nrow(pairs) + 1)
 v_full <- rank(pairs$SCALE_SCORE_CURRENT) / (nrow(pairs) + 1)
 
-# Compute true SGPc for subgroup students using full-condition copula
+# Subgroup indices
 if (subgroup_id == "ALL") {
   u_sg <- u_full
   v_sg <- v_full
+  sg_idx_a <- seq_len(nrow(pairs))
 } else {
-  sg_idx <- which(pairs[[sg_col]] == subgroup_id)
-  u_sg <- u_full[sg_idx]
-  v_sg <- v_full[sg_idx]
+  sg_idx_a <- which(pairs[[sg_col]] == subgroup_id)
+  u_sg <- u_full[sg_idx_a]
+  v_sg <- v_full[sg_idx_a]
 }
 
-true_sgpc <- sgpc_engine(u_sg, v_sg, p1_copula, scale = "percentile")
+# Truth: load from STEP 2 when configured, else recompute
+truth_source <- STEP3_CONFIG$systematic$truth_source %||% "recompute"
+true_sgpc <- NULL
+if (identical(truth_source, "step2_empirical")) {
+  step2_dir_raw <- STEP3_CONFIG$systematic$step2_results_dir %||% "STEP_2_SGPc_Sensitivity/results"
+  step2_dir <- if (startsWith(step2_dir_raw, "/")) step2_dir_raw else file.path(PROJECT_ROOT, step2_dir_raw)
+  step2_file <- file.path(step2_dir, paste0("sgpc_all_variants_", dataset_id, ".rds"))
+  if (file.exists(step2_file)) {
+    cat("  Loading STEP 2 truth from:", step2_file, "\n")
+    s2 <- data.table::setDT(readRDS(step2_file))
+    cond_id_match <- condition_id
+    s2_cond <- s2[condition_id == cond_id_match]
+    if (nrow(s2_cond) > 0 && "sgpc_emp" %in% names(s2_cond)) {
+      aligned <- merge(
+        data.table::data.table(ID = pairs$ID[sg_idx_a], row_idx = seq_along(sg_idx_a)),
+        s2_cond[, .(ID, sgpc_emp)],
+        by = "ID", all.x = TRUE, sort = FALSE)
+      data.table::setorder(aligned, row_idx)
+      pct_matched <- mean(!is.na(aligned$sgpc_emp))
+      if (pct_matched >= 0.95) {
+        true_sgpc <- aligned$sgpc_emp
+        n_miss <- sum(is.na(true_sgpc))
+        if (n_miss > 0) {
+          true_sgpc[is.na(true_sgpc)] <- sgpc_engine(
+            u_sg[is.na(true_sgpc)], v_sg[is.na(true_sgpc)], p1_copula, scale = "percentile")
+        }
+        cat(sprintf("  STEP 2 truth loaded: %d matched (%.1f%%)\n",
+                    sum(!is.na(aligned$sgpc_emp)), pct_matched * 100))
+      }
+    }
+    rm(s2)
+  }
+}
+if (is.null(true_sgpc)) {
+  cat("  Computing true SGPc via sgpc_engine\n")
+  true_sgpc <- sgpc_engine(u_sg, v_sg, p1_copula, scale = "percentile")
+}
 cat("  True SGPc distribution for subgroup:\n")
 cat("    Mean:", round(mean(true_sgpc, na.rm = TRUE), 1), "\n")
 cat("    Median:", round(median(true_sgpc, na.rm = TRUE), 1), "\n")
