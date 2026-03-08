@@ -181,7 +181,8 @@ if (parallel_available) {
         file.path(STEP3_ROOT_ABS,   "functions/predict_v_cdf.R"),
         file.path(STEP3_ROOT_ABS,   "functions/distance_metrics.R"),
         file.path(STEP3_ROOT_ABS,   "functions/optimize_regime.R"),
-        file.path(STEP3_ROOT_ABS,   "functions/bucket_classification.R")
+        file.path(STEP3_ROOT_ABS,   "functions/bucket_classification.R"),
+        file.path(STEP3_ROOT_ABS,   "functions/process_replicate_batch.R")
       )) {
         tryCatch(source(ff), error = function(e) {
           cat("[DAEMON", Sys.getpid(), "] ERROR sourcing", ff, ":", conditionMessage(e), "\n")
@@ -837,17 +838,10 @@ for (ds_id in cfg_sys$datasets) {
       })
 
       if (isTRUE(push_ok)) {
-        # Push the worker function itself to all daemons so it is available
-        # by name in daemon globalenv before dispatch
-        mirai::everywhere(
-          { process_replicate_batch <- fn_push },
-          fn_push = process_replicate_batch
-        )[]
-
-        # Build a self-contained lambda with baseenv() so that when mirai
-        # serializes .f, name lookups (process_replicate_batch) resolve via
-        # the daemon's own search path (finding the copy pushed above) rather
-        # than through a serialized snapshot of the main session's environment.
+        # process_replicate_batch is sourced into daemon globalenv at daemon
+        # init (functions/process_replicate_batch.R). No runtime push needed.
+        # baseenv() on the lambda ensures name lookups use the daemon's own
+        # search path rather than a frozen snapshot of the main session.
         pf_abs <- normalizePath(phaseb_progress_file, mustWork = FALSE)
         worker_lambda <- function(task, pf) {
           process_replicate_batch(
