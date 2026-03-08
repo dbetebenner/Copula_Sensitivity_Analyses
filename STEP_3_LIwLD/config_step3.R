@@ -123,6 +123,7 @@ STEP3_CONFIG <- list(
     n_growth_strata = 3,
     cluster_min_pool_n = 500,
     use_parallel = TRUE,
+    rep_batch_size = 25L,       # replicates per parallel task (tune for granularity vs overhead)
     year_spans  = c(1, 2, 4),       # Test these spans
     content_areas = NULL             # NULL = all available
   ),

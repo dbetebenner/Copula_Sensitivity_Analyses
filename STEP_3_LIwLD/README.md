@@ -202,7 +202,7 @@ Extends Phase A across multiple conditions and subgroups to assess precision ope
 - **Eligibility:** `N_pool >= N_bucket * (1 + 0.10)`
 - **Outer reps:** 200 per eligible `pool x N` cell (default)
 - **Pool design:** district pools + growth-stratified cluster pools (Low/Typical/High)
-- **Execution:** optional pool-level `mirai` parallelization (`systematic$use_parallel`)
+- **Execution:** Two-stage `mirai` parallelization — Stage 1 (pool setup) sequential on main process, Stage 2 (replicate batches) parallel via `mirai_map()` over fine-grained `pool × bucket × rep_batch` tasks (`systematic$use_parallel`, `systematic$rep_batch_size`)
 - **Year span:** 1-year, 2-year, 4-year gaps
 - **Content area:** Mathematics, Reading, etc.
 
@@ -282,8 +282,45 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 | `systematic$allow_cluster_pools` | `TRUE` | Enable growth-stratified super-district pools |
 | `systematic$n_growth_strata` | 3 | Number of growth strata for cluster pooling |
 | `systematic$cluster_min_pool_n` | 500 | Minimum pooled N required for a cluster stratum |
-| `systematic$use_parallel` | `TRUE` | Run pool-level Phase B workloads with `mirai` |
+| `systematic$use_parallel` | `TRUE` | Run Phase B Stage 2 replicate batches with `mirai` |
+| `systematic$rep_batch_size` | `25` | Replicates per parallel task (tune granularity vs. overhead) |
 | `seed` | 20260210 | RNG seed for reproducibility |
+
+### Phase B Parallelization Architecture
+
+Phase B uses a **two-stage design** that enables full utilisation of large EC2 instances (tested up to 192 vCPUs):
+
+**Stage 1 — Pool setup (sequential, main process)**
+For each condition, runs full-pool regime estimation, copula sensitivity, independence sensitivity, and builds the pool registry. Generates summary rows immediately.
+
+**Stage 2 — Replicate batches (parallel, `mirai_map()`)**
+Builds a flat task list by expanding `pool × bucket × rep_batch` — e.g., 8 pools × 5 buckets × 8 batches of 25 = 320 fine-grained tasks per condition. Each task calls `process_replicate_batch()` and returns a `data.table` of replicate rows. Results are reassembled by the main process after all tasks complete.
+
+**Daemon lifecycle (single create/destroy — follows STEP 1 pattern)**
+- Daemons created **once** before all datasets/conditions with `daemons(n_workers, output=TRUE)`
+- **Phase 1 `everywhere()`**: packages (`data.table`, `copula`), all function files, single-threaded mode (`OMP_NUM_THREADS=1`, `data.table::setDTthreads(1)`)
+- **Phase 2 `everywhere()` per condition**: pushes `u_full`, `v_full`, `scale_score_prior`, `scale_score_current`, `refs`, `kernel_cache`, `p1_copula`, `pool_defs`, `cfg_reg`, `cfg_dist` to all daemons as globals (prefixed `.PHASEB_*`)
+- Daemons destroyed **once** at the end with `daemons(0)`
+
+**EC2 worker sizing**
+```r
+if (n_cores <= 48) n_workers <- n_cores - 2  # e.g. 14 on r8g.4xlarge
+else               n_workers <- n_cores - 4  # e.g. 188 on r8g.48xlarge (192 CPU)
+```
+
+**Performance estimates** (200 reps, 10 conditions, 8 pools, 5 buckets, batch=25):
+
+| Instance        | vCPUs | Workers | Est. total time |
+|-----------------|-------|---------|-----------------|
+| r8g.4xlarge     | 16    | 14      | ~50 min         |
+| r8g.48xlarge    | 192   | 188     | ~5 min          |
+
+**Progress monitoring**  
+A tail-able progress file is written to `results/.phase_b_progress.txt`. Monitor from a second SSH session:
+```bash
+tail -f ~/Copula_Sensitivity_Analyses/STEP_3_LIwLD/results/.phase_b_progress.txt
+```
+Each completed replicate batch also logs `[W<pid>] pool= bkt= reps= | <elapsed>s` to daemon stdout (captured via `output=TRUE`).
 
 ---
 
