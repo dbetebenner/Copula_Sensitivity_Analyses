@@ -838,37 +838,43 @@ for (ds_id in cfg_sys$datasets) {
 
       if (isTRUE(push_ok)) {
         # Push the worker function itself to all daemons so it is available
-        # by name in globalenv() — avoids fragile closure serialization via .args
+        # by name in daemon globalenv before dispatch
         mirai::everywhere(
           { process_replicate_batch <- fn_push },
           fn_push = process_replicate_batch
         )[]
 
-        # Dispatch all tasks via mirai_map — call by name, not via closure arg
+        # Build a self-contained lambda with baseenv() so that when mirai
+        # serializes .f, name lookups (process_replicate_batch) resolve via
+        # the daemon's own search path (finding the copy pushed above) rather
+        # than through a serialized snapshot of the main session's environment.
         pf_abs <- normalizePath(phaseb_progress_file, mustWork = FALSE)
+        worker_lambda <- function(task, pf) {
+          process_replicate_batch(
+            pool_idx               = task$pool_idx,
+            n_bucket               = task$n_bucket,
+            rep_start              = task$rep_start,
+            rep_end                = task$rep_end,
+            pool_seed_base         = task$pool_seed_base,
+            pool_id                = task$pool_id,
+            pool_type              = task$pool_type,
+            ds_id                  = task$ds_id,
+            condition_id           = task$condition_id,
+            year_span              = task$year_span,
+            content_area           = task$content_area,
+            phaseb_progress_file_abs = pf
+          )
+        }
+        environment(worker_lambda) <- baseenv()
+
         mirai_res <- mirai::mirai_map(
-          .x = tasks,
-          .f = function(task, pf) {
-            process_replicate_batch(
-              pool_idx               = task$pool_idx,
-              n_bucket               = task$n_bucket,
-              rep_start              = task$rep_start,
-              rep_end                = task$rep_end,
-              pool_seed_base         = task$pool_seed_base,
-              pool_id                = task$pool_id,
-              pool_type              = task$pool_type,
-              ds_id                  = task$ds_id,
-              condition_id           = task$condition_id,
-              year_span              = task$year_span,
-              content_area           = task$content_area,
-              phaseb_progress_file_abs = pf
-            )
-          },
-          .args = list(pf = pf_abs)
+          .x     = tasks,
+          .f     = worker_lambda,
+          .args  = list(pf = pf_abs)
         )
         batch_results <- mirai_res[]
 
-        # Count completions for progress reporting
+        # Count completions and print first few error messages for diagnosis
         n_done  <- sum(!sapply(batch_results, function(x)
           inherits(x, "miraiError") || inherits(x, "errorValue") || is.null(x)))
         n_errs  <- n_tasks - n_done
@@ -876,6 +882,17 @@ for (ds_id in cfg_sys$datasets) {
                       n_done, n_tasks,
                       proc.time()[["elapsed"]] - s2_t0,
                       if (n_errs > 0) paste0(" | ERRORS: ", n_errs) else ""))
+        if (n_errs > 0) {
+          err_shown <- 0L
+          for (bi in seq_along(batch_results)) {
+            res <- batch_results[[bi]]
+            if (inherits(res, "miraiError") || inherits(res, "errorValue")) {
+              cat(sprintf("    [Task %d error] %s\n", bi, as.character(res)))
+              err_shown <- err_shown + 1L
+              if (err_shown >= 3L) break
+            }
+          }
+        }
       } else {
         cat("    WARNING: condition push failed; falling back to sequential for Stage 2.\n")
         batch_results <- NULL
