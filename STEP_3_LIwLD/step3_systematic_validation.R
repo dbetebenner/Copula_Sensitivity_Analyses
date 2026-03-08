@@ -946,8 +946,13 @@ for (ds_id in cfg_sys$datasets) {
       if (isTRUE(push_ok)) {
         # process_replicate_batch is sourced into daemon globalenv at daemon
         # init (functions/process_replicate_batch.R). No runtime push needed.
-        # baseenv() on the lambda ensures name lookups use the daemon's own
-        # search path rather than a frozen snapshot of the main session.
+        #
+        # IMPORTANT: environment must be globalenv(), NOT baseenv().
+        # serialize() writes globalenv() as GLOBALENV_SXP (a reference token),
+        # which the daemon deserializes as ITS OWN .GlobalEnv — exactly where
+        # process_replicate_batch was sourced via everywhere(). baseenv() is
+        # serialized as BASEENV_SXP and resolves below .GlobalEnv in the daemon's
+        # environment chain, making process_replicate_batch unreachable.
         pf_abs <- normalizePath(phaseb_progress_file, mustWork = FALSE)
         worker_lambda <- function(task, pf) {
           process_replicate_batch(
@@ -965,7 +970,7 @@ for (ds_id in cfg_sys$datasets) {
             phaseb_progress_file_abs = pf
           )
         }
-        environment(worker_lambda) <- baseenv()
+        environment(worker_lambda) <- globalenv()
 
         mirai_res <- mirai::mirai_map(
           .x     = tasks,
