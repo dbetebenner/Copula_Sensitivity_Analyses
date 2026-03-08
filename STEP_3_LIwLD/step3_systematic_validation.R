@@ -837,12 +837,19 @@ for (ds_id in cfg_sys$datasets) {
       })
 
       if (isTRUE(push_ok)) {
-        # Dispatch all tasks via mirai_map
+        # Push the worker function itself to all daemons so it is available
+        # by name in globalenv() — avoids fragile closure serialization via .args
+        mirai::everywhere(
+          { process_replicate_batch <- fn_push },
+          fn_push = process_replicate_batch
+        )[]
+
+        # Dispatch all tasks via mirai_map — call by name, not via closure arg
         pf_abs <- normalizePath(phaseb_progress_file, mustWork = FALSE)
         mirai_res <- mirai::mirai_map(
           .x = tasks,
-          .f = function(task, worker_fn, pf) {
-            worker_fn(
+          .f = function(task, pf) {
+            process_replicate_batch(
               pool_idx               = task$pool_idx,
               n_bucket               = task$n_bucket,
               rep_start              = task$rep_start,
@@ -857,10 +864,7 @@ for (ds_id in cfg_sys$datasets) {
               phaseb_progress_file_abs = pf
             )
           },
-          .args = list(
-            worker_fn = process_replicate_batch,
-            pf        = pf_abs
-          )
+          .args = list(pf = pf_abs)
         )
         batch_results <- mirai_res[]
 
