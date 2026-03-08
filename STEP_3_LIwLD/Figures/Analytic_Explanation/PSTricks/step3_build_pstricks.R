@@ -194,6 +194,11 @@ cat("\n--- Step 3: Assemble infographic ---\n")
 compile_xelatex("step3_header_band")
 compile_xelatex("step3_infographic_main")
 
+cat("\n--- Step 4: Compile standalone panel PDFs ---\n")
+compile_xelatex("step3_infographic_panel_a")
+compile_xelatex("step3_infographic_panel_b1b2")
+compile_xelatex("step3_infographic_panel_c")
+
 final_pdf <- file.path(output_dir, "step3_infographic_main.pdf")
 if (file.exists(final_pdf)) {
   copied <- file.copy(final_pdf, infographic_release_pdf, overwrite = TRUE)
@@ -234,7 +239,8 @@ if (file.exists(final_pdf)) {
 # ---------------------------------------------------------------------------
 
 cat("\n--- Cleanup ---\n")
-all_stems <- c(graphic_panels, text_panels, "step3_header_band", "step3_infographic_main")
+all_stems <- c(graphic_panels, text_panels, "step3_header_band", "step3_infographic_main",
+               "step3_infographic_panel_a", "step3_infographic_panel_b1b2", "step3_infographic_panel_c")
 #cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
 cleanup_suffixes <- c(".aux",".log",".dvi",".fls",".fdb_latexmk",".out",".pdf")
 old_wd <- setwd(pstricks_dir)
