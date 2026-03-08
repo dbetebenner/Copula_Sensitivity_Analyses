@@ -3,6 +3,7 @@
 # Relies on .PHASEB_* globals pushed per-condition via everywhere().
 
 process_replicate_batch <- function(
+
   pool_idx, n_bucket, rep_start, rep_end,
   pool_seed_base,
   pool_id, pool_type,
@@ -90,3 +91,6 @@ process_replicate_batch <- function(
 
   rbindlist(lapply(rows, as.data.table), fill = TRUE)
 }
+
+cat("STEP 3 process_replicate_batch.R loaded.\n")
+cat("  Functions: process_replicate_batch\n")
