@@ -109,6 +109,37 @@ export_step3_manifest <- function(results,
     manifest$sensitivity <- results$sensitivity
   }
 
+  # --------------------------------------------------------------------------
+  # Phase B systematic validation summary
+  # Precision operating table by (n_bucket x year_span) — the primary Phase B
+  # deliverable answering: "how precise is cross-sectional growth inference at
+  # NAEP/TIMSS-relevant sample sizes?"
+  # --------------------------------------------------------------------------
+  if (!is.null(results$phase_b_systematic)) {
+    manifest$phase_b_systematic <- results$phase_b_systematic
+  }
+
+  # --------------------------------------------------------------------------
+  # Error source decomposition
+  # Separates the two independent error sources that STEP 3 characterises:
+  #   Error 1 (sampling):   precision degrades as N falls below ~5000; captured
+  #                         by Phase B precision operating curves.
+  #   Error 2 (inference):  bias from using canonical copula + regime family;
+  #                         captured by Phase A inferred-vs-true comparison and
+  #                         bootstrap variance decomposition.
+  # --------------------------------------------------------------------------
+  if (!is.null(results$error_sources)) {
+    manifest$error_sources <- results$error_sources
+  }
+
+  # --------------------------------------------------------------------------
+  # Bucket classification (K=3 / K=5)
+  # Growth regime bucketing: Low (<45/40), Typical (45–55 / 40–60), High (>55/>60)
+  # --------------------------------------------------------------------------
+  if (!is.null(results$bucket_classification)) {
+    manifest$bucket_classification <- results$bucket_classification
+  }
+
   # Run metadata
   if (!is.null(results$metadata)) {
     manifest$run_metadata <- results$metadata
@@ -121,14 +152,118 @@ export_step3_manifest <- function(results,
   # --- Write Markdown ---
   md_path <- file.path(output_dir, paste0(prefix, "_manifest.md"))
   md_lines <- c(
-    "# STEP 3: Growth Regime Inference Results",
+    "# STEP 3: Growth Regime Inference (LIwLD) — Results Manifest",
     "",
     paste0("**Generated:** ", manifest$metadata$generated_at),
     paste0("**Subgroups analysed:** ", manifest$metadata$n_subgroups),
     "",
     "---",
     "",
-    "## Subgroup Estimates",
+    "## STEP 3 Framework",
+    "",
+    "STEP 3 characterises the precision and bias of **LIwLD** (Longitudinal Inference",
+    "without Longitudinal Data) — cross-sectional growth regime inference using the",
+    "SGPcFlow generative model. The central analytic identity is:",
+    "",
+    "    F_H(v) = (1/n) * sum_i H(F_0(v | u_i))",
+    "",
+    "where `H` is the latent growth regime (Beta distribution on [0,1]), `F_0(v|u)` is",
+    "the conditional CDF from the baseline copula (fitted in STEP 1), and the estimation",
+    "target is the occupancy distribution `H_S` of a subgroup `S`.",
+    "",
+    "### Two Independent Error Sources",
+    "",
+    "| Error | Source | Phase | Controlled By |",
+    "|-------|--------|-------|---------------|",
+    "| **Error 1 — Sampling** | Cross-sectional sample of size N substitutes for full subgroup | Phase B systematic | Increases N; degrades precision below ~5,000 students |",
+    "| **Error 2 — Inference** | Canonical copula + Beta family may not match true data-generating process | Phase A deep-dive | Robustness checks: copula sensitivity (B2), family comparison (Phase A), U-independence diagnostic |",
+    "",
+    "Phase A provides a full diagnostic at the observed subgroup size (N ~ 2,500–6,000).",
+    "Phase B maps precision as a function of N across 200 Monte Carlo replicates per",
+    "condition, directly addressing NAEP (state-level N ~ 3,000–4,000) and TIMSS",
+    "(country-level N ~ 4,000+) operating conditions.",
+    ""
+  )
+
+  # Phase B precision operating table (if available)
+  if (!is.null(manifest$phase_b_systematic)) {
+    pb <- manifest$phase_b_systematic
+    md_lines <- c(md_lines,
+      "---",
+      "",
+      "## Phase B: Systematic Validation Summary",
+      ""
+    )
+    if (!is.null(pb$overview)) {
+      ov <- pb$overview
+      md_lines <- c(md_lines,
+        paste0("- **Conditions tested:** ", ov$n_conditions),
+        paste0("- **Subgroup-condition pairs:** ", ov$n_subgroup_conditions),
+        paste0("- **Year spans:** ", paste(ov$year_spans, collapse = ", ")),
+        paste0("- **Content areas:** ", paste(ov$content_areas, collapse = ", ")),
+        paste0("- **N buckets:** ", paste(ov$n_buckets, collapse = ", ")),
+        paste0("- **Pool types:** ", paste(ov$pool_types, collapse = ", ")),
+        paste0("- **Outer replicates per cell:** ", ov$outer_reps),
+        paste0("- **Overall convergence rate:** ",
+               round(ov$overall_convergence_rate * 100, 1), "%"),
+        ""
+      )
+    }
+    # Precision operating table by (year_span x n_bucket)
+    if (!is.null(pb$precision_by_n_span)) {
+      tbl <- pb$precision_by_n_span
+      md_lines <- c(md_lines,
+        "### Precision Operating Table (Median SGPc, averaged across conditions)",
+        "",
+        "Columns: 95% CI width | MAE | Convergence rate  —  by N bucket and year span",
+        "",
+        "| Year Span | N = 1,000 | N = 2,500 | N = 5,000 | N = 7,500 | N = 10,000 |",
+        "|-----------|-----------|-----------|-----------|-----------|------------|"
+      )
+      spans <- sort(unique(sapply(tbl, `[[`, "year_span")))
+      buckets_ordered <- c(1000, 2500, 5000, 7500, 10000)
+      for (sp in spans) {
+        cells <- sapply(buckets_ordered, function(nb) {
+          row <- Filter(function(r) r$year_span == sp && r$n_bucket == nb, tbl)
+          if (length(row) == 0L) return("—")
+          r <- row[[1]]
+          paste0(round(r$median_ci_width_95, 1), " / ",
+                 round(r$median_mae, 1), " / ",
+                 round(r$convergence_rate * 100, 0), "%")
+        })
+        md_lines <- c(md_lines,
+          paste0("| ", sp, "-yr span | ",
+                 paste(cells, collapse = " | "), " |")
+        )
+      }
+      md_lines <- c(md_lines,
+        "",
+        "_Format: 95% CI width (SGP units) / MAE (SGP units) / convergence rate_",
+        "",
+        "**NAEP/TIMSS reference:** NAEP state-level N ~ 3,000–4,000 (between N=2,500",
+        "and N=5,000 rows); TIMSS country-level N ~ 4,000+ (N=5,000 row is a",
+        "conservative proxy). CI widths ≤ 8 SGP units meet the 'good' threshold.",
+        ""
+      )
+    }
+    # Year-span finding
+    if (!is.null(pb$year_span_finding)) {
+      md_lines <- c(md_lines,
+        "### Year Span Finding",
+        "",
+        paste0("- **Mean |median error| by span** — ",
+               paste(names(pb$year_span_finding), ":", round(unlist(pb$year_span_finding), 2),
+                     collapse = "; ")),
+        ""
+      )
+    }
+  }
+
+  # Subgroup estimates (Phase A showcase + any Phase B summaries)
+  md_lines <- c(md_lines,
+    "---",
+    "",
+    "## Phase A: Subgroup Estimates (Deep-Dive Condition)",
     ""
   )
 
@@ -136,31 +271,102 @@ export_step3_manifest <- function(results,
     md_lines <- c(md_lines,
       paste0("### ", sg$subgroup_id),
       paste0("- **Regime family:** ", sg$regime_family),
-      paste0("- **Parameters:** ", paste(round(sg$regime_param_hat, 4), collapse = ", ")),
-      paste0("- **Median SGPc:** ", sg$median_sgpc),
-      paste0("- **Mean SGPc:** ", sg$mean_sgpc),
+      paste0("- **Parameters (m, κ):** ", paste(round(sg$regime_param_hat, 4), collapse = ", ")),
+      paste0("- **Inferred median SGPc:** ", sg$median_sgpc),
+      paste0("- **Inferred mean SGPc:** ", sg$mean_sgpc),
+      if (!is.na(sg$dispersion_sd)) paste0("- **Dispersion (SD):** ", sg$dispersion_sd) else NULL,
       paste0("- **Wasserstein-1:** ", sg$distances$wasserstein1),
       paste0("- **CvM:** ", sg$distances$cramer_von_mises),
       ""
     )
   }
 
-  if (!is.null(results$bootstrap_results)) {
-    boot <- results$bootstrap_results
+  # Uncertainty / error decomposition
+  if (!is.null(results$bootstrap_results) || !is.null(manifest$error_sources)) {
     md_lines <- c(md_lines,
       "---",
       "",
-      "## Uncertainty Quantification",
-      "",
-      "### Sampling Uncertainty (Bootstrap)",
-      paste0("- **Replicates:** ", boot$n_boot,
-             " (converged: ", boot$n_converged, ")"),
-      paste0("- **Median SGPc 95% CI:** [",
-             round(boot$ci_median_sgpc[1], 1), ", ",
-             round(boot$ci_median_sgpc[2], 1), "]"),
-      paste0("- **SE:** ", round(boot$se_median_sgpc, 2)),
+      "## Uncertainty Quantification and Error Decomposition",
       ""
     )
+    if (!is.null(results$bootstrap_results)) {
+      boot <- results$bootstrap_results
+      md_lines <- c(md_lines,
+        "### Error 1 — Sampling Uncertainty (Phase A bootstrap at full N)",
+        paste0("- **Replicates:** ", boot$n_boot,
+               " (converged: ", boot$n_converged, ")"),
+        paste0("- **Median SGPc 95% CI:** [",
+               round(boot$ci_median_sgpc[1], 1), ", ",
+               round(boot$ci_median_sgpc[2], 1), "]"),
+        paste0("- **SE (median SGPc):** ", round(boot$se_median_sgpc, 2)),
+        ""
+      )
+    }
+    if (!is.null(manifest$error_sources)) {
+      es <- manifest$error_sources
+      md_lines <- c(md_lines,
+        "### Error 2 — Inference Error (Phase A inferred vs. true at full N)",
+        paste0("- **Inferred median SGPc:** ", es$inference$inferred_median),
+        paste0("- **True median SGPc:** ", es$inference$true_median),
+        paste0("- **Median error (bias):** ", es$inference$median_error, " SGP units"),
+        paste0("- **Mean error (bias):** ", es$inference$mean_error, " SGP units"),
+        "",
+        "_Interpretation: Error 2 is the residual bias at full subgroup N, attributable_",
+        "_to copula misspecification or regime family mismatch, not to small-sample noise._",
+        ""
+      )
+      if (!is.null(es$variance_decomposition)) {
+        vd <- es$variance_decomposition
+        md_lines <- c(md_lines,
+          "### Variance Decomposition (Phase A bootstrap)",
+          paste0("- **Var(sampling):** ", round(vd$var_sampling, 4)),
+          paste0("- **Var(copula param):** ", round(vd$var_copula, 4)),
+          paste0("- **% sampling:** ", round(vd$pct_sampling, 1), "%"),
+          paste0("- **% copula param:** ", round(vd$pct_copula, 1), "%"),
+          ""
+        )
+      }
+    }
+  }
+
+  # Bucket classification
+  if (!is.null(manifest$bucket_classification)) {
+    bc <- manifest$bucket_classification
+    md_lines <- c(md_lines,
+      "---",
+      "",
+      "## Bucket Classification",
+      "",
+      paste0("- **K=3 thresholds:** Low < ", bc$cutpoints_k3[1],
+             " | Typical ", bc$cutpoints_k3[1], "–", bc$cutpoints_k3[2],
+             " | High > ", bc$cutpoints_k3[2]),
+      paste0("- **K=5 thresholds:** Low < ", bc$cutpoints_k5[1],
+             " | Low-Typ ", bc$cutpoints_k5[1], "–", bc$cutpoints_k5[2],
+             " | Typical ", bc$cutpoints_k5[2], "–", bc$cutpoints_k5[3],
+             " | High-Typ ", bc$cutpoints_k5[3], "–", bc$cutpoints_k5[4],
+             " | High > ", bc$cutpoints_k5[4]),
+      paste0("- **Mean K=3 classification consistency:** ",
+             round(bc$mean_k3_consistency * 100, 1), "%"),
+      paste0("- **Mean K=5 classification consistency:** ",
+             round(bc$mean_k5_consistency * 100, 1), "%"),
+      ""
+    )
+    if (!is.null(bc$subgroups) && length(bc$subgroups) > 0) {
+      md_lines <- c(md_lines,
+        "| Subgroup | K=3 Bucket | K=3 Consistency | K=5 Bucket | K=5 Consistency |",
+        "|----------|------------|-----------------|------------|-----------------|"
+      )
+      for (sg in bc$subgroups) {
+        md_lines <- c(md_lines, paste0(
+          "| ", sg$subgroup_id,
+          " | ", sg$k3_assigned,
+          " | ", round(sg$k3_consistency * 100, 1), "%",
+          " | ", sg$k5_assigned,
+          " | ", round(sg$k5_consistency * 100, 1), "% |"
+        ))
+      }
+      md_lines <- c(md_lines, "")
+    }
   }
 
   md_lines <- c(md_lines,
@@ -170,23 +376,28 @@ export_step3_manifest <- function(results,
     "",
     "| File | Description |",
     "|------|-------------|",
-    "| `district_summary_grade.csv` | District-level model-health summary artifact |",
-    "| `step3_country_estimates.csv` | Subgroup estimates with dispersion and entropy |",
-    "| `step3_uncertainty_decomposition.csv` | Variance decomposition (sampling, copula, family) |",
-    "| `step3_bucket_probabilities.csv` | K=3 and K=5 bucket membership probabilities |",
+    "| `phase_a_deep_dive.rds` | Full Phase A results object (best estimate, bootstrap, family comparison) |",
+    "| `phase_a_analytic_payload.rds` | Notation-aligned figure payload for Phase A panel assembly |",
+    "| `phase_a_precision_anchor.csv` | Phase A baseline N₀/SE₀/CI-width anchor for scaling narrative |",
+    "| `phase_a_summary.csv` | One-row Phase A summary for reporting |",
+    "| `phase_b_systematic_summary.csv` | Phase B per-subgroup condition summaries (all conditions run) |",
+    "| `phase_b_precision_by_n.csv` | Phase B precision operating characteristics by N bucket |",
+    "| `phase_b_pool_registry.csv` | Phase B pooled-source registry with eligibility metadata |",
+    "| `phase_b_replicates.RData` | Phase B replicate-level raw results (200 draws × N × conditions) |",
     "| `phase_b_copula_sensitivity.csv` | Phase B2 sensitivity to copula parameter variants |",
     "| `phase_b_independence_sensitivity.csv` | Phase B3 sensitivity to stratified-by-U regimes |",
-    "| `phase_b_pool_registry.csv` | Phase B pooled-source registry with eligibility metadata |",
-    "| `phase_b_replicates.RData` | Phase B replicate-level operating-characteristics artifact |",
-    "| `phase_b_precision_by_n.csv` | Phase B precision operating characteristics by N bucket |",
-    "| `phase_a_analytic_payload.rds` | Notation-aligned figure payload for Step 3 Phase A |",
-    "| `phase_a_precision_anchor.csv` | Phase A baseline N0/SE0/CI-width anchor for scaling narrative |",
-    "| `exports/phase_a/*.csv` | Tidy figure-data exports (CDF, objective, density, fit, bootstrap, independence) |",
+    "| `step3_country_estimates.csv` | All-subgroup estimates with dispersion, entropy, distances |",
+    "| `step3_uncertainty_decomposition.csv` | Variance decomposition: var_sampling, var_copula, var_family |",
+    "| `step3_bucket_probabilities.csv` | K=3 and K=5 bucket membership probabilities |",
+    "| `district_summary_grade.csv` | District-level model-health summary artifact |",
+    "| `bucket_stability_summary.json` | Bucket classification consistency summary |",
     "| `output_contract_check.json` | Output contract validation report |",
-    "| `bucket_stability_summary.json` | Classification consistency summary |",
+    "| `exports/phase_a/*.csv` | Tidy figure-data exports (CDF, objective, density, fit, bootstrap, independence) |",
+    "| `phase_a_manifest.json` | Phase A deep-dive manifest (machine-readable) |",
+    "| `phase_a_manifest.md` | Phase A deep-dive manifest (human-readable) |",
     "| `step3_manifest.json` | This manifest (machine-readable) |",
     "| `step3_manifest.md` | This manifest (human-readable) |",
-    "| `run_metadata.json` | Reproducibility metadata |",
+    "| `run_metadata.json` | Reproducibility metadata (R version, packages, git hash, seed) |",
     "",
     "---",
     "",
@@ -197,8 +408,19 @@ export_step3_manifest <- function(results,
     'library(jsonlite)',
     paste0('manifest <- fromJSON("', json_path, '")'),
     '',
-    '# Access subgroup estimates',
-    'manifest$subgroup_estimates[[1]]$median_sgpc',
+    '# --- Phase A point estimate ---',
+    'manifest$subgroup_estimates[[1]]$median_sgpc   # inferred median SGPc',
+    '',
+    '# --- Phase B precision operating table ---',
+    '# CI width at NAEP-scale (N ~ 3000-4000, between n=2500 and n=5000 rows):',
+    'manifest$phase_b_systematic$precision_by_n_span  # list of (year_span, n_bucket, ci_width, mae, convergence)',
+    '',
+    '# --- Error decomposition ---',
+    'manifest$error_sources$inference   # Error 2: bias at full N',
+    'manifest$error_sources$variance_decomposition   # var_sampling / var_copula split',
+    '',
+    '# --- Bucket classification ---',
+    'manifest$bucket_classification$subgroups[[1]]$k3_assigned',
     "```",
     ""
   )

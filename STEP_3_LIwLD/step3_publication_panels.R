@@ -685,13 +685,222 @@ if (!is.null(phase_a)) {
 
 cat("\nExporting manifests...\n")
 
+# ---------------------------------------------------------------------------
+# C.M1  Assemble Phase B systematic summary
+#   - Precision operating table keyed by (year_span x n_bucket) — the primary
+#     Phase B scientific deliverable.
+#   - Overview: conditions, year spans, content areas, pool types, reps.
+# ---------------------------------------------------------------------------
+phase_b_systematic_summary <- NULL
+if (nrow(phase_b_precision) > 0) {
+
+  # Cross-tab precision by (year_span x n_bucket) if year_span column present
+  precision_by_n_span <- NULL
+  if ("year_span" %in% names(phase_b_precision) && "span" %in% names(phase_b_precision)) {
+    span_col <- "span"
+  } else if ("year_span" %in% names(phase_b_precision)) {
+    span_col <- "year_span"
+  } else {
+    span_col <- NULL
+  }
+
+  if (!is.null(span_col)) {
+    tmp <- phase_b_precision[, .(
+      median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4),
+      median_mae         = round(mean(median_mae, na.rm = TRUE), 4),
+      mean_mae           = round(mean(mean_mae, na.rm = TRUE), 4),
+      median_bias        = round(mean(median_bias, na.rm = TRUE), 4),
+      convergence_rate   = round(sum(n_converged, na.rm = TRUE) /
+                                   pmax(sum(n_reps, na.rm = TRUE), 1L), 4),
+      n_pools            = .N
+    ), by = c(span_col, "n_bucket")][order(get(span_col), n_bucket)]
+    # Normalise column name to year_span for manifest consumers
+    if (span_col != "year_span") setnames(tmp, span_col, "year_span")
+    precision_by_n_span <- lapply(seq_len(nrow(tmp)), function(i) as.list(tmp[i]))
+  }
+
+  # Year-span effect: mean |bias| per span
+  year_span_finding <- NULL
+  if (!is.null(precision_by_n_span)) {
+    span_vals <- sapply(precision_by_n_span, `[[`, "year_span")
+    mae_vals  <- sapply(precision_by_n_span, `[[`, "median_mae")
+    yf <- tapply(mae_vals, span_vals, mean, na.rm = TRUE)
+    year_span_finding <- as.list(round(yf, 4))
+  }
+
+  # Overview
+  n_pools_total     <- nrow(phase_b_pool_registry)
+  pool_types_used   <- if (n_pools_total > 0) unique(phase_b_pool_registry$pool_type) else character(0)
+  year_spans_tested <- sort(unique(phase_b_precision[[if (is.null(span_col)) "n_bucket" else span_col]]))
+  if (!is.null(span_col)) year_spans_tested <- sort(unique(phase_b_precision[[span_col]]))
+  n_buckets_tested  <- sort(unique(phase_b_precision$n_bucket))
+
+  overall_conv_rate <- if (sum(phase_b_precision$n_reps, na.rm = TRUE) > 0)
+    round(sum(phase_b_precision$n_converged, na.rm = TRUE) /
+            sum(phase_b_precision$n_reps, na.rm = TRUE), 4)
+  else NA_real_
+
+  # Content areas and subgroup-condition count from systematic summary csv
+  phase_b_sys_csv_path <- file.path(RESULTS_DIR, "phase_b_systematic_summary.csv")
+  n_conditions     <- NA_integer_
+  n_sg_conditions  <- NA_integer_
+  content_areas_run <- character(0)
+  if (file.exists(phase_b_sys_csv_path)) {
+    pb_sys_dt <- tryCatch(fread(phase_b_sys_csv_path), error = function(e) NULL)
+    if (!is.null(pb_sys_dt) && nrow(pb_sys_dt) > 0) {
+      n_sg_conditions  <- nrow(pb_sys_dt)
+      if ("condition_id" %in% names(pb_sys_dt))
+        n_conditions <- length(unique(pb_sys_dt$condition_id))
+      if ("content_area" %in% names(pb_sys_dt))
+        content_areas_run <- sort(unique(pb_sys_dt$content_area))
+    }
+  }
+
+  phase_b_systematic_summary <- list(
+    overview = list(
+      n_conditions             = n_conditions,
+      n_subgroup_conditions    = n_sg_conditions,
+      n_pools                  = n_pools_total,
+      pool_types               = pool_types_used,
+      year_spans               = year_spans_tested,
+      content_areas            = content_areas_run,
+      n_buckets                = n_buckets_tested,
+      outer_reps               = STEP3_CONFIG$systematic$outer_reps,
+      overall_convergence_rate = overall_conv_rate
+    ),
+    precision_by_n_span = precision_by_n_span,
+    year_span_finding   = year_span_finding,
+    # Flat precision by n_bucket only (backward compat)
+    precision_by_n = as.list(phase_b_precision[, .(
+      median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4),
+      median_mae         = round(mean(median_mae, na.rm = TRUE), 4)
+    ), by = n_bucket][order(n_bucket)])
+  )
+}
+
+# ---------------------------------------------------------------------------
+# C.M2  Error source decomposition object
+#   Error 1 (sampling):  Phase B precision CIs — degradation with falling N
+#   Error 2 (inference): Phase A inferred-vs-true at full pool N
+# ---------------------------------------------------------------------------
+error_sources <- NULL
+if (!is.null(phase_a)) {
+  inferred_median <- phase_a$best_estimate$regime$median * 100
+  inferred_mean   <- phase_a$best_estimate$regime$mean   * 100
+  true_median     <- median(phase_a$true_sgpc, na.rm = TRUE)
+  true_mean       <- mean(phase_a$true_sgpc,   na.rm = TRUE)
+
+  # Variance decomposition: var_sampling from bootstrap, var_copula if available
+  var_sampling <- var_copula <- pct_sampling <- pct_copula <- NA_real_
+  if (!is.null(phase_a$bootstrap) && !is.null(phase_a$bootstrap$se_median_sgpc)) {
+    var_sampling <- phase_a$bootstrap$se_median_sgpc^2
+  }
+  if (!is.null(phase_a$copula_uncertainty) && !is.null(phase_a$copula_uncertainty$var_copula)) {
+    var_copula <- phase_a$copula_uncertainty$var_copula
+    total_var  <- var_sampling + var_copula
+    if (is.finite(total_var) && total_var > 0) {
+      pct_sampling <- round(var_sampling / total_var * 100, 1)
+      pct_copula   <- round(var_copula   / total_var * 100, 1)
+    }
+  }
+
+  error_sources <- list(
+    inference = list(
+      description     = "Error 2: bias at full subgroup N from copula/regime misspecification",
+      inferred_median = round(inferred_median, 2),
+      true_median     = round(true_median, 2),
+      median_error    = round(inferred_median - true_median, 2),
+      inferred_mean   = round(inferred_mean, 2),
+      true_mean       = round(true_mean, 2),
+      mean_error      = round(inferred_mean - true_mean, 2),
+      n_subgroup      = phase_a$n_subgroup
+    ),
+    sampling = list(
+      description     = "Error 1: sampling noise from cross-sectional N; characterised by Phase B",
+      phase_b_available = !is.null(phase_b_systematic_summary),
+      naep_reference_n  = list(min = 3000L, max = 4000L,
+                                note = "NAEP state-level typical range"),
+      timss_reference_n = list(min = 4000L, note = "TIMSS country-level minimum")
+    ),
+    variance_decomposition = if (!is.na(var_sampling)) list(
+      var_sampling  = round(var_sampling, 4),
+      var_copula    = if (!is.na(var_copula))  round(var_copula, 4)  else NA_real_,
+      pct_sampling  = pct_sampling,
+      pct_copula    = pct_copula,
+      note = "var_sampling from bootstrap SE²; var_copula from n_copula_draws uncertainty draws"
+    ) else NULL
+  )
+}
+
+# ---------------------------------------------------------------------------
+# C.M3  Bucket classification summary
+# ---------------------------------------------------------------------------
+bucket_classification <- NULL
+bucket_summary_path <- file.path(RESULTS_DIR, "bucket_stability_summary.json")
+if (file.exists(bucket_summary_path)) {
+  bucket_classification <- tryCatch(
+    jsonlite::fromJSON(bucket_summary_path, simplifyVector = FALSE),
+    error = function(e) {
+      cat("WARNING: could not load bucket_stability_summary.json:", conditionMessage(e), "\n")
+      NULL
+    }
+  )
+}
+
+# ---------------------------------------------------------------------------
+# C.M4  Phase B subgroup-level summaries (all conditions)
+#   These supplement the single Phase A subgroup in subgroup_estimates.
+# ---------------------------------------------------------------------------
+phase_b_subgroup_estimates <- list()
+# phase_b_sys_csv_path was set in C.M1; reuse it here
+if (!exists("phase_b_sys_csv_path"))
+  phase_b_sys_csv_path <- file.path(RESULTS_DIR, "phase_b_systematic_summary.csv")
+if (file.exists(phase_b_sys_csv_path)) {
+  pb_sys_dt2 <- tryCatch(fread(phase_b_sys_csv_path), error = function(e) NULL)
+  if (!is.null(pb_sys_dt2) && nrow(pb_sys_dt2) > 0) {
+    for (i in seq_len(nrow(pb_sys_dt2))) {
+      row   <- pb_sys_dt2[i]
+      sg_key <- paste0("phaseb__", row$condition_id, "__", row$subgroup_id)
+      phase_b_subgroup_estimates[[sg_key]] <- list(
+        source         = "phase_b",
+        condition_id   = row$condition_id,
+        subgroup_id    = row$subgroup_id,
+        year_span      = row$year_span,
+        content_area   = row$content_area,
+        dataset_id     = row$dataset_id,
+        n_subgroup     = row$n_subgroup,
+        regime_family  = row$regime_family,
+        regime_param_hat = c(row$regime_param_1, row$regime_param_2),
+        m_hat          = row$m_hat,
+        kappa_hat      = row$kappa_hat,
+        median_sgpc    = round(row$median_sgpc_inferred, 2),
+        mean_sgpc      = round(row$mean_sgpc_inferred, 2),
+        true_median    = round(row$median_sgpc_true, 2),
+        true_mean      = round(row$mean_sgpc_true, 2),
+        median_diff    = round(row$median_diff, 2),
+        mean_diff      = round(row$mean_diff, 2),
+        distance_min   = round(row$wasserstein1, 6),
+        distances      = list(wasserstein1 = round(row$wasserstein1, 6),
+                              cramer_von_mises = round(row$cvm, 6)),
+        convergence    = 1L
+      )
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# C.M5  Assemble full manifest_results
+# ---------------------------------------------------------------------------
 manifest_results <- list(
-  subgroup_estimates = list(),
-  bootstrap_results = if (!is.null(phase_a)) phase_a$bootstrap else NULL,
+  subgroup_estimates    = phase_b_subgroup_estimates,  # Phase B conditions (populated above)
+  bootstrap_results     = if (!is.null(phase_a)) phase_a$bootstrap else NULL,
   assumption_diagnostics = if (!is.null(phase_a)) phase_a$independence_diagnostics else NULL,
+  phase_b_systematic    = phase_b_systematic_summary,
+  error_sources         = error_sources,
+  bucket_classification = bucket_classification,
   sensitivity = list(
     precision_by_n = if (nrow(phase_b_precision) > 0) list(
-      n_rows = nrow(phase_b_precision),
+      n_rows    = nrow(phase_b_precision),
       n_buckets = sort(unique(phase_b_precision$n_bucket)),
       median_ci95_by_bucket = as.list(phase_b_precision[, .(
         median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4)
@@ -702,23 +911,25 @@ manifest_results <- list(
     ) else NULL,
     copula_param_range = if (nrow(phase_b_copula) > 0) list(
       rho = range(phase_b_copula$rho, na.rm = TRUE),
-      df = range(phase_b_copula$df, na.rm = TRUE)
+      df  = range(phase_b_copula$df,  na.rm = TRUE)
     ) else NULL,
     independence_stratified = if (nrow(phase_b_indep) > 0) list(
-      n_rows = nrow(phase_b_indep),
-      mean_delta_median = mean(phase_b_indep$delta_median, na.rm = TRUE),
-      mean_delta_mean = mean(phase_b_indep$delta_mean, na.rm = TRUE)
+      n_rows            = nrow(phase_b_indep),
+      mean_delta_median = round(mean(phase_b_indep$delta_median, na.rm = TRUE), 4),
+      mean_delta_mean   = round(mean(phase_b_indep$delta_mean,   na.rm = TRUE), 4)
     ) else NULL
   ),
-  config = STEP3_CONFIG,
+  config   = STEP3_CONFIG,
   metadata = list(
-    timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
-    n_phase_b_subgroups = if (!is.null(phase_b)) nrow(phase_b) else 0,
-    n_phase_b_pools = nrow(phase_b_pool_registry),
-    n_phase_b_precision_rows = nrow(phase_b_precision)
+    timestamp               = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
+    n_phase_b_subgroups     = if (!is.null(phase_b)) nrow(phase_b) else 0L,
+    n_phase_b_pools         = nrow(phase_b_pool_registry),
+    n_phase_b_precision_rows = nrow(phase_b_precision),
+    n_phase_b_sg_conditions = length(phase_b_subgroup_estimates)
   )
 )
 
+# Add Phase A subgroup to estimates (primary showcase)
 if (!is.null(phase_a)) {
   sg_key <- paste0(phase_a$condition_id, "__", phase_a$subgroup_id)
   manifest_results$subgroup_estimates[[sg_key]] <- phase_a$best_estimate
