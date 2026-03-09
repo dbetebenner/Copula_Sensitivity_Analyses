@@ -911,17 +911,24 @@ for (ds_id in cfg_sys$datasets) {
       # u_full/v_full/p1_copula (which are only needed for truth recomputation).
       push_ok <- tryCatch({
         cond_push <- mirai::everywhere({
-          .PHASEB_TRUE_SGPC_FULL <- true_sgpc_push
-          .PHASEB_U_FULL       <- u_full_push
-          .PHASEB_V_FULL       <- v_full_push
-          .PHASEB_SS_PRIOR     <- ss_prior_push
-          .PHASEB_SS_CURRENT   <- ss_current_push
-          .PHASEB_REFS         <- refs_push
-          .PHASEB_KERNEL_CACHE <- kernel_cache_push
-          .PHASEB_P1_COPULA    <- p1_copula_push
-          .PHASEB_POOL_DEFS    <- pool_defs_push
-          .PHASEB_CFG_REG      <- cfg_reg_push
-          .PHASEB_CFG_DIST     <- cfg_dist_push
+          # <<- is required here (not <-). everywhere() evaluates this block
+          # in a local task frame whose parent is the daemon's .GlobalEnv.
+          # <- would assign into that local frame, which is discarded when
+          # the task completes. <<- walks up to .GlobalEnv and persists the
+          # binding there, where process_replicate_batch can find it via
+          # normal lexical lookup (its enclosing env is the daemon's .GlobalEnv,
+          # set when process_replicate_batch.R was sourced at daemon init).
+          .PHASEB_TRUE_SGPC_FULL <<- true_sgpc_push
+          .PHASEB_U_FULL         <<- u_full_push
+          .PHASEB_V_FULL         <<- v_full_push
+          .PHASEB_SS_PRIOR       <<- ss_prior_push
+          .PHASEB_SS_CURRENT     <<- ss_current_push
+          .PHASEB_REFS           <<- refs_push
+          .PHASEB_KERNEL_CACHE   <<- kernel_cache_push
+          .PHASEB_P1_COPULA      <<- p1_copula_push
+          .PHASEB_POOL_DEFS      <<- pool_defs_push
+          .PHASEB_CFG_REG        <<- cfg_reg_push
+          .PHASEB_CFG_DIST       <<- cfg_dist_push
           TRUE
         },
         true_sgpc_push     = true_sgpc_full,
