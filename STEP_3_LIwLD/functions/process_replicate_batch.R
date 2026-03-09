@@ -40,6 +40,15 @@ process_replicate_batch <- function(
     u_rep <- reference_cdf(.PHASEB_SS_PRIOR[rep_obs_idx],   .PHASEB_REFS$ref_prior)
     v_rep <- reference_cdf(.PHASEB_SS_CURRENT[rep_obs_idx], .PHASEB_REFS$ref_current)
 
+    # grid_resolution for replicates: use rep_grid_resolution from regime config
+    # if available (set in config_step3.R systematic$rep_grid_resolution), else
+    # fall back to 15. Lower values (~10) give ~2.25x per-task speedup at the
+    # cost of slightly coarser optimisation — acceptable since we average 200 reps.
+    rep_grid_res <- {
+      gr <- .PHASEB_CFG_REG[["rep_grid_resolution"]]
+      if (is.null(gr) || !is.finite(as.numeric(gr)) || as.integer(gr) < 5L) 15L
+      else as.integer(gr)
+    }
     est_rep <- tryCatch(
       estimate_regime(
         u_sample        = u_rep,
@@ -47,7 +56,7 @@ process_replicate_batch <- function(
         kernel_cache    = .PHASEB_KERNEL_CACHE,
         regime_family   = .PHASEB_CFG_REG$primary_family,
         distance_fn     = .PHASEB_CFG_DIST$primary,
-        grid_resolution = 15L,
+        grid_resolution = rep_grid_res,
         verbose         = FALSE
       ),
       error = function(e) NULL

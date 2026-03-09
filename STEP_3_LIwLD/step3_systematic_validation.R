@@ -891,6 +891,18 @@ for (ds_id in cfg_sys$datasets) {
       }
     }
 
+    # Sort tasks slowest-first (largest N bucket first).
+    # With many workers (e.g. 188 on r8g.48xlarge) and a flat task list, all tasks
+    # are dispatched simultaneously and workers pick them up greedily. Without
+    # sorting, the last dispatch round may contain only a handful of slow N=10000
+    # batches while the remaining workers sit idle. Dispatching large-N tasks
+    # first ensures the longest jobs start immediately and workers converge
+    # together rather than finishing in a long slow tail.
+    if (length(tasks) > 1L) {
+      task_order <- order(sapply(tasks, `[[`, "n_bucket"), decreasing = TRUE)
+      tasks      <- tasks[task_order]
+    }
+
     n_tasks <- length(tasks)
     .plog(sprintf("  Stage 2: %d replicate tasks dispatched (%d workers, reps=%d, batch=%d)",
                   n_tasks, if (b1_daemons_live) n_workers else 1L,

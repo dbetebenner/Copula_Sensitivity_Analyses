@@ -57,7 +57,16 @@ STEP3_CONFIG <- list(
     tie_tolerance  = 1e-4,       # Prefer beta when distances are nearly tied
 
     # Grid search resolution (per parameter dimension)
+    # Used by Phase A deep-dive and Stage 1 full-pool estimates.
     grid_resolution = 30,
+
+    # Grid resolution for Phase B replicate batches (process_replicate_batch).
+    # Lower than grid_resolution is intentional: each replicate is one of 200
+    # draws so individual precision matters less than aggregate statistics.
+    # 10 → 100 grid points vs 15² = 225 → ~2.25x per-task speedup.
+    # Set to NULL to keep the hardcoded default of 15.
+    rep_grid_resolution = 10,
+
     stratify_by_u = FALSE,
     stratify_bins = 5
   ),
@@ -126,7 +135,16 @@ STEP3_CONFIG <- list(
     n_growth_strata = 3,
     cluster_min_pool_n = 500,
     use_parallel = TRUE,
-    rep_batch_size = 25L,       # replicates per parallel task (tune for granularity vs overhead)
+    # rep_batch_size: replicates per parallel task.
+    # This is the most critical tuning parameter for large EC2 instances.
+    # Rule of thumb: set so that (outer_reps / rep_batch_size) * n_eligible_combos >> n_workers
+    # to ensure workers stay busy and the final dispatch round is not a long tail.
+    #   r8g.4xlarge  (16 vCPU,  14 workers): 25 — 192 tasks, ~2 rounds at N>5000 sizes
+    #   r8g.12xlarge (48 vCPU,  46 workers): 10 — 480 tasks, good utilisation
+    #   r8g.48xlarge (192 vCPU, 188 workers): 5 — 960 tasks, ~5 rounds, good utilisation
+    # With batch=25 on r8g.48xlarge, only 192 tasks are dispatched to 188 workers:
+    # the last 4 tasks (possibly N=10000 at ~7100s each) leave 184 workers idle.
+    rep_batch_size = 5L,        # SET TO 5 FOR r8g.48xlarge; SET TO 25 FOR r8g.4xlarge
     year_spans  = c(1, 2, 4),       # Test these spans
     content_areas = NULL,            # NULL = all available
     # "step2_empirical" = load sgpc_emp from STEP 2 outputs (no recomputation)
