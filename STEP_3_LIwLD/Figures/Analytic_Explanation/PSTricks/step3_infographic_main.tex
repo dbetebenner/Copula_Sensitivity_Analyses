@@ -6,13 +6,22 @@
 %%%% \includegraphics, following the pattern in SGPc_Explanation.tex
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=16in,paperheight=22.7in,margin=0in]{geometry}
+\usepackage[paperwidth=16in,paperheight=23.4in,margin=0in]{geometry}
 \usepackage{graphicx}
 \usepackage[svgnames]{xcolor}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
 
 \input{step3_styles}
 \input{data/summary_metrics}
+
+\newlength{\fnlabelwidth}
+\setlength{\fnlabelwidth}{0.075in}
+\newcommand{\fnline}[2]{%
+  \par\noindent
+  \makebox[\fnlabelwidth][l]{$^{#1}$}%
+  \parbox[t]{\dimexpr\linewidth-\fnlabelwidth\relax}{#2}%
+  \par
+}
 
 \pagestyle{empty}
 \begin{document}
@@ -78,16 +87,17 @@
 
 \vspace{0.60in}
 
-\hspace{0.15in}%
-$^{1}$ Panel A also shows the density, $f_{\HShat}(v)$, the density induced from the baseline copula and fitted growth regime from panels B1 and B2, superimposed on the observed density, $f^{\mathrm{obs}}_{V,S}(v)$.
+\noindent
+\hspace{0.5in}%
+\begin{minipage}[t]{15.2in}
+\small\raggedright
+\setlength{\parskip}{0pt}
+
+\fnline{1}{Panel A also shows the density, $f_{\HShat}(v)$, the density induced from the baseline copula and fitted growth regime from panels B1 and B2, superimposed on the observed density, $f^{\mathrm{obs}}_{V,S}(v)$.}
 
 \vspace{4pt}
-\hspace{0.15in}%
-$^{2}$%
-\begin{minipage}[t]{15.2in}
-The baseline copula used for inference is selected from canonical STEP 1 sensitivity analyses over 966 longitudinal conditions across four datasets: the $t$-copula is best by AIC in 63.6\% of conditions (Frank: 30.7\%). In the cross-stratified canonical table below (content area $\times$ year span), the recommended family is $t$ in every cell; entries report $(\rho,\mathrm{df})$ medians.
+\fnline{2}{The baseline copula used for inference is selected from canonical STEP 1 sensitivity analyses over 966 longitudinal conditions across four datasets: the $t$-copula is best by AIC in 63.6\% of conditions (Frank: 30.7\%). In the cross-stratified canonical table below (content area $\times$ year span), the recommended family is $t$ in every cell; entries report $(\rho,\mathrm{df})$ medians.
 \vspace{2pt}
-
 \begin{center}
 \begin{tabular}{@{}lcccc@{}}
 \textbf{Content area} & \textbf{1-year} & \textbf{2-year} & \textbf{3-year} & \textbf{4-year} \\
@@ -98,18 +108,24 @@ READING     & (0.84, 28.33) & (0.80, 29.34) & (0.77, 26.63) & (0.76, 28.22) \\
 WRITING     & (0.85, 23.72) & (0.82, 27.58) & (0.80, 27.22) & (0.77, 23.86) \\
 ELA         & (0.84, 41.95) & (0.79, 46.41) & (0.76, 51.57) & (0.72, 42.04) \\
 \end{tabular}
-\end{center}
-\end{minipage}
+\end{center}}
 
 \vspace{6pt}
-\hspace{0.15in}%
-$^{3}$ Other regime families considered include the truncated exponential family (the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean) and the truncated uniform family. 
+\fnline{3}{Other regime families considered include the truncated exponential family (the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean) and the truncated uniform family.}
 
 \vspace{4pt}
-\hspace{0.15in}%
-$^{4}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup; meaning there is no correlation between the starting point $u$ and the growth regime. This assumption is investigated more deeply in the full paper.
+\fnline{4}{Here, $U$ denotes the subgroup's prior-grade reference quantile (pseudo-observation), and $C_0$ is the canonical baseline copula selected from STEP 1 by content area and year span. The fitted growth regime $\widehat{H}_S$ (distribution of latent $P=\SGPc/100$) and $C_0$ define a forward map
+\[
+(U,\;C_0,\;\widehat{H}_S)\ \longmapsto\ F_{\widehat{H}_S}(v)=\mathbb{E}_U\!\left[\widehat{H}_S\!\left(F_0(v\mid U)\right)\right],
+\]
+with corresponding induced density $f_{\widehat{H}_S}(v)$. The latent SGPc distribution itself is given by $\widehat{H}_S$ (density $\widehat{h}_S(p)=d\widehat{H}_S/dp$), which is estimated by matching $F_{\widehat{H}_S}$ to the observed current marginal.}
 
 \vspace{4pt}
-\hspace{0.15in}%
-$^{5}$ The Beta family, $\mathrm{Beta}(\alpha, \beta)$, is reparameterized via $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P] = \alpha / (\alpha + \beta)$ (the regime center, mean \SGPc~on the 0--1 scale) and $\kappa = \alpha + \beta$ (the concentration parameter).
+\fnline{5}{We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup; meaning there is no correlation between the starting point $u$ and the growth regime. This assumption is investigated more deeply in the full paper.}
+
+\vspace{4pt}
+\fnline{6}{The Beta family, $\mathrm{Beta}(\alpha, \beta)$, is reparameterized via $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P] = \alpha / (\alpha + \beta)$ (the regime center, mean \SGPc~on the 0--1 scale) and $\kappa = \alpha + \beta$ (the concentration parameter).}
+
+\end{minipage}
+
 \end{document}

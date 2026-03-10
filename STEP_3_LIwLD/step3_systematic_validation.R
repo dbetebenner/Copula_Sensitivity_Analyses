@@ -559,16 +559,54 @@ for (ds_id in cfg_sys$datasets) {
   cond_spans   <- sapply(cond_metas, `[[`, "year_span")
   cond_content <- sapply(cond_metas, `[[`, "content_area")
 
-  if (!is.null(cfg_sys$year_spans)) {
-    keep         <- cond_spans %in% cfg_sys$year_spans
+  # Year span filter: per-dataset override takes precedence over the global setting.
+  # dataset_3 uses year_spans = c(1L, 2L) because span=4 is structurally impossible
+  # post-2016 without crossing the 2015 assessment-scale transition.
+  ds_year_spans <- cfg_sys$condition_filters[[ds_id]]$year_spans %||%
+                   cfg_sys$year_spans
+  if (!is.null(ds_year_spans)) {
+    keep           <- cond_spans %in% ds_year_spans
     conditions_all <- conditions_all[keep]
-    cond_spans   <- cond_spans[keep]
-    cond_content <- cond_content[keep]
+    cond_spans     <- cond_spans[keep]
+    cond_content   <- cond_content[keep]
+  }
+
+  # Content area alias normalisation: remap dataset-specific labels to the
+  # canonical group names BEFORE applying the global content_areas filter.
+  # e.g. dataset_3 codes literacy as "ELA"; aliasing to "READING" ensures
+  # those conditions pass the filter and are labelled "READING" in outputs,
+  # so that ELA and READING are treated as one literacy group across datasets.
+  local_ca_aliases <- cfg_sys$condition_filters[[ds_id]]$content_area_aliases
+  if (!is.null(local_ca_aliases)) {
+    for (a_from in names(local_ca_aliases)) {
+      cond_content[cond_content == a_from] <- local_ca_aliases[[a_from]]
+    }
   }
   if (!is.null(cfg_sys$content_areas)) {
-    keep         <- cond_content %in% cfg_sys$content_areas
+    keep           <- cond_content %in% cfg_sys$content_areas
     conditions_all <- conditions_all[keep]
-    cond_spans   <- cond_spans[keep]
+    cond_spans     <- cond_spans[keep]
+    cond_content   <- cond_content[keep]
+  }
+
+  # Per-dataset condition filters (e.g., dataset_3 restricted to 2016+)
+  ds_filters <- cfg_sys$condition_filters[[ds_id]]
+  if (!is.null(ds_filters)) {
+    # Extract year_current from condition IDs (first 4 characters encode the year)
+    cond_years <- as.integer(substr(conditions_all, 1, 4))
+    keep <- rep(TRUE, length(conditions_all))
+    if (!is.null(ds_filters$min_year)) {
+      keep <- keep & (cond_years >= ds_filters$min_year)
+    }
+    if (!is.null(ds_filters$max_year)) {
+      keep <- keep & (cond_years <= ds_filters$max_year)
+    }
+    if (sum(keep) < length(conditions_all)) {
+      cat("  Condition year filter (", ds_id, "): ",
+          length(conditions_all), " -> ", sum(keep), " conditions\n", sep = "")
+    }
+    conditions_all <- conditions_all[keep]
+    cond_spans     <- cond_spans[keep]
   }
 
   n_conds <- min(length(conditions_all), cfg_sys$n_conditions_per_dataset)
@@ -625,6 +663,12 @@ for (ds_id in cfg_sys$datasets) {
   for (ci in seq_along(conditions)) {
     condition_id   <- conditions[ci]
     cond           <- parse_condition_id(condition_id)
+    # Alias map for this dataset (e.g. ELA -> READING for dataset_3).
+    # cond$content_area keeps its raw value ("ELA") until after the data
+    # queries that depend on matching the actual CONTENT_AREA column in
+    # STATE_DATA; it is then remapped to the canonical label in-place so
+    # that all output rows carry the canonical group name.
+    local_ca_aliases <- cfg_sys$condition_filters[[ds_id]]$content_area_aliases
     cond_t0        <- Sys.time()
     total_conditions_run <- total_conditions_run + 1L
 
@@ -653,6 +697,16 @@ for (ds_id in cfg_sys$datasets) {
       error = function(e) { cat("    ERROR building refs:", e$message, "\n"); NULL }
     )
     if (is.null(refs)) next
+
+    # Data queries (create_longitudinal_pairs, build_condition_reference) are
+    # complete and used the raw content_area label (e.g. "ELA") to match the
+    # CONTENT_AREA column in STATE_DATA.  Remap to the canonical group label
+    # now so that all subsequent output rows carry the canonical name
+    # (e.g. "READING"), keeping ELA and READING as one literacy group.
+    if (!is.null(local_ca_aliases) &&
+        !is.null(local_ca_aliases[[cond$content_area]])) {
+      cond$content_area <- local_ca_aliases[[cond$content_area]]
+    }
 
     # --- Copula selection: canonical_only vs phase1_best_fit ---
     p1 <- tryCatch(load_phase1_condition(ds_id, condition_id), error = function(e) NULL)

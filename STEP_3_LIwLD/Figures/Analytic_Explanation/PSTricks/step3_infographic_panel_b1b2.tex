@@ -4,7 +4,7 @@
 %%%% Contains: title, B1 and B2 graphics side-by-side, B1B2 text, footnotes 2-5.
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=8.3in,paperheight=20.4in,margin=0in]{geometry}
+\usepackage[paperwidth=8.3in,paperheight=21.2in,margin=0in]{geometry}
 \usepackage{graphicx}
 \usepackage[svgnames]{xcolor}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
@@ -79,12 +79,21 @@ $^{3}$ Other regime families considered include the truncated exponential family
 interval with a fixed mean) and the truncated uniform family.
 
 \vspace{4pt}
-$^{4}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting
+$^{4}$ Here, $U$ denotes the subgroup’s prior-grade reference quantile (pseudo-observation), 
+and $C_0$ is the canonical baseline copula selected from STEP 1 by content area and year span. 
+The fitted growth regime $\widehat{H}_S$ (distribution of latent $P=\SGPc/100$) and $C_0$ 
+define a forward map \[ (U,\;C_0,\;\widehat{H}_S)\ \longmapsto\ F_{\widehat{H}_S}(v)=\mathbb{E}_U\!\left[\widehat{H}_S\!\left(F_0(v\mid U)\right)\right], \] 
+with corresponding induced density $f_{\widehat{H}_S}(v)$. The latent SGPc distribution itself 
+is given by $\widehat{H}_S$ (density $\widehat{h}_S(p)=d\widehat{H}_S/dp$), which is estimated 
+by matching $F_{\widehat{H}_S}$ to the observed current marginal.
+
+\vspace{4pt}
+$^{5}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting
 point within the subgroup; meaning there is no correlation between the starting point $u$ and
 the growth regime. This assumption is investigated more deeply in the full paper.
 
 \vspace{4pt}
-$^{5}$ The Beta family, $\mathrm{Beta}(\alpha, \beta)$, is reparameterized via
+$^{6}$ The Beta family, $\mathrm{Beta}(\alpha, \beta)$, is reparameterized via
 $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P] = \alpha / (\alpha + \beta)$
 (the regime center, mean \SGPc~on the 0--1 scale) and $\kappa = \alpha + \beta$
 (the concentration parameter).}

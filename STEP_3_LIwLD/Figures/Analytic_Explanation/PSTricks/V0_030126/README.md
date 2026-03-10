@@ -1,8 +1,17 @@
-# STEP 3 PSTricks Infographic
+# STEP 3 PSTricks Infographic — V0 (Archived)
 
-> Archived snapshot (`V1_030126`) kept for historical comparison.
-> Active development and REPOMIX/AI context packaging target the parent `PSTricks/` directory.
-> Canonical active-theme title in parent directory: **Longitudinal Inference Without Longitudinal Data**.
+> **Archived snapshot** (`V0_030126`, original build date 2026-03-01). Kept for historical
+> comparison only. Do not use for publication.
+>
+> **Active version:** `PSTricks/` (V2, build date 2026-03-07). See `../README.md`.
+>
+> **Key differences from active V2:**
+> - Panel ordering: A (marginals) → B (CDF check) → C (objective surface) → D (regime density)
+>   rather than the current A → B1 (objective) → B2 (CDF check) → C.
+> - No versioned output PDF; no AI context artifact pipeline.
+> - No `::PHASE_A_REAL_DATA::` export mode.
+>
+> Canonical active-theme title: **Longitudinal Inference Without Longitudinal Data**.
 
 Publication-grade 2×4 PSTricks/LaTeX infographic explaining how STEP 3 infers a latent growth regime $\widehat{H}_S$ from unlinked cross-sectional data.
 

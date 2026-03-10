@@ -68,6 +68,19 @@ cd ..
 Rscript step3_analytic_explanation.R
 ```
 
+### Data source modes
+
+`step3_export_data.R` supports two source modes:
+
+- `::SYNTHETIC::` (default): uses `../outputs/step3_growth_regime_analytic_infographic_data.rds`
+- `::PHASE_A_REAL_DATA::`: uses `../../../results/phase_a_analytic_payload.rds`
+
+Run real-data export mode with:
+
+```bash
+STEP3_EXPORT_MODE=PHASE_A_REAL_DATA Rscript step3_export_data.R
+```
+
 ## Build pipeline
 
 ```
@@ -248,7 +261,7 @@ if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 # Build configuration
 # ---------------------------------------------------------------------------
 # Update this version string when issuing a new release artifact.
-infographic_release_version <- "1.0.0"
+infographic_release_version <- "2.0.1"
 infographic_release_stem <- "Longitudinal_Inference_Without_Longitudinal_Data"
 infographic_release_pdf <- file.path(
   output_dir,
@@ -405,6 +418,11 @@ cat("\n--- Step 3: Assemble infographic ---\n")
 compile_xelatex("step3_header_band")
 compile_xelatex("step3_infographic_main")
 
+cat("\n--- Step 4: Compile standalone panel PDFs ---\n")
+compile_xelatex("step3_infographic_panel_a")
+compile_xelatex("step3_infographic_panel_b1b2")
+compile_xelatex("step3_infographic_panel_c")
+
 final_pdf <- file.path(output_dir, "step3_infographic_main.pdf")
 if (file.exists(final_pdf)) {
   copied <- file.copy(final_pdf, infographic_release_pdf, overwrite = TRUE)
@@ -445,7 +463,8 @@ if (file.exists(final_pdf)) {
 # ---------------------------------------------------------------------------
 
 cat("\n--- Cleanup ---\n")
-all_stems <- c(graphic_panels, text_panels, "step3_header_band", "step3_infographic_main")
+all_stems <- c(graphic_panels, text_panels, "step3_header_band", "step3_infographic_main",
+               "step3_infographic_panel_a", "step3_infographic_panel_b1b2", "step3_infographic_panel_c")
 #cleanup_suffixes <- c(".aux",".log",".dvi",".ps",".fls",".fdb_latexmk",".out",".pdf")
 cleanup_suffixes <- c(".aux",".log",".dvi",".fls",".fdb_latexmk",".out",".pdf")
 old_wd <- setwd(pstricks_dir)
@@ -475,26 +494,35 @@ cat("Final PNG :", file.path(output_dir, "step3_infographic_main.png"), "\n\n")
 ###
 ###############################################################################
 
-pstricks_dir <- tryCatch({
-  normalizePath(dirname(sys.frame(1)$ofile), winslash = "/", mustWork = TRUE)
-}, error = function(e) {
+script_file <- sub("^--file=", "", commandArgs(trailingOnly = FALSE)[grep("^--file=", commandArgs(trailingOnly = FALSE))][1])
+pstricks_dir <- if (!is.na(script_file) && nzchar(script_file)) {
+  normalizePath(dirname(script_file), winslash = "/", mustWork = TRUE)
+} else {
   normalizePath(getwd(), winslash = "/", mustWork = TRUE)
-})
+}
 
 analytic_dir <- normalizePath(file.path(pstricks_dir, ".."), winslash = "/")
+step3_root <- normalizePath(file.path(pstricks_dir, "..", "..", ".."), winslash = "/")
 data_dir     <- file.path(pstricks_dir, "data")
 
 if (!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
 
-rds_path <- file.path(analytic_dir, "outputs",
-                      "step3_growth_regime_analytic_infographic_data.rds")
+export_mode <- Sys.getenv("STEP3_EXPORT_MODE", unset = "SYNTHETIC")
+export_mode <- toupper(export_mode)
+
+rds_path <- if (export_mode == "PHASE_A_REAL_DATA") {
+  file.path(step3_root, "results", "phase_a_analytic_payload.rds")
+} else {
+  file.path(analytic_dir, "outputs", "step3_growth_regime_analytic_infographic_data.rds")
+}
 
 if (!file.exists(rds_path)) {
-  stop("RDS not found at: ", rds_path,
-       "\nRun step3_analytic_explanation.R first.")
+  cat("RDS not found at: ", rds_path, "\n", sep = "")
+  quit(save = "no", status = 1, runLast = FALSE)
 }
 
 dat <- readRDS(rds_path)
+cat("Loaded mode:", export_mode, "\n")
 cat("Loaded:", rds_path, "\n\n")
 
 
@@ -513,22 +541,61 @@ d_v <- density(dat$v_sample, from = 0, to = 1, n = 256, bw = "SJ")
 write_dat(round(d_u$x, 6), round(d_u$y, 6), "panel_A_density_U.dat")
 write_dat(round(d_v$x, 6), round(d_v$y, 6), "panel_A_density_V.dat")
 
+# Best-fit induced density: numerically differentiate F_pred over v_grid,
+# then smooth with a Gaussian kernel for a clean illustration.
+# Done after Panel B2 CDF is resolved so F_pred / F_inferred is available.
+# (Deferred below -- see "Panel A inferred density" block after Panel B2.)
+
 
 # --- Panel B2: CDF curves ---------------------------------------------------
 cat("Panel B2...\n")
-write_dat(round(dat$v_grid, 6), round(dat$F_obs, 6),      "panel_B2_cdf_obs.dat")
-write_dat(round(dat$v_grid, 6), round(dat$F_uniform, 6),  "panel_B2_cdf_uniform.dat")
-write_dat(round(dat$v_grid, 6), round(dat$est$F_pred, 6), "panel_B2_cdf_inferred.dat")
+if (export_mode == "PHASE_A_REAL_DATA") {
+  write_dat(round(dat$v_grid, 6), round(dat$F_obs, 6),      "panel_B2_cdf_obs.dat")
+  write_dat(round(dat$v_grid, 6), round(dat$F_uniform, 6),  "panel_B2_cdf_uniform.dat")
+  write_dat(round(dat$v_grid, 6), round(dat$F_pred, 6),     "panel_B2_cdf_inferred.dat")
+} else {
+  write_dat(round(dat$v_grid, 6), round(dat$F_obs, 6),      "panel_B2_cdf_obs.dat")
+  write_dat(round(dat$v_grid, 6), round(dat$F_uniform, 6),  "panel_B2_cdf_uniform.dat")
+  write_dat(round(dat$v_grid, 6), round(dat$est$F_pred, 6), "panel_B2_cdf_inferred.dat")
+}
 # Co-monotonic (TAMP) induced marginal under equi-percentile mapping:
 # F_tamp(v) = P(U <= v) = F_U(v)
-F_tamp <- stats::ecdf(dat$u_sample)(dat$v_grid)
+F_tamp <- if (!is.null(dat$F_tamp)) dat$F_tamp else stats::ecdf(dat$u_sample)(dat$v_grid)
 write_dat(round(dat$v_grid, 6), round(F_tamp, 6),         "panel_B2_cdf_tamp.dat")
+
+
+# --- Panel A: best-fit induced density (deferred until F_pred is resolved) ---
+cat("Panel A (inferred density)...\n")
+# Retrieve the same F_pred that was just written for Panel B2
+F_pred_for_density <- if (export_mode == "PHASE_A_REAL_DATA") dat$F_pred else dat$est$F_pred
+v_grid_for_density <- dat$v_grid
+
+# Numerical derivative on midpoint grid
+dv       <- diff(v_grid_for_density)[1]
+v_mid    <- (v_grid_for_density[-1] + v_grid_for_density[-length(v_grid_for_density)]) / 2
+f_raw    <- diff(F_pred_for_density) / dv
+
+# Gaussian-kernel smooth (bandwidth 0.04 gives a clean illustrative curve)
+sm <- stats::ksmooth(v_mid, f_raw, kernel = "normal", bandwidth = 0.04,
+                     n.points = 256, x.points = seq(0, 1, length.out = 256))
+
+# Trim boundary artefacts and clamp to non-negative
+keep  <- sm$x >= 0.01 & sm$x <= 0.99
+x_out <- round(sm$x[keep], 6)
+y_out <- pmax(round(sm$y[keep], 6), 0)
+write_dat(x_out, y_out, "panel_A_density_inferred.dat")
 
 
 # --- Panel B1: heatmap cells (generated TeX) ---------------------------------
 cat("Panel B1...\n")
-gs     <- dat$est$grid_search
-z_raw  <- with(gs, tapply(distance, list(regime_param_2, regime_param_1), mean))
+if (export_mode == "PHASE_A_REAL_DATA") {
+  gs <- dat$objective_surface
+  gs <- as.data.frame(gs)
+  z_raw <- with(gs, tapply(distance_w1, list(kappa, m), mean))
+} else {
+  gs <- dat$est$grid_search
+  z_raw <- with(gs, tapply(distance, list(regime_param_2, regime_param_1), mean))
+}
 mean_vals  <- as.numeric(colnames(z_raw))
 kappa_vals <- as.numeric(rownames(z_raw))
 ord_m <- order(mean_vals);  ord_k <- order(kappa_vals)
@@ -576,8 +643,19 @@ writeLines(heatmap_lines, file.path(data_dir, "panel_B1_heatmap_cells.tex"))
 cat("   panel_B1_heatmap_cells.tex\n")
 
 ## Best-fit point (m_hat, kappa_hat)
-opt_x <- dat$est$m_hat * 100
-opt_y <- log10(dat$est$kappa_hat)
+if (export_mode == "PHASE_A_REAL_DATA") {
+  fit_m <- gs[which(gs$is_optimum)[1], "m"]
+  fit_k <- gs[which(gs$is_optimum)[1], "kappa"]
+  if (is.na(fit_m) || is.na(fit_k)) {
+    fit_m <- mean_vals[which.min(colMeans(z_raw, na.rm = TRUE))]
+    fit_k <- kappa_vals[which.min(rowMeans(z_raw, na.rm = TRUE))]
+  }
+  opt_x <- fit_m * 100
+  opt_y <- log10(fit_k)
+} else {
+  opt_x <- dat$est$m_hat * 100
+  opt_y <- log10(dat$est$kappa_hat)
+}
 writeLines(c(
   sprintf("\\newcommand{\\optX}{%s}", round(opt_x, 2)),
   sprintf("\\newcommand{\\optY}{%s}", round(opt_y, 4))
@@ -588,32 +666,50 @@ cat("   panel_B1_optimum.tex\n")
 # --- Panel C: regime density curves ------------------------------------------
 cat("Panel C...\n")
 p_grid <- seq(0.001, 0.999, length.out = 500)
-d_true <- dat$true_regime$density(p_grid)
-d_inf  <- dat$est$regime$density(p_grid)
+d_true <- if (export_mode == "PHASE_A_REAL_DATA") {
+  if (!is.null(dat$regime_density)) {
+    approx(dat$regime_density$p, dat$regime_density$density_true, xout = p_grid, rule = 2)$y
+  } else {
+    rep(NA_real_, length(p_grid))
+  }
+} else {
+  dat$true_regime$density(p_grid)
+}
+d_inf  <- if (export_mode == "PHASE_A_REAL_DATA") {
+  approx(dat$regime_density$p, dat$regime_density$density_hat, xout = p_grid, rule = 2)$y
+} else {
+  dat$est$regime$density(p_grid)
+}
 write_dat(round(p_grid * 100, 4), round(rep(1, length(p_grid)), 4),
           "panel_C_density_uniform.dat")
-write_dat(round(p_grid * 100, 4), round(d_true, 6), "panel_C_density_true.dat")
+write_dat(round(p_grid * 100, 4), round(ifelse(is.na(d_true), 0, d_true), 6), "panel_C_density_true.dat")
 write_dat(round(p_grid * 100, 4), round(d_inf, 6),  "panel_C_density_inferred.dat")
 
 
 # --- Summary metrics (LaTeX macros) ------------------------------------------
 cat("Summary metrics...\n")
-w1_reduction <- 100 * (1 - dat$distances$inferred$wasserstein1 /
-                            dat$distances$uniform$wasserstein1)
+w1_uniform <- if (export_mode == "PHASE_A_REAL_DATA") dat$fit_metrics$w1_uniform[[1]] else dat$distances$uniform$wasserstein1
+w1_inferred <- if (export_mode == "PHASE_A_REAL_DATA") dat$fit_metrics$w1_best[[1]] else dat$distances$inferred$wasserstein1
+w1_reduction <- ifelse(isTRUE(w1_uniform > 0), 100 * (1 - w1_inferred / w1_uniform), NA_real_)
+true_mean <- if (export_mode == "PHASE_A_REAL_DATA") NA_real_ else dat$true_regime$mean * 100
+true_median <- if (export_mode == "PHASE_A_REAL_DATA") NA_real_ else dat$true_regime$median * 100
+inferred_mean <- if (export_mode == "PHASE_A_REAL_DATA") mean(dat$regime_density$p * dat$regime_density$density_hat / sum(dat$regime_density$density_hat), na.rm = TRUE) * 100 else dat$est$regime$mean * 100
+inferred_median <- if (export_mode == "PHASE_A_REAL_DATA") NA_real_ else dat$est$regime$median * 100
+inferred_kappa <- if (export_mode == "PHASE_A_REAL_DATA") fit_k else dat$est$kappa_hat
 
 metrics <- c(
-  sprintf("\\newcommand{\\trueRegimeMean}{%.1f}",      dat$true_regime$mean * 100),
-  sprintf("\\newcommand{\\trueRegimeMedian}{%.1f}",    dat$true_regime$median * 100),
-  sprintf("\\newcommand{\\inferredRegimeMean}{%.1f}",  dat$est$regime$mean * 100),
-  sprintf("\\newcommand{\\inferredRegimeMedian}{%.1f}", dat$est$regime$median * 100),
-  sprintf("\\newcommand{\\wOneUniform}{%.4f}",         dat$distances$uniform$wasserstein1),
-  sprintf("\\newcommand{\\wOneInferred}{%.4f}",        dat$distances$inferred$wasserstein1),
+  sprintf("\\newcommand{\\trueRegimeMean}{%.1f}",      ifelse(is.na(true_mean), 0, true_mean)),
+  sprintf("\\newcommand{\\trueRegimeMedian}{%.1f}",    ifelse(is.na(true_median), 0, true_median)),
+  sprintf("\\newcommand{\\inferredRegimeMean}{%.1f}",  inferred_mean),
+  sprintf("\\newcommand{\\inferredRegimeMedian}{%.1f}", ifelse(is.na(inferred_median), 0, inferred_median)),
+  sprintf("\\newcommand{\\wOneUniform}{%.4f}",         w1_uniform),
+  sprintf("\\newcommand{\\wOneInferred}{%.4f}",        w1_inferred),
   sprintf("\\newcommand{\\wOneReduction}{%.1f}",       w1_reduction),
-  sprintf("\\newcommand{\\copulaRho}{%.2f}",           dat$config$copula_rho),
-  sprintf("\\newcommand{\\copulaDf}{%s}",             dat$config$copula_df),
-  sprintf("\\newcommand{\\nStudents}{%s}",            dat$config$n_students),
-  sprintf("\\newcommand{\\inferredKappa}{%.1f}",      dat$est$kappa_hat),
-  sprintf("\\newcommand{\\trueRegimeKappa}{%s}",      dat$config$true_regime_kappa)
+  sprintf("\\newcommand{\\copulaRho}{%.2f}",           ifelse(!is.null(dat$copula_used$params$rho), dat$copula_used$params$rho, ifelse(!is.null(dat$config$copula_rho), dat$config$copula_rho, 0))),
+  sprintf("\\newcommand{\\copulaDf}{%s}",             ifelse(!is.null(dat$copula_used$params$df), dat$copula_used$params$df, ifelse(!is.null(dat$config$copula_df), dat$config$copula_df, "NA"))),
+  sprintf("\\newcommand{\\nStudents}{%s}",            ifelse(!is.null(dat$n_subgroup), dat$n_subgroup, dat$config$n_students)),
+  sprintf("\\newcommand{\\inferredKappa}{%.1f}",      inferred_kappa),
+  sprintf("\\newcommand{\\trueRegimeKappa}{%s}",      ifelse(!is.null(dat$config$true_regime_kappa), dat$config$true_regime_kappa, "NA"))
 )
 writeLines(metrics, file.path(data_dir, "summary_metrics.tex"))
 cat("   summary_metrics.tex\n")
@@ -622,7 +718,7 @@ cat("   summary_metrics.tex\n")
 # --- Axis limits (LaTeX macros) ----------------------------------------------
 cat("Axis limits...\n")
 y_max_a <- max(c(d_u$y, d_v$y)) * 1.15
-y_max_d <- max(c(1, d_true, d_inf)) * 1.12
+y_max_d <- max(c(1, d_true, d_inf), na.rm = TRUE) * 1.12
 x_min_c <- min(mean_vals) * 100 - dx * 50
 x_max_c <- max(mean_vals) * 100 + dx * 50
 y_min_c <- min(log10(kappa_vals)) - dy / 2
@@ -635,8 +731,8 @@ axes <- c(
   sprintf("\\newcommand{\\panelCxmax}{%s}", ceiling(x_max_c)),
   sprintf("\\newcommand{\\panelCymin}{%s}", round(y_min_c, 2)),
   sprintf("\\newcommand{\\panelCymax}{%s}", round(y_max_c, 2)),
-  sprintf("\\newcommand{\\inferredMeanVline}{%s}", round(dat$est$regime$mean * 100, 1)),
-  sprintf("\\newcommand{\\trueMeanVline}{%s}", round(dat$true_regime$mean * 100, 1))
+  sprintf("\\newcommand{\\inferredMeanVline}{%s}", round(inferred_mean, 1)),
+  sprintf("\\newcommand{\\trueMeanVline}{%s}", round(ifelse(is.na(true_mean), 50, true_mean), 1))
 )
 writeLines(axes, file.path(data_dir, "axis_limits.tex"))
 cat("   axis_limits.tex\n")
@@ -1057,7 +1153,7 @@ cat("Max chars             :", format(max_chars, big.mark = ","), "\n\n")
 %%%% \includegraphics, following the pattern in SGPc_Explanation.tex
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=16in,paperheight=22.0in,margin=0in]{geometry}
+\usepackage[paperwidth=16in,paperheight=22.7in,margin=0in]{geometry}
 \usepackage{graphicx}
 \usepackage[svgnames]{xcolor}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
@@ -1130,7 +1226,11 @@ cat("Max chars             :", format(max_chars, big.mark = ","), "\n\n")
 \vspace{0.60in}
 
 \hspace{0.15in}%
-$^{1}$%
+$^{1}$ Panel A also shows the density, $f_{\HShat}(v)$, the density induced from the baseline copula and fitted growth regime from panels B1 and B2, superimposed on the observed density, $f^{\mathrm{obs}}_{V,S}(v)$.
+
+\vspace{4pt}
+\hspace{0.15in}%
+$^{2}$%
 \begin{minipage}[t]{15.2in}
 The baseline copula used for inference is selected from canonical STEP 1 sensitivity analyses over 966 longitudinal conditions across four datasets: the $t$-copula is best by AIC in 63.6\% of conditions (Frank: 30.7\%). In the cross-stratified canonical table below (content area $\times$ year span), the recommended family is $t$ in every cell; entries report $(\rho,\mathrm{df})$ medians.
 \vspace{2pt}
@@ -1139,6 +1239,7 @@ The baseline copula used for inference is selected from canonical STEP 1 sensiti
 \begin{tabular}{@{}lcccc@{}}
 \textbf{Content area} & \textbf{1-year} & \textbf{2-year} & \textbf{3-year} & \textbf{4-year} \\
 \hline
+\noalign{\vspace{2pt}}
 MATHEMATICS & (0.85, 25.26) & (0.81, 27.40) & (0.78, 28.38) & (0.76, 27.34) \\
 READING     & (0.84, 28.33) & (0.80, 29.34) & (0.77, 26.63) & (0.76, 28.22) \\
 WRITING     & (0.85, 23.72) & (0.82, 27.58) & (0.80, 27.22) & (0.77, 23.86) \\
@@ -1149,15 +1250,19 @@ ELA         & (0.84, 41.95) & (0.79, 46.41) & (0.76, 51.57) & (0.72, 42.04) \\
 
 \vspace{6pt}
 \hspace{0.15in}%
-$^{2}$ Other regime families considered include the truncated exponential family (the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean) and the truncated uniform family. 
+$^{3}$ Other regime families considered include the truncated exponential family (the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean) and the truncated uniform family. 
 
 \vspace{4pt}
 \hspace{0.15in}%
-$^{3}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup. That is, that there is no correlation between the starting point and the growth regime. This assumption is investigated more deeply in the full paper.
+
 
 \vspace{4pt}
 \hspace{0.15in}%
-$^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P]$ (the regime center, mean \SGPc on the 0--1 scale) and $\kappa = \alpha + \beta$ (the concentration parameter).
+$^{5}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting point within the subgroup; meaning there is no correlation between the starting point $u$ and the growth regime. This assumption is investigated more deeply in the full paper.
+
+\vspace{4pt}
+\hspace{0.15in}%
+$^{6}$ The Beta family, $\mathrm{Beta}(\alpha, \beta)$, is reparameterized via $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P] = \alpha / (\alpha + \beta)$ (the regime center, mean \SGPc~on the 0--1 scale) and $\kappa = \alpha + \beta$ (the concentration parameter).
 \end{document}
 ===== END FILE: step3_infographic_main.tex =====
 
@@ -1269,6 +1374,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
   %% Read curve data
   \readdata{\dataU}{data/panel_A_density_U.dat}
   \readdata{\dataV}{data/panel_A_density_V.dat}
+  \readdata{\dataInferred}{data/panel_A_density_inferred.dat}
 
   %% Filled area under U density
   \pscustom[fillstyle=solid,fillcolor=priorU,opacity=0.18,linestyle=none]{%
@@ -1287,6 +1393,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
   %% Curve lines
   \listplot[linecolor=priorU,linewidth=1.3pt,plotstyle=line]{\dataU}
   \listplot[linecolor=currentV,linewidth=1.3pt,plotstyle=line]{\dataV}
+  \listplot[linecolor=inferredV,linewidth=1.0pt,linestyle=dashed,dash=3pt 2pt,linecap=1,plotstyle=line]{\dataInferred}
 
   %% Axes
   \psaxes[Dx=0.2,Dy=0.5,ticksize=-3pt 0,
@@ -1299,13 +1406,15 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
 
   %% Legend
   \rput[tr](0.98,\panelAymax){%
-    \raisebox{-28pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+    \raisebox{-32pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
       \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
         \textsf{\scriptsize Prior sample $U$} &
         {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=priorU,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
         \textsf{\scriptsize Current sample $V$} &
-        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[2pt]
-        \multicolumn{2}{@{}l@{}}{\textsf{\tiny\textcolor{subtitleGrey}{NOTE: No student-level pair IDs available}}}
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=currentV,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Best-fit $f_{\HShat}(v)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=1.0pt,linestyle=dashed,dash=3pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[2pt]
+        \multicolumn{2}{@{}l@{}}{\textsf{\tiny\textcolor{subtitleGrey}{NOTE: Best-fit density from Panel B2}}}
       \end{tabular}%
     }}}}
 %
@@ -1573,7 +1682,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
     Panel~A shows the two \emph{univariate} marginals plotted on the same 
     reference-quantile axis (``$u$ or $v$'' in $[0,1]$). This is the 
     information available in TIMSS/NAEP-style designs when cohorts are 
-    sampled independently (with survey weights, when applicable).
+    sampled independently (with survey weights, when applicable).$^{\mbox{\footnotesize{1}}}$
     
     \vspace{4pt}
     After the reference-quantile transform, $U$ and $V$ summarize the observable evidence.
@@ -1592,7 +1701,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
 %%%% Panel B1 text: Explanation of regime reverse-engineering
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=7.65in,paperheight=11.4in,margin=0in]{geometry}
+\usepackage[paperwidth=7.65in,paperheight=12.0in,margin=0in]{geometry}
 \usepackage[svgnames]{xcolor}
 \usepackage{amsmath}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
@@ -1612,8 +1721,8 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
     The mathematical bridge connecting the observed, unlinked marginals (Panel~A) and the recovered latent SGPc regime (Panel~C)
     has two ingredients:
     \begin{enumerate}
-      \item A baseline copula $C_0$ providing a dependence template from prior reference-quantiles $U$ to current reference-quantiles $V$.$^\mbox{1}$
-      \item A stochastic growth regime $H$ that governs how subgroup $S$ allocates conditional percentiles within that template.$^\mbox{2}$
+      \item A baseline copula $C_0$ providing a dependence template from prior reference-quantiles $U$ to current reference-quantiles $V$.$^\mbox{\footnotesize{2}}$
+      \item A stochastic growth regime $H$ that governs how subgroup $S$ allocates conditional percentiles within that template.$^\mbox{\footnotesize{3, 4}}$
     \end{enumerate}
     
     \vspace{1pt}
@@ -1647,7 +1756,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
     \]
     
     \vspace{1pt}
-    Given $U=u$ and a draw $P=p$, the model generates an outcome percentile by$^\mbox{3}$
+    Given $U=u$ and a draw $P=p$, the model generates an outcome percentile by:$^\mbox{\footnotesize{5}}$
     \[
       V \;=\; Q_0(P\mid U=u).
     \]
@@ -1694,7 +1803,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
     
     \vspace{1pt}
     where $m=\mathbb{E}[P]$ controls the regime center (mean SGPc on the 0--1 scale) and
-    $\kappa$ controls concentration (dispersion of latent SGPc).$^\mbox{4}$
+    $\kappa$ controls concentration (dispersion of latent SGPc).$^\mbox{\footnotesize{6}}$
     
     \vspace{4pt}
     For each candidate $H\in\mathcal{H}$, Panel~B2 provides the 
@@ -1727,6 +1836,11 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
     For reference, the uniform regime $H(p)=p$ occurs at $m=0.5$ and $\kappa=2$ (i.e., $\mathrm{Beta}(1,1)$),
     indicated by the $U(0,1)$ marker.
 
+    \vspace{6pt}
+    The baseline copula, $C_0$, combined with the best fit growth regime estimate, $\widehat{H}_S$, induces the 
+    Wasserstein--1 minimized CDF, $F_{\HShat}(v)$, and its density, $f_{\HShat}(v)$, which are shown in panel B2 and A, respectively, 
+    with a dashed-black line.
+
   \end{minipage}
   \vspace{0.1in}
 \end{minipage}
@@ -1745,6 +1859,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
 
 \input{step3_styles}
+\input{data/summary_metrics}
 
 \pagestyle{empty}
 \begin{document}
@@ -1780,7 +1895,7 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
     the fitted regime implies
     $P_S\sim\mathrm{Beta}(\kappa m,\kappa(1-m))$:
     the mean $m=\mathbb{E}[P_S]$ sets the regime center (reported as mean SGPc $=100m$),
-    and $\kappa$ controls concentration (dispersion of latent SGPc).
+    and $\kappa$ controls concentration of latent SGPc.
     
     \vspace{4pt}
     The vertical reference lines mark mean SGPc under the uniform regime (50),
@@ -1834,7 +1949,8 @@ $^{4}$ The Beta family is reparameterized via $\alpha = \kappa m$ and $\beta = \
     "useDefaultPatterns": true,
     "customPatterns": [
       "outputs/**",
-      "V1_030126/**",
+      "V0_030126/**",
+      "V1_030726/**",
       "*.pdf",
       "*.png",
       "*.svg",

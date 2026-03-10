@@ -120,9 +120,19 @@ STEP3_CONFIG <- list(
   # 7. Systematic validation settings (Phase B)
   # ===========================================================================
   systematic = list(
-    datasets    = c("dataset_1"),   # Start with dataset_1
-    n_conditions_per_dataset = 10,  # Limit for speed
-    n_subgroups_per_condition = 5,  # Top N largest subgroups
+    # -----------------------------------------------------------------------
+    # Datasets:
+    #   dataset_1 / dataset_3  — same state; large districts make subgroup
+    #                            selection straightforward.
+    #   dataset_3 conditions   — restricted to 2016+ via condition_filters
+    #                            (post-2015 assessment scale transition).
+    #   dataset_2              — different state; one very large district,
+    #                            one moderate district; yields ~2 eligible
+    #                            districts + 3 cluster pools per condition.
+    # -----------------------------------------------------------------------
+    datasets    = c("dataset_1", "dataset_2", "dataset_3"),
+    n_conditions_per_dataset = 10,  # Limit for speed; use NULL for "all available"
+    n_subgroups_per_condition = 5,  # Top N largest subgroups (dataset_2 may yield fewer)
     min_subgroup_n = 50,
     min_n = 1000,
     n_buckets = c(1000, 2500, 5000, 7500, 10000),
@@ -146,11 +156,55 @@ STEP3_CONFIG <- list(
     # the last 4 tasks (possibly N=10000 at ~7100s each) leave 184 workers idle.
     rep_batch_size = 5L,        # SET TO 5 FOR r8g.48xlarge; SET TO 25 FOR r8g.4xlarge
     year_spans  = c(1, 2, 4),       # Test these spans
-    content_areas = NULL,            # NULL = all available
+    content_areas = c("READING", "MATHEMATICS"),  # NAEP/TIMSS-relevant domains
     # "step2_empirical" = load sgpc_emp from STEP 2 outputs (no recomputation)
     # "recompute" = compute true SGPc on-the-fly via sgpc_engine (fallback)
     truth_source = "step2_empirical",
-    step2_results_dir = "STEP_2_SGPc_Sensitivity/results"
+    step2_results_dir = "STEP_2_SGPc_Sensitivity/results",
+
+    # Per-dataset condition filters ----------------------------------------
+    # Applied after the global year_span and content_area filters.
+    # Each entry is a named list; supported keys:
+    #
+    #   min_year  (integer): drop conditions whose year_current < min_year
+    #   max_year  (integer): drop conditions whose year_current > max_year
+    #
+    #   year_spans (integer vector): REPLACE the global year_spans for this
+    #     dataset only.  Use when certain span values are structurally
+    #     impossible (e.g. dataset_3 cannot produce span=4 conditions after
+    #     the 2016+ filter without crossing the assessment-scale transition).
+    #
+    #   content_area_aliases (named list, source -> canonical):
+    #     Remap content area labels BEFORE the global content_areas filter
+    #     and in all output tables.  The raw label is still used internally
+    #     for data queries; the canonical label takes over afterwards.
+    #     ELA -> READING: dataset_3 codes its literacy assessment as "ELA"
+    #     (post-2015 name); aliasing to "READING" ensures ELA conditions pass
+    #     the READING+MATHEMATICS filter and that ELA and READING form one
+    #     literacy group in all downstream figures and tables.
+    #
+    condition_filters = list(
+
+      # dataset_2: years 2007-2014.  The first year where span=4 SGPs exist
+      # is 2011 (prior=2007 -> current=2011).  Year_current=2011 norms are
+      # immature (no prior span=4 baseline); 2012+ have at least one prior
+      # year of span=4 history and yield more stable estimates.
+      dataset_2 = list(
+        min_year = 2012
+      ),
+
+      # dataset_3: same state as dataset_1, assessment transition in 2015.
+      #   - Restrict to 2016+ (post-transition scale only).
+      #   - span=4 is structurally impossible: the only post-2016 span=4
+      #     window (prior=2013, current=2017) crosses the 2015 transition.
+      #   - Literacy is coded "ELA" in dataset_3; alias to "READING" so that
+      #     ELA and READING form one literacy group in analysis outputs.
+      dataset_3 = list(
+        min_year             = 2016,
+        year_spans           = c(1L, 2L),
+        content_area_aliases = list(ELA = "READING")
+      )
+    )
   ),
 
   # ===========================================================================

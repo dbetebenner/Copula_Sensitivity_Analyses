@@ -1,0 +1,40 @@
+{
+	"folders": [
+		{
+			"path": "../../../GitHub/DBetebenner/SGP"
+		},
+		{
+			"path": "../../../GitHub/dataimago/HelloWorld/HelloWorld-ai"
+		},
+		{
+			"path": "../../../GitHub/dataimago/dataimago.github.io"
+		},
+		{
+			"path": "../../Papers/Betebenner_Braun"
+		},
+		{
+			"path": "../../../GitHub/DBetebenner/packageSkeleton"
+		},
+		{
+			"path": "../../../GitHub/dataimago/HelloWorld/HelloWorld-rpkg"
+		},
+		{
+			"path": "../../../GitHub/dataimago/dataimago/dataimago-rpkg"
+		},
+		{
+			"path": "../../../GitHub/dataimago/dataimago/dataimago-design"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../../../GitHub/SGP_Sandbox/Indiana_Target_Analysis_120925"
+		},
+		{
+			"path": "../../Papers/QMD_NOTE_TEMPLATE"
+		}
+	],
+	"settings": {
+		"chatgpt.openOnStartup": false
+	}
+}
