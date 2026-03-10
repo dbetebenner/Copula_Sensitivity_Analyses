@@ -561,7 +561,8 @@ for (ds_id in cfg_sys$datasets) {
   cat("  Loaded:", format(nrow(STATE_DATA), big.mark = ","), "rows\n")
   .plog("  Dataset loaded: ", format(nrow(STATE_DATA), big.mark = ","), " rows")
 
-  conditions_all <- get_phase1_conditions(ds_id)
+  conditions_all <- get_phase1_conditions(ds_id,
+    phase1_results_dir = file.path(PROJECT_ROOT_ABS, "STEP_1_Family_Selection", "results"))
   if (length(conditions_all) == 0) {
     cat("  WARNING: No Phase 1 conditions found. Skipping.\n\n")
     next
@@ -637,7 +638,10 @@ for (ds_id in cfg_sys$datasets) {
 
   cat("  Selected", length(conditions), "conditions for validation\n\n")
   .plog("  Conditions selected: ", length(conditions))
-  canonical <- tryCatch(load_canonical_parameters(), error = function(e) NULL)
+  canonical <- tryCatch(load_canonical_parameters(
+    manifest_path        = file.path(PROJECT_ROOT_ABS, "STEP_1_Family_Selection/results/dataset_all/analysis_manifest.json"),
+    canonical_params_path = file.path(PROJECT_ROOT_ABS, "STEP_1_Family_Selection/results/dataset_all/canonical_copula_parameters.csv")
+  ), error = function(e) NULL)
 
   # Load STEP 2 pre-computed SGPc variants for truth (sgpc_emp) reuse
   truth_source   <- cfg_sys$truth_source %||% "recompute"

@@ -64,7 +64,8 @@ cat("State data loaded:", format(nrow(STATE_DATA), big.mark = ","), "rows\n")
 # Select condition (auto or specified)
 if (is.null(cfg$validation$condition_id)) {
   # Auto-select: prioritize 1-year span + preferred content area
-  conditions <- get_phase1_conditions(dataset_id)
+  conditions <- get_phase1_conditions(dataset_id,
+    phase1_results_dir = file.path(PROJECT_ROOT, "STEP_1_Family_Selection", "results"))
   if (length(conditions) == 0) stop("No Phase 1 conditions found for ", dataset_id)
 
   preferred_content <- ""
@@ -167,10 +168,16 @@ cat("A.2  Computing true SGPc distribution from longitudinal data...\n")
 
 # Copula selection: respect copula.mode config
 copula_mode <- STEP3_CONFIG$copula$mode %||% "phase1_best_fit"
-p1 <- tryCatch(load_phase1_condition(dataset_id, condition_id), error = function(e) NULL)
+p1 <- tryCatch(load_phase1_condition(dataset_id, condition_id,
+  phase1_results_dir = file.path(PROJECT_ROOT, "STEP_1_Family_Selection", "results")),
+  error = function(e) NULL)
+
+.load_canon <- function() load_canonical_parameters(
+  manifest_path        = file.path(PROJECT_ROOT, "STEP_1_Family_Selection/results/dataset_all/analysis_manifest.json"),
+  canonical_params_path = file.path(PROJECT_ROOT, "STEP_1_Family_Selection/results/dataset_all/canonical_copula_parameters.csv"))
 
 if (identical(copula_mode, "canonical_only")) {
-  canonical <- load_canonical_parameters()
+  canonical <- .load_canon()
   p1_copula <- create_canonical_copula(cond$year_span, cond$content_area,
                                         canonical$canonical_params)
   cat("  Copula: canonical (", cond$content_area, ", span=", cond$year_span, ")\n")
@@ -179,7 +186,7 @@ if (identical(copula_mode, "canonical_only")) {
   cat("  Loaded Phase 1 copula:", class(p1_copula)[1], "\n")
 } else {
   cat("  WARNING: No Phase 1 copula found. Using canonical t-copula.\n")
-  canonical <- load_canonical_parameters()
+  canonical <- .load_canon()
   p1_copula <- create_canonical_copula(cond$year_span, cond$content_area,
                                         canonical$canonical_params)
 }
