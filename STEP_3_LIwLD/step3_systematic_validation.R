@@ -530,10 +530,22 @@ for (ds_id in cfg_sys$datasets) {
     next
   }
 
-  data_path <- ds_config$local_path
-  if (!file.exists(data_path)) data_path <- ds_config$ec2_path
+  # Resolve data paths: dataset_configs.R stores relative paths (e.g.
+  # "Data/Copula_Sensitivity_Data_Set_1.Rdata") that are relative to the
+  # project root, not to R's current working directory.  Anchor them to
+  # PROJECT_ROOT_ABS so the script works regardless of where R was started.
+  anchor_path <- function(p) {
+    if (!is.null(p) && nzchar(p) && !startsWith(p, "/"))
+      file.path(PROJECT_ROOT_ABS, p)
+    else
+      p
+  }
+  data_path <- anchor_path(ds_config$local_path)
+  if (!file.exists(data_path)) data_path <- anchor_path(ds_config$ec2_path)
   if (!file.exists(data_path)) {
-    cat("  WARNING: Data file not found. Skipping.\n\n")
+    cat("  WARNING: Data file not found at either path:\n")
+    cat("    local:", anchor_path(ds_config$local_path), "\n")
+    cat("    ec2:  ", anchor_path(ds_config$ec2_path),   "\n\n")
     next
   }
 
