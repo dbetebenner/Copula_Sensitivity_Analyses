@@ -4,14 +4,17 @@
 ###
 ### Parallelization Architecture (Two-Stage):
 ###
-###   Stage 1  — Pool setup (sequential, main process)
+###   Stage 1  — Pool setup (parallel via mirai_map, sequential fallback)
 ###              Full-pool regime estimation, copula/independence sensitivity,
 ###              summary row, pool registry.
+###              Condition data pushed via everywhere() (.PHASEB_S1_* globals).
+###              With 8 pools at ~400s each, parallel dispatch reduces wall
+###              time from ~53 min to ~9 min (= slowest single pool).
 ###
 ###   Stage 2  — Replicate batches (parallel via mirai_map)
 ###              Flat task list: pool x bucket x rep_batch
 ###              Each task = rep_batch_size estimations (default 25)
-###              Condition data pushed once via everywhere() before dispatch.
+###              Condition data pushed once via everywhere() (.PHASEB_* globals).
 ###
 ###   Daemon lifecycle (follows STEP 1 pattern):
 ###              - Created ONCE before the dataset loop
@@ -182,7 +185,8 @@ if (parallel_available) {
         file.path(STEP3_ROOT_ABS,   "functions/distance_metrics.R"),
         file.path(STEP3_ROOT_ABS,   "functions/optimize_regime.R"),
         file.path(STEP3_ROOT_ABS,   "functions/bucket_classification.R"),
-        file.path(STEP3_ROOT_ABS,   "functions/process_replicate_batch.R")
+        file.path(STEP3_ROOT_ABS,   "functions/process_replicate_batch.R"),
+        file.path(STEP3_ROOT_ABS,   "functions/process_pool_setup.R")
       )) {
         tryCatch(source(ff), error = function(e) {
           cat("[DAEMON", Sys.getpid(), "] ERROR sourcing", ff, ":", conditionMessage(e), "\n")
@@ -939,63 +943,209 @@ for (ds_id in cfg_sys$datasets) {
     if (length(subgroups) == 0) next
 
     ##################################################################
-    ### Stage 1: Full-pool setup (sequential, main process)
+    ### Stage 1: Full-pool setup (parallel via mirai_map OR sequential)
+    ###
+    ### Each pool's estimation is independent: they share read-only
+    ### condition data (pairs, refs, kernel_cache, etc.) and operate
+    ### on disjoint student-index subsets. With 8 pools at ~400s each,
+    ### parallel dispatch reduces Stage 1 from ~53 min to ~9 min
+    ### (wall time = slowest single pool).
     ##################################################################
     s1_t0 <- proc.time()[["elapsed"]]
 
     pool_setups   <- list()
     n_pool_ok     <- 0L
 
-    for (pi in seq_along(subgroups)) {
+    # Build Stage 1 task descriptors from pool definitions
+    s1_tasks <- lapply(seq_along(subgroups), function(pi) {
       pool <- subgroups[[pi]]
-      cat(sprintf("      [Pool %d/%d] %s (%s, N=%d)...",
-                  pi, length(subgroups),
-                  pool$pool_id %||% paste0(condition_id, "__", pool$id),
-                  pool$pool_type %||% "district",
-                  length(pool$idx)))
-      ps_t0 <- proc.time()[["elapsed"]]
-      setup <- process_pool_setup(
-        pool = pool, ds_id = ds_id, condition_id = condition_id, cond = cond,
-        pairs = pairs, refs = refs, p1_copula = p1_copula,
-        kernel_cache = kernel_cache, u_full = u_full, v_full = v_full,
-        cfg_reg = cfg_reg, cfg_dist = cfg_dist, cfg_sys = cfg_sys,
-        n_buckets = n_buckets, eligibility_buffer = eligibility_buffer,
-        seed_base = seed_base, buckets_cfg = STEP3_CONFIG$buckets,
-        enable_copula_sensitivity     = identical(pool$pool_type, "district"),
-        enable_independence_sensitivity = identical(pool$pool_type, "district"),
-        true_sgpc_full = true_sgpc_full
+      list(
+        pool_idx       = pi,
+        pool_id        = pool$pool_id %||% paste0(condition_id, "__", pool$id),
+        pool_type      = pool$pool_type %||% "district",
+        sg_id          = as.character(pool$id),
+        sg_idx         = pool$idx,
+        n_sg           = length(pool$idx),
+        ds_id          = ds_id,
+        condition_id   = condition_id,
+        year_span      = cond$year_span,
+        content_area   = cond$content_area,
+        n_buckets      = n_buckets,
+        eligibility_buffer = eligibility_buffer,
+        seed_base      = seed_base,
+        enable_copula_sensitivity      = identical(pool$pool_type %||% "district", "district"),
+        enable_independence_sensitivity = identical(pool$pool_type %||% "district", "district"),
+        strata_label          = if (!is.null(pool$strata_label))             as.character(pool$strata_label)             else NA_character_,
+        n_constituent_districts = if (!is.null(pool$n_constituent_districts)) as.integer(pool$n_constituent_districts)   else 1L,
+        constituent_districts = if (!is.null(pool$constituent_districts))     as.character(pool$constituent_districts)   else as.character(pool$id)
       )
-      ps_elapsed <- proc.time()[["elapsed"]] - ps_t0
-      if (!is.null(setup)) {
-        n_pool_ok <- n_pool_ok + 1L
-        pool_setups[[pi]] <- setup
-        cat(sprintf(" median=%.1f, diff=%.1f, %.1fs\n",
-                    setup$summary_row$median_sgpc_inferred,
-                    setup$summary_row$median_diff,
-                    ps_elapsed))
-        # Accumulate Stage 1 outputs immediately
-        row_counter  <- row_counter  + 1L
-        summary_rows[[row_counter]] <- setup$summary_row
-        pool_counter <- pool_counter + 1L
-        pool_registry_rows[[pool_counter]] <- setup$pool_registry
-        all_results[[setup$pool_id]] <- setup$pool_result
-        if (nrow(setup$copula_rows) > 0 && copula_counter < sensitivity_budget) {
-          copula_counter <- copula_counter + 1L
-          copula_sensitivity_rows[[copula_counter]] <- setup$copula_rows
+    })
+
+    s1_parallel_ok <- FALSE
+
+    if (b1_daemons_live && length(s1_tasks) > 1L) {
+      # Push condition-level shared data for Stage 1 (separate namespace .PHASEB_S1_*)
+      s1_push_ok <- tryCatch({
+        s1_push <- mirai::everywhere({
+          .PHASEB_S1_SS_PRIOR      <<- s1_ss_prior_push
+          .PHASEB_S1_SS_CURRENT    <<- s1_ss_current_push
+          .PHASEB_S1_REFS          <<- s1_refs_push
+          .PHASEB_S1_P1_COPULA     <<- s1_p1_copula_push
+          .PHASEB_S1_KERNEL_CACHE  <<- s1_kernel_cache_push
+          .PHASEB_S1_U_FULL        <<- s1_u_full_push
+          .PHASEB_S1_V_FULL        <<- s1_v_full_push
+          .PHASEB_S1_TRUE_SGPC_FULL <<- s1_true_sgpc_push
+          .PHASEB_S1_CFG_REG       <<- s1_cfg_reg_push
+          .PHASEB_S1_CFG_DIST      <<- s1_cfg_dist_push
+          .PHASEB_S1_CFG_SYS       <<- s1_cfg_sys_push
+          .PHASEB_S1_BUCKETS_CFG   <<- s1_buckets_cfg_push
+          TRUE
+        },
+        s1_ss_prior_push      = pairs$SCALE_SCORE_PRIOR,
+        s1_ss_current_push    = pairs$SCALE_SCORE_CURRENT,
+        s1_refs_push          = refs,
+        s1_p1_copula_push     = p1_copula,
+        s1_kernel_cache_push  = kernel_cache,
+        s1_u_full_push        = u_full,
+        s1_v_full_push        = v_full,
+        s1_true_sgpc_push     = true_sgpc_full,
+        s1_cfg_reg_push       = cfg_reg,
+        s1_cfg_dist_push      = cfg_dist,
+        s1_cfg_sys_push       = cfg_sys,
+        s1_buckets_cfg_push   = STEP3_CONFIG$buckets
+        )
+        push_vals <- s1_push[]
+        all(vapply(push_vals, isTRUE, logical(1)))
+      }, error = function(e) {
+        cat("    WARNING: Stage 1 data push failed:", e$message, "\n")
+        FALSE
+      })
+
+      if (isTRUE(s1_push_ok)) {
+        .plog(sprintf("  Stage 1: dispatching %d pools in parallel (%d workers)",
+                      length(s1_tasks), n_workers))
+
+        # Lambda calls the daemon-compatible process_pool_setup_daemon
+        s1_lambda <- function(task) {
+          process_pool_setup_daemon(
+            pool_idx       = task$pool_idx,
+            pool_id        = task$pool_id,
+            pool_type      = task$pool_type,
+            sg_id          = task$sg_id,
+            sg_idx         = task$sg_idx,
+            n_sg           = task$n_sg,
+            ds_id          = task$ds_id,
+            condition_id   = task$condition_id,
+            year_span      = task$year_span,
+            content_area   = task$content_area,
+            n_buckets      = task$n_buckets,
+            eligibility_buffer = task$eligibility_buffer,
+            seed_base      = task$seed_base,
+            enable_copula_sensitivity      = task$enable_copula_sensitivity,
+            enable_independence_sensitivity = task$enable_independence_sensitivity,
+            strata_label          = task$strata_label,
+            n_constituent_districts = task$n_constituent_districts,
+            constituent_districts = task$constituent_districts
+          )
         }
-        if (nrow(setup$independence_rows) > 0 && independence_counter < sensitivity_budget) {
-          independence_counter <- independence_counter + 1L
-          independence_sensitivity_rows[[independence_counter]] <- setup$independence_rows
+        environment(s1_lambda) <- globalenv()
+
+        s1_mirai_res <- mirai::mirai_map(
+          .x = s1_tasks,
+          .f = s1_lambda
+        )
+        s1_results <- s1_mirai_res[]
+
+        # Collect results — same accumulation as the sequential path
+        for (pi in seq_along(s1_results)) {
+          setup <- s1_results[[pi]]
+          if (inherits(setup, "miraiError") || inherits(setup, "errorValue") || is.null(setup)) {
+            pool <- subgroups[[pi]]
+            cat(sprintf("      [Pool %d/%d] %s — %s\n",
+                        pi, length(subgroups),
+                        pool$pool_id %||% paste0(condition_id, "__", pool$id),
+                        if (is.null(setup)) "SKIPPED" else as.character(setup)))
+            next
+          }
+          n_pool_ok <- n_pool_ok + 1L
+          pool_setups[[pi]] <- setup
+          cat(sprintf("      [Pool %d/%d] %s (%s, N=%d) median=%.1f, diff=%.1f\n",
+                      pi, length(subgroups),
+                      setup$pool_id, setup$pool_type,
+                      setup$summary_row$n_subgroup,
+                      setup$summary_row$median_sgpc_inferred,
+                      setup$summary_row$median_diff))
+          row_counter  <- row_counter  + 1L
+          summary_rows[[row_counter]] <- setup$summary_row
+          pool_counter <- pool_counter + 1L
+          pool_registry_rows[[pool_counter]] <- setup$pool_registry
+          all_results[[setup$pool_id]] <- setup$pool_result
+          if (nrow(setup$copula_rows) > 0 && copula_counter < sensitivity_budget) {
+            copula_counter <- copula_counter + 1L
+            copula_sensitivity_rows[[copula_counter]] <- setup$copula_rows
+          }
+          if (nrow(setup$independence_rows) > 0 && independence_counter < sensitivity_budget) {
+            independence_counter <- independence_counter + 1L
+            independence_sensitivity_rows[[independence_counter]] <- setup$independence_rows
+          }
         }
-      } else {
-        cat(" SKIPPED\n")
+        s1_parallel_ok <- TRUE
+      }
+    }
+
+    # Sequential fallback: when daemons are not available or push failed
+    if (!s1_parallel_ok) {
+      for (pi in seq_along(subgroups)) {
+        pool <- subgroups[[pi]]
+        cat(sprintf("      [Pool %d/%d] %s (%s, N=%d)...",
+                    pi, length(subgroups),
+                    pool$pool_id %||% paste0(condition_id, "__", pool$id),
+                    pool$pool_type %||% "district",
+                    length(pool$idx)))
+        ps_t0 <- proc.time()[["elapsed"]]
+        setup <- process_pool_setup(
+          pool = pool, ds_id = ds_id, condition_id = condition_id, cond = cond,
+          pairs = pairs, refs = refs, p1_copula = p1_copula,
+          kernel_cache = kernel_cache, u_full = u_full, v_full = v_full,
+          cfg_reg = cfg_reg, cfg_dist = cfg_dist, cfg_sys = cfg_sys,
+          n_buckets = n_buckets, eligibility_buffer = eligibility_buffer,
+          seed_base = seed_base, buckets_cfg = STEP3_CONFIG$buckets,
+          enable_copula_sensitivity     = identical(pool$pool_type, "district"),
+          enable_independence_sensitivity = identical(pool$pool_type, "district"),
+          true_sgpc_full = true_sgpc_full
+        )
+        ps_elapsed <- proc.time()[["elapsed"]] - ps_t0
+        if (!is.null(setup)) {
+          n_pool_ok <- n_pool_ok + 1L
+          pool_setups[[pi]] <- setup
+          cat(sprintf(" median=%.1f, diff=%.1f, %.1fs\n",
+                      setup$summary_row$median_sgpc_inferred,
+                      setup$summary_row$median_diff,
+                      ps_elapsed))
+          row_counter  <- row_counter  + 1L
+          summary_rows[[row_counter]] <- setup$summary_row
+          pool_counter <- pool_counter + 1L
+          pool_registry_rows[[pool_counter]] <- setup$pool_registry
+          all_results[[setup$pool_id]] <- setup$pool_result
+          if (nrow(setup$copula_rows) > 0 && copula_counter < sensitivity_budget) {
+            copula_counter <- copula_counter + 1L
+            copula_sensitivity_rows[[copula_counter]] <- setup$copula_rows
+          }
+          if (nrow(setup$independence_rows) > 0 && independence_counter < sensitivity_budget) {
+            independence_counter <- independence_counter + 1L
+            independence_sensitivity_rows[[independence_counter]] <- setup$independence_rows
+          }
+        } else {
+          cat(" SKIPPED\n")
+        }
       }
     }
 
     s1_elapsed <- proc.time()[["elapsed"]] - s1_t0
     s1_recoveries <- sapply(pool_setups[!sapply(pool_setups, is.null)],
                              function(x) abs(x$summary_row$median_diff))
-    .plog(sprintf("  Stage 1 complete: %d/%d pools | median |diff|=%.2f SGP pts | %.1fs",
+    .plog(sprintf("  Stage 1 complete%s: %d/%d pools | median |diff|=%.2f SGP pts | %.1fs",
+                  if (s1_parallel_ok) " (parallel)" else " (sequential)",
                   n_pool_ok, length(subgroups),
                   if (length(s1_recoveries) > 0) median(s1_recoveries) else NA_real_,
                   s1_elapsed))
