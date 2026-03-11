@@ -421,13 +421,18 @@ process_pool_setup <- function(
 # NOTE: u_full, v_full, pairs_ss_prior, pairs_ss_current, refs, kernel_cache,
 #       p1_copula, pool_defs, cfg_reg, cfg_dist are pushed via everywhere()
 #       per-condition before mirai_map() is called.
+#
+# This inline definition is the SEQUENTIAL FALLBACK. The daemon workers use
+# the version sourced from functions/process_replicate_batch.R (which supports
+# sampling_mode="paired"|"independent"). This inline copy must stay in sync.
 process_replicate_batch <- function(
   pool_idx, n_bucket, rep_start, rep_end,
   pool_seed_base,
   pool_id, pool_type,
   ds_id, condition_id,
   year_span, content_area,
-  phaseb_progress_file_abs
+  phaseb_progress_file_abs,
+  sampling_mode = "paired"
 ) {
   t0 <- proc.time()[["elapsed"]]
 
@@ -435,17 +440,61 @@ process_replicate_batch <- function(
   reps   <- seq.int(rep_start, rep_end)
   rows   <- vector("list", length(reps))
 
+  is_independent <- identical(sampling_mode, "independent")
+
+  has_preloaded_truth <- exists(".PHASEB_TRUE_SGPC_FULL", inherits = TRUE) &&
+                         !is.null(.PHASEB_TRUE_SGPC_FULL)
+
+  if (is_independent) {
+    pool_truth_median <- if (exists(".PHASEB_TRUE_POOL_MEDIAN", inherits = TRUE))
+                           .PHASEB_TRUE_POOL_MEDIAN[[pool_idx]] else NA_real_
+    pool_truth_mean   <- if (exists(".PHASEB_TRUE_POOL_MEAN",   inherits = TRUE))
+                           .PHASEB_TRUE_POOL_MEAN[[pool_idx]]   else NA_real_
+    if (is.na(pool_truth_median) || is.na(pool_truth_mean)) {
+      cat(sprintf("WARNING: [W%d] pool=%s independent mode without pool truth — results will be NA\n",
+                  Sys.getpid(), pool_id))
+    }
+  }
+
+  # grid_resolution: respect config rep_grid_resolution (same as daemon version)
+  rep_grid_res <- {
+    gr <- .PHASEB_CFG_REG[["rep_grid_resolution"]]
+    if (is.null(gr) || !is.finite(as.numeric(gr)) || as.integer(gr) < 5L) 15L
+    else as.integer(gr)
+  }
+
   for (ri in seq_along(reps)) {
     rep_idx <- reps[[ri]]
-    set.seed(pool_seed_base + as.integer(n_bucket) * 1000L + rep_idx)
-    rep_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
+    # Seed offset of 500000L for independent mode intentionally decorrelates
+    # the random streams. Both modes use valid random numbers; the offset
+    # ensures different student draws, not a systematic bias source.
+    set.seed(pool_seed_base + as.integer(n_bucket) * 1000L + rep_idx +
+               if (is_independent) 500000L else 0L)
 
-    true_rep <- sgpc_engine(
-      .PHASEB_U_FULL[rep_obs_idx], .PHASEB_V_FULL[rep_obs_idx],
-      .PHASEB_P1_COPULA, scale = "percentile"
-    )
-    u_rep <- reference_cdf(.PHASEB_SS_PRIOR[rep_obs_idx],   .PHASEB_REFS$ref_prior)
-    v_rep <- reference_cdf(.PHASEB_SS_CURRENT[rep_obs_idx], .PHASEB_REFS$ref_current)
+    if (is_independent) {
+      # Independent cohort design (TIMSS/NAEP): separate draws for U and V
+      u_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
+      v_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
+      u_rep <- reference_cdf(.PHASEB_SS_PRIOR[u_obs_idx],   .PHASEB_REFS$ref_prior)
+      v_rep <- reference_cdf(.PHASEB_SS_CURRENT[v_obs_idx], .PHASEB_REFS$ref_current)
+      true_median <- pool_truth_median
+      true_mean   <- pool_truth_mean
+    } else {
+      # Paired subsampling (original behaviour)
+      rep_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
+      if (has_preloaded_truth) {
+        true_rep <- .PHASEB_TRUE_SGPC_FULL[rep_obs_idx]
+      } else {
+        true_rep <- sgpc_engine(
+          .PHASEB_U_FULL[rep_obs_idx], .PHASEB_V_FULL[rep_obs_idx],
+          .PHASEB_P1_COPULA, scale = "percentile"
+        )
+      }
+      u_rep <- reference_cdf(.PHASEB_SS_PRIOR[rep_obs_idx],   .PHASEB_REFS$ref_prior)
+      v_rep <- reference_cdf(.PHASEB_SS_CURRENT[rep_obs_idx], .PHASEB_REFS$ref_current)
+      true_median <- median(true_rep, na.rm = TRUE)
+      true_mean   <- mean(true_rep,   na.rm = TRUE)
+    }
 
     est_rep <- tryCatch(
       estimate_regime(
@@ -454,14 +503,12 @@ process_replicate_batch <- function(
         kernel_cache    = .PHASEB_KERNEL_CACHE,
         regime_family   = .PHASEB_CFG_REG$primary_family,
         distance_fn     = .PHASEB_CFG_DIST$primary,
-        grid_resolution = 15L,
+        grid_resolution = rep_grid_res,
         verbose         = FALSE
       ),
       error = function(e) NULL
     )
 
-    true_median <- median(true_rep, na.rm = TRUE)
-    true_mean   <- mean(true_rep,   na.rm = TRUE)
     if (is.null(est_rep)) {
       inferred_median <- NA_real_; inferred_mean <- NA_real_
       median_error    <- NA_real_; mean_error    <- NA_real_
@@ -487,6 +534,7 @@ process_replicate_batch <- function(
       n_bucket         = as.integer(n_bucket),
       n_eff_bucket     = as.numeric(n_bucket),
       outer_rep        = rep_idx,
+      sampling_mode    = sampling_mode,
       converged        = converged,
       inferred_median  = inferred_median,
       inferred_mean    = inferred_mean,
@@ -502,13 +550,13 @@ process_replicate_batch <- function(
   }
 
   elapsed <- proc.time()[["elapsed"]] - t0
-  cat(sprintf("[W%d] %s | pool=%s bkt=%d reps=%d-%d | %.1fs\n",
+  cat(sprintf("[W%d] %s | %s pool=%s bkt=%d reps=%d-%d | %.1fs\n",
               Sys.getpid(), format(Sys.time(), "%H:%M:%S"),
-              pool_id, n_bucket, rep_start, rep_end, elapsed))
+              sampling_mode, pool_id, n_bucket, rep_start, rep_end, elapsed))
   # Append completion record to shared progress file
   tryCatch(
-    cat(sprintf("DONE|%s|%d|%d|%d|%.2f\n",
-                pool_id, n_bucket, rep_start, rep_end, elapsed),
+    cat(sprintf("DONE|%s|%s|%d|%d|%d|%.2f\n",
+                sampling_mode, pool_id, n_bucket, rep_start, rep_end, elapsed),
         file = phaseb_progress_file_abs, append = TRUE),
     error = function(e) invisible(NULL)
   )
@@ -959,7 +1007,15 @@ for (ds_id in cfg_sys$datasets) {
     # Build flat task list: (pool_idx, n_bucket, rep_start, rep_end)
     tasks <- list()
     pool_defs_for_workers <- list()
+    pool_truth_median <- list()
+    pool_truth_mean   <- list()
     ti <- 0L
+
+    # Determine which sampling modes to run (paired, independent, or both)
+    sampling_modes <- cfg$systematic$sampling_modes
+    if (is.null(sampling_modes) || length(sampling_modes) == 0) {
+      sampling_modes <- "paired"  # backward compatible default
+    }
 
     for (pi in seq_along(pool_setups)) {
       setup <- pool_setups[[pi]]
@@ -969,23 +1025,38 @@ for (ds_id in cfg_sys$datasets) {
         sg_idx     = setup$sg_idx,
         subgroup_id = setup$subgroup_id
       )
-      for (nb in setup$eligible_buckets) {
-        for (rb_start in seq(1L, outer_reps, by = rep_batch_size)) {
-          rb_end <- min(rb_start + rep_batch_size - 1L, outer_reps)
-          ti <- ti + 1L
-          tasks[[ti]] <- list(
-            pool_idx       = pi,
-            n_bucket       = as.integer(nb),
-            rep_start      = rb_start,
-            rep_end        = rb_end,
-            pool_seed_base = setup$seed_base,
-            pool_id        = setup$pool_id,
-            pool_type      = setup$pool_type,
-            ds_id          = ds_id,
-            condition_id   = condition_id,
-            year_span      = cond$year_span,
-            content_area   = cond$content_area
-          )
+      # Precompute full-pool truth summaries for independent-mode replicates.
+      # In independent mode, per-replicate truth is undefined (U and V come
+      # from different students), so error is measured against the fixed
+      # full-pool summary.
+      if (!is.null(true_sgpc_full)) {
+        pool_true <- true_sgpc_full[setup$sg_idx]
+        pool_truth_median[[pi]] <- median(pool_true, na.rm = TRUE)
+        pool_truth_mean[[pi]]   <- mean(pool_true,   na.rm = TRUE)
+      } else {
+        pool_truth_median[[pi]] <- NA_real_
+        pool_truth_mean[[pi]]   <- NA_real_
+      }
+      for (sm in sampling_modes) {
+        for (nb in setup$eligible_buckets) {
+          for (rb_start in seq(1L, outer_reps, by = rep_batch_size)) {
+            rb_end <- min(rb_start + rep_batch_size - 1L, outer_reps)
+            ti <- ti + 1L
+            tasks[[ti]] <- list(
+              pool_idx       = pi,
+              n_bucket       = as.integer(nb),
+              rep_start      = rb_start,
+              rep_end        = rb_end,
+              pool_seed_base = setup$seed_base,
+              pool_id        = setup$pool_id,
+              pool_type      = setup$pool_type,
+              ds_id          = ds_id,
+              condition_id   = condition_id,
+              year_span      = cond$year_span,
+              content_area   = cond$content_area,
+              sampling_mode  = sm
+            )
+          }
         }
       }
     }
@@ -1040,6 +1111,9 @@ for (ds_id in cfg_sys$datasets) {
           .PHASEB_POOL_DEFS      <<- pool_defs_push
           .PHASEB_CFG_REG        <<- cfg_reg_push
           .PHASEB_CFG_DIST       <<- cfg_dist_push
+          # Full-pool truth summaries for independent-mode replicates
+          .PHASEB_TRUE_POOL_MEDIAN <<- pool_truth_median_push
+          .PHASEB_TRUE_POOL_MEAN   <<- pool_truth_mean_push
           TRUE
         },
         true_sgpc_push     = true_sgpc_full,
@@ -1052,7 +1126,9 @@ for (ds_id in cfg_sys$datasets) {
         p1_copula_push     = p1_copula,
         pool_defs_push     = pool_defs_for_workers,
         cfg_reg_push       = cfg_reg,
-        cfg_dist_push      = cfg_dist
+        cfg_dist_push      = cfg_dist,
+        pool_truth_median_push = pool_truth_median,
+        pool_truth_mean_push   = pool_truth_mean
         )
         push_vals <- cond_push[]
         all(vapply(push_vals, isTRUE, logical(1)))
@@ -1085,7 +1161,8 @@ for (ds_id in cfg_sys$datasets) {
             condition_id           = task$condition_id,
             year_span              = task$year_span,
             content_area           = task$content_area,
-            phaseb_progress_file_abs = pf
+            phaseb_progress_file_abs = pf,
+            sampling_mode          = task$sampling_mode %||% "paired"
           )
         }
         environment(worker_lambda) <- globalenv()
@@ -1136,6 +1213,8 @@ for (ds_id in cfg_sys$datasets) {
       .PHASEB_POOL_DEFS    <- pool_defs_for_workers
       .PHASEB_CFG_REG      <- cfg_reg
       .PHASEB_CFG_DIST     <- cfg_dist
+      .PHASEB_TRUE_POOL_MEDIAN <- pool_truth_median
+      .PHASEB_TRUE_POOL_MEAN   <- pool_truth_mean
 
       pf_abs <- normalizePath(phaseb_progress_file, mustWork = FALSE)
       cat("    Running", n_tasks, "replicate tasks sequentially...\n")
@@ -1157,7 +1236,8 @@ for (ds_id in cfg_sys$datasets) {
             condition_id           = task$condition_id,
             year_span              = task$year_span,
             content_area           = task$content_area,
-            phaseb_progress_file_abs = pf_abs
+            phaseb_progress_file_abs = pf_abs,
+            sampling_mode          = task$sampling_mode %||% "paired"
           ),
           error = function(e) {
             cat("      ERROR task", ti, ":", e$message, "\n")
@@ -1259,6 +1339,12 @@ if (length(summary_rows) > 0) {
   save(phase_b_replicates,      file = file.path(RESULTS_DIR, "phase_b_replicates.RData"))
 
   if (nrow(phase_b_replicates) > 0) {
+    # Backward compat: ensure sampling_mode column exists before aggregation.
+    # Old replicate tables (pre-sampling-mode feature) will lack this column;
+    # default to "paired" which was the only mode previously.
+    if (!"sampling_mode" %in% names(phase_b_replicates)) {
+      phase_b_replicates[, sampling_mode := "paired"]
+    }
     phase_b_precision_by_n <- phase_b_replicates[, .(
       n_reps            = .N,
       n_converged       = sum(converged, na.rm = TRUE),
@@ -1293,11 +1379,12 @@ if (length(summary_rows) > 0) {
       kappa_hat_q25     = round(quantile(kappa_hat[converged %in% TRUE], 0.25, na.rm = TRUE), 4),
       kappa_hat_q75     = round(quantile(kappa_hat[converged %in% TRUE], 0.75, na.rm = TRUE), 4),
       kappa_hat_q90     = round(quantile(kappa_hat[converged %in% TRUE], 0.90, na.rm = TRUE), 4)
-    ), by = .(pool_id, pool_type, span, content, n_bucket)]
+    ), by = .(pool_id, pool_type, span, content, n_bucket, sampling_mode)]
   } else {
     phase_b_precision_by_n <- data.table(
       pool_id = character(), pool_type = character(),
       span = integer(), content = character(), n_bucket = integer(),
+      sampling_mode = character(),
       n_reps = integer(), n_converged = integer(), N_eff_bucket = numeric(),
       median_bias = numeric(), median_mae = numeric(), median_rmse = numeric(),
       median_ci_width_90 = numeric(), median_ci_width_95 = numeric(),

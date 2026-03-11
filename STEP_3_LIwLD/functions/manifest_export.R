@@ -171,11 +171,12 @@ export_step3_manifest <- function(results,
     "the conditional CDF from the baseline copula (fitted in STEP 1), and the estimation",
     "target is the occupancy distribution `H_S` of a subgroup `S`.",
     "",
-    "### Two Independent Error Sources",
+    "### Error Source Taxonomy",
     "",
     "| Error | Source | Phase | Controlled By |",
     "|-------|--------|-------|---------------|",
-    "| **Error 1 — Sampling** | Cross-sectional sample of size N substitutes for full subgroup | Phase B systematic | Increases N; degrades precision below ~5,000 students |",
+    "| **Error 1a — Subsampling** | Cross-sectional sample of size N substitutes for full subgroup (paired design) | Phase B systematic (paired mode) | Increases N; degrades precision below ~5,000 students |",
+    "| **Error 1b — Cohort mismatch** | Prior and current cohorts are different students (TIMSS/NAEP) | Phase B systematic (independent mode) | Linkage premium: multiplicative CI inflation vs paired; see linkage premium table |",
     "| **Error 2 — Inference** | Canonical copula + Beta family may not match true data-generating process | Phase A deep-dive | Robustness checks: copula sensitivity (B2), family comparison (Phase A), U-independence diagnostic |",
     "",
     "Phase A provides a full diagnostic at the observed subgroup size (N ~ 2,500–6,000).",
@@ -196,6 +197,8 @@ export_step3_manifest <- function(results,
     )
     if (!is.null(pb$overview)) {
       ov <- pb$overview
+      sampling_modes_str <- if (!is.null(ov$sampling_modes))
+        paste(ov$sampling_modes, collapse = ", ") else "paired"
       md_lines <- c(md_lines,
         paste0("- **Conditions tested:** ", ov$n_conditions),
         paste0("- **Subgroup-condition pairs:** ", ov$n_subgroup_conditions),
@@ -203,6 +206,7 @@ export_step3_manifest <- function(results,
         paste0("- **Content areas:** ", paste(ov$content_areas, collapse = ", ")),
         paste0("- **N buckets:** ", paste(ov$n_buckets, collapse = ", ")),
         paste0("- **Pool types:** ", paste(ov$pool_types, collapse = ", ")),
+        paste0("- **Sampling modes:** ", sampling_modes_str),
         paste0("- **Outer replicates per cell:** ", ov$outer_reps),
         paste0("- **Overall convergence rate:** ",
                round(ov$overall_convergence_rate * 100, 1), "%"),
@@ -256,6 +260,71 @@ export_step3_manifest <- function(results,
                      collapse = "; ")),
         ""
       )
+    }
+
+    # Linkage premium (sampling-mode decomposition)
+    if (!is.null(pb$linkage_premium)) {
+      lp <- pb$linkage_premium
+      md_lines <- c(md_lines,
+        "### Linkage Premium: Paired vs Independent Cohort Sampling",
+        "",
+        "Phase B decomposes Error 1 (sampling uncertainty) into two sub-components",
+        "by running each replicate under two sampling designs:",
+        "",
+        "- **Paired** — same student indices for prior and current scores (longitudinal pairing preserved)",
+        "- **Independent** — separate random draws for prior and current, mirroring the TIMSS/NAEP",
+        "  cross-sectional design where Grade 4 and Grade 8 are different students tested in the same year",
+        "",
+        paste0("The **linkage premium** is the multiplicative factor by which uncertainty increases ",
+               "when moving from paired to independent sampling. Mean CI ratio: **",
+               lp$mean_ci_ratio, "x**; Mean MAE ratio: **", lp$mean_mae_ratio, "x**."),
+        "",
+        "| N Bucket | CI (Paired) | CI (Independent) | CI Ratio | MAE (Paired) | MAE (Independent) | MAE Ratio |",
+        "|----------|-------------|------------------|----------|--------------|-------------------|-----------|"
+      )
+      for (row in lp$premium_by_n_bucket) {
+        md_lines <- c(md_lines,
+          paste0("| ", formatC(row$n_bucket, format = "d", big.mark = ","),
+                 " | ", round(row$ci_width_95_paired, 1),
+                 " | ", round(row$ci_width_95_independent, 1),
+                 " | ", row$ci_ratio, "x",
+                 " | ", round(row$mae_paired, 1),
+                 " | ", round(row$mae_independent, 1),
+                 " | ", row$mae_ratio, "x |")
+        )
+      }
+      md_lines <- c(md_lines,
+        "",
+        "_CI = 95% confidence interval width (SGP units); MAE = mean absolute error (SGP units)._",
+        "_Ratio > 1 indicates the precision cost of not having longitudinal pairing._",
+        "",
+        "**Implication for NAEP/TIMSS:** At NAEP state-level N (~3,000–4,000), the independent",
+        "sampling mode is the operationally relevant scenario. Multiply paired-mode CI widths",
+        "by the linkage premium ratio to obtain realistic uncertainty estimates for cross-sectional",
+        "growth inference in assessment programmes without longitudinal tracking.",
+        ""
+      )
+
+      # Precision by (year_span x n_bucket x sampling_mode) table if available
+      if (!is.null(lp$precision_by_n_span_mode)) {
+        md_lines <- c(md_lines,
+          "#### Full Precision Table by Year Span, N, and Sampling Mode",
+          "",
+          "| Sampling Mode | Year Span | N | 95% CI Width | MAE | Convergence |",
+          "|---------------|-----------|-------|--------------|------|-------------|"
+        )
+        for (row in lp$precision_by_n_span_mode) {
+          md_lines <- c(md_lines,
+            paste0("| ", row$sampling_mode,
+                   " | ", row$year_span,
+                   " | ", formatC(row$n_bucket, format = "d", big.mark = ","),
+                   " | ", round(row$median_ci_width_95, 1),
+                   " | ", round(row$median_mae, 1),
+                   " | ", round(row$convergence_rate * 100, 0), "% |")
+          )
+        }
+        md_lines <- c(md_lines, "")
+      }
     }
   }
 
@@ -381,7 +450,8 @@ export_step3_manifest <- function(results,
     "| `phase_a_precision_anchor.csv` | Phase A baseline N₀/SE₀/CI-width anchor for scaling narrative |",
     "| `phase_a_summary.csv` | One-row Phase A summary for reporting |",
     "| `phase_b_systematic_summary.csv` | Phase B per-subgroup condition summaries (all conditions run) |",
-    "| `phase_b_precision_by_n.csv` | Phase B precision operating characteristics by N bucket |",
+    "| `phase_b_precision_by_n.csv` | Phase B precision operating characteristics by N bucket (includes sampling_mode column) |",
+    "| `visualizations/panel_d2_precision_decomposition.*` | Phase B paired vs independent cohort precision decomposition (linkage premium) |",
     "| `phase_b_pool_registry.csv` | Phase B pooled-source registry with eligibility metadata |",
     "| `phase_b_replicates.RData` | Phase B replicate-level raw results (200 draws × N × conditions) |",
     "| `phase_b_copula_sensitivity.csv` | Phase B2 sensitivity to copula parameter variants |",
@@ -411,9 +481,17 @@ export_step3_manifest <- function(results,
     '# --- Phase A point estimate ---',
     'manifest$subgroup_estimates[[1]]$median_sgpc   # inferred median SGPc',
     '',
-    '# --- Phase B precision operating table ---',
+    '# --- Phase B precision operating table (paired mode, default) ---',
     '# CI width at NAEP-scale (N ~ 3000-4000, between n=2500 and n=5000 rows):',
     'manifest$phase_b_systematic$precision_by_n_span  # list of (year_span, n_bucket, ci_width, mae, convergence)',
+    '',
+    '# --- Linkage premium: paired vs independent cohort sampling ---',
+    '# The linkage premium quantifies the CI inflation from TIMSS/NAEP-style',
+    '# cross-sectional design (independent cohorts) vs longitudinal pairing.',
+    'lp <- manifest$phase_b_systematic$linkage_premium',
+    'lp$mean_ci_ratio                    # mean CI multiplier across N buckets',
+    'lp$premium_by_n_bucket              # per-N breakdown: ci_ratio, mae_ratio',
+    'lp$precision_by_n_span_mode         # full cross-tab: (year_span x n_bucket x sampling_mode)',
     '',
     '# --- Error decomposition ---',
     'manifest$error_sources$inference   # Error 2: bias at full N',

@@ -6,7 +6,7 @@
 %%%% \includegraphics, following the pattern in SGPc_Explanation.tex
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=16in,paperheight=23.4in,margin=0in]{geometry}
+\usepackage[paperwidth=16in,paperheight=24.0in,margin=0in]{geometry}
 \usepackage{graphicx}
 \usepackage[svgnames]{xcolor}
 \usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
@@ -111,7 +111,7 @@ ELA         & (0.84, 41.95) & (0.79, 46.41) & (0.76, 51.57) & (0.72, 42.04) \\
 \end{center}}
 
 \vspace{6pt}
-\fnline{3}{Other regime families considered include the truncated exponential family (the maximum entropy probability distribution for a random variable restricted to a finite interval with a fixed mean) and the truncated uniform family.}
+\fnline{3}{Other regime families considered include the truncated exponential family (the maximum-entropy distribution on a finite interval with a fixed mean) and the truncated uniform family. If acceptable accuracy and precision are already achieved under the Beta family, additional growth-regime optimization and fine-tuning should only improve the recovered fit.}
 
 \vspace{4pt}
 \fnline{4}{Here, $U$ denotes the subgroup's prior-grade reference quantile (pseudo-observation), and $C_0$ is the canonical baseline copula selected from STEP 1 by content area and year span. The fitted growth regime $\widehat{H}_S$ (distribution of latent $P=\SGPc/100$) and $C_0$ define a forward map
@@ -125,6 +125,9 @@ with corresponding induced density $f_{\widehat{H}_S}(v)$. The latent SGPc distr
 
 \vspace{4pt}
 \fnline{6}{The Beta family, $\mathrm{Beta}(\alpha, \beta)$, is reparameterized via $\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P] = \alpha / (\alpha + \beta)$ (the regime center, mean \SGPc~on the 0--1 scale) and $\kappa = \alpha + \beta$ (the concentration parameter).}
+
+\vspace{4pt}
+\fnline{7}{Alternative minimum-distance criteria (e.g., Cramer--von Mises, $\int_0^1 \{F(v)-G(v)\}^2\,dv$) are also valid for regime fitting. If acceptable accuracy and precision are already achieved under Wasserstein--1, then additional growth-regime optimization and fine-tuning should only improve the recovered fit.}
 
 \end{minipage}
 

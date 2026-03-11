@@ -157,6 +157,20 @@ STEP3_CONFIG <- list(
     rep_batch_size = 5L,        # SET TO 5 FOR r8g.48xlarge; SET TO 25 FOR r8g.4xlarge
     year_spans  = c(1, 2, 4),       # Test these spans
     content_areas = c("READING", "MATHEMATICS"),  # NAEP/TIMSS-relevant domains
+
+    # Sampling mode decomposition -----------------------------------------------
+    # Phase B replicates can run under two sampling designs:
+    #   "paired"      — same student indices for both U and V (original).
+    #                    Measures subsampling variability only.
+    #   "independent" — separate random draws for U and V, mirroring
+    #                    TIMSS/NAEP where Grade 4 and Grade 8 are different
+    #                    students tested in the same year.
+    #                    Captures full cross-sectional sampling uncertainty.
+    # When both are enabled, the precision-by-N table includes a
+    # sampling_mode dimension, and the decomposition panel (panel_d2)
+    # directly quantifies the "linkage premium" — the precision cost
+    # of not having longitudinal pairing.
+    sampling_modes = c("paired", "independent"),  # or just c("paired") to skip
     # "step2_empirical" = load sgpc_emp from STEP 2 outputs (no recomputation)
     # "recompute" = compute true SGPc on-the-fly via sgpc_engine (fallback)
     truth_source = "step2_empirical",

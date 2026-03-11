@@ -363,6 +363,8 @@ if (exists("phase_b_precision") && nrow(phase_b_precision) > 0 && exists("phase_
 ###
 ### D*. Revised Panel D: Precision vs N with NAEP/TIMSS Zones
 ###
+### Three variants: Median SGPc, Mean SGPc, and a combined 2x2 panel.
+###
 ############################################################################
 
 cat("D* (revised): Precision vs N with NAEP/TIMSS zones... ")
@@ -374,107 +376,173 @@ if (exists("phase_b_precision") && nrow(phase_b_precision) > 0) {
   D_NAEP_COLOR  <- "#B5654A"   # dusty terracotta  (warm, reddish-brown)
   D_TIMSS_COLOR <- "#4E8B62"   # muted sage green  (cool, earthy)
 
-  # Aggregate by pool_type and n_bucket
-  prec_agg <- phase_b_precision[, .(
-    median_mae = mean(median_mae, na.rm = TRUE),
-    mae_q25    = quantile(median_mae, 0.25, na.rm = TRUE),
-    mae_q75    = quantile(median_mae, 0.75, na.rm = TRUE),
-    mae_q10    = quantile(median_mae, 0.10, na.rm = TRUE),
-    mae_q90    = quantile(median_mae, 0.90, na.rm = TRUE),
-    ci_width   = mean(median_ci_width_95, na.rm = TRUE),
-    ci_q25     = quantile(median_ci_width_95, 0.25, na.rm = TRUE),
-    ci_q75     = quantile(median_ci_width_95, 0.75, na.rm = TRUE),
-    n_pools    = .N
-  ), by = .(n_bucket, pool_type)]
-  prec_agg[, pool_type := fifelse(grepl("cluster", pool_type, ignore.case = TRUE), "Cluster", "District")]
-
-  # y positions for zone labels (just below the top of each panel)
-  mae_label_y <- max(prec_agg$mae_q90, na.rm = TRUE) * 0.95
-  ci_label_y  <- max(prec_agg$ci_q75,  na.rm = TRUE) * 0.95
-
-  # --- Left panel: MAE ---
-  p_mae <- ggplot(prec_agg, aes(x = n_bucket, y = median_mae, color = pool_type)) +
-    # NAEP zone — terracotta background
-    annotate("rect", xmin = 3000, xmax = 4000, ymin = -Inf, ymax = Inf,
-             fill = alpha(D_NAEP_COLOR, 0.12)) +
-    annotate("text", x = 3500, y = mae_label_y,
-             label = "NAEP", color = D_NAEP_COLOR, size = 3, fontface = "bold") +
-    # TIMSS zone — sage-green background
-    # xmax = 8,000: above the cross-country mean (~6,600) but below the largest
-    # national samplers (e.g. Australia ~10,000); covers the bulk of the 45
-    # grade-8 systems.  Design minimum = 4,000 per country.
-    annotate("rect", xmin = 4000, xmax = 8000, ymin = -Inf, ymax = Inf,
-             fill = alpha(D_TIMSS_COLOR, 0.10)) +
-    annotate("text", x = 6000, y = mae_label_y,
-             label = "TIMSS", color = D_TIMSS_COLOR, size = 3, fontface = "bold") +
-    # IQR ribbon
-    geom_ribbon(aes(ymin = mae_q25, ymax = mae_q75, fill = pool_type),
-                alpha = 0.15, color = NA) +
-    # 90% ribbon
-    geom_ribbon(aes(ymin = mae_q10, ymax = mae_q90, fill = pool_type),
-                alpha = 0.07, color = NA) +
-    # Line + points
-    geom_line(linewidth = 0.9) +
-    geom_point(size = 2.5) +
-    # 2 SGPc reference
-    geom_hline(yintercept = 2, linetype = "dashed", color = "grey60", linewidth = 0.4) +
-    scale_color_manual(values = c("District" = ZISSOU1_BASE[1],
-                                   "Cluster" = ZISSOU1_BASE[4]),
-                        name = "Pool Type") +
-    scale_fill_manual(values = c("District" = ZISSOU1_BASE[1],
-                                  "Cluster" = ZISSOU1_BASE[4]),
-                       guide = "none") +
-    scale_x_continuous(labels = scales::comma, breaks = c(1000, 2500, 5000, 7500, 10000)) +
-    labs(title = "Accuracy: Median Absolute Error by Sample Size",
-         subtitle = "How close is the cross-sectional inference to the longitudinal ground truth?\nIQR (dark band) and 10th\u201390th percentile (light band) across pools",
-         x = "Sample Size (N)", y = "Accuracy — Median Absolute Error (SGPc)") +
-    theme_publication(base_size = 9) +
-    theme(legend.position = c(0.83, 0.82))
-
-  # --- Right panel: CI width ---
-  p_ci <- ggplot(prec_agg, aes(x = n_bucket, y = ci_width, color = pool_type)) +
-    # NAEP zone — same terracotta
-    annotate("rect", xmin = 3000, xmax = 4000, ymin = -Inf, ymax = Inf,
-             fill = alpha(D_NAEP_COLOR, 0.12)) +
-    annotate("text", x = 3500, y = ci_label_y,
-             label = "NAEP", color = D_NAEP_COLOR, size = 3, fontface = "bold") +
-    # TIMSS zone — same sage-green
-    annotate("rect", xmin = 4000, xmax = 8000, ymin = -Inf, ymax = Inf,
-             fill = alpha(D_TIMSS_COLOR, 0.10)) +
-    annotate("text", x = 6000, y = ci_label_y,
-             label = "TIMSS", color = D_TIMSS_COLOR, size = 3, fontface = "bold") +
-    geom_ribbon(aes(ymin = ci_q25, ymax = ci_q75, fill = pool_type),
-                alpha = 0.15, color = NA) +
-    geom_line(linewidth = 0.9) +
-    geom_point(size = 2.5) +
-    scale_color_manual(values = c("District" = ZISSOU1_BASE[1],
-                                   "Cluster" = ZISSOU1_BASE[4]),
-                        name = "Pool Type") +
-    scale_fill_manual(values = c("District" = ZISSOU1_BASE[1],
-                                  "Cluster" = ZISSOU1_BASE[4]),
-                       guide = "none") +
-    scale_x_continuous(labels = scales::comma, breaks = c(1000, 2500, 5000, 7500, 10000)) +
-    labs(title = "Precision: Bootstrap 95% CI Width by Sample Size",
-         subtitle = "How repeatable is the estimate across independent cross-sectional draws?\nIQR across pools; shaded zones mark NAEP and TIMSS sample-size ranges",
-         x = "Sample Size (N)", y = "Precision — Bootstrap 95% CI Width (SGPc)") +
-    theme_publication(base_size = 9) +
-    theme(legend.position = c(0.83, 0.82))
-
-  p_d_rev <- p_mae | p_ci
-  p_d_rev <- p_d_rev + plot_annotation(
-    title = "Recovery Accuracy and Precision vs Sample Size",
-    subtitle = paste0(
-      "Left: accuracy (how close to truth \u2014 MAE); ",
-      "Right: precision (how consistent across samples \u2014 95% CI width).\n",
-      "Error 1 (sampling) drives both curves upward as N falls; ",
-      "shaded zones mark operational N ranges for NAEP and TIMSS."
-    ),
-    theme = theme(plot.title = element_text(face = "bold", size = 14),
-                  plot.subtitle = element_text(size = 11, color = "grey30"))
+  # ---- Pre-compute unified y-axis upper bound across all four sub-panels ----
+  # Aggregate the outermost envelope statistics for each metric so that every
+  # sub-panel (MAE-median, MAE-mean, CI-median, CI-mean) shares the same
+  # y-axis range, making visual comparison straightforward.
+  .d_agg <- function(col) {
+    phase_b_precision[, .(
+      avg = mean(get(col), na.rm = TRUE),
+      q75 = quantile(get(col), 0.75, na.rm = TRUE),
+      q90 = quantile(get(col), 0.90, na.rm = TRUE)
+    ), by = .(n_bucket, pool_type)]
+  }
+  d_y_candidates <- c(
+    .d_agg("median_mae")$q90,
+    .d_agg("mean_mae")$q90,
+    .d_agg("median_ci_width_95")$q75,
+    .d_agg("mean_ci_width_95")$q75
   )
+  D_YLIM <- c(0, max(d_y_candidates, na.rm = TRUE) * 1.05)
 
-  save_plot_multi(p_d_rev, "panel_d_revised_precision_vs_n", enhanced_dir, width = 14, height = 7)
-  cat("generated.\n")
+  # ---- Helper: build a MAE panel for a given metric (median or mean) ----
+  build_mae_panel <- function(dt, metric = c("median", "mean"), ylim = D_YLIM) {
+    metric <- match.arg(metric)
+    mae_col <- paste0(metric, "_mae")
+    label   <- if (metric == "median") "Median" else "Mean"
+
+    agg <- dt[, .(
+      mae_avg = mean(get(mae_col), na.rm = TRUE),
+      mae_q25 = quantile(get(mae_col), 0.25, na.rm = TRUE),
+      mae_q75 = quantile(get(mae_col), 0.75, na.rm = TRUE),
+      mae_q10 = quantile(get(mae_col), 0.10, na.rm = TRUE),
+      mae_q90 = quantile(get(mae_col), 0.90, na.rm = TRUE),
+      n_pools = .N
+    ), by = .(n_bucket, pool_type)]
+    agg[, pool_type := fifelse(grepl("cluster", pool_type, ignore.case = TRUE), "Cluster", "District")]
+
+    y_label <- ylim[2] * 0.93
+
+    ggplot(agg, aes(x = n_bucket, y = mae_avg, color = pool_type)) +
+      annotate("rect", xmin = 3000, xmax = 4000, ymin = -Inf, ymax = Inf,
+               fill = alpha(D_NAEP_COLOR, 0.12)) +
+      annotate("text", x = 3500, y = y_label,
+               label = "NAEP", color = D_NAEP_COLOR, size = 3, fontface = "bold") +
+      annotate("rect", xmin = 4000, xmax = 8000, ymin = -Inf, ymax = Inf,
+               fill = alpha(D_TIMSS_COLOR, 0.10)) +
+      annotate("text", x = 6000, y = y_label,
+               label = "TIMSS", color = D_TIMSS_COLOR, size = 3, fontface = "bold") +
+      geom_ribbon(aes(ymin = mae_q25, ymax = mae_q75, fill = pool_type),
+                  alpha = 0.15, color = NA) +
+      geom_ribbon(aes(ymin = mae_q10, ymax = mae_q90, fill = pool_type),
+                  alpha = 0.07, color = NA) +
+      geom_line(linewidth = 0.9) +
+      geom_point(size = 2.5) +
+      geom_hline(yintercept = 2, linetype = "dashed", color = "grey60", linewidth = 0.4) +
+      scale_color_manual(values = c("District" = ZISSOU1_BASE[1],
+                                     "Cluster" = ZISSOU1_BASE[4]),
+                          name = "Pool Type") +
+      scale_fill_manual(values = c("District" = ZISSOU1_BASE[1],
+                                    "Cluster" = ZISSOU1_BASE[4]),
+                         guide = "none") +
+      scale_x_continuous(labels = scales::comma, breaks = c(1000, 2500, 5000, 7500, 10000)) +
+      coord_cartesian(ylim = ylim) +
+      labs(title = paste0("Accuracy: MAE for ", label, " SGPc by Sample Size"),
+           subtitle = paste0(
+             "How close is the cross-sectional ", tolower(label),
+             " SGPc inference to the longitudinal ground truth?\n",
+             "IQR (dark band) and 10th\u201390th percentile (light band) across pools"),
+           x = "Sample Size (N)",
+           y = paste0("Accuracy \u2014 MAE of ", label, " SGPc")) +
+      theme_publication(base_size = 9) +
+      theme(legend.position = c(0.83, 0.82))
+  }
+
+  # ---- Helper: build a CI-width panel for a given metric ----
+  build_ci_panel <- function(dt, metric = c("median", "mean"), ylim = D_YLIM) {
+    metric <- match.arg(metric)
+    ci_col <- paste0(metric, "_ci_width_95")
+    label  <- if (metric == "median") "Median" else "Mean"
+
+    agg <- dt[, .(
+      ci_avg = mean(get(ci_col), na.rm = TRUE),
+      ci_q25 = quantile(get(ci_col), 0.25, na.rm = TRUE),
+      ci_q75 = quantile(get(ci_col), 0.75, na.rm = TRUE),
+      n_pools = .N
+    ), by = .(n_bucket, pool_type)]
+    agg[, pool_type := fifelse(grepl("cluster", pool_type, ignore.case = TRUE), "Cluster", "District")]
+
+    y_label <- ylim[2] * 0.93
+
+    ggplot(agg, aes(x = n_bucket, y = ci_avg, color = pool_type)) +
+      annotate("rect", xmin = 3000, xmax = 4000, ymin = -Inf, ymax = Inf,
+               fill = alpha(D_NAEP_COLOR, 0.12)) +
+      annotate("text", x = 3500, y = y_label,
+               label = "NAEP", color = D_NAEP_COLOR, size = 3, fontface = "bold") +
+      annotate("rect", xmin = 4000, xmax = 8000, ymin = -Inf, ymax = Inf,
+               fill = alpha(D_TIMSS_COLOR, 0.10)) +
+      annotate("text", x = 6000, y = y_label,
+               label = "TIMSS", color = D_TIMSS_COLOR, size = 3, fontface = "bold") +
+      geom_ribbon(aes(ymin = ci_q25, ymax = ci_q75, fill = pool_type),
+                  alpha = 0.15, color = NA) +
+      geom_line(linewidth = 0.9) +
+      geom_point(size = 2.5) +
+      scale_color_manual(values = c("District" = ZISSOU1_BASE[1],
+                                     "Cluster" = ZISSOU1_BASE[4]),
+                          name = "Pool Type") +
+      scale_fill_manual(values = c("District" = ZISSOU1_BASE[1],
+                                    "Cluster" = ZISSOU1_BASE[4]),
+                         guide = "none") +
+      scale_x_continuous(labels = scales::comma, breaks = c(1000, 2500, 5000, 7500, 10000)) +
+      coord_cartesian(ylim = ylim) +
+      labs(title = paste0("Precision: Bootstrap 95% CI Width for ", label, " SGPc"),
+           subtitle = paste0(
+             "How repeatable is the ", tolower(label),
+             " SGPc estimate across independent cross-sectional draws?\n",
+             "IQR across pools; shaded zones mark NAEP and TIMSS sample-size ranges"),
+           x = "Sample Size (N)",
+           y = paste0("Precision \u2014 95% CI Width of ", label, " SGPc")) +
+      theme_publication(base_size = 9) +
+      theme(legend.position = c(0.83, 0.82))
+  }
+
+  # ---- Helper: annotate a two-panel (MAE | CI) row ----
+  annotate_d_row <- function(p_mae, p_ci, label) {
+    (p_mae | p_ci) + plot_annotation(
+      title = paste0("Recovery Accuracy and Precision vs Sample Size \u2014 ", label, " SGPc"),
+      subtitle = paste0(
+        "Left: accuracy (how close to truth \u2014 MAE); ",
+        "Right: precision (how consistent across samples \u2014 95% CI width).\n",
+        "Error 1 (sampling) drives both curves upward as N falls; ",
+        "shaded zones mark operational N ranges for NAEP and TIMSS."
+      ),
+      theme = theme(plot.title    = element_text(face = "bold", size = 14),
+                    plot.subtitle = element_text(size = 11, color = "grey30"))
+    )
+  }
+
+  # ---- Build the six sub-panels ----
+  p_mae_median <- build_mae_panel(phase_b_precision, "median")
+  p_ci_median  <- build_ci_panel(phase_b_precision,  "median")
+  p_mae_mean   <- build_mae_panel(phase_b_precision, "mean")
+  p_ci_mean    <- build_ci_panel(phase_b_precision,  "mean")
+
+  # ---- Standalone: Median SGPc (MAE + CI width) ----
+  p_d_median <- annotate_d_row(p_mae_median, p_ci_median, "Median")
+  save_plot_multi(p_d_median, "panel_d_median_precision_vs_n", enhanced_dir, width = 14, height = 7)
+
+  # ---- Standalone: Mean SGPc (MAE + CI width) ----
+  p_d_mean <- annotate_d_row(p_mae_mean, p_ci_mean, "Mean")
+  save_plot_multi(p_d_mean, "panel_d_mean_precision_vs_n", enhanced_dir, width = 14, height = 7)
+
+  # ---- Combined 2x2: Median (top row) and Mean (bottom row) ----
+  # Strip per-row annotations and use a single combined annotation.
+  p_d_combined <- (p_mae_median | p_ci_median) /
+                  (p_mae_mean   | p_ci_mean) +
+    plot_annotation(
+      title = "Recovery Accuracy and Precision vs Sample Size",
+      subtitle = paste0(
+        "Top row: Median SGPc; Bottom row: Mean SGPc.  ",
+        "Left: accuracy (MAE); Right: precision (95% CI width).\n",
+        "Error 1 (sampling) drives both curves upward as N falls; ",
+        "shaded zones mark operational N ranges for NAEP and TIMSS."
+      ),
+      theme = theme(plot.title    = element_text(face = "bold", size = 14),
+                    plot.subtitle = element_text(size = 11, color = "grey30"))
+    )
+  save_plot_multi(p_d_combined, "panel_d_combined_precision_vs_n", enhanced_dir, width = 14, height = 13)
+
+  cat("generated (median + mean + combined).\n")
 } else {
   cat("skipped.\n")
 }

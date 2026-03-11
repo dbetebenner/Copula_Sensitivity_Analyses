@@ -205,6 +205,40 @@ if (!is.null(phase_b_precision) && nrow(phase_b_precision) > 0) {
 
 
 ############################################################################
+### Panel D2: Sampling-Mode Precision Decomposition (Phase B)
+###
+### Requires both "paired" and "independent" sampling modes in precision data.
+### Compares CI widths and MAE by mode to quantify the "linkage premium" —
+### the additional uncertainty from independent cohorts (TIMSS/NAEP design).
+############################################################################
+
+cat("Panel D2: Sampling-Mode Precision Decomposition... ")
+if (!is.null(phase_b_precision) && nrow(phase_b_precision) > 0 &&
+    "sampling_mode" %in% names(phase_b_precision) &&
+    all(c("paired", "independent") %in% phase_b_precision$sampling_mode)) {
+
+  # Aggregate across pools but preserve sampling_mode dimension
+  decomp_plot_dt <- phase_b_precision[, .(
+    median_ci_width_90 = mean(median_ci_width_90, na.rm = TRUE),
+    median_ci_width_95 = mean(median_ci_width_95, na.rm = TRUE),
+    median_mae = mean(median_mae, na.rm = TRUE),
+    mean_mae = mean(mean_mae, na.rm = TRUE)
+  ), by = .(n_bucket, sampling_mode)]
+  decomp_plot_dt <- decomp_plot_dt[order(n_bucket, sampling_mode)]
+
+  plot_precision_decomposition(
+    precision_dt = decomp_plot_dt,
+    output_dir = viz_dir,
+    filename = "panel_d2_precision_decomposition",
+    title = "Sampling-Mode Precision Decomposition: Paired vs Independent Cohorts"
+  )
+  cat("generated.\n")
+} else {
+  cat("skipped (need both paired and independent sampling modes).\n")
+}
+
+
+############################################################################
 ### Panel E: Recovery Accuracy by Year Span (Phase B)
 ############################################################################
 
@@ -756,6 +790,97 @@ if (nrow(phase_b_precision) > 0) {
     }
   }
 
+  # ---- Linkage premium: sampling-mode decomposition (paired vs independent) ----
+  linkage_premium <- NULL
+  has_sampling_mode <- "sampling_mode" %in% names(phase_b_precision) &&
+    all(c("paired", "independent") %in% phase_b_precision$sampling_mode)
+
+  if (has_sampling_mode) {
+    cat("  Assembling linkage premium decomposition for manifest...\n")
+
+    # Precision by (year_span x n_bucket x sampling_mode) — full cross-tab
+    precision_by_n_span_mode <- NULL
+    if (!is.null(span_col)) {
+      tmp_mode <- phase_b_precision[, .(
+        median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4),
+        median_mae         = round(mean(median_mae, na.rm = TRUE), 4),
+        mean_mae           = round(mean(mean_mae, na.rm = TRUE), 4),
+        median_bias        = round(mean(median_bias, na.rm = TRUE), 4),
+        convergence_rate   = round(sum(n_converged, na.rm = TRUE) /
+                                     pmax(sum(n_reps, na.rm = TRUE), 1L), 4),
+        n_pools            = .N
+      ), by = c(span_col, "n_bucket", "sampling_mode")][order(get(span_col), n_bucket, sampling_mode)]
+      if (span_col != "year_span") setnames(tmp_mode, span_col, "year_span")
+      precision_by_n_span_mode <- lapply(seq_len(nrow(tmp_mode)), function(i) as.list(tmp_mode[i]))
+    }
+
+    # Linkage premium ratio by n_bucket: CI_independent / CI_paired
+    lp_wide <- phase_b_precision[, .(
+      median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4),
+      median_mae         = round(mean(median_mae, na.rm = TRUE), 4)
+    ), by = .(n_bucket, sampling_mode)][order(n_bucket, sampling_mode)]
+
+    lp_paired <- lp_wide[sampling_mode == "paired"]
+    lp_indep  <- lp_wide[sampling_mode == "independent"]
+
+    # Validate n_bucket alignment before merge
+    paired_buckets <- sort(lp_paired$n_bucket)
+    indep_buckets  <- sort(lp_indep$n_bucket)
+    if (!identical(paired_buckets, indep_buckets)) {
+      cat("    WARNING: n_bucket mismatch between paired and independent modes.\n")
+      cat("      paired:      ", paste(paired_buckets, collapse = ", "), "\n")
+      cat("      independent: ", paste(indep_buckets, collapse = ", "), "\n")
+    }
+
+    lp_merged <- merge(lp_paired, lp_indep, by = "n_bucket",
+                        suffixes = c("_paired", "_independent"), all = TRUE)
+
+    # Safe ratio computation: guard against zero/NA denominators
+    lp_merged[, ci_ratio := ifelse(
+      is.finite(median_ci_width_95_paired) & median_ci_width_95_paired > 0,
+      round(median_ci_width_95_independent / median_ci_width_95_paired, 2),
+      NA_real_
+    )]
+    lp_merged[, mae_ratio := ifelse(
+      is.finite(median_mae_paired) & median_mae_paired > 0,
+      round(median_mae_independent / median_mae_paired, 2),
+      NA_real_
+    )]
+
+    if (nrow(lp_merged) == 0) {
+      cat("    WARNING: linkage premium merge produced 0 rows; skipping.\n")
+      linkage_premium <- NULL
+    } else {
+      # Only compute means from finite ratio values
+      finite_ci  <- lp_merged$ci_ratio[is.finite(lp_merged$ci_ratio)]
+      finite_mae <- lp_merged$mae_ratio[is.finite(lp_merged$mae_ratio)]
+
+      linkage_premium <- list(
+        description = paste0(
+          "Linkage premium: the multiplicative factor by which uncertainty increases ",
+          "when moving from paired (longitudinal) to independent (cross-sectional) ",
+          "cohort sampling, as encountered in TIMSS and NAEP."
+        ),
+        sampling_modes = sort(unique(lp_wide$sampling_mode)),
+        precision_by_n_span_mode = precision_by_n_span_mode,
+        premium_by_n_bucket = lapply(seq_len(nrow(lp_merged)), function(i) list(
+          n_bucket                       = lp_merged$n_bucket[i],
+          ci_width_95_paired             = lp_merged$median_ci_width_95_paired[i],
+          ci_width_95_independent        = lp_merged$median_ci_width_95_independent[i],
+          ci_ratio                       = lp_merged$ci_ratio[i],
+          mae_paired                     = lp_merged$median_mae_paired[i],
+          mae_independent                = lp_merged$median_mae_independent[i],
+          mae_ratio                      = lp_merged$mae_ratio[i]
+        )),
+        mean_ci_ratio  = if (length(finite_ci) > 0)  round(mean(finite_ci), 2)  else NA_real_,
+        mean_mae_ratio = if (length(finite_mae) > 0) round(mean(finite_mae), 2) else NA_real_
+      )
+
+      cat("    Mean CI ratio (independent / paired):", linkage_premium$mean_ci_ratio, "\n")
+      cat("    Mean MAE ratio:", linkage_premium$mean_mae_ratio, "\n")
+    }
+  }
+
   phase_b_systematic_summary <- list(
     overview = list(
       n_conditions             = n_conditions,
@@ -766,10 +891,14 @@ if (nrow(phase_b_precision) > 0) {
       content_areas            = content_areas_run,
       n_buckets                = n_buckets_tested,
       outer_reps               = STEP3_CONFIG$systematic$outer_reps,
-      overall_convergence_rate = overall_conv_rate
+      overall_convergence_rate = overall_conv_rate,
+      sampling_modes           = if (has_sampling_mode)
+                                   sort(unique(phase_b_precision$sampling_mode))
+                                 else c("paired")
     ),
     precision_by_n_span = precision_by_n_span,
     year_span_finding   = year_span_finding,
+    linkage_premium     = linkage_premium,
     # Flat precision by n_bucket only (backward compat)
     precision_by_n = as.list(phase_b_precision[, .(
       median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4),
@@ -820,7 +949,17 @@ if (!is.null(phase_a)) {
       phase_b_available = !is.null(phase_b_systematic_summary),
       naep_reference_n  = list(min = 3000L, max = 4000L,
                                 note = "NAEP state-level typical range"),
-      timss_reference_n = list(min = 4000L, note = "TIMSS country-level minimum")
+      timss_reference_n = list(min = 4000L, note = "TIMSS country-level minimum"),
+      linkage_premium_available = !is.null(phase_b_systematic_summary) &&
+                                    !is.null(phase_b_systematic_summary$linkage_premium),
+      linkage_premium_note = paste0(
+        "Error 1 decomposes into two sub-components: ",
+        "(1a) subsampling variability (paired mode) and ",
+        "(1b) additional cohort-mismatch uncertainty from independent sampling ",
+        "(TIMSS/NAEP cross-sectional design). The linkage premium ",
+        "quantifies the multiplicative cost of (1b); see ",
+        "phase_b_systematic$linkage_premium for per-N ratios."
+      )
     ),
     variance_decomposition = if (!is.na(var_sampling)) list(
       var_sampling  = round(var_sampling, 4),

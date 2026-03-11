@@ -994,6 +994,198 @@ plot_precision_vs_n <- function(precision_dt,
 }
 
 
+#' Sampling-Mode Precision Decomposition
+#'
+#' Three-panel diagnostic comparing paired vs independent cross-sectional
+#' sampling modes. Directly quantifies the "linkage premium" — the additional
+#' uncertainty incurred when prior and current cohorts are sampled from
+#' different students (as in TIMSS/NAEP) rather than the same students.
+#'
+#' Panel layout:
+#'   Left:  95% CI width vs N (paired vs independent curves)
+#'   Centre: MAE vs N (paired vs independent curves)
+#'   Right: Variance ratio = Var(independent) / Var(paired) by N bucket
+#'
+#' @param precision_dt data.table with columns: n_bucket, sampling_mode,
+#'   median_ci_width_95, median_ci_width_90, median_mae, mean_mae.
+#'   Must contain both "paired" and "independent" rows.
+#' @param output_dir Character. Output directory.
+#' @param filename Character. Base filename.
+#' @param title Character. Overall title.
+#'
+#' @return The patchwork composite (invisible).
+#' @export
+plot_precision_decomposition <- function(precision_dt,
+                                          output_dir = "results/visualizations",
+                                          filename = "panel_d2_precision_decomposition",
+                                          title = "Sampling-Mode Precision Decomposition: Paired vs Independent Cohorts") {
+
+  if (is.null(precision_dt) || nrow(precision_dt) == 0) {
+    p <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5, label = "No precision-by-N data available", size = 4) +
+      theme_void()
+    save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    return(invisible(p))
+  }
+
+  dt <- as.data.frame(precision_dt, check.names = FALSE)
+  dt <- dt[, !duplicated(names(dt)), drop = FALSE]
+
+  # Backward compat: add sampling_mode if missing
+ if (!"sampling_mode" %in% names(dt)) dt$sampling_mode <- "paired"
+
+  modes_present <- unique(dt$sampling_mode)
+  if (!all(c("paired", "independent") %in% modes_present)) {
+    p <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5,
+               label = paste0("Need both paired and independent modes.\nPresent: ",
+                              paste(modes_present, collapse = ", ")),
+               size = 4) +
+      theme_void()
+    save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    return(invisible(p))
+  }
+
+  pick_col <- function(primary) {
+    if (primary %in% names(dt)) return(primary)
+    alt <- grep(paste0("^", primary), names(dt), value = TRUE)
+    if (length(alt) > 0) return(alt[1])
+    NA_character_
+  }
+
+  n_col         <- pick_col("n_bucket")
+  ci95_col      <- pick_col("median_ci_width_95")
+  median_mae_col <- pick_col("median_mae")
+  mean_mae_col  <- pick_col("mean_mae")
+
+  needed <- c(n_col, ci95_col, median_mae_col, mean_mae_col)
+  if (any(!is.finite(match(needed, names(dt))))) {
+    p <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5, label = "Missing precision-by-N columns", size = 4) +
+      theme_void()
+    save_plot_multi(p, filename, output_dir, width = PLOT_WIDTH, height = PLOT_HEIGHT)
+    return(invisible(p))
+  }
+
+  dt$n_bucket      <- as.numeric(dt[[n_col]])
+  dt$ci95          <- as.numeric(dt[[ci95_col]])
+  dt$mae_median    <- as.numeric(dt[[median_mae_col]])
+  dt$mae_mean      <- as.numeric(dt[[mean_mae_col]])
+  dt <- dt[is.finite(dt$n_bucket), , drop = FALSE]
+
+  # Aggregate across pools to get median CI width and MAE per (n_bucket, sampling_mode)
+  agg <- aggregate(
+    cbind(ci95, mae_median, mae_mean) ~ n_bucket + sampling_mode,
+    data = dt, FUN = median, na.rm = TRUE
+  )
+  agg <- agg[order(agg$n_bucket), ]
+
+  mode_colors <- c(
+    "paired"      = STEP3_COLORS$predicted,
+    "independent" = STEP3_COLORS$true_value
+  )
+  mode_labels <- c(
+    "paired"      = "Paired (same students)",
+    "independent" = "Independent cohorts (TIMSS/NAEP)"
+  )
+
+  # ---- Panel 1: CI width vs N ----
+  p_ci <- ggplot(agg, aes(x = n_bucket, y = ci95, color = sampling_mode,
+                           linetype = sampling_mode)) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 2.2) +
+    scale_color_manual(values = mode_colors, labels = mode_labels) +
+    scale_linetype_manual(values = c("paired" = "solid", "independent" = "dashed"),
+                          labels = mode_labels) +
+    scale_x_continuous(breaks = sort(unique(agg$n_bucket)),
+                       labels = scales::comma) +
+    labs(
+      title    = "95% CI Width vs N",
+      subtitle = format_step3_subtitle(
+        "How much wider is the CI when cohorts are independent?",
+        "Median across pools"
+      ),
+      x = "N (students per cohort)",
+      y = "Empirical 95% CI width (SGPc)",
+      color = NULL, linetype = NULL
+    ) +
+    theme_publication(base_size = 9) +
+    theme(legend.position = "bottom",
+          legend.key.width = unit(1.5, "cm"))
+
+  # ---- Panel 2: MAE vs N ----
+  p_mae <- ggplot(agg, aes(x = n_bucket, y = mae_median, color = sampling_mode,
+                             linetype = sampling_mode)) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 2.2) +
+    scale_color_manual(values = mode_colors, labels = mode_labels) +
+    scale_linetype_manual(values = c("paired" = "solid", "independent" = "dashed"),
+                          labels = mode_labels) +
+    scale_x_continuous(breaks = sort(unique(agg$n_bucket)),
+                       labels = scales::comma) +
+    labs(
+      title    = "Median SGPc MAE vs N",
+      subtitle = format_step3_subtitle(
+        "How does median absolute error grow under independent sampling?",
+        "Median across pools"
+      ),
+      x = "N (students per cohort)",
+      y = "Median absolute error (SGPc)",
+      color = NULL, linetype = NULL
+    ) +
+    theme_publication(base_size = 9) +
+    theme(legend.position = "bottom",
+          legend.key.width = unit(1.5, "cm"))
+
+  # ---- Panel 3: Variance ratio (linkage premium) ----
+  # Compute per-N-bucket variance ratio = Var(independent) / Var(paired)
+  paired_agg <- agg[agg$sampling_mode == "paired", ]
+  indep_agg  <- agg[agg$sampling_mode == "independent", ]
+  ratio_df <- merge(
+    paired_agg[, c("n_bucket", "ci95")],
+    indep_agg[, c("n_bucket", "ci95")],
+    by = "n_bucket", suffixes = c("_paired", "_indep")
+  )
+  ratio_df$ci_ratio <- ratio_df$ci95_indep / pmax(ratio_df$ci95_paired, 0.01)
+
+  p_ratio <- ggplot(ratio_df, aes(x = n_bucket, y = ci_ratio)) +
+    geom_hline(yintercept = 1, linetype = "dotted", color = "grey50") +
+    geom_line(linewidth = 0.9, color = STEP3_COLORS$residual) +
+    geom_point(size = 2.5, color = STEP3_COLORS$residual) +
+    geom_text(aes(label = sprintf("%.1fx", ci_ratio)),
+              vjust = -1.2, size = 3.2, color = STEP3_COLORS$residual) +
+    scale_x_continuous(breaks = sort(unique(ratio_df$n_bucket)),
+                       labels = scales::comma) +
+    coord_cartesian(ylim = c(0, max(ratio_df$ci_ratio, na.rm = TRUE) * 1.3)) +
+    labs(
+      title    = "Linkage Premium",
+      subtitle = format_step3_subtitle(
+        "CI width multiplier: independent / paired",
+        "Ratio > 1 = cost of losing longitudinal linkage"
+      ),
+      x = "N (students per cohort)",
+      y = "CI width ratio"
+    ) +
+    theme_publication(base_size = 9)
+
+  combined <- (p_ci | p_mae | p_ratio) +
+    patchwork::plot_annotation(
+      title    = title,
+      subtitle = paste0(
+        "Paired = same students in both cohorts (standard subsampling) | ",
+        "Independent = different students (TIMSS/NAEP design)"
+      ),
+      theme = theme(
+        plot.title    = element_text(face = "bold", size = 13, hjust = 0),
+        plot.subtitle = element_text(size = 9, color = "grey40", hjust = 0)
+      )
+    )
+
+  save_plot_multi(combined, filename, output_dir, width = 16, height = 6.5)
+  invisible(combined)
+}
+
+
 #' Multi-Panel Recovery Summary
 #'
 #' Four-panel diagnostic: A. CDF overlay, B. Regime density vs true,
@@ -1158,5 +1350,5 @@ cat("  Functions: plot_observed_vs_predicted_cdf, plot_regime_shape,\n")
 cat("             plot_residual_curve, plot_objective_surface,\n")
 cat("             plot_marginal_uv_density, plot_independence_diagnostic,\n")
 cat("             plot_bootstrap_sgpc, plot_bootstrap_sgpc_combined,\n")
-cat("             plot_precision_vs_n, plot_district_summary_grade,\n")
-cat("             plot_recovery_summary\n")
+cat("             plot_precision_vs_n, plot_precision_decomposition,\n")
+cat("             plot_district_summary_grade, plot_recovery_summary\n")
