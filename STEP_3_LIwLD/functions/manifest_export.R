@@ -690,9 +690,8 @@ export_phase_a_manifest <- function(phase_a_results,
       phasea_03e_recovery = file.path(output_dir, "visualizations", "phase_a", "phasea_03e_recovery_summary.pdf"),
       phasea_03f_linkage = file.path(output_dir, "visualizations", "phase_a", "phasea_03f_linkage_decomposition.pdf"),
       phasea_04_independence = file.path(output_dir, "visualizations", "phase_a", "phasea_04_independence_diagnostic.pdf")
-    ),
-    config = phase_a_results$config
   )
+  manifest$config <- phase_a_results$config
 
   json_path <- file.path(output_dir, paste0(prefix, "_manifest.json"))
   write_json(manifest, json_path, pretty = TRUE, auto_unbox = TRUE)
