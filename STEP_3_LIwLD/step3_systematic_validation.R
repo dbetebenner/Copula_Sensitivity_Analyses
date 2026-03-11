@@ -465,12 +465,15 @@ process_replicate_batch <- function(
     if (is.null(est_rep)) {
       inferred_median <- NA_real_; inferred_mean <- NA_real_
       median_error    <- NA_real_; mean_error    <- NA_real_
+      rep_m_hat       <- NA_real_; rep_kappa_hat <- NA_real_
       converged       <- FALSE
     } else {
       inferred_median <- as.numeric(est_rep$regime$median) * 100
       inferred_mean   <- as.numeric(est_rep$regime$mean)   * 100
       median_error    <- inferred_median - true_median
       mean_error      <- inferred_mean   - true_mean
+      rep_m_hat       <- if (!is.null(est_rep$m_hat))     round(est_rep$m_hat,     4) else NA_real_
+      rep_kappa_hat   <- if (!is.null(est_rep$kappa_hat)) round(est_rep$kappa_hat, 4) else NA_real_
       converged       <- TRUE
     }
     rows[[ri]] <- list(
@@ -492,7 +495,9 @@ process_replicate_batch <- function(
       median_error     = median_error,
       mean_error       = mean_error,
       abs_median_error = abs(median_error),
-      abs_mean_error   = abs(mean_error)
+      abs_mean_error   = abs(mean_error),
+      m_hat            = rep_m_hat,
+      kappa_hat        = rep_kappa_hat
     )
   }
 
@@ -561,8 +566,32 @@ for (ds_id in cfg_sys$datasets) {
   cat("  Loaded:", format(nrow(STATE_DATA), big.mark = ","), "rows\n")
   .plog("  Dataset loaded: ", format(nrow(STATE_DATA), big.mark = ","), " rows")
 
-  conditions_all <- get_phase1_conditions(ds_id,
-    phase1_results_dir = file.path(PROJECT_ROOT_ABS, "STEP_1_Family_Selection", "results"))
+  conditions_all <- tryCatch(
+    get_phase1_conditions(ds_id,
+      phase1_results_dir = file.path(PROJECT_ROOT_ABS, "STEP_1_Family_Selection", "results")),
+    error = function(e) {
+      cat("  WARNING: get_phase1_conditions() error:", e$message, "\n")
+      character(0)
+    }
+  )
+
+  # Fallback: if get_phase1_conditions() returns nothing (e.g. because the
+  # function in phase1_data_loader.R still uses a stale hardcoded path), scan
+  # the known STEP_1_Family_Selection contour_plots/ directory directly.
+  if (length(conditions_all) == 0) {
+    p1_scan_dir <- file.path(PROJECT_ROOT_ABS, "STEP_1_Family_Selection",
+                             "results", ds_id, "contour_plots")
+    if (dir.exists(p1_scan_dir)) {
+      conditions_all <- list.dirs(p1_scan_dir, full.names = FALSE, recursive = FALSE)
+      conditions_all <- conditions_all[nzchar(conditions_all)]
+      if (length(conditions_all) > 0) {
+        cat("  INFO: get_phase1_conditions() returned 0; using direct directory scan.\n")
+        cat("        Found", length(conditions_all), "conditions in contour_plots/\n\n")
+        .plog("  Fallback scan: ", length(conditions_all), " conditions for ", ds_id)
+      }
+    }
+  }
+
   if (length(conditions_all) == 0) {
     cat("  WARNING: No Phase 1 conditions found. Skipping.\n\n")
     next
@@ -1251,7 +1280,19 @@ if (length(summary_rows) > 0) {
           quantile(inferred_mean[converged %in% TRUE], 0.05, na.rm = TRUE), 4),
       mean_ci_width_95  = round(
         quantile(inferred_mean[converged %in% TRUE], 0.975, na.rm = TRUE) -
-          quantile(inferred_mean[converged %in% TRUE], 0.025, na.rm = TRUE), 4)
+          quantile(inferred_mean[converged %in% TRUE], 0.025, na.rm = TRUE), 4),
+      # Beta regime shape parameters across converged replicates.
+      # m_hat  = mean of the Beta (location); kappa_hat = concentration.
+      # Summaries cover central tendency and spread to characterise how
+      # stable the fitted regime shape is as a function of sample size.
+      m_hat_mean        = round(mean(m_hat[converged %in% TRUE],             na.rm = TRUE), 4),
+      m_hat_sd          = round(sd(  m_hat[converged %in% TRUE],             na.rm = TRUE), 4),
+      kappa_hat_mean    = round(mean(kappa_hat[converged %in% TRUE],         na.rm = TRUE), 4),
+      kappa_hat_sd      = round(sd(  kappa_hat[converged %in% TRUE],         na.rm = TRUE), 4),
+      kappa_hat_q10     = round(quantile(kappa_hat[converged %in% TRUE], 0.10, na.rm = TRUE), 4),
+      kappa_hat_q25     = round(quantile(kappa_hat[converged %in% TRUE], 0.25, na.rm = TRUE), 4),
+      kappa_hat_q75     = round(quantile(kappa_hat[converged %in% TRUE], 0.75, na.rm = TRUE), 4),
+      kappa_hat_q90     = round(quantile(kappa_hat[converged %in% TRUE], 0.90, na.rm = TRUE), 4)
     ), by = .(pool_id, pool_type, span, content, n_bucket)]
   } else {
     phase_b_precision_by_n <- data.table(
@@ -1261,7 +1302,11 @@ if (length(summary_rows) > 0) {
       median_bias = numeric(), median_mae = numeric(), median_rmse = numeric(),
       median_ci_width_90 = numeric(), median_ci_width_95 = numeric(),
       mean_bias = numeric(), mean_mae = numeric(), mean_rmse = numeric(),
-      mean_ci_width_90 = numeric(), mean_ci_width_95 = numeric()
+      mean_ci_width_90 = numeric(), mean_ci_width_95 = numeric(),
+      m_hat_mean = numeric(), m_hat_sd = numeric(),
+      kappa_hat_mean = numeric(), kappa_hat_sd = numeric(),
+      kappa_hat_q10 = numeric(), kappa_hat_q25 = numeric(),
+      kappa_hat_q75 = numeric(), kappa_hat_q90 = numeric()
     )
   }
   fwrite(phase_b_precision_by_n, file.path(RESULTS_DIR, "phase_b_precision_by_n.csv"))
