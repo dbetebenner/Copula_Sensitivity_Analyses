@@ -18,6 +18,7 @@ get_phasea_figure_map <- function() {
     bootstrap_mean = "phasea_03c_bootstrap_mean_sgpc",
     bootstrap_combined = "phasea_03d_bootstrap_combined",
     recovery_summary = "phasea_03e_recovery_summary",
+    linkage_decomposition = "phasea_03f_linkage_decomposition",
     independence_diagnostic = "phasea_04_independence_diagnostic"
   )
 }

@@ -2,8 +2,11 @@
 ###
 ### Bootstrap Uncertainty Quantification for STEP 3
 ###
-### Two layers of uncertainty:
-###   (A) Sampling uncertainty — resample prior and current independently
+### Three layers of uncertainty:
+###   (A) Sampling uncertainty — resample prior and current (independently
+###       or paired) to quantify finite-sample noise
+###   (A') Linkage premium — paired vs independent resampling decomposes
+###        subsampling noise (Error 1a) from cohort-mismatch noise (Error 1b)
 ###   (B) Copula uncertainty  — draw baseline copula parameters from
 ###       STEP 1 recommendation distributions
 ###
@@ -18,8 +21,22 @@ require(copula)
 
 #' Bootstrap Sampling Uncertainty for Growth Regime Estimation
 #'
-#' Resamples the prior and current samples independently (with replacement)
-#' and re-estimates the growth regime for each replicate.
+#' Resamples the prior and current samples and re-estimates the growth regime
+#' for each replicate. Supports two pairing modes:
+#'
+#' \describe{
+#'   \item{independent}{(default) Resamples U and V with separate index vectors,
+#'     simulating the TIMSS/NAEP cross-sectional design where prior and current
+#'     cohorts are different students. Captures Error 1a + 1b jointly.}
+#'   \item{paired}{Draws a single shared index vector applied to both U and V,
+#'     preserving the implicit student-level linkage. Captures Error 1a only
+#'     (subsampling variability). Requires length(u_sample) == length(v_sample)
+#'     and that both vectors are aligned by student.}
+#' }
+#'
+#' Running both modes on the same data yields the **linkage premium** — the
+#' multiplicative CI inflation from independent cohort sampling — at the
+#' observed N, without needing Phase B.
 #'
 #' @param u_sample Numeric vector. Prior-grade reference percentiles.
 #' @param v_sample Numeric vector. Current-grade reference percentiles.
@@ -31,6 +48,8 @@ require(copula)
 #' @param grid_resolution Integer. Grid resolution for coarse search.
 #'   Default 20 (lower than estimate_regime default for speed).
 #' @param seed Integer. RNG seed for reproducibility. Default NULL.
+#' @param pairing Character. \code{"independent"} (default) draws separate
+#'   indices for U and V; \code{"paired"} draws a single shared index.
 #' @param verbose Logical. Print progress? Default TRUE.
 #'
 #' @return List with:
@@ -45,6 +64,7 @@ require(copula)
 #'     \item se_mean_sgpc: Bootstrap standard error of mean SGPc
 #'     \item n_boot: Number of replicates
 #'     \item n_converged: Number that converged
+#'     \item pairing: The pairing mode used
 #'   }
 #'
 #' @export
@@ -58,7 +78,10 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
                               u_weights = NULL,
                               v_weights = NULL,
                               resample_scheme = "srs_bootstrap",
+                              pairing = c("independent", "paired"),
                               verbose = TRUE) {
+
+  pairing <- match.arg(pairing)
 
   if (!is.null(seed)) set.seed(seed)
 
@@ -68,6 +91,16 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
 
   n_u <- length(u_sample)
   n_v <- length(v_sample)
+  is_paired <- identical(pairing, "paired")
+
+  # Paired mode requires equal-length, student-aligned U and V
+
+  if (is_paired && n_u != n_v) {
+    stop("pairing='paired' requires length(u_sample) == length(v_sample) ",
+         "(got ", n_u, " vs ", n_v, "). ",
+         "Vectors must be student-aligned for shared-index resampling.")
+  }
+
   resample_scheme <- tolower(resample_scheme)
   if (is.null(u_weights)) u_weights <- rep(1, n_u)
   if (is.null(v_weights)) v_weights <- rep(1, n_v)
@@ -81,29 +114,46 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   distances   <- numeric(n_boot)
   converged   <- logical(n_boot)
 
-  if (verbose) cat("Bootstrap sampling uncertainty: ", n_boot, " replicates\n")
+  pairing_label <- if (is_paired) "paired" else "independent"
+  if (verbose) cat("Bootstrap sampling uncertainty (", pairing_label, "): ",
+                   n_boot, " replicates\n", sep = "")
 
   for (b in seq_len(n_boot)) {
     if (verbose && (b %% 50 == 0 || b == 1)) {
       cat("  Replicate", b, "/", n_boot, "\n")
     }
 
-    # Resample independently
-    if (resample_scheme == "weighted_bootstrap") {
+    # --- Resampling: paired uses shared indices, independent uses separate ---
+    if (is_paired) {
+      # Shared index preserves student-level U<->V linkage
+      shared_idx <- sample.int(n_u, n_u, replace = TRUE)
+      u_boot <- u_sample[shared_idx]
+      v_boot <- v_sample[shared_idx]
+      uw_boot <- u_weights[shared_idx]
+      vw_boot <- v_weights[shared_idx]
+    } else if (resample_scheme == "weighted_bootstrap") {
       u_idx <- sample.int(n_u, n_u, replace = TRUE, prob = u_prob)
       v_idx <- sample.int(n_v, n_v, replace = TRUE, prob = v_prob)
+      u_boot <- u_sample[u_idx]
+      v_boot <- v_sample[v_idx]
+      uw_boot <- u_weights[u_idx]
+      vw_boot <- v_weights[v_idx]
     } else if (resample_scheme == "replicate_weights") {
       warning("replicate_weights is not implemented in STEP 3 yet; falling back to srs_bootstrap")
       u_idx <- sample.int(n_u, n_u, replace = TRUE)
       v_idx <- sample.int(n_v, n_v, replace = TRUE)
+      u_boot <- u_sample[u_idx]
+      v_boot <- v_sample[v_idx]
+      uw_boot <- u_weights[u_idx]
+      vw_boot <- v_weights[v_idx]
     } else {
       u_idx <- sample.int(n_u, n_u, replace = TRUE)
       v_idx <- sample.int(n_v, n_v, replace = TRUE)
+      u_boot <- u_sample[u_idx]
+      v_boot <- v_sample[v_idx]
+      uw_boot <- u_weights[u_idx]
+      vw_boot <- v_weights[v_idx]
     }
-    u_boot <- u_sample[u_idx]
-    v_boot <- v_sample[v_idx]
-    uw_boot <- u_weights[u_idx]
-    vw_boot <- v_weights[v_idx]
 
     res <- tryCatch({
       estimate_regime(u_boot, v_boot, kernel_cache,
@@ -157,7 +207,8 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     se_mean_sgpc     = if (sum(valid) > 2) sd(mean_sgpc[valid]) else NA_real_,
     n_boot           = n_boot,
     n_converged      = n_converged,
-    resample_scheme  = resample_scheme
+    resample_scheme  = resample_scheme,
+    pairing          = pairing
   )
 }
 

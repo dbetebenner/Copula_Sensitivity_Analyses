@@ -640,6 +640,15 @@ export_phase_a_manifest <- function(phase_a_results,
       }
     ),
     uncertainty = list(
+      sampling_independent = list(
+        description = "Error 1a+1b: independent resampling of U and V (cross-sectional design)",
+        n_boot = boot$n_boot,
+        n_converged = boot$n_converged,
+        ci_median_sgpc = as.numeric(boot$ci_median_sgpc),
+        ci_mean_sgpc = as.numeric(boot$ci_mean_sgpc),
+        se_median_sgpc = as.numeric(boot$se_median_sgpc)
+      ),
+      # Backward compat alias
       sampling = list(
         n_boot = boot$n_boot,
         n_converged = boot$n_converged,
@@ -648,8 +657,26 @@ export_phase_a_manifest <- function(phase_a_results,
         se_median_sgpc = as.numeric(boot$se_median_sgpc)
       )
     ),
-    family_comparison = fam_comp,
-    output_files = list(
+    family_comparison = fam_comp
+  )
+
+  # Add paired bootstrap and linkage premium if available
+  boot_paired <- phase_a_results$bootstrap_paired
+  if (!is.null(boot_paired)) {
+    manifest$uncertainty$sampling_paired <- list(
+      description = "Error 1a only: paired resampling preserving student-level U<->V linkage",
+      n_boot = boot_paired$n_boot,
+      n_converged = boot_paired$n_converged,
+      ci_median_sgpc = as.numeric(boot_paired$ci_median_sgpc),
+      ci_mean_sgpc = as.numeric(boot_paired$ci_mean_sgpc),
+      se_median_sgpc = as.numeric(boot_paired$se_median_sgpc)
+    )
+  }
+  if (!is.null(phase_a_results$linkage_premium)) {
+    manifest$linkage_premium <- phase_a_results$linkage_premium
+  }
+
+  manifest$output_files <- list(
       phase_a_rds = file.path(output_dir, "phase_a_deep_dive.rds"),
       phase_a_analytic_payload = file.path(output_dir, "phase_a_analytic_payload.rds"),
       phase_a_summary_csv = file.path(output_dir, "phase_a_summary.csv"),
@@ -661,6 +688,7 @@ export_phase_a_manifest <- function(phase_a_results,
       phasea_02c_residual = file.path(output_dir, "visualizations", "phase_a", "phasea_02c_residual_diagnostics.pdf"),
       phasea_03a_regime = file.path(output_dir, "visualizations", "phase_a", "phasea_03a_regime_density.pdf"),
       phasea_03e_recovery = file.path(output_dir, "visualizations", "phase_a", "phasea_03e_recovery_summary.pdf"),
+      phasea_03f_linkage = file.path(output_dir, "visualizations", "phase_a", "phasea_03f_linkage_decomposition.pdf"),
       phasea_04_independence = file.path(output_dir, "visualizations", "phase_a", "phasea_04_independence_diagnostic.pdf")
     ),
     config = phase_a_results$config
@@ -712,6 +740,11 @@ export_phase_a_manifest <- function(phase_a_results,
     "",
     "## Uncertainty (Bootstrap)",
     "",
+    "### Independent Bootstrap (Error 1a + 1b)",
+    "",
+    "Resamples prior and current scores with **separate** index vectors,",
+    "simulating the TIMSS/NAEP cross-sectional design.",
+    "",
     paste0("- **Replicates:** ", manifest$uncertainty$sampling$n_boot,
            " (converged: ", manifest$uncertainty$sampling$n_converged, ")"),
     paste0("- **Mean SGPc 95% CI:** [",
@@ -721,7 +754,58 @@ export_phase_a_manifest <- function(phase_a_results,
            round(manifest$uncertainty$sampling$ci_median_sgpc[1], 1), ", ",
            round(manifest$uncertainty$sampling$ci_median_sgpc[2], 1), "]"),
     paste0("- **Median SGPc SE:** ", round(manifest$uncertainty$sampling$se_median_sgpc, 2)),
-    "",
+    ""
+  )
+
+  # Paired bootstrap section (if available)
+  if (!is.null(manifest$uncertainty$sampling_paired)) {
+    sp <- manifest$uncertainty$sampling_paired
+    md_lines <- c(md_lines,
+      "### Paired Bootstrap (Error 1a only)",
+      "",
+      "Resamples prior and current scores with a **shared** index vector,",
+      "preserving the student-level U<->V linkage. Isolates subsampling variability.",
+      "",
+      paste0("- **Replicates:** ", sp$n_boot,
+             " (converged: ", sp$n_converged, ")"),
+      paste0("- **Mean SGPc 95% CI:** [",
+             round(sp$ci_mean_sgpc[1], 1), ", ",
+             round(sp$ci_mean_sgpc[2], 1), "]"),
+      paste0("- **Median SGPc 95% CI:** [",
+             round(sp$ci_median_sgpc[1], 1), ", ",
+             round(sp$ci_median_sgpc[2], 1), "]"),
+      paste0("- **Median SGPc SE:** ", round(sp$se_median_sgpc, 2)),
+      ""
+    )
+  }
+
+  # Linkage premium section (if available)
+  if (!is.null(manifest$linkage_premium)) {
+    lp <- manifest$linkage_premium
+    md_lines <- c(md_lines,
+      "### Linkage Premium at Observed N",
+      "",
+      paste0("The linkage premium quantifies the CI inflation from breaking the ",
+             "student-level pairing. At N=", format(lp$n_observed, big.mark = ","), ":"),
+      "",
+      "| Measure | CI Width (Paired) | CI Width (Independent) | CI Ratio | SE Ratio |",
+      "|---------|-------------------|------------------------|----------|----------|",
+      paste0("| Median SGPc | ", lp$median$ci_width_paired,
+             " | ", lp$median$ci_width_independent,
+             " | ", lp$median$ci_ratio, "x",
+             " | ", lp$median$se_ratio, "x |"),
+      paste0("| Mean SGPc | ", lp$mean$ci_width_paired,
+             " | ", lp$mean$ci_width_independent,
+             " | ", lp$mean$ci_ratio, "x",
+             " | ", lp$mean$se_ratio, "x |"),
+      "",
+      "_Ratio > 1 indicates the precision cost of not having longitudinal pairing._",
+      "_This single-N anchor complements Phase B's Panel D2, which maps the premium across N values._",
+      ""
+    )
+  }
+
+  md_lines <- c(md_lines,
     "## Family Comparison",
     "",
     "| Family | Distance | Mean SGPc | Median SGPc | Params |",
@@ -750,6 +834,7 @@ export_phase_a_manifest <- function(phase_a_results,
     "| `phase_a_summary.csv` | One-row summary for reporting |",
     "| `phase_a_manifest.json` | Machine-readable Phase A manifest |",
     "| `phase_a_manifest.md` | Human-readable Phase A manifest |",
+    "| `visualizations/phase_a/phasea_03f_linkage_decomposition.*` | Paired vs independent bootstrap overlay (linkage premium) |",
     "| `visualizations/phase_a/panel_*.{pdf,svg,png}` | Phase A diagnostic panels |",
     ""
   )

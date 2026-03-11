@@ -1012,7 +1012,7 @@ for (ds_id in cfg_sys$datasets) {
     ti <- 0L
 
     # Determine which sampling modes to run (paired, independent, or both)
-    sampling_modes <- cfg$systematic$sampling_modes
+    sampling_modes <- cfg_sys$sampling_modes
     if (is.null(sampling_modes) || length(sampling_modes) == 0) {
       sampling_modes <- "paired"  # backward compatible default
     }

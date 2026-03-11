@@ -1344,11 +1344,154 @@ plot_recovery_summary <- function(est, true_sgpc = NULL,
 }
 
 
+#' Phase A Linkage Premium Decomposition
+#'
+#' Overlays paired and independent bootstrap distributions to visualise the
+#' linkage premium — the multiplicative CI inflation when moving from
+#' longitudinal pairing to cross-sectional (independent cohort) sampling.
+#'
+#' Two-panel patchwork layout:
+#'   Left:  Median SGPc bootstrap densities (paired vs independent)
+#'   Right: Mean SGPc bootstrap densities (paired vs independent)
+#'
+#' @param boot_independent List from bootstrap_regime(pairing="independent")
+#' @param boot_paired List from bootstrap_regime(pairing="paired")
+#' @param true_sgpc Optional numeric vector of true SGPc values
+#' @param linkage_premium Optional list with pre-computed linkage premium stats
+#' @param title Character. Overall title.
+#' @param output_dir Character.
+#' @param filename Character.
+#'
+#' @return The patchwork composite (invisible).
+#' @export
+plot_linkage_decomposition <- function(boot_independent,
+                                        boot_paired,
+                                        true_sgpc = NULL,
+                                        linkage_premium = NULL,
+                                        title = "Linkage Premium Decomposition",
+                                        output_dir = "results/visualizations",
+                                        filename = "phasea_03f_linkage_decomposition") {
+
+  # Helper: build one density panel for a given measure
+  .build_panel <- function(measure) {
+    draws_i <- switch(measure,
+      median = boot_independent$median_sgpc_draws,
+      mean   = boot_independent$mean_sgpc_draws)
+    draws_p <- switch(measure,
+      median = boot_paired$median_sgpc_draws,
+      mean   = boot_paired$mean_sgpc_draws)
+    ci_i <- switch(measure,
+      median = boot_independent$ci_median_sgpc,
+      mean   = boot_independent$ci_mean_sgpc)
+    ci_p <- switch(measure,
+      median = boot_paired$ci_median_sgpc,
+      mean   = boot_paired$ci_mean_sgpc)
+
+    valid_i <- draws_i[!is.na(draws_i)]
+    valid_p <- draws_p[!is.na(draws_p)]
+    if (length(valid_i) < 3 || length(valid_p) < 3) {
+      return(ggplot() +
+        annotate("text", x = 0.5, y = 0.5,
+                 label = paste0("Insufficient ", measure, " draws"), size = 4) +
+        theme_void())
+    }
+
+    measure_label <- paste0(toupper(substring(measure, 1, 1)),
+                            substring(measure, 2), " SGPc")
+    ci_w_i <- round(diff(as.numeric(ci_i)), 1)
+    ci_w_p <- round(diff(as.numeric(ci_p)), 1)
+    ratio  <- if (ci_w_p > 0) round(ci_w_i / ci_w_p, 1) else NA
+
+    df <- rbind(
+      data.frame(value = valid_i, mode = "Independent\n(TIMSS/NAEP)", stringsAsFactors = FALSE),
+      data.frame(value = valid_p, mode = "Paired\n(longitudinal)", stringsAsFactors = FALSE)
+    )
+
+    true_val <- if (!is.null(true_sgpc) && length(true_sgpc) > 0)
+      switch(measure, median = median(true_sgpc), mean = mean(true_sgpc))
+    else NULL
+
+    subtitle <- paste0(
+      "Paired CI=[", round(ci_p[1], 1), ", ", round(ci_p[2], 1),
+      "] (w=", ci_w_p, ") | Independent CI=[", round(ci_i[1], 1),
+      ", ", round(ci_i[2], 1), "] (w=", ci_w_i, ")",
+      if (!is.na(ratio)) paste0(" | Ratio: ", ratio, "x") else "")
+
+    p <- ggplot(df, aes(x = value, fill = mode, color = mode)) +
+      geom_density(alpha = 0.25, linewidth = 0.8) +
+      # Paired CI band
+      annotate("rect", xmin = ci_p[1], xmax = ci_p[2],
+               ymin = -Inf, ymax = Inf,
+               fill = STEP3_COLORS$predicted, alpha = 0.06) +
+      # Independent CI band
+      annotate("rect", xmin = ci_i[1], xmax = ci_i[2],
+               ymin = -Inf, ymax = Inf,
+               fill = STEP3_COLORS$true_value, alpha = 0.06) +
+      # CI boundary lines
+      geom_vline(xintercept = as.numeric(ci_p), linetype = "dashed",
+                 linewidth = 0.5, color = STEP3_COLORS$predicted) +
+      geom_vline(xintercept = as.numeric(ci_i), linetype = "dashed",
+                 linewidth = 0.5, color = STEP3_COLORS$true_value) +
+      scale_fill_manual(values = c(
+        "Independent\n(TIMSS/NAEP)" = STEP3_COLORS$true_value,
+        "Paired\n(longitudinal)"    = STEP3_COLORS$predicted
+      )) +
+      scale_color_manual(values = c(
+        "Independent\n(TIMSS/NAEP)" = STEP3_COLORS$true_value,
+        "Paired\n(longitudinal)"    = STEP3_COLORS$predicted
+      ))
+
+    if (!is.null(true_val)) {
+      p <- p +
+        geom_vline(xintercept = true_val, linetype = "dotdash",
+                   linewidth = 0.7, color = STEP3_COLORS$residual)
+    }
+
+    p + labs(title = measure_label, subtitle = subtitle,
+             x = paste0(measure_label, " (bootstrap draws)"), y = "Density") +
+      coord_cartesian(xlim = c(25, 75)) +
+      theme_publication(base_size = 9) +
+      theme(legend.position = "bottom",
+            legend.title = element_blank())
+  }
+
+  p_median <- .build_panel("median")
+  p_mean   <- .build_panel("mean")
+
+  # Summary statistics for annotation
+  n_obs <- if (!is.null(linkage_premium)) linkage_premium$n_observed else "?"
+  lp_med <- if (!is.null(linkage_premium)) linkage_premium$median$ci_ratio else "?"
+  lp_mean <- if (!is.null(linkage_premium)) linkage_premium$mean$ci_ratio else "?"
+
+  subtitle <- format_step3_subtitle(
+    paste0("At N=", format(n_obs, big.mark = ","),
+           ": how much wider is the CI when prior/current cohorts are different students?"),
+    paste0("Linkage premium (CI ratio): median=", lp_med, "x | mean=", lp_mean, "x")
+  )
+
+  combined <- p_median | p_mean
+  combined <- combined +
+    plot_annotation(
+      title = title,
+      subtitle = subtitle,
+      theme = theme(
+        plot.title = element_text(face = "bold", size = 14, hjust = 0),
+        plot.subtitle = element_text(size = 10, hjust = 0, color = "grey40")
+      )
+    )
+
+  save_plot_multi(combined, filename, output_dir,
+                  width = PLOT_WIDTH * 1.6, height = PLOT_HEIGHT + 0.5)
+  invisible(combined)
+}
+
+
 cat("STEP 3 diagnostics_plots.R loaded.\n")
 cat("  Helpers: format_step3_subtitle, format_p_value, format_step3_condition_label\n")
 cat("  Functions: plot_observed_vs_predicted_cdf, plot_regime_shape,\n")
 cat("             plot_residual_curve, plot_objective_surface,\n")
 cat("             plot_marginal_uv_density, plot_independence_diagnostic,\n")
 cat("             plot_bootstrap_sgpc, plot_bootstrap_sgpc_combined,\n")
+cat("             plot_linkage_decomposition,\n")
 cat("             plot_precision_vs_n, plot_precision_decomposition,\n")
 cat("             plot_district_summary_grade, plot_recovery_summary\n")

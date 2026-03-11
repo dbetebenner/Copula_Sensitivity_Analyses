@@ -351,6 +351,37 @@ if (!is.null(phase_a) && !is.null(phase_a$bootstrap)) {
 
 
 ############################################################################
+### Panel G2: Linkage Premium Decomposition (Phase A)
+###
+### Overlays paired and independent bootstrap distributions to show
+### the CI widening from cross-sectional (independent cohort) sampling.
+### This is the single-N counterpart to Phase B's Panel D2.
+############################################################################
+
+cat("Panel G2: Linkage Premium Decomposition... ")
+if (!is.null(phase_a) && !is.null(phase_a$bootstrap_paired) &&
+    !is.null(phase_a$bootstrap) &&
+    sum(!is.na(phase_a$bootstrap$median_sgpc_draws)) > 10 &&
+    sum(!is.na(phase_a$bootstrap_paired$median_sgpc_draws)) > 10) {
+
+  plot_linkage_decomposition(
+    boot_independent = phase_a$bootstrap,
+    boot_paired      = phase_a$bootstrap_paired,
+    true_sgpc        = phase_a$true_sgpc,
+    linkage_premium  = phase_a$linkage_premium,
+    title = format_step3_condition_label(
+      phase_a$condition_id, phase_a$subgroup_col, phase_a$subgroup_id,
+      "G2. Linkage Premium"),
+    output_dir = file.path(viz_dir, "phase_a"),
+    filename = "panel_g2_linkage_decomposition"
+  )
+  cat("generated.\n")
+} else {
+  cat("skipped (need both paired and independent bootstrap).\n")
+}
+
+
+############################################################################
 ### Panel I: Independence Diagnostic (Phase A)
 ############################################################################
 

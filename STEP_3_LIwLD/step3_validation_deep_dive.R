@@ -417,12 +417,100 @@ boot_results <- bootstrap_regime(
   seed           = cfg$seed,
   verbose        = TRUE
 )
-cat("  Bootstrap median SGPc 95% CI:",
+cat("  Bootstrap median SGPc 95% CI (independent):",
     paste0("[", round(boot_results$ci_median_sgpc[1], 1), ", ",
            round(boot_results$ci_median_sgpc[2], 1), "]"), "\n")
-cat("  Bootstrap mean SGPc 95% CI:  ",
+cat("  Bootstrap mean SGPc 95% CI (independent):  ",
     paste0("[", round(boot_results$ci_mean_sgpc[1], 1), ", ",
            round(boot_results$ci_mean_sgpc[2], 1), "]"), "\n\n")
+
+
+############################################################################
+### A.7b  Paired Bootstrap — Linkage Premium Decomposition
+###
+### Re-runs the bootstrap with a shared index vector (paired resampling)
+### to isolate Error 1a (subsampling variability) from Error 1b (cohort
+### mismatch). The ratio of independent to paired CI widths is the
+### "linkage premium" at the observed N.
+###
+### Prerequisite: u_cross and v_cross are student-aligned (both derive
+### from pairs_sg in the same row order), so a shared index preserves
+### the implicit pairing.
+############################################################################
+
+cat("A.7b Paired bootstrap (linkage premium decomposition)...\n\n")
+
+boot_paired <- bootstrap_regime(
+  u_sample       = u_cross,
+  v_sample       = v_cross,
+  kernel_cache   = kernel_cache,
+  regime_family  = best_family,
+  distance_fn    = cfg$distance$primary,
+  n_boot         = cfg$uncertainty$n_bootstrap,
+  grid_resolution = cfg$uncertainty$bootstrap_grid_resolution,
+  resample_scheme = cfg$uncertainty$resample_scheme,
+  pairing        = "paired",
+  seed           = cfg$seed + 1L,
+  verbose        = TRUE
+)
+cat("  Bootstrap median SGPc 95% CI (paired):     ",
+    paste0("[", round(boot_paired$ci_median_sgpc[1], 1), ", ",
+           round(boot_paired$ci_median_sgpc[2], 1), "]"), "\n")
+cat("  Bootstrap mean SGPc 95% CI (paired):       ",
+    paste0("[", round(boot_paired$ci_mean_sgpc[1], 1), ", ",
+           round(boot_paired$ci_mean_sgpc[2], 1), "]"), "\n\n")
+
+# Compute linkage premium at observed N
+ci_w_indep_median  <- diff(as.numeric(boot_results$ci_median_sgpc))
+ci_w_paired_median <- diff(as.numeric(boot_paired$ci_median_sgpc))
+ci_w_indep_mean    <- diff(as.numeric(boot_results$ci_mean_sgpc))
+ci_w_paired_mean   <- diff(as.numeric(boot_paired$ci_mean_sgpc))
+
+phase_a_linkage_premium <- list(
+  n_observed = nrow(pairs_sg),
+  # Median SGPc
+  median = list(
+    ci_paired      = as.numeric(boot_paired$ci_median_sgpc),
+    ci_independent = as.numeric(boot_results$ci_median_sgpc),
+    ci_width_paired      = round(ci_w_paired_median, 2),
+    ci_width_independent = round(ci_w_indep_median, 2),
+    se_paired            = round(boot_paired$se_median_sgpc, 4),
+    se_independent       = round(boot_results$se_median_sgpc, 4),
+    ci_ratio = if (is.finite(ci_w_paired_median) && ci_w_paired_median > 0)
+                 round(ci_w_indep_median / ci_w_paired_median, 2) else NA_real_,
+    se_ratio = if (is.finite(boot_paired$se_median_sgpc) && boot_paired$se_median_sgpc > 0)
+                 round(boot_results$se_median_sgpc / boot_paired$se_median_sgpc, 2) else NA_real_
+  ),
+  # Mean SGPc
+  mean = list(
+    ci_paired      = as.numeric(boot_paired$ci_mean_sgpc),
+    ci_independent = as.numeric(boot_results$ci_mean_sgpc),
+    ci_width_paired      = round(ci_w_paired_mean, 2),
+    ci_width_independent = round(ci_w_indep_mean, 2),
+    se_paired            = round(boot_paired$se_mean_sgpc, 4),
+    se_independent       = round(boot_results$se_mean_sgpc, 4),
+    ci_ratio = if (is.finite(ci_w_paired_mean) && ci_w_paired_mean > 0)
+                 round(ci_w_indep_mean / ci_w_paired_mean, 2) else NA_real_,
+    se_ratio = if (is.finite(boot_paired$se_mean_sgpc) && boot_paired$se_mean_sgpc > 0)
+                 round(boot_results$se_mean_sgpc / boot_paired$se_mean_sgpc, 2) else NA_real_
+  ),
+  description = paste0(
+    "Linkage premium at N=", nrow(pairs_sg), ": the ratio of ",
+    "independent-bootstrap CI width to paired-bootstrap CI width. ",
+    "Paired captures Error 1a (subsampling) only; independent captures ",
+    "Error 1a + 1b (subsampling + cohort mismatch)."
+  )
+)
+
+cat("  Linkage premium (median SGPc):\n")
+cat("    CI width — paired:", phase_a_linkage_premium$median$ci_width_paired,
+    "| independent:", phase_a_linkage_premium$median$ci_width_independent, "\n")
+cat("    CI ratio:", phase_a_linkage_premium$median$ci_ratio, "x\n")
+cat("    SE ratio:", phase_a_linkage_premium$median$se_ratio, "x\n")
+cat("  Linkage premium (mean SGPc):\n")
+cat("    CI width — paired:", phase_a_linkage_premium$mean$ci_width_paired,
+    "| independent:", phase_a_linkage_premium$mean$ci_width_independent, "\n")
+cat("    CI ratio:", phase_a_linkage_premium$mean$ci_ratio, "x\n\n")
 
 
 ############################################################################
@@ -448,6 +536,7 @@ phasea_fig <- if (exists("get_phasea_figure_map", mode = "function")) {
     bootstrap_mean = "phasea_03c_bootstrap_mean_sgpc",
     bootstrap_combined = "phasea_03d_bootstrap_combined",
     recovery_summary = "phasea_03e_recovery_summary",
+    linkage_decomposition = "phasea_03f_linkage_decomposition",
     independence_diagnostic = "phasea_04_independence_diagnostic"
   )
 }
@@ -546,6 +635,17 @@ plot_bootstrap_sgpc_combined(
   filename = phasea_fig$bootstrap_combined
 )
 
+# Linkage decomposition: overlay paired vs independent bootstrap distributions
+plot_linkage_decomposition(
+  boot_independent = boot_results,
+  boot_paired      = boot_paired,
+  true_sgpc        = true_sgpc,
+  linkage_premium  = phase_a_linkage_premium,
+  title = paste0("Linkage Premium Decomposition — ", sg_label),
+  output_dir = viz_dir,
+  filename = phasea_fig$linkage_decomposition
+)
+
 if (exists("write_phasea_legacy_aliases", mode = "function")) {
   write_phasea_legacy_aliases(
     output_dir = viz_dir,
@@ -577,6 +677,8 @@ phase_a_results <- list(
   best_family        = best_family,
   best_estimate      = best_est,
   bootstrap          = boot_results,
+  bootstrap_paired   = boot_paired,
+  linkage_premium    = phase_a_linkage_premium,
   u_sample           = u_cross,
   v_sample           = v_cross,
   kernel_cache       = kernel_cache,
@@ -613,6 +715,14 @@ summary_row <- data.frame(
   boot_ci_mean_lo = round(boot_results$ci_mean_sgpc[1], 1),
   boot_ci_mean_hi = round(boot_results$ci_mean_sgpc[2], 1),
   boot_se         = round(boot_results$se_median_sgpc, 2),
+  # Paired bootstrap (linkage premium decomposition)
+  boot_paired_ci_lo      = round(boot_paired$ci_median_sgpc[1], 1),
+  boot_paired_ci_hi      = round(boot_paired$ci_median_sgpc[2], 1),
+  boot_paired_ci_mean_lo = round(boot_paired$ci_mean_sgpc[1], 1),
+  boot_paired_ci_mean_hi = round(boot_paired$ci_mean_sgpc[2], 1),
+  boot_paired_se         = round(boot_paired$se_median_sgpc, 2),
+  linkage_ci_ratio_median = phase_a_linkage_premium$median$ci_ratio,
+  linkage_ci_ratio_mean   = phase_a_linkage_premium$mean$ci_ratio,
   spearman_rho_u_sgpc_true = round(spearman_rho, 6),
   kruskal_p_u_bins = round(kw_p, 8),
   flag_independence_violation = flag_independence_violation,
@@ -621,30 +731,42 @@ summary_row <- data.frame(
 fwrite(summary_row, file.path(RESULTS_DIR, "phase_a_summary.csv"))
 
 # Precision anchor for sample-size scaling narrative in Phase B/Step 5
+# Now includes both independent and paired bootstrap rows for linkage premium
 se_median <- if (!is.null(boot_results$se_median_sgpc)) boot_results$se_median_sgpc else NA_real_
 se_mean   <- if (!is.null(boot_results$se_mean_sgpc))   boot_results$se_mean_sgpc   else NA_real_
+se_paired_median <- if (!is.null(boot_paired$se_median_sgpc)) boot_paired$se_median_sgpc else NA_real_
+se_paired_mean   <- if (!is.null(boot_paired$se_mean_sgpc))   boot_paired$se_mean_sgpc   else NA_real_
 
 precision_anchor <- data.table::data.table(
   dataset_id = dataset_id,
   condition_id = condition_id,
   subgroup_id = subgroup_id,
   n0 = nrow(pairs_sg),
-  measure = c("median_sgpc", "mean_sgpc"),
+  pairing = c("independent", "independent", "paired", "paired"),
+  measure = c("median_sgpc", "mean_sgpc", "median_sgpc", "mean_sgpc"),
   estimate = c(
+    round(best_est$regime$median * 100, 2),
+    round(best_est$regime$mean * 100, 2),
     round(best_est$regime$median * 100, 2),
     round(best_est$regime$mean * 100, 2)
   ),
   se0 = c(
     round(se_median, 4),
-    round(se_mean, 4)
+    round(se_mean, 4),
+    round(se_paired_median, 4),
+    round(se_paired_mean, 4)
   ),
   ci95_lo = c(
     round(boot_results$ci_median_sgpc[1], 4),
-    round(boot_results$ci_mean_sgpc[1], 4)
+    round(boot_results$ci_mean_sgpc[1], 4),
+    round(boot_paired$ci_median_sgpc[1], 4),
+    round(boot_paired$ci_mean_sgpc[1], 4)
   ),
   ci95_hi = c(
     round(boot_results$ci_median_sgpc[2], 4),
-    round(boot_results$ci_mean_sgpc[2], 4)
+    round(boot_results$ci_mean_sgpc[2], 4),
+    round(boot_paired$ci_median_sgpc[2], 4),
+    round(boot_paired$ci_mean_sgpc[2], 4)
   )
 )
 precision_anchor[, ci95_width := round(ci95_hi - ci95_lo, 4)]

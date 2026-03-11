@@ -165,6 +165,21 @@ if (!is.null(phase_a$bootstrap)) {
     output_dir = VIZ_DIR,
     filename = phasea_fig$bootstrap_combined
   )
+  # Linkage decomposition: paired vs independent bootstrap
+  if (!is.null(phase_a$bootstrap_paired)) {
+    plot_linkage_decomposition(
+      boot_independent = phase_a$bootstrap,
+      boot_paired      = phase_a$bootstrap_paired,
+      true_sgpc        = true_sgpc,
+      linkage_premium  = phase_a$linkage_premium,
+      title = format_step3_condition_label(condition_id, sg_col, subgroup_id,
+                                            "Linkage Premium —"),
+      output_dir = VIZ_DIR,
+      filename = phasea_fig$linkage_decomposition
+    )
+  } else {
+    cat("  Skipping linkage decomposition (no paired bootstrap).\n")
+  }
 } else {
   cat("  Skipping bootstrap panels (no bootstrap data).\n")
 }
