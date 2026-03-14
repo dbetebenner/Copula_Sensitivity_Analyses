@@ -1,0 +1,52 @@
+%%%%
+%%%% step3_styles.tex - Shared PSTricks/LaTeX definitions for Error Budget infographic
+%%%%
+%%%% Canonical notation, colors, and macros used across all panel files.
+%%%% INPUT this file in each panel document.
+%%%%
+
+%%% Zissou-aligned color palette (matching STEP 3 publication style)
+\definecolor{zissouTeal}{HTML}{3B9AB2}
+\definecolor{zissouRed}{HTML}{F21A00}
+\definecolor{zissouAmber}{HTML}{E1AF00}
+
+%%% Extended palette for error/precision infographic
+\definecolor{truthAmber}{HTML}{E1AF00}
+\definecolor{bridgeBlack}{HTML}{000000}
+\definecolor{pairedTeal}{HTML}{3B9AB2}
+\definecolor{indepRed}{HTML}{F21A00}
+\definecolor{samplingBlue}{HTML}{4A90D9}
+\definecolor{stressOrange}{HTML}{F5A623}
+
+%%% Standard greys
+\definecolor{priorU}{HTML}{009292}
+\definecolor{currentV}{HTML}{B66DFF}
+\definecolor{inferredV}{HTML}{000000}
+\definecolor{panelGrey}{gray}{0.65}
+\definecolor{bodyGrey}{gray}{0.25}
+\definecolor{subtitleGrey}{gray}{0.30}
+\definecolor{borderGrey}{gray}{0.85}
+\definecolor{gridLight}{gray}{0.92}
+\definecolor{fillGrey}{gray}{0.95}
+\definecolor{lightTealBg}{HTML}{E8F4F8}
+\definecolor{lightRedBg}{HTML}{FDECEB}
+
+%%% Canonical notation macros (from overview / dataimago.sty)
+%%% Use \providecommand so these do NOT clash when dataimago.sty is loaded
+%%% (dataimago defines many of these already; PSTricks panels that skip
+%%% dataimago still get the definitions via this file).
+\providecommand{\HS}{H_S}
+\providecommand{\HShat}{\widehat{H}_S}
+\providecommand{\HU}{H_U}
+\providecommand{\FH}{F_H}
+\providecommand{\FHhat}{\widehat{F}_H}
+\providecommand{\Fobs}{F_{obs}}
+\providecommand{\Fzero}{F_0}
+\providecommand{\SGPcFlow}{\textit{\textsf{SGPcFlow}}}
+\providecommand{\SGPc}{\textit{SGPc}}
+\providecommand{\Wone}{W_1}
+
+%%% Error budget specific notation (new — not in dataimago)
+\providecommand{\thetaTrue}{\theta_S^{\mathrm{true}}}
+\providecommand{\thetaBridge}{\hat{\theta}_S^{\mathrm{bridge}}}
+\providecommand{\thetaHat}{\hat{\theta}_S}

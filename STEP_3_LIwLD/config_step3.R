@@ -112,12 +112,30 @@ STEP3_CONFIG <- list(
     content_area   = "MATHEMATICS",  # Preferred content area for auto-selection
     # Subgroup selection
     subgroup_col   = "DISTRICT_NUMBER",  # Column to use for subgroups
+    subgroup_id    = NULL,       # NULL = auto-select by target_subgroup_n
     min_subgroup_n = 500,        # Minimum students in subgroup
-    target_subgroup_n = 2500      # Preferred subgroup size
+    target_subgroup_n = 2500,     # Preferred subgroup size
+    # Bootstrap parallelisation via mirai (daemons started by caller)
+    use_mirai  = FALSE,
+    n_workers  = NULL        # NULL = auto-detect from CPU count
   ),
 
   # ===========================================================================
-  # 7. Systematic validation settings (Phase B)
+  # 7. Multi-target deep-dive settings (Phase A extension)
+  # ===========================================================================
+  multi_deep_dive = list(
+    # Expression evaluated against phase_b_systematic_summary.csv columns
+    # (e.g., abs(mean_diff) > 8 & content_area == "MATHEMATICS")
+    filter_expr = "abs(mean_diff) > 8",
+    content_areas = c("MATHEMATICS"),
+    max_targets = 20L,
+    # mirai parallelisation: daemons started once, shared across all targets
+    use_mirai  = TRUE,
+    n_workers  = NULL        # NULL = auto-detect from CPU count
+  ),
+
+  # ===========================================================================
+  # 8. Systematic validation settings (Phase B)
   # ===========================================================================
   systematic = list(
     # -----------------------------------------------------------------------
@@ -222,7 +240,7 @@ STEP3_CONFIG <- list(
   ),
 
   # ===========================================================================
-  # 8. Bucket classification
+  # 9. Bucket classification
   # ===========================================================================
   buckets = list(
     k3 = c(45, 55),
@@ -230,7 +248,7 @@ STEP3_CONFIG <- list(
   ),
 
   # ===========================================================================
-  # 8b. Model-health thresholds
+  # 9b. Model-health thresholds
   # ===========================================================================
   thresholds = list(
     point_accuracy = list(
@@ -260,7 +278,7 @@ STEP3_CONFIG <- list(
   ),
 
   # ===========================================================================
-  # 8c. Sensitivity settings
+  # 9c. Sensitivity settings
   # ===========================================================================
   sensitivity = list(
     copula_param_quantiles = c(0.25, 0.50, 0.75),
@@ -269,7 +287,7 @@ STEP3_CONFIG <- list(
   ),
 
   # ===========================================================================
-  # 9. Output settings
+  # 10. Output settings
   # ===========================================================================
   output = list(
     export_formats     = c("pdf", "svg", "png"),
@@ -280,7 +298,7 @@ STEP3_CONFIG <- list(
   ),
 
   # ===========================================================================
-  # 10. Reproducibility
+  # 11. Reproducibility
   # ===========================================================================
   seed = 20260210
 )

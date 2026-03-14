@@ -1,0 +1,60 @@
+%%%%
+%%%% Panel C text: Sampling worlds — why precision is design-dependent
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=4.5in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    ``Precision'' is not one thing. It depends on what is being resampled.
+
+    \vspace{4pt}
+    \textcolor{pairedTeal}{\bfseries Paired subsampling.}
+    Sample the \emph{same} student indices at both time points: draw
+    $(U_i, V_i)$ pairs by resampling indices $\{i_1, \ldots, i_n\}$ from
+    the subgroup. This preserves the latent covariance
+    $\mathrm{Cov}(U_i, V_i)$ and typically yields \emph{tighter}
+    repeated-sampling precision.
+
+    \vspace{4pt}
+    \textcolor{indepRed}{\bfseries Independent cross-sectional resampling.}
+    Sample grade-$t_1$ and grade-$t_2$ populations independently: different
+    students contribute to $F_U$ and $F_V$. This matches the
+    NAEP/TIMSS use case and produces \emph{wider} uncertainty because no
+    within-student covariance anchors the bridge.
+
+    \vspace{4pt}
+    Without distinguishing these two worlds, readers will conflate:
+
+    \vspace{2pt}
+    \hspace{5pt}$\bullet$\;linked-subsample stability (optimistic),
+
+    \vspace{1pt}
+    \hspace{5pt}$\bullet$\;unlinked-cross-sectional operating precision
+              (realistic), and
+
+    \vspace{1pt}
+    \hspace{5pt}$\bullet$\;bridge accuracy (a separate axis).
+
+    \vspace{4pt}
+    Those are three different beasts. Panel~C makes the design dependence
+    visible so that the precision curves in Panel~D can be read correctly.$^{\mbox{\footnotesize{3}}}$
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

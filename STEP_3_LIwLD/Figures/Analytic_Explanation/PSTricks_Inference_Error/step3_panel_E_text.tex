@@ -1,0 +1,70 @@
+%%%%
+%%%% Panel E text: Total uncertainty and decision stability
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=4.5in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    The final panel answers the operational question: \emph{what total
+    uncertainty attaches to a reported subgroup mean \SGPc, and how stable
+    are resulting classifications?}
+
+    \vspace{4pt}
+    For each of five representative subgroups (at $N = 500$,
+    independent design), Panel~E displays nested uncertainty layers:
+
+    \vspace{2pt}
+    \hspace{5pt}$\bullet$\;\textcolor{truthAmber}{$\bullet$} \textbf{Truth}
+    (amber dot): $\thetaTrue$ from linked data.
+
+    \vspace{1pt}
+    \hspace{5pt}$\bullet$\;$\bullet$ \textbf{Bridge estimate} (black dot):
+    $\thetaBridge$. The \textcolor{zissouRed}{arrow} between truth and
+    estimate is the bridge bias (accuracy cost).
+
+    \vspace{1pt}
+    \hspace{5pt}$\bullet$\;\textcolor{samplingBlue}{$\blacksquare$}
+    \textbf{Sampling band}: 95\% CI from repeated sampling
+    ($\pm\,\samplingHWindep$ SGPc).
+
+    \vspace{1pt}
+    \hspace{5pt}$\bullet$\;\textcolor{stressOrange}{$\square$}
+    \textbf{Stress-test band}: additional sensitivity to copula family choice,
+    $P \perp U$ relaxation, and classification perturbation.
+
+    \vspace{4pt}
+    The total uncertainty envelope combines:
+    \[
+      \underbrace{\text{bridge bias}}_{\text{Panel B}}
+      \;+\;
+      \underbrace{\text{sampling precision}}_{\text{Panel D}}
+      \;+\;
+      \underbrace{\text{model sensitivity}}_{\text{stress tests}}.
+    \]
+
+    \vspace{4pt}
+    Action thresholds and category labels are meaningful only within this
+    combined envelope. A subgroup classified as ``low growth'' at
+    $\thetaHat = 35$ is robust if the full band stays below 40; it is
+    fragile if the band spans 30--45.$^{\mbox{\footnotesize{5}}}$
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

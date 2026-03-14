@@ -73,6 +73,7 @@ source(file.path(STEP3_ROOT, "functions/distance_metrics.R"))
 source(file.path(STEP3_ROOT, "functions/optimize_regime.R"))
 source(file.path(STEP3_ROOT, "functions/optimize_regime_stratified.R"))
 source(file.path(STEP3_ROOT, "functions/bootstrap_uncertainty.R"))
+source(file.path(STEP3_ROOT, "functions/run_deep_dive.R"))
 source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
 source(file.path(STEP3_ROOT, "functions/figure_naming.R"))
 source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
@@ -150,6 +151,22 @@ if (!exists("STEP3_PHASE_A") || STEP3_PHASE_A) {
   })
 } else {
   cat("Phase A skipped (STEP3_PHASE_A = FALSE)\n\n")
+}
+
+############################################################################
+### PHASE A (MULTI): Outlier Deep-Dive Batch
+############################################################################
+
+if (exists("STEP3_PHASE_A_MULTI") && isTRUE(STEP3_PHASE_A_MULTI)) {
+  cat("====================================================================\n")
+  cat("PHASE A (MULTI): Outlier Deep-Dive Batch\n")
+  cat("====================================================================\n\n")
+  tryCatch({
+    source(file.path(STEP3_ROOT, "step3_multi_deep_dive.R"), local = FALSE)
+  }, error = function(e) {
+    cat("ERROR in Phase A (Multi): ", e$message, "\n")
+    cat("Continuing to Phase B...\n\n")
+  })
 }
 
 ############################################################################

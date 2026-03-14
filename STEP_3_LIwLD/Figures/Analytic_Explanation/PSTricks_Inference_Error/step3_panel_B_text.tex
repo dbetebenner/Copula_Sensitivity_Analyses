@@ -1,0 +1,63 @@
+%%%%
+%%%% Panel B text: Bridge accuracy — what is lost when linkage is forgotten?
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=4.5in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    Panel~B operationalizes \emph{bridge accuracy} across $\nConditions$
+    validation conditions. For each condition $r$:
+
+    \vspace{2pt}
+    \hspace{5pt}1.~Compute the truth $\thetaTrue$ from linked data.
+
+    \vspace{1pt}
+    \hspace{5pt}2.~Erase the pairings; retain only the unlinked marginals
+                  $F_U$ and $F_V$.
+
+    \vspace{1pt}
+    \hspace{5pt}3.~Re-run the copula bridge (STEP~3) to obtain
+                  $\thetaBridge$.
+
+    \vspace{1pt}
+    \hspace{5pt}4.~Record the bridge error:
+
+    \[
+      \text{Bridge error}_r \;=\; \thetaBridge - \thetaTrue.
+    \]
+
+    \vspace{4pt}
+    The scatter plot shows \emph{truth vs.\ bridge estimate} for each
+    condition. Points near the identity line indicate high accuracy.
+    The amber band marks $\pm 2$ SGPc points from perfect agreement.
+
+    \vspace{4pt}
+    Accuracy is summarized by center displacement, not by interval width.
+    The relevant metrics are mean absolute error (MAE~$= \maeBridge$),
+    mean signed error ($\meanBridgeError$), and RMSE ($\rmseBridge$),
+    all on the 0--100 SGPc scale.
+
+    \vspace{4pt}
+    This validation answers: \emph{how far does the unlinked bridge move us
+    from the truth that linked data would provide?}$^{\mbox{\footnotesize{2}}}$
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

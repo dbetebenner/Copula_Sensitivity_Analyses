@@ -1,0 +1,60 @@
+%%%%
+%%%% Panel D text: Precision operating curve — how much wobble remains at finite N?
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=4.5in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    Precision quantifies the repeated-sampling spread of the bridge estimator
+    $\thetaHat$ as a function of subgroup size $N$. Panel~D shows the 95\%
+    confidence interval width under both resampling designs from Panel~C:
+    \[
+      \text{Precision} \;=\; \text{CI width}_{95}(\thetaHat)
+      \;=\; 3.92 \cdot \mathrm{SE}(\thetaHat).
+    \]
+
+    \vspace{4pt}
+    Two curves appear:
+
+    \vspace{2pt}
+    \hspace{5pt}$\bullet$\;\textcolor{pairedTeal}{\bfseries Paired} (solid):
+    the optimistic bound from bootstrap subsampling with linked indices.
+    At $N = 500$: CI width $\approx \ciWidthPairedFiveH$ SGPc points.
+
+    \vspace{1pt}
+    \hspace{5pt}$\bullet$\;\textcolor{indepRed}{\bfseries Independent} (dashed):
+    the operational bound matching NAEP/TIMSS-style cross-sectional designs.
+    At $N = 500$: CI width $\approx \ciWidthIndepFiveH$ SGPc points.
+
+    \vspace{4pt}
+    Precision improves sharply from small $N$ into the mid-range (200--800),
+    then flattens. The amber dotted line at 5~SGPc points marks a
+    practical threshold: below this width, subgroup mean \SGPc\ becomes
+    operationally useful for reporting and comparison.
+
+    \vspace{4pt}
+    The gap between the two curves is the \emph{design effect}: the
+    additional uncertainty from not having linked cohorts. This gap is
+    largest at small $N$ and shrinks (absolutely) as $N$ grows, but the
+    \emph{ratio} remains roughly constant.$^{\mbox{\footnotesize{4}}}$
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

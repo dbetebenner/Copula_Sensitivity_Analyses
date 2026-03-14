@@ -50,6 +50,11 @@ require(copula)
 #' @param seed Integer. RNG seed for reproducibility. Default NULL.
 #' @param pairing Character. \code{"independent"} (default) draws separate
 #'   indices for U and V; \code{"paired"} draws a single shared index.
+#' @param use_mirai Logical. If TRUE and mirai daemons are alive, distribute
+#'   bootstrap replicates via \code{mirai::mirai_map()}. The caller is
+#'   responsible for starting daemons and sourcing required functions via
+#'   \code{mirai::everywhere()} before calling this function.
+#'   Falls back to sequential if daemons are not running. Default FALSE.
 #' @param verbose Logical. Print progress? Default TRUE.
 #'
 #' @return List with:
@@ -79,6 +84,7 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
                               v_weights = NULL,
                               resample_scheme = "srs_bootstrap",
                               pairing = c("independent", "paired"),
+                              use_mirai = FALSE,
                               verbose = TRUE) {
 
   pairing <- match.arg(pairing)
@@ -118,11 +124,11 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   if (verbose) cat("Bootstrap sampling uncertainty (", pairing_label, "): ",
                    n_boot, " replicates\n", sep = "")
 
-  for (b in seq_len(n_boot)) {
-    if (verbose && (b %% 50 == 0 || b == 1)) {
-      cat("  Replicate", b, "/", n_boot, "\n")
-    }
-
+  # Pre-generate deterministic per-replicate seeds so sequential and parallel
+  # modes remain reproducible for a fixed top-level seed.
+  seeds <- sample.int(.Machine$integer.max, n_boot)
+  run_one_replicate <- function(b) {
+    if (!is.null(seed)) set.seed(seeds[b])
     # --- Resampling: paired uses shared indices, independent uses separate ---
     if (is_paired) {
       # Shared index preserves student-level U<->V linkage
@@ -167,18 +173,168 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     }, error = function(e) NULL)
 
     if (!is.null(res)) {
-      regime_param_list[[b]] <- res$regime_param_hat
-      median_sgpc[b]  <- res$regime$median * 100
-      mean_sgpc[b]    <- res$regime$mean * 100
-      distances[b]    <- res$distance_min
-      converged[b]    <- (res$convergence == 0)
+      list(
+        regime_param_hat = res$regime_param_hat,
+        median_sgpc = res$regime$median * 100,
+        mean_sgpc = res$regime$mean * 100,
+        distance_min = res$distance_min,
+        converged = (res$convergence == 0)
+      )
     } else {
-      regime_param_list[[b]] <- rep(NA_real_, 2)
-      median_sgpc[b]  <- NA_real_
-      mean_sgpc[b]    <- NA_real_
-      distances[b]    <- NA_real_
-      converged[b]    <- FALSE
+      list(
+        regime_param_hat = rep(NA_real_, 2),
+        median_sgpc = NA_real_,
+        mean_sgpc = NA_real_,
+        distance_min = NA_real_,
+        converged = FALSE
+      )
     }
+  }
+
+  # --- Dispatch: mirai (if daemons alive) or sequential fallback ----------
+  mirai_ok <- FALSE
+  if (isTRUE(use_mirai) && n_boot > 1L) {
+    mirai_ok <- tryCatch({
+      requireNamespace("mirai", quietly = TRUE) &&
+        is.matrix(mirai::status()$daemons)
+    }, error = function(e) FALSE)
+    if (!mirai_ok && verbose) {
+      cat("  mirai bootstrap requested but no daemons running; falling back to sequential.\n")
+    }
+  }
+
+  draw_list <- vector("list", n_boot)
+  if (mirai_ok) {
+    n_daemons <- nrow(mirai::status()$daemons)
+    if (verbose) cat("  Running bootstrap via mirai (", n_daemons, " daemons)\n", sep = "")
+
+    push_ok <- tryCatch({
+      p <- mirai::everywhere({
+        .BOOT_U_SAMPLE      <<- u_push
+        .BOOT_V_SAMPLE      <<- v_push
+        .BOOT_KERNEL_CACHE  <<- kc_push
+        .BOOT_REGIME_FAMILY <<- rf_push
+        .BOOT_DISTANCE_FN   <<- df_push
+        .BOOT_V_GRID        <<- vg_push
+        .BOOT_GRID_RES      <<- gr_push
+        .BOOT_U_WEIGHTS     <<- uw_push
+        .BOOT_V_WEIGHTS     <<- vw_push
+        .BOOT_U_PROB        <<- up_push
+        .BOOT_V_PROB        <<- vp_push
+        .BOOT_RESAMPLE      <<- rs_push
+        .BOOT_PAIRING       <<- pa_push
+        .BOOT_SEEDS         <<- seeds_push
+        .BOOT_HAS_SEED      <<- hs_push
+        TRUE
+      },
+      u_push     = u_sample,
+      v_push     = v_sample,
+      kc_push    = kernel_cache,
+      rf_push    = regime_family,
+      df_push    = distance_fn,
+      vg_push    = v_grid,
+      gr_push    = grid_resolution,
+      uw_push    = u_weights,
+      vw_push    = v_weights,
+      up_push    = u_prob,
+      vp_push    = v_prob,
+      rs_push    = resample_scheme,
+      pa_push    = is_paired,
+      seeds_push = seeds,
+      hs_push    = !is.null(seed))
+      pv <- p[]
+      all(vapply(pv, isTRUE, logical(1)))
+    }, error = function(e) {
+      if (verbose) cat("  WARNING: mirai data push failed: ", e$message, "\n")
+      FALSE
+    })
+
+    if (isTRUE(push_ok)) {
+      tasks <- lapply(seq_len(n_boot), function(b) list(b = b))
+
+      boot_lambda <- function(task) {
+        b <- task$b
+        if (.BOOT_HAS_SEED) set.seed(.BOOT_SEEDS[b])
+        n_u <- length(.BOOT_U_SAMPLE)
+        n_v <- length(.BOOT_V_SAMPLE)
+        if (.BOOT_PAIRING) {
+          shared_idx <- sample.int(n_u, n_u, replace = TRUE)
+          u_boot  <- .BOOT_U_SAMPLE[shared_idx]
+          v_boot  <- .BOOT_V_SAMPLE[shared_idx]
+          uw_boot <- .BOOT_U_WEIGHTS[shared_idx]
+          vw_boot <- .BOOT_V_WEIGHTS[shared_idx]
+        } else if (.BOOT_RESAMPLE == "weighted_bootstrap") {
+          u_idx <- sample.int(n_u, n_u, replace = TRUE, prob = .BOOT_U_PROB)
+          v_idx <- sample.int(n_v, n_v, replace = TRUE, prob = .BOOT_V_PROB)
+          u_boot  <- .BOOT_U_SAMPLE[u_idx]; v_boot  <- .BOOT_V_SAMPLE[v_idx]
+          uw_boot <- .BOOT_U_WEIGHTS[u_idx]; vw_boot <- .BOOT_V_WEIGHTS[v_idx]
+        } else {
+          u_idx <- sample.int(n_u, n_u, replace = TRUE)
+          v_idx <- sample.int(n_v, n_v, replace = TRUE)
+          u_boot  <- .BOOT_U_SAMPLE[u_idx]; v_boot  <- .BOOT_V_SAMPLE[v_idx]
+          uw_boot <- .BOOT_U_WEIGHTS[u_idx]; vw_boot <- .BOOT_V_WEIGHTS[v_idx]
+        }
+        res <- tryCatch(
+          estimate_regime(u_boot, v_boot, .BOOT_KERNEL_CACHE,
+                          regime_family = .BOOT_REGIME_FAMILY,
+                          distance_fn   = .BOOT_DISTANCE_FN,
+                          v_grid        = .BOOT_V_GRID,
+                          u_weights     = uw_boot,
+                          v_weights     = vw_boot,
+                          grid_resolution = .BOOT_GRID_RES,
+                          verbose = FALSE),
+          error = function(e) NULL)
+        if (!is.null(res)) {
+          list(regime_param_hat = res$regime_param_hat,
+               median_sgpc     = res$regime$median * 100,
+               mean_sgpc       = res$regime$mean * 100,
+               distance_min    = res$distance_min,
+               converged       = (res$convergence == 0))
+        } else {
+          list(regime_param_hat = rep(NA_real_, 2),
+               median_sgpc     = NA_real_,
+               mean_sgpc       = NA_real_,
+               distance_min    = NA_real_,
+               converged       = FALSE)
+        }
+      }
+      environment(boot_lambda) <- globalenv()
+
+      mirai_res <- mirai::mirai_map(.x = tasks, .f = boot_lambda)
+      draw_list <- mirai_res[]
+
+      n_errs <- sum(vapply(draw_list, function(x)
+        inherits(x, "miraiError") || inherits(x, "errorValue"), logical(1)))
+      if (n_errs > 0 && verbose) {
+        cat("  WARNING:", n_errs, "mirai replicate(s) returned errors\n")
+      }
+      for (b in seq_along(draw_list)) {
+        if (inherits(draw_list[[b]], "miraiError") || inherits(draw_list[[b]], "errorValue")) {
+          draw_list[[b]] <- list(regime_param_hat = rep(NA_real_, 2),
+                                 median_sgpc = NA_real_, mean_sgpc = NA_real_,
+                                 distance_min = NA_real_, converged = FALSE)
+        }
+      }
+    } else {
+      mirai_ok <- FALSE
+    }
+  }
+
+  if (!mirai_ok) {
+    for (b in seq_len(n_boot)) {
+      if (verbose && (b %% 50 == 0 || b == 1)) {
+        cat("  Replicate", b, "/", n_boot, "\n")
+      }
+      draw_list[[b]] <- run_one_replicate(b)
+    }
+  }
+
+  for (b in seq_len(n_boot)) {
+    regime_param_list[[b]] <- draw_list[[b]]$regime_param_hat
+    median_sgpc[b] <- draw_list[[b]]$median_sgpc
+    mean_sgpc[b] <- draw_list[[b]]$mean_sgpc
+    distances[b] <- draw_list[[b]]$distance_min
+    converged[b] <- draw_list[[b]]$converged
   }
 
   regime_param_draws <- do.call(rbind, regime_param_list)

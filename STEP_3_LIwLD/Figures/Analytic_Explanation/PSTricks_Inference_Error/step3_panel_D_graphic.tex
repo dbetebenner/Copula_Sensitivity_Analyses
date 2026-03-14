@@ -1,0 +1,81 @@
+%%%%
+%%%% Panel D graphic: Precision operating curve — 95% CI width vs N
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+%% X axis: N from 0 to 5000, mapped to 0..3.3in
+%% Y axis: CI width from 0 to ~30, mapped to 0..2.8in
+\psset{xunit=0.00065in,yunit=0.098in}
+\begin{pspicture}(-550,-5.5)(5200,32)
+
+  %% Read precision curves
+  \readdata{\dataPaired}{data/panel_D_precision_paired.dat}
+  \readdata{\dataIndep}{data/panel_D_precision_indep.dat}
+
+  %% Filled area between curves (precision gap)
+  %% Use individual fills for visual effect
+  \pscustom[fillstyle=solid,fillcolor=indepRed,opacity=0.08,linestyle=none]{%
+    \listplot[plotstyle=line]{\dataIndep}%
+    \psline(5000,0)(50,0)%
+    \closepath}
+  \pscustom[fillstyle=solid,fillcolor=pairedTeal,opacity=0.12,linestyle=none]{%
+    \listplot[plotstyle=line]{\dataPaired}%
+    \psline(5000,0)(50,0)%
+    \closepath}
+
+  %% Precision curves
+  \listplot[linecolor=pairedTeal,linewidth=1.3pt,plotstyle=line]{\dataPaired}
+  \listplot[linecolor=indepRed,linewidth=1.3pt,linestyle=dashed,dash=3pt 2pt,
+            plotstyle=line,linecap=1]{\dataIndep}
+
+  %% Reference lines for key sample sizes
+  \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.5pt](500,0)(500,30)
+  \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.5pt](1000,0)(1000,30)
+  \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.5pt](2000,0)(2000,30)
+
+  %% Threshold reference: CI width = 5 SGPc (meaningful precision)
+  \psline[linecolor=truthAmber,linestyle=dotted,linewidth=0.8pt](0,5)(5000,5)
+  \rput[bl](3800,5.5){\textsf{\tiny\textcolor{truthAmber}{5 SGPc threshold}}}
+
+  %% Axes
+  \psaxes[Dx=1000,Dy=5,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(5000,30)
+
+  %% Axis labels
+  \rput[t](2500,-3.2){\textsf{\footnotesize Subgroup size $N$}}
+  \rput[b]{90}(-450,15){\textsf{\footnotesize 95\% CI width (SGPc points)}}
+
+  %% Legend
+  \rput[tr](4800,29){%
+    \raisebox{-22pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize Paired} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=pairedTeal,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Independent} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=indepRed,linewidth=1.3pt,linestyle=dashed,dash=3pt 2pt,linecap=1](0,0)(0.65,0)}}}
+      \end{tabular}%
+    }}}}
+
+  %% Annotation: values at N=500
+  \rput[tl](600,20.7){\textsf{\scriptsize\textcolor{pairedTeal}{%
+    Paired: $\ciWidthPairedFiveH$ at $N\!=\!500$}}}
+  \rput[tl](600,19.5){\textsf{\scriptsize\textcolor{indepRed}{%
+    Independent: $\ciWidthIndepFiveH$ at $N\!=\!500$}}}
+
+\end{pspicture}
+
+\end{document}

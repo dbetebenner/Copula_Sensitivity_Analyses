@@ -1,0 +1,146 @@
+%%%%
+%%%% step3_infographic_main.tex - 2x5 publication infographic assembler
+%%%%
+%%%% Layout: top row (5 graphic panels) + bottom row (5 text panels)
+%%%% All panel PDFs are pre-compiled; this file composes them with
+%%%% \includegraphics, following the pattern in the Overview Figure.
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=20in,paperheight=24.0in,margin=0in]{geometry}
+\usepackage{graphicx}
+\usepackage[svgnames]{xcolor}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\newlength{\fnlabelwidth}
+\setlength{\fnlabelwidth}{0.075in}
+\newcommand{\fnline}[2]{%
+  \par\noindent
+  \makebox[\fnlabelwidth][l]{$^{#1}$}%
+  \parbox[t]{\dimexpr\linewidth-\fnlabelwidth\relax}{#2}%
+  \par
+}
+
+\pagestyle{empty}
+\begin{document}
+
+%% Master title
+\noindent
+\hspace{0.4in}%
+\raisebox{0pt}[0.8in][0pt]{%
+  \parbox{19.0in}{%
+    \vspace{0.5in}
+    {\Huge\bfseries Inference Error Budget for Copula-Induced Stochastic Growth Regimes}
+
+    \vspace{0.05in}
+    {\huge\bfseries Accuracy and Precision of Mean \SGPc~Estimated Without Linked Data}
+
+    \vspace{0.1in}
+    {\Large\color{subtitleGrey}%
+      Synthetic validation:
+      True mean $\SGPc = \trueRegimeMean$,\enspace
+      bridge estimate $= \bridgeMean$,\enspace
+      MAE $= \maeBridge$ across $\nConditions$ conditions,\enspace
+      baseline $t$-copula ($\rho = \copulaRho$, $\mathrm{df} = \copulaDf$)}%
+  }}
+
+\vspace{1.15in}
+
+%% --- Top row: header band with overlaid labels ---
+\noindent
+\hspace{0.15in}%
+\includegraphics[width=19.55in,height=1.05in]{outputs/step3_header_band.pdf}%
+
+\vspace{0.08in}
+
+%% --- Middle row: graphic panels ---
+\noindent
+\hspace{0.15in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_A_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_B_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_C_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_D_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_E_graphic.pdf}%
+
+%% --- Bottom row: text panels ---
+\noindent
+\hspace{0.15in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_A_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_B_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_C_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_D_text.pdf}%
+\end{minipage}%
+\hspace{0.05in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_E_text.pdf}%
+\end{minipage}%
+
+\vspace{0.60in}
+
+%% --- Footnotes ---
+\noindent
+\hspace{0.5in}%
+\begin{minipage}[t]{19.2in}
+\small\raggedright
+\setlength{\parskip}{0pt}
+
+\fnline{1}{In the synthetic validation setting, the true growth regime is
+$P_S \sim \mathrm{Beta}(\trueAlpha, \trueBeta)$ with mean $\SGPc = \trueRegimeMean$
+and $\kappa = \trueKappa$, under a baseline $t$-copula
+($\rho = \copulaRho$, $\mathrm{df} = \copulaDf$).
+The bridge-recovered estimate uses the same copula family and
+$\mathrm{Beta}$ regime class, evaluated by Wasserstein-1 minimum distance.}
+
+\vspace{4pt}
+\fnline{2}{Bridge accuracy here refers to the displacement introduced solely
+by erasing individual-level linkage and relying on marginal-only information
+to estimate the growth regime. It does \emph{not} include sampling variability
+(that is precision, Panel~D) or model-choice sensitivity (stress tests, Panel~E).}
+
+\vspace{4pt}
+\fnline{3}{The paired-vs-independent distinction matters operationally because
+most large-scale assessment programs (NAEP, TIMSS, PIRLS) use independently
+drawn cross-sectional samples. Precision estimates based on paired subsampling
+of a longitudinal cohort are systematically tighter than what users of the
+method will experience in the field.}
+
+\vspace{4pt}
+\fnline{4}{The precision curves assume the baseline copula and regime family
+are correctly specified. Model misspecification introduces additional uncertainty
+not captured by these curves; see the stress-test component in Panel~E.
+At large $N$ ($> 2{,}000$), bridge accuracy (Panel~B) typically dominates
+sampling precision as the primary error source.}
+
+\vspace{4pt}
+\fnline{5}{Category stability is assessed by asking: would the subgroup's
+classification change under perturbation of the estimate by one standard error,
+by the bridge bias, or by the stress-test envelope? Robust classifications
+survive all three perturbations. Fragile classifications require either larger
+samples, tighter bridge accuracy, or wider reporting bands.}
+
+\vspace{6pt}
+\fnline{6}{\textbf{Model-choice stress tests} (right margin of Panel~E band):
+copula family sensitivity (Frank vs.\ $t$), relaxation of the $P \perp U$
+assumption, and classification changes under perturbation. These are
+second-order uncertainty components that bound the ``unknown unknowns''
+of the copula bridge.}
+
+\end{minipage}
+
+\end{document}

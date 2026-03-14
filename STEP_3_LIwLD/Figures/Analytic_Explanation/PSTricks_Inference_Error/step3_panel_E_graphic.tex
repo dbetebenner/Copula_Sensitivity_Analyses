@@ -1,0 +1,129 @@
+%%%%
+%%%% Panel E graphic: Total uncertainty budget — nested bands per subgroup
+%%%%
+%%%% Horizontal strip chart: center estimate with nested uncertainty bands
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage{amssymb}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+%% X axis: SGPc scale 15 to 85, Y axis: 5 subgroups stacked
+\psset{xunit=0.046in,yunit=0.55in}
+\begin{pspicture}(12,-1.0)(88,6.2)
+
+  %% --- Subgroup 1: Very Low growth ---
+  %% Stress-test outer band (widest)
+  \psframe[fillstyle=solid,fillcolor=stressOrange,opacity=0.12,linecolor=stressOrange,linewidth=0.3pt]%
+          (27.1,0.65)(37.9,1.35)
+  %% Sampling band (middle)
+  \psframe[fillstyle=solid,fillcolor=samplingBlue,opacity=0.18,linecolor=samplingBlue,linewidth=0.5pt]%
+          (29.4,0.7)(35.6,1.3)
+  %% Truth marker
+  \psdot[linecolor=truthAmber,dotsize=1pt,dotstyle=*](32.0,1.0)
+  \psline[linecolor=truthAmber,linewidth=0.2pt,linecap=1]{-}(32.0,0.9)(32.0,1.1)
+  %% Estimate marker
+  \psdot[linecolor=inferredV,dotsize=1pt,dotstyle=*](32.5,1.0)
+  \psline[linecolor=inferredV,linewidth=0.2pt,linecap=1]{-}(32.5,0.9)(32.5,1.1)
+  %% Bridge bias arrow
+  \psline[linecolor=zissouRed,linewidth=0.2pt]{-}(32.0,1.0)(32.5,1.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](32.0,1.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](32.5,1.0)
+  %% Label
+  \rput[r](13.0,1.0){\textsf{\scriptsize Very Low}}
+
+  %% --- Subgroup 2: Low growth ---
+  \psframe[fillstyle=solid,fillcolor=stressOrange,opacity=0.12,linecolor=stressOrange,linewidth=0.3pt]%
+          (37.7,1.65)(46.3,2.35)
+  \psframe[fillstyle=solid,fillcolor=samplingBlue,opacity=0.18,linecolor=samplingBlue,linewidth=0.5pt]%
+          (38.9,1.7)(45.1,2.3)
+  \psdot[linecolor=truthAmber,dotsize=1pt,dotstyle=*](41.5,2.0)
+  \psline[linecolor=truthAmber,linewidth=0.2pt,linecap=1]{-}(41.5,1.9)(41.5,2.1)
+  \psdot[linecolor=inferredV,dotsize=1pt,dotstyle=*](42.0,2.0)
+  \psline[linecolor=inferredV,linewidth=0.2pt,linecap=1]{-}(42.0,1.9)(42.0,2.1)
+  \psline[linecolor=zissouRed,linewidth=0.2pt]{-}(41.5,2.0)(42.0,2.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](41.5,2.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](42.0,2.0)
+  \rput[r](13.0,2.0){\textsf{\scriptsize Low}}
+
+  %% --- Subgroup 3: Average ---
+  \psframe[fillstyle=solid,fillcolor=stressOrange,opacity=0.12,linecolor=stressOrange,linewidth=0.3pt]%
+          (46.5,2.65)(54.5,3.35)
+  \psframe[fillstyle=solid,fillcolor=samplingBlue,opacity=0.18,linecolor=samplingBlue,linewidth=0.5pt]%
+          (47.4,2.7)(53.6,3.3)
+  \psdot[linecolor=truthAmber,dotsize=1pt,dotstyle=*](50.0,3.0)
+  \psline[linecolor=truthAmber,linewidth=0.2pt,linecap=1]{-}(50.0,2.9)(50.0,3.1)
+  \psdot[linecolor=inferredV,dotsize=1pt,dotstyle=*](50.5,3.0)
+  \psline[linecolor=inferredV,linewidth=0.2pt,linecap=1]{-}(50.5,2.9)(50.5,3.1)
+  \psline[linecolor=zissouRed,linewidth=0.2pt]{-}(50.0,3.0)(50.5,3.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](50.0,3.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](50.5,3.0)
+  \rput[r](13.0,3.0){\textsf{\scriptsize Average}}
+
+  %% --- Subgroup 4: High growth ---
+  \psframe[fillstyle=solid,fillcolor=stressOrange,opacity=0.12,linecolor=stressOrange,linewidth=0.3pt]%
+          (53.7,3.65)(62.3,4.35)
+  \psframe[fillstyle=solid,fillcolor=samplingBlue,opacity=0.18,linecolor=samplingBlue,linewidth=0.5pt]%
+          (54.9,3.7)(61.1,4.3)
+  \psdot[linecolor=truthAmber,dotsize=1pt,dotstyle=*](57.5,4.0)
+  \psline[linecolor=truthAmber,linewidth=0.2pt,linecap=1]{-}(57.5,3.9)(57.5,4.1)
+  \psdot[linecolor=inferredV,dotsize=1pt,dotstyle=*](58.0,4.0)
+  \psline[linecolor=inferredV,linewidth=0.2pt,linecap=1]{-}(58.0,3.9)(58.0,4.1)
+  \psline[linecolor=zissouRed,linewidth=0.2pt]{-}(57.5,4.0)(58.0,4.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](57.5,4.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](58.0,4.0)
+  \rput[r](13.0,4.0){\textsf{\scriptsize High}}
+
+  %% --- Subgroup 5: Very High growth ---
+  \psframe[fillstyle=solid,fillcolor=stressOrange,opacity=0.12,linecolor=stressOrange,linewidth=0.3pt]%
+          (62.7,4.65)(72.3,5.35)
+  \psframe[fillstyle=solid,fillcolor=samplingBlue,opacity=0.18,linecolor=samplingBlue,linewidth=0.5pt]%
+          (64.4,4.7)(70.6,5.3)
+  \psdot[linecolor=truthAmber,dotsize=1pt,dotstyle=*](68.0,5.0)
+  \psline[linecolor=truthAmber,linewidth=0.2pt,linecap=1]{-}(68.0,4.9)(68.0,5.1)
+  \psdot[linecolor=inferredV,dotsize=1pt,dotstyle=*](67.5,5.0)
+  \psline[linecolor=inferredV,linewidth=0.2pt,linecap=1]{-}(67.5,4.9)(67.5,5.1)
+  \psline[linecolor=zissouRed,linewidth=0.2pt]{-}(68.0,5.0)(67.5,5.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](68.0,5.0)
+  \psdot[linecolor=zissouRed,dotsize=0.4pt,dotstyle=*](67.5,5.0)
+  \rput[r](13.0,5.0){\textsf{\scriptsize Very High}}
+
+  %% Axes
+  \psaxes[Dx=10,Dy=1,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          labels=x,
+          axesstyle=axes,linecolor=borderGrey]{-}(15,0)(85,5.8)
+
+  %% Axis labels
+  \rput[t](50,-0.6){\textsf{\footnotesize Mean $\SGPc$ (bridge estimate $\pm$ uncertainty)}}
+
+  %% Legend (top right)
+  \rput[tr](83,2.0){%
+    \raisebox{0pt}{\psscalebox{0.85 0.85}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{4pt}}l@{}}
+        \textsf{\tiny\textcolor{truthAmber}{$\bullet$} Truth} &
+        \textsf{\tiny (linked data)}\\[-1pt]
+        \textsf{\tiny $\bullet$ Estimate} &
+        \textsf{\tiny (bridge)}\\[-1pt]
+        \textsf{\tiny\textcolor{zissouRed}{$\rightarrow$} Bridge bias} &
+        \textsf{\tiny (accuracy)}\\[-1pt]
+        \textsf{\tiny\textcolor{samplingBlue}{$\blacksquare$} Sampling} &
+        \textsf{\tiny 95\% CI}\\[-1pt]
+        \textsf{\tiny\textcolor{stressOrange}{$\square$} Stress-test} &
+        \textsf{\tiny sensitivity}
+      \end{tabular}%
+    }}}}
+
+\end{pspicture}
+
+\end{document}

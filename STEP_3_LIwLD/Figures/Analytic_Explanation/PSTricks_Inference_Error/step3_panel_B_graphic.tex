@@ -1,0 +1,87 @@
+%%%%
+%%%% Panel B graphic: Bridge accuracy — truth vs bridge estimate across conditions
+%%%%
+%%%% Dot-and-arrow plot: amber dots = truth, arrows to bridge estimates
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+%% Accuracy scatter: true mean SGPc (x) vs bridge estimate (y)
+%% with identity line showing perfect accuracy
+\psset{xunit=0.046in,yunit=0.046in}
+\begin{pspicture}(17,-8)(72,72)
+
+  %% Read data
+  \readdata{\dataPairs}{data/panel_B_accuracy_pairs.dat}
+
+  %% Identity line (perfect accuracy)
+  \psline[linecolor=panelGrey,linewidth=0.6pt,linestyle=dashed,dash=3pt 2pt](20,20)(70,70)
+
+  %% Accuracy band: +/- 2 SGPc from identity
+  \pspolygon[fillstyle=solid,fillcolor=truthAmber,opacity=0.35,linestyle=none]%
+    (20,20)(22,20)(70,68)(70,70)(68,70)(20,22)
+
+  %% Scatter points
+  \listplot[linecolor=zissouTeal,linewidth=0pt,plotstyle=dots,
+            dotsize=4pt,fillcolor=zissouTeal,dotstyle=*]{\dataPairs}
+
+  %% Axes — labels=none so we can control font via manual \uput nodes below
+  \psaxes[Dx=10,Dy=10,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,labels=none,
+          axesstyle=frame,linecolor=borderGrey]{-}(20,20)(70,70)
+
+  %% X-axis tick labels
+  \uput[d](20,20){\textsf{\fontsize{7}{7}\selectfont 20}}
+  \uput[d](30,20){\textsf{\fontsize{7}{7}\selectfont 30}}
+  \uput[d](40,20){\textsf{\fontsize{7}{7}\selectfont 40}}
+  \uput[d](50,20){\textsf{\fontsize{7}{7}\selectfont 50}}
+  \uput[d](60,20){\textsf{\fontsize{7}{7}\selectfont 60}}
+  \uput[d](70,20){\textsf{\fontsize{7}{7}\selectfont 70}}
+
+  %% Y-axis tick labels
+  \uput[l](20,20){\textsf{\fontsize{7}{7}\selectfont 20}}
+  \uput[l](20,30){\textsf{\fontsize{7}{7}\selectfont 30}}
+  \uput[l](20,40){\textsf{\fontsize{7}{7}\selectfont 40}}
+  \uput[l](20,50){\textsf{\fontsize{7}{7}\selectfont 50}}
+  \uput[l](20,60){\textsf{\fontsize{7}{7}\selectfont 60}}
+  \uput[l](20,70){\textsf{\fontsize{7}{7}\selectfont 70}}
+
+  %% Axis labels
+  \rput[t](45,15.0){\textsf{\fontsize{8}{8}\selectfont True mean $\SGPc$ (linked data)}}
+  \rput[b]{90}(13.5,45){\textsf{\fontsize{8}{8}\selectfont Bridge estimate mean $\SGPc$}}
+
+  %% Annotation: MAE and bias
+  \rput[tl](22,68){%
+    \psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=4pt]{%
+      \begin{tabular}{@{}l@{}}
+        \textsf{\scriptsize MAE $= \maeBridge$ SGPc pts}\\[-1pt]
+        \textsf{\scriptsize Mean error $= \meanBridgeError$}\\[-1pt]
+        \textsf{\scriptsize RMSE $= \rmseBridge$}\\[-1pt]
+        \textsf{\scriptsize $n = \nConditions$ conditions}
+      \end{tabular}%
+  }}
+
+  %% Legend
+  \rput[br](68,24){%
+    \psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}l@{}}
+        \textsf{\scriptsize\textcolor{panelGrey}{--- Identity (perfect)}}\\[-1pt]
+        \textsf{\scriptsize\textcolor{truthAmber}{$\pm 2$ SGPc band}}\\[-1pt]
+        \textsf{\scriptsize\textcolor{zissouTeal}{$\bullet$ Validation conditions}}
+      \end{tabular}%
+    }}
+
+\end{pspicture}
+
+\end{document}

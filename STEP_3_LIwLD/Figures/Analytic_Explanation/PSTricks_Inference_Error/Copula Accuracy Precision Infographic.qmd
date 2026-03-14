@@ -1,0 +1,301 @@
+# Inference Accuracy/Precision for Copula-Based Stochastic Growth Regimes
+
+A few of the earlier uploaded source files appear to have expired on my side, so I’m grounding this in the currently accessible PNG, README, and STEP 3 sensitivity note. Re-upload the older PSTricks bundle if you want the next pass tied directly to those files.
+
+The cleanest way to think about the new infographic is this:
+
+**The current STEP 3 figure explains the mechanism.  
+The new figure should explain the error budget.**
+
+That means the visual grammar should shift from “how the bridge works” to “what kinds of uncertainty the bridge introduces, how large they are, and which of them matter for action.”
+
+## Core conceptual move
+
+Do **not** center the new infographic on the \((m,\kappa)\) search itself. That was correct for the first figure because the task there was identification of \(\widehat H_S\). For the new figure, the real protagonist is the estimand
+
+$$
+\theta_S = 100\,\mathbb{E}(P_S)
+$$
+
+or the analogous median functional, and the question is:
+
+1. What is the true subgroup quantity under linked data?
+2. How far does the unlinked bridge move us from that truth?
+3. How much extra wobble do we get from finite samples?
+4. How much do modeling choices perturb the answer?
+
+That is a much sharper story than “here is another optimization heatmap.” The heatmap can appear, but only as a supporting actor.
+
+## Best overall structure
+
+I would make this a **2x5** infographic rather than forcing everything back into 2x4. The 2x4 worked for the mechanism because B1 and B2 shared a mathematical core. Here, the conceptual hinge is the distinction between **accuracy** and **precision**, and especially between **paired** and **independent** resampling worlds. That deserves its own column.
+
+### Proposed top-row flow
+
+**A. Define the target under linked truth**  
+Show the benchmark quantity you would know if longitudinal pairs existed.
+
+**B. Break the links, re-infer, and measure bridge error**  
+This is the “accuracy” panel.
+
+**C. Repeat sampling under two designs**  
+This is the conceptual hinge: paired subsampling versus independent cross-sectional resampling.
+
+**D. Build the precision-by-\(N\) operating curve**  
+This is the “precision” panel.
+
+**E. Combine errors into an action-ready uncertainty summary**  
+This is where the audience learns what the method can and cannot support.
+
+That left-to-right flow preserves the spirit of the current infographic while making the inferential logic much cleaner.
+
+---
+
+## The five panels in substance
+
+### Panel A — Truth benchmark: what are we trying to recover?
+
+This panel should depict the **linked-data world**.
+
+Not the whole copula machinery. Just enough to define the target. A simple linked schematic is enough: prior quantiles \(U_i\), current quantiles \(V_i\), latent conditional percentiles \(P_i\), and the subgroup truth
+
+$$
+\theta_S^{\text{true}} = 100\,\mathbb{E}(P_S).
+$$
+
+Graphically, I would use one of these:
+
+- a linked \(U \to V\) scatter or spaghetti-like percentile map, with a side density for the true \(P_S\), or
+- a single density plot for the true latent SGPc distribution with vertical lines for true mean and median.
+
+The point is to tell the reader: **there exists a truth benchmark when pairs are available**.
+
+This matters because otherwise “accuracy” becomes philosophically mushy. No benchmark, no accuracy—just internal consistency cosplay.
+
+### Panel B — Bridge accuracy: what is lost when linkage is forgotten?
+
+This is the panel that operationalizes **Error 2**.
+
+Start with the same subgroup from Panel A. Then erase the pairings and retain only the unlinked marginals \(F_U\) and \(F_V\). Re-run STEP 3 and compare
+
+$$
+\hat\theta_S^{\text{bridge}} \quad \text{vs} \quad \theta_S^{\text{true}}.
+$$
+
+This is where the current sensitivity note’s bridge language belongs. The figure should visually encode:
+
+- **truth** from linked data,
+- **estimate** from unlinked inference on the same subgroup,
+- **bridge error** as the horizontal distance between them.
+
+Use center displacement, not interval width, as the visual grammar here. Accuracy is about **where the estimate is centered relative to truth**, not how wide the estimate bounces.
+
+A very effective graphic would be:
+
+- amber vertical line = true mean SGPc,
+- black vertical line = recovered mean SGPc,
+- arrow between them labeled “bridge cost.”
+
+This panel can also carry the compact statement:
+
+$$
+\text{Bridge error} = \hat\theta_S^{\text{bridge}} - \theta_S^{\text{true}}.
+$$
+
+If you want one number in the panel footer, it should be something like mean error, median error, MAE, or absolute bias across validation conditions—not a CI width.
+
+### Panel C — Sampling worlds: why precision is design-dependent
+
+This is the panel your current materials are begging for.
+
+The discrepancy you flagged between the larger Phase A bootstrap uncertainty and the smaller Phase B precision curve is not noise. It is a consequence of **different resampling worlds**. If this is not made visible, readers will misread the entire operating curve.
+
+So Panel C should be a side-by-side conceptual split:
+
+#### Left half: paired subsampling
+
+Sample the same student indices at both times.  
+This preserves latent covariance and usually yields tighter precision.
+
+#### Right half: independent cross-sectional resampling
+
+Sample grade-\(t_1\) and grade-\(t_2\) independently.  
+This matches the NAEP/TIMSS use case and produces wider uncertainty.
+
+You do not even need heavy equations here. A diagram with colored boxes and arrows would do the job. The whole point is to make the reader see that “precision” is not one thing. It depends on what is being resampled.
+
+This panel is the conceptual bridge between “the method works” and “what uncertainty should I expect in the field?”
+
+Without it, the figure risks conflating:
+
+- linked-subsample stability,
+- unlinked-cross-sectional operating precision,
+- and bridge accuracy.
+
+Those are three different beasts wearing similar hats.
+
+### Panel D — Precision operating curve: how much wobble remains at finite \(N\)?
+
+Now you earn the line plot.
+
+This panel should show the repeated-sampling spread of \(\hat\theta_S\) as a function of subgroup size \(N\). The natural y-axis options are:
+
+- median MAE,
+- SE,
+- or 95% interval width.
+
+I would probably use **95% interval width** as the dominant display and **MAE** as a secondary annotation, because interval width is visually legible and operationally useful.
+
+The key design decision is this:
+
+**Show two curves if you can.**
+
+- one for paired subsampling,
+- one for independent cross-sectional resampling.
+
+If the independent curve is not yet computed, then show the existing paired curve but visually label it as an **optimistic precision curve** and reserve a dashed placeholder for the operational unlinked curve. That would actually be scientifically honest and conceptually elegant.
+
+The operating curve is where you put the sample-size message from the sensitivity note: precision improves sharply from small \(N\) into the mid-range, then flattens. That is the sort of thing policymakers and measurement people can both digest without eating the furniture.
+
+### Panel E — Total uncertainty and decision stability
+
+This final panel is where the figure becomes useful rather than merely beautiful.
+
+You want the reader to leave with an answer to:
+
+“What uncertainty attaches to a reported subgroup mean SGPc, and how stable are any resulting classifications?”
+
+This panel should combine:
+
+- **bridge cost** from Panel B,
+- **sampling precision** from Panel D,
+- and optionally a thin outer ring for **stress-test sensitivity**.
+
+A very clean display would be a target estimate with nested bands:
+
+- center point: \(\hat\theta_S\),
+- inner band: sampling uncertainty,
+- outer shift marker: bridge error,
+- optional callouts for copula sensitivity and \(P_S \perp U\) sensitivity.
+
+This panel should also be the only place where you mention category stability or action thresholds. That keeps the earlier panels inferential and the last panel decision-facing.
+
+---
+
+## What should count as “accuracy” and “precision” in the figure?
+
+I would define them very explicitly, because those words get abused with cheerful recklessness.
+
+### Accuracy
+
+Use truth-referenced displacement:
+
+$$
+\text{Accuracy error}_r = \hat\theta_{S,r} - \theta_S^{\text{true}}.
+$$
+
+Across validation conditions, summarize with:
+
+- mean signed error,
+- mean absolute error,
+- median absolute error,
+- or calibration slope/intercept if you want a stronger modeling flavor.
+
+### Precision
+
+Use repeated-sample variability of the estimator:
+
+$$
+\text{Precision} = \operatorname{SD}(\hat\theta_{S,r})
+\quad\text{or}\quad
+\text{CI width}_{95}.
+$$
+
+Graphically:
+
+- **accuracy** = distance between centers,
+- **precision** = width/spread of repeated estimates.
+
+Never use the same visual object for both. That’s how readers end up staring into the methodological void.
+
+---
+
+## How to handle the current Phase A / Phase B discrepancy
+
+This needs to be built into the figure, not buried in prose.
+
+Your conversation excerpt points to a major conceptual refinement: the existing Phase B precision story is likely more stable than the true NAEP/TIMSS operating setting because it leverages paired subsampling structure, whereas the field use case is independent cross-sectional sampling.
+
+So the infographic should explicitly distinguish at least three layers:
+
+1. **Truth world:** linked data available.
+2. **Bridge world:** same subgroup, links erased, estimate compared to truth.
+3. **Survey world:** new finite samples drawn without linkage.
+
+That decomposition is better than the more generic “Error 1 + Error 2” language alone, because it maps each error source to an actual data-generating design. Readers understand worlds more easily than they understand variance-component metaphysics.
+
+---
+
+## Stress tests: where to put copula sensitivity and independence sensitivity
+
+Do not put these in the main left-to-right pipeline. They are important, but they are not the central inferential decomposition.
+
+I would treat them as a **footer strip** or **right-margin callout box** labeled something like:
+
+**Model-choice stress tests**
+- copula parameter movement,
+- relaxation of \(P_S \perp U\),
+- classification changes under perturbation.
+
+These are second-order uncertainty components. They matter, but they should not steal visual attention from the bridge-versus-sampling story.
+
+---
+
+## Suggested header band text
+
+A companion to the current band could look like this:
+
+- **A. Define the linked-data benchmark**  
+  True subgroup mean SGPc from longitudinal pairs
+
+- **B. Forget linkage and re-infer**  
+  Bridge accuracy: unlinked estimate versus truth
+
+- **C. Repeat the sampling design**  
+  Paired subsampling versus independent cross-sectional resampling
+
+- **D. Quantify precision by subgroup size**  
+  Operating uncertainty as a function of \(N\)
+
+- **E. Report total uncertainty for decisions**  
+  Combined error, interval interpretation, and category stability
+
+That reads well and tracks the actual inferential story.
+
+---
+
+## The one design principle I would not compromise on
+
+The infographic should separate **how the estimate is produced** from **how the estimate is evaluated**.
+
+Your current STEP 3 infographic is mostly about production:
+
+$$
+(F_U,F_V,C_0,\mathcal H)\;\mapsto\;\widehat H_S \mapsto \hat\theta_S.
+$$
+
+The new infographic should be about evaluation:
+
+$$
+\hat\theta_S \;\text{vs truth},\qquad
+\hat\theta_S \;\text{across repeated samples},\qquad
+\hat\theta_S \;\text{under perturbations}.
+$$
+
+That distinction is the whole game.
+
+## My recommendation in one sentence
+
+Build the new figure as a **five-column uncertainty decomposition** with a dedicated panel for the paired-versus-independent resampling distinction; otherwise the audience will systematically misread precision as if it were a property of the estimator alone rather than of the sampling design.
+
+The next clean step is to draft the exact panel text and the minimal equations for each box so the figure stays mathematically honest without turning into a wall of symbolic porridge.

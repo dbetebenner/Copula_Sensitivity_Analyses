@@ -1,0 +1,60 @@
+%%%%
+%%%% step3_header_band.tex - 5-column header band for Error Budget infographic
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=19.55in,paperheight=1.05in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{tikz}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+\noindent
+\begin{tikzpicture}[x=1in,y=1in]
+  \definecolor{headerDark}{RGB}{210,210,208}
+  \definecolor{headerLight}{RGB}{225,225,223}
+  \definecolor{headerAccent}{RGB}{218,218,215}
+
+  % Base darker band
+  \fill[headerDark] (0,0.1) rectangle (19.55,0.95);
+
+  % Panel B lighter region
+  \fill[headerLight]
+    (3.85,0.1) -- (7.50,0.1) -- (7.80,0.525) -- (7.50,0.95) --
+    (3.70,0.95) -- (4.0,0.525) -- (3.70,0.1) -- cycle;
+
+  % Panel D lighter region
+  \fill[headerLight]
+    (11.65,0.1) -- (15.30,0.1) -- (15.60,0.525) -- (15.30,0.95) --
+    (11.50,0.95) -- (11.80,0.525) -- (11.50,0.1) -- cycle;
+
+  % A header block
+  \node[anchor=west,align=left,text width=3.35in] at (0.25,0.51) {%
+    {\normalsize\bfseries A. Define the linked-data benchmark}\\[-1pt]
+    {\small True subgroup mean \textit{SGPc} from longitudinal pairs}};
+
+  % B header block
+  \node[anchor=west,align=left,text width=3.20in] at (4.10,0.51) {%
+    {\normalsize\bfseries B. Forget linkage and re-infer}\\[-1pt]
+    {\small Bridge accuracy: unlinked estimate versus truth}};
+
+  % C header block (the hinge)
+  \node[anchor=west,align=left,text width=3.20in] at (8.00,0.51) {%
+    {\normalsize\bfseries C. Repeat the sampling design}\\[-1pt]
+    {\small Paired subsampling vs.\ independent resampling}};
+
+  % D header block
+  \node[anchor=west,align=left,text width=3.20in] at (11.90,0.51) {%
+    {\normalsize\bfseries D. Quantify precision by \textit{N}}\\[-1pt]
+    {\small Operating uncertainty as a function of subgroup size}};
+
+  % E header block
+  \node[anchor=west,align=left,text width=3.50in] at (15.75,0.55) {%
+    {\normalsize\bfseries E. Report total uncertainty}\\[-1pt]
+    {\small Combined error, interval, and category stability}};
+
+\end{tikzpicture}
+
+\end{document}

@@ -184,6 +184,7 @@ if (parallel_available) {
         file.path(STEP3_ROOT_ABS,   "functions/predict_v_cdf.R"),
         file.path(STEP3_ROOT_ABS,   "functions/distance_metrics.R"),
         file.path(STEP3_ROOT_ABS,   "functions/optimize_regime.R"),
+        file.path(STEP3_ROOT_ABS,   "functions/optimize_regime_stratified.R"),
         file.path(STEP3_ROOT_ABS,   "functions/bucket_classification.R"),
         file.path(STEP3_ROOT_ABS,   "functions/process_replicate_batch.R"),
         file.path(STEP3_ROOT_ABS,   "functions/process_pool_setup.R")

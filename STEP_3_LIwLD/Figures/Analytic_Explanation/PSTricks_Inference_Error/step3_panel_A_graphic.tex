@@ -1,0 +1,95 @@
+%%%%
+%%%% Panel A graphic: Truth benchmark — true latent SGPc density from linked data
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+\psset{xunit=0.033in,yunit=0.65in}
+\begin{pspicture}(-7,-0.85)(108,\panelAymax)
+
+  %% Read density data
+  \readdata{\dataTrue}{data/panel_A_density_true.dat}
+  \readdata{\dataUnif}{data/panel_A_density_uniform.dat}
+  \readdata{\dataBridge}{data/panel_A_density_bridge.dat}
+
+  %% Filled area under true density (amber)
+  \pscustom[fillstyle=solid,fillcolor=truthAmber,opacity=0.22,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataTrue}%
+    \psline(100,0)%
+    \closepath}
+
+  %% Filled area under bridge density (subtle grey)
+  \pscustom[fillstyle=solid,fillcolor=inferredV,opacity=0.08,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataBridge}%
+    \psline(100,0)%
+    \closepath}
+
+  %% Density curves
+  \listplot[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,
+            plotstyle=line,linecap=1]{\dataUnif}
+  \listplot[linecolor=truthAmber,linewidth=1.3pt,linestyle=solid,plotstyle=line]{\dataTrue}
+  \listplot[linecolor=inferredV,linewidth=1.0pt,linestyle=dashed,dash=3pt 2pt,
+            plotstyle=line,linecap=1]{\dataBridge}
+
+  %% Reference lines
+  \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.8pt](50,0)(50,\panelAymax)
+  \psline[linecolor=truthAmber,linestyle=dotted,linewidth=1.0pt]%
+         (\trueMeanVline,0)(\trueMeanVline,\panelAymax)
+  \psline[linecolor=inferredV,linestyle=dotted,linewidth=0.8pt]%
+         (\bridgeMeanVline,0)(\bridgeMeanVline,\panelAymax)
+
+  %% Axes
+  \psaxes[Dx=20,Dy=1,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          labels=y,
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(100,\panelAymax)
+
+  % Custom x labels
+  \uput[d](0,0){\textsf{\small 0}}
+  \uput[d](20,0){\textsf{\small 0.2}}
+  \uput[d](40,0){\textsf{\small 0.4}}
+  \uput[d](60,0){\textsf{\small 0.6}}
+  \uput[d](80,0){\textsf{\small 0.8}}
+  \uput[d](100,0){\textsf{\small 1.0}}
+
+  %% Axis labels
+  \rput[t](50,-0.4){\textsf{\footnotesize Latent $\SGPc/100$}}
+  \rput[b]{90}(-7,2.0){\textsf{\footnotesize Density}}
+
+  %% Legend
+  \rput[tr](97,\panelAymax){%
+    \raisebox{-30pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize True $f_{H_S}(p)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=truthAmber,linewidth=1.3pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Bridge $f_{\HShat}(p)$} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=1.0pt,linestyle=dashed,dash=3pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Uniform} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}
+      \end{tabular}%
+    }}}}
+
+  %% Annotations
+  \rput[tl](62.2,\panelAymax){%
+    \raisebox{-67pt}{\textsf{\scriptsize\textcolor{truthAmber}{%
+      True mean $\SGPc = \trueRegimeMean$}}}}
+  \rput[tl](62.2,\panelAymax){%
+    \raisebox{-75pt}{\textsf{\scriptsize\textcolor{inferredV}{%
+      Bridge mean $\SGPc = \bridgeMean$}}}}
+
+\end{pspicture}
+
+\end{document}

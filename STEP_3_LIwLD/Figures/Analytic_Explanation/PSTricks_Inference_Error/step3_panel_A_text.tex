@@ -1,0 +1,56 @@
+%%%%
+%%%% Panel A text: Truth benchmark — what are we trying to recover?
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=3.75in,paperheight=4.5in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{3.75in}
+  \vspace{0.05in}
+  \hspace{0.15in}%
+  \begin{minipage}{3.45in}
+    \small\raggedright\color{bodyGrey}
+
+    Suppose longitudinal linkage is available: each student $i$ in subgroup $S$
+    has a prior quantile $U_i$ \emph{and} a current quantile $V_i$. With these
+    linked pairs, we can compute the true latent conditional percentiles
+    \[
+      P_i \;=\; F_0(V_i \mid U_i),
+    \]
+    where $F_0$ is the conditional CDF from the baseline copula $C_0$. The
+    \emph{truth benchmark} for the subgroup is
+    \[
+      \thetaTrue \;=\; 100\,\mathbb{E}(P_S).
+    \]
+
+    \vspace{4pt}
+    This is the quantity we would report if individual-level linkage existed.
+    Panel~A shows the density $f_{H_S}(p)$ of the true growth regime alongside
+    the bridge-recovered density $f_{\HShat}(p)$. The vertical lines mark their
+    respective means.
+
+    \vspace{4pt}
+    The fundamental role of Panel~A is to \emph{define what accuracy means}:
+    accuracy can only be assessed relative to a well-defined truth. Without
+    a linked-data benchmark, ``accuracy'' becomes internal consistency rather
+    than genuine error measurement.$^{\mbox{\footnotesize{1}}}$
+
+    \vspace{4pt}
+    The small displacement between the amber (true) and black (bridge)
+    densities is the \emph{bridge cost}: the price paid for erasing
+    individual-level linkage and relying on the copula bridge instead.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}
