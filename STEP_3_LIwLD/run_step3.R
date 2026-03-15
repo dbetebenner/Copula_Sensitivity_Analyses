@@ -239,13 +239,6 @@ if (isTRUE(STEP3_CONFIG$validation$use_mirai)) {
   }
 }
 
-on.exit({
-  if (daemons_live) {
-    tryCatch(mirai::daemons(0), error = function(e) NULL)
-    cat("mirai daemons shut down.\n")
-  }
-}, add = TRUE)
-
 ############################################################################
 ### PHASE A: Deep Validation
 ############################################################################
@@ -315,3 +308,13 @@ cat("====================================================================\n")
 cat("Elapsed time:", round(as.numeric(step3_elapsed), 1), "minutes\n")
 cat("Results directory:", RESULTS_DIR, "\n")
 cat("====================================================================\n\n")
+
+############################################################################
+### CLEANUP: Shut down mirai daemons
+############################################################################
+
+if (daemons_live) {
+  tryCatch(mirai::daemons(0), error = function(e) NULL)
+  daemons_live <- FALSE
+  cat("mirai daemons shut down.\n")
+}
