@@ -202,17 +202,15 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   if (isTRUE(use_mirai) && n_boot > 1L) {
     mirai_ok <- tryCatch({
       requireNamespace("mirai", quietly = TRUE) && {
-        s <- mirai::status()
-        n_conn <- s[["connections"]]
-        if (is.numeric(n_conn) && length(n_conn) == 1L && n_conn > 0L) {
-          n_daemons <<- as.integer(n_conn)
-          TRUE
-        } else {
-          FALSE
-        }
+        n_conn <- mirai::status()[["connections"]]
+        is.numeric(n_conn) && length(n_conn) == 1L && n_conn > 0L
       }
     }, error = function(e) FALSE)
-    if (!mirai_ok && verbose) {
+    # Read daemon count OUTSIDE tryCatch to avoid <<- scoping issues
+    if (mirai_ok) {
+      n_daemons <- tryCatch(as.integer(mirai::status()[["connections"]]),
+                            error = function(e) 0L)
+    } else if (verbose) {
       diag <- tryCatch({
         s <- mirai::status()
         paste0("connections=", deparse(s$connections),

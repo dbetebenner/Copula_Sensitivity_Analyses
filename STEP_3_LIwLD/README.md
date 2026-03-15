@@ -41,7 +41,7 @@ Work throughout on the pseudo-observation (reference-percentile) scale:
 | Symbol | Definition |
 |--------|-----------|
 | X, Y | Prior (Grade 4) and current (Grade 8) raw scores |
-| F_X^ref, F_Y^ref | Fixed reference marginal CDFs (full state population, not subgroup-specific) |
+| F_X^ref, F_Y^ref | Fixed reference marginal CDFs (condition-level paired population, not subgroup-specific) |
 | U = F_X^ref(X) | Prior reference percentile ∈ (0, 1) |
 | V = F_Y^ref(Y) | Current reference percentile ∈ (0, 1) |
 | C_0 | Baseline copula from STEP 1 |
@@ -50,9 +50,12 @@ Work throughout on the pseudo-observation (reference-percentile) scale:
 | P_S ~ H_S | Latent conditional percentile drawn from subgroup growth regime |
 | SGPc(u, v) = 100·F_0(v\|u) | Student Growth Percentile (copula scale) |
 
-**Note on reference marginals:** Using subgroup-specific ECDF mapping would force both U and V
-toward Uniform(0,1), erasing the distributional shift signal that STEP 3 needs to recover H_S.
-Fixed population-level references are therefore required.
+**Note on reference marginals:** The reference ECDFs must satisfy two constraints:
+(1) they must **not** be subgroup-specific, since that would force U and V toward Uniform(0,1)
+and erase the distributional shift signal that STEP 3 needs to recover H_S; and
+(2) they must be built from the **condition-level matched pairs** (via `build_pairs_reference()`),
+not the full cross-sectional population, to ensure consistency with the copula training population
+from Step 1. See "Methodological Note: Reference Marginals" below.
 
 ### SGPcFlow: The Core Generative Model
 
@@ -132,6 +135,59 @@ STEP 3 characterises two independent sources of error in cross-sectional growth 
 
 Phase A provides a full diagnostic at the observed subgroup size. Phase B maps how Error 1
 degrades as N falls to NAEP-scale (~3,000–4,000 per state) and TIMSS-scale (~4,000+ per country).
+
+### Methodological Note: Reference Marginals (Paired vs State-Level)
+
+The reference marginal ECDFs (F_X^ref, F_Y^ref) that transform raw scores to pseudo-observations
+must be built from the **condition-level matched pairs**, not the full state cross-section. This
+is implemented via `build_pairs_reference(pairs)` in `functions/reference_marginals.R`.
+
+**Why paired-data marginals are correct:**
+
+The copula C_0 from Step 1 was estimated from pseudo-observations created via `rank(x)/(n+1)` on
+matched pairs. By Sklar's theorem, C_0 describes the dependence structure of the joint distribution
+H(x,y) whose marginals are F_X and F_Y — the marginals of the *paired* population. When applying
+C_0 in the regime estimator, the score-to-percentile transformation must use the same marginal
+population to keep the copula on its native scale.
+
+**The selection-bias problem with state-level marginals:**
+
+The full cross-section at a given grade/year includes students who do not appear in the matched
+pairs (movers, dropouts, new arrivals, retained students). If the match rate is less than 100%,
+the state-level ECDF differs from the paired-data ECDF. Transforming scores through the wrong
+ECDF systematically shifts the pseudo-observations fed to C(v|u), biasing the regime estimate.
+
+*Thought experiment:* Consider a dataset with only a 20% match rate. The state-level ECDF is
+dominated by the 80% of students who lack matches. A given raw score maps to a substantially
+different percentile under the state ECDF than under the paired ECDF. The copula conditional
+`C(v|u)` — calibrated to paired-data percentiles — receives systematically wrong inputs, and
+the regime estimator produces biased results. The bias would be uniform across all subgroups
+within the condition (since the reference ECDFs are shared), not district-specific.
+
+This scenario is not merely theoretical: NAEP states with retention policies (holding back low-
+achieving students) or high student mobility create exactly this pattern. Colorado's match rates
+are high (~90%+) for most conditions, so the practical impact is modest for this dataset, but
+the methodological principle is important for generalisability.
+
+**Copula family mismatch is the larger concern for outliers:**
+
+Phase B systematic validation revealed 16 outlier subgroups with |mean_diff| > 8 SGP points,
+all concentrated in two conditions: `2016_G6_G8_MATHEMATICS` and `2016_G7_G8_MATHEMATICS`. The
+bias is uniform across all subgroups within each condition (~11 SGP points), ruling out
+district-level match-rate variation as the primary cause. Cross-referencing with Step 1 copula
+family selection results showed that both conditions have **Gumbel** (not t) as the best-fitting
+copula, with ΔAIC > 1,000 against the canonical t-copula. Both conditions also span the 2015
+TCAP-to-CMAS assessment transition (`has_transition = TRUE`). The Gumbel copula has asymmetric
+(upper-only) tail dependence, while the canonical t-copula has symmetric tail dependence — a
+fundamental structural mismatch that propagates through the conditional distributions and
+accounts for the large condition-level bias.
+
+**Implementation:**
+
+| Function | Source | Purpose |
+|----------|--------|---------|
+| `build_pairs_reference(pairs)` | `reference_marginals.R` | Production default: ECDFs from matched pairs |
+| `build_condition_reference(state_data, cond)` | `reference_marginals.R` | Retained for diagnostic comparison: ECDFs from full cross-section |
 
 ---
 
@@ -239,34 +295,82 @@ source("STEP_3_LIwLD/run_step3.R")
 
 ---
 
-## Phase A: Single-Condition Deep Validation (The Showcase)
+## Phase A: Deep Validation
 
-Picks one well-understood condition and one large district (configurable in `config_step3.R`).
-Walks through the complete pipeline end-to-end and validates the cross-sectional inference
-against known longitudinal ground truth:
+Phase A runs the full LIwLD pipeline on one or more target subgroups and validates the
+cross-sectional inference against known longitudinal ground truth. The core logic lives in
+`functions/run_deep_dive.R`; the orchestrator is `step3_validation_deep_dive.R`.
 
-1. **Extract longitudinal pairs** for the district from the state dataset
+### Target Selection Modes
+
+Phase A supports three modes, controlled via the `validation` section of `config_step3.R`:
+
+| Mode | Config trigger | Description |
+|------|---------------|-------------|
+| **Single target** | `targets = NULL`, `filter_expr = NULL` | Uses `dataset_id` / `condition_id` / `subgroup_id` from config. Output to `results/` directly. |
+| **Explicit targets** | `targets` = data.frame with `dataset_id`, `condition_id`, `subgroup_id` columns | Each target writes to `results/deep_dives/{tag}/`. |
+| **Phase B filter** | `filter_expr` = string expression (e.g., `"abs(mean_diff) > 8"`) | Evaluates against `phase_b_systematic_summary.csv`. Matching rows become targets, capped by `max_targets`. |
+
+### Pipeline Steps (per target)
+
+1. **Extract longitudinal pairs** for the condition from the state dataset
 2. **Compute true SGPc distribution** using the STEP 1 fitted copula and actual (u, v) pairs
-3. **"Forget" the pairing** — take only independent prior and current score samples
-4. **Build reference marginals** using the full state-level ECDF (district scores expressed as
-   state percentiles; subgroup-specific ECDF is deliberately avoided)
+   (rank pseudo-observations from all matched pairs in the condition)
+3. **"Forget" the pairing** — take only independent prior and current score samples for the subgroup
+4. **Build reference marginals** using `build_pairs_reference(pairs)` — ECDFs from the
+   condition-level matched pairs, keeping marginals consistent with the Step 1 copula
 5. **Build transition kernel** F_0(v|u) = ∂C_0(u,v)/∂u from the STEP 1 baseline copula
 6. **Estimate growth regime** H_S via minimum Wasserstein-1 distance:
    H_hat_S = argmin_{H ∈ H_Beta} W_1( F_obs_V, F_H )
    where F_H(v) = (1/n) * Σ_i H(F_0(v|u_i))
 7. **Compare inferred vs actual** — the key validation against longitudinal ground truth
-8. **Bootstrap uncertainty** — 200 replicates for confidence intervals and SE estimates
+8. **Bootstrap uncertainty** — 200 replicates (independent + paired) for confidence intervals,
+   SE estimates, and linkage-premium decomposition. Parallelised via `mirai` when daemons are
+   available (see below).
 9. **Independence diagnostic** — tests P_S ⊥ U via Spearman ρ(U, SGPc_true) and Kruskal-Wallis
 10. **Regime family comparison** — Beta vs truncated-exponential vs truncated-uniform sensitivity
+
+### Phase A Bootstrap Parallelisation
+
+Bootstrap replicates (step 8) are dispatched via `mirai_map()` when `use_mirai = TRUE` (the
+default). Daemons are started **once** in `run_step3.R` and shared across Phase A and Phase B.
+The data push uses `mirai::everywhere()` with `.BOOT_*` global variables (`<<-` assignment).
+The worker lambda's environment is set to `globalenv()` so each daemon resolves function lookups
+in its own `.GlobalEnv`. If daemons are not running, the bootstrap falls back to sequential
+execution automatically. See `MIRAI_IMPLEMENTATION.md` in the project root for full details.
+
+### Runtime Configuration Overrides
+
+To override specific config fields without editing `config_step3.R`, set a
+`STEP3_CONFIG_OVERRIDES` list before sourcing `run_step3.R`:
+
+```r
+STEP3_CONFIG_OVERRIDES <- list(
+  validation = list(
+    filter_expr = 'abs(mean_diff) > 8',
+    content_areas = "MATHEMATICS",
+    max_targets = 5L
+  )
+)
+STEP3_PHASE_A <- TRUE
+STEP3_PHASE_B <- FALSE
+STEP3_PHASE_C <- FALSE
+source("STEP_3_LIwLD/run_step3.R")
+```
+
+The override mechanism merges field-by-field into each config section after `config_step3.R`
+loads, so all unspecified fields retain their defaults.
 
 ### Key Outputs
 
 - `phase_a_summary.csv` — One-row summary: inferred vs true mean/median SGPc, distances,
   bootstrap CIs, independence diagnostics
-- `phase_a_analytic_payload.rds` — notation-aware payload (U/V samples, F_obs, F_H, objective
-  surface, kernel slices) for downstream figure assembly
+- `phase_a_precision_anchor.csv` — Bootstrap precision (SE, CI width) for both pairing modes
+- `phase_a_deep_dive.rds` — Full Phase A results object
 - `results/exports/phase_a/*.csv` — tidy exports for plotting
-- `visualizations/phase_a/` — A/B1/B2/C diagnostic panels + recovery summary
+- `visualizations/phase_a/` — Diagnostic panels + recovery summary + linkage decomposition
+- `results/deep_dives/` — Per-target output directories (multi-target modes only)
+- `results/deep_dives/deep_dive_summary.csv` — Combined summary across all targets
 
 ---
 
@@ -282,6 +386,7 @@ characteristics** under diverse settings — directly addressing the NAEP and TI
 - **Pool design:** district pools + growth-stratified cluster pools (Low/Typical/High)
 - **Year spans:** 1-year, 2-year, 4-year gaps
 - **Content areas:** all available (Mathematics, Reading/Writing, etc.)
+- **Reference marginals:** `build_pairs_reference(pairs)` — same matched-pair ECDFs as Phase A
 - **Execution:** Two-stage `mirai` parallelization (see below)
 
 ### Key Outputs
@@ -576,15 +681,6 @@ STEP 3 panels follow the same visual conventions as STEP 2, enforced via
 **Fix:** Try `SCHOOL_NUMBER` (set `validation$subgroup_col` in config), or lower
 `min_subgroup_n`.
 
-### Issue: "Estimation failed" for a subgroup
-
-**Cause:** The grid search found no valid parameter candidate (observed CDF is outside the
-predictable range for all regime candidates).
-
-**Fix:** Verify that reference marginals are built from the full state population, not the
-subgroup. The subgroup's U and V distributions should *not* be uniform when expressed in
-state-reference percentiles.
-
 ### Issue: "could not find function process_replicate_batch" (Phase B daemon error)
 
 **Cause:** `environment(worker_lambda) <- baseenv()` — base environment cannot see functions
@@ -603,9 +699,43 @@ assignments. `<-` creates local bindings that evaporate; `<<-` walks up to daemo
 ### Issue: Large recovery error (|diff| > 10 SGP points)
 
 **Possible causes:**
+- **Condition-level copula mismatch** (most common for large uniform bias): if the best-fitting
+  copula family from Step 1 is not the canonical t-copula (e.g., Gumbel for assessment-transition
+  conditions), the canonical kernel systematically biases the regime estimate for *all* subgroups
+  in that condition. Check Step 1 `analysis_manifest.md` for the condition's best-fit family and
+  ΔAIC against the t-copula.
 - Subgroup too small (n < 50): sampling noise dominates
 - P_S ⊥ U assumption violated: H_S actually depends on U; check independence diagnostic output
-- Copula mismatch: baseline copula does not capture this subgroup's dependence structure
+- Reference marginal mismatch: if `build_condition_reference()` (state-level) was used instead
+  of `build_pairs_reference()` (paired), selection-bias contamination inflates the error
+
+### Issue: Daemons initialise then immediately shut down
+
+**Cause:** `on.exit(mirai::daemons(0))` was placed in a `source()`d script. R evaluates each
+top-level expression in a `source()` call via `eval()`. `on.exit()` registers its handler for
+that `eval()` frame, which exits immediately — not at the end of the script. The cleanup fires
+as soon as the expression containing `on.exit()` completes.
+
+**Fix:** Never use `on.exit()` for daemon cleanup in sourced scripts. Use an explicit
+`mirai::daemons(0)` call at the very bottom of the script, or wrap the entire script body in a
+function and use `on.exit()` inside that function.
+
+### Issue: Bootstrap falls back to sequential despite daemons running
+
+**Cause:** The daemon liveness check used `is.matrix(mirai::status()$daemons)`, which returns
+`FALSE` on some `mirai` versions where `$daemons` is a `data.frame` rather than a matrix.
+
+**Fix:** Use the robust check `mirai::status()[["connections"]] > 0L`, which is always an
+integer count regardless of `mirai` version.
+
+### Issue: "Estimation failed" for a subgroup
+
+**Cause:** The grid search found no valid parameter candidate (observed CDF is outside the
+predictable range for all regime candidates).
+
+**Fix:** Verify that reference marginals are built from the condition-level paired population,
+not the subgroup. The subgroup's U and V distributions should *not* be uniform when expressed in
+paired-population-reference percentiles.
 
 ---
 
@@ -639,21 +769,26 @@ support.
 |------|---------|
 | `README.md` | This documentation |
 | `SGPcFlow_Inference_Plan.md` | Detailed mathematical implementation plan |
-| `config_step3.R` | Configuration (incl. bucket cutpoints, grid resolution, parallel tuning) |
-| `run_step3.R` | Master runner |
-| `step3_validation_deep_dive.R` | Phase A: single-condition showcase + ground-truth comparison |
+| `config_step3.R` | Configuration (incl. bucket cutpoints, grid resolution, parallel tuning, `mirai` settings) |
+| `run_step3.R` | Master runner: config loading, `STEP3_CONFIG_OVERRIDES` mechanism, `mirai` daemon lifecycle, phase dispatch |
+| `step3_validation_deep_dive.R` | Phase A: unified deep-validation runner (single / multi-target / Phase B filter modes) |
 | `step3_systematic_validation.R` | Phase B: multi-condition validation with `mirai` parallelisation |
+| `step3_enhanced_panels.R` | Enhanced post-hoc panels from Phase B summary data |
 | `step3_publication_panels.R` | Phase C: figures + manifests + CSV exports |
+| `functions/run_deep_dive.R` | Core Phase A deep-dive logic (extracted for reuse across target modes) |
 | `functions/step3_publication_style.R` | Zissou1 style bridge (shared with STEP 2) |
-| `functions/reference_marginals.R` | Weighted ECDF + inverse CDF (population-level) |
+| `functions/reference_marginals.R` | `build_pairs_reference()` (paired ECDFs, production default), `build_condition_reference()` (state-level, diagnostic), `create_reference_ecdf()` |
 | `functions/copula_kernel_cache.R` | Precompute F_0(v\|u) on (u,v) grid |
 | `functions/regime_families.R` | Beta, trunc-exp, trunc-uniform (sd, IQR, entropy) |
 | `functions/predict_v_cdf.R` | Analytic predicted CDF via F_H identity |
 | `functions/distance_metrics.R` | W1, CvM, KS |
-| `functions/optimize_regime.R` | Grid search + optim() |
-| `functions/bootstrap_uncertainty.R` | Sampling + copula uncertainty |
+| `functions/optimize_regime.R` | Grid search + optim() (single pool) |
+| `functions/optimize_regime_stratified.R` | Stratified regime estimation (per U-bin) for independence sensitivity |
+| `functions/bootstrap_uncertainty.R` | Sampling + copula uncertainty; `mirai`-parallel dispatch via `mirai_map()` |
 | `functions/bucket_classification.R` | K=3/K=5 bucket probabilities + stability |
 | `functions/build_cluster_pools.R` | Growth-stratified super-district pool construction |
+| `functions/process_pool_setup.R` | Daemon-compatible function for Stage 1 pool setup |
+| `functions/process_replicate_batch.R` | Daemon-compatible function for Stage 2 replicate processing |
 | `functions/diagnostics_plots.R` | ggplot2 diagnostic visualisations |
 | `functions/manifest_export.R` | JSON/MD export (phase_b_systematic, error sources, bucket classification) |
 | `Figures/Analytic_Explanation/` | Synthetic infographic illustrating the LIwLD workflow |
