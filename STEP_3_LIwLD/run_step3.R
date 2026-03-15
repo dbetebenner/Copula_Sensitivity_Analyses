@@ -86,6 +86,21 @@ source(file.path(STEP3_ROOT, "functions/validate_output_contract.R"))
 # Load configuration
 source(file.path(STEP3_ROOT, "config_step3.R"))
 
+# Apply runtime overrides (set STEP3_CONFIG_OVERRIDES before sourcing this script)
+if (exists("STEP3_CONFIG_OVERRIDES") && is.list(STEP3_CONFIG_OVERRIDES)) {
+  for (.sec in names(STEP3_CONFIG_OVERRIDES)) {
+    if (is.list(STEP3_CONFIG_OVERRIDES[[.sec]]) && is.list(STEP3_CONFIG[[.sec]])) {
+      for (.key in names(STEP3_CONFIG_OVERRIDES[[.sec]])) {
+        STEP3_CONFIG[[.sec]][[.key]] <- STEP3_CONFIG_OVERRIDES[[.sec]][[.key]]
+      }
+    } else {
+      STEP3_CONFIG[[.sec]] <- STEP3_CONFIG_OVERRIDES[[.sec]]
+    }
+  }
+  rm(.sec, .key)
+  cat("Config overrides applied from STEP3_CONFIG_OVERRIDES\n")
+}
+
 # Load dataset configurations (from project root)
 source(file.path(PROJECT_ROOT, "dataset_configs.R"))
 

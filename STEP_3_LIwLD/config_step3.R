@@ -129,7 +129,7 @@ STEP3_CONFIG <- list(
     targets        = NULL,       # data.frame(dataset_id, condition_id, subgroup_id)
 
     # mirai bootstrap parallelisation (daemons managed by run_step3.R)
-    use_mirai  = FALSE,
+    use_mirai  = TRUE,
     n_workers  = NULL            # NULL = auto-detect from CPU count
   ),
 
