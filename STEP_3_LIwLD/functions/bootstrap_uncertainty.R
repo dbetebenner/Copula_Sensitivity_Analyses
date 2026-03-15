@@ -193,12 +193,13 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
 
   # --- Dispatch: mirai (if daemons alive) or sequential fallback ----------
   #
-  # Daemon check: mirai::status()$daemons can be:
-  #   - a matrix/data.frame (per-daemon status rows) when dispatcher is connected
-  #   - an integer (requested daemon count)  when daemons are configured
-  #   - integer 0L when no daemons are configured
-  # Phase B bypasses this check entirely (uses mirai_map directly with a flag).
-  # We accept any of the first two forms as "daemons alive".
+  # Daemon liveness check — must handle multiple mirai API versions:
+  #   - Current mirai: status()$daemons returns the dispatcher URL (character)
+  #     when daemons are configured with a dispatcher.  Use info() to get the
+  #     actual daemon count and connection state.
+  #   - Legacy mirai: status()$daemons returns a matrix (per-daemon rows) or
+  #     an integer (configured count).
+  # Phase B bypasses this entirely (uses mirai_map directly with a flag).
   mirai_ok <- FALSE
   n_daemons <- 0L
   if (isTRUE(use_mirai) && n_boot > 1L) {
@@ -206,13 +207,23 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
       requireNamespace("mirai", quietly = TRUE) && {
         s <- mirai::status()
         d <- s$daemons
-        if (is.matrix(d) || is.data.frame(d)) {
+        if (is.character(d) && length(d) == 1L && nzchar(d)) {
+          # Current mirai: dispatcher URL (e.g. "abstract://...") means daemons
+          # are configured.  Use info() for the actual count.
+          inf <- tryCatch(mirai::info(), error = function(e) NULL)
+          if (!is.null(inf) && is.numeric(inf[["daemons"]])) {
+            n_daemons <<- as.integer(inf[["daemons"]])
+          } else {
+            # info() unavailable or unexpected — infer from status() structure
+            nc <- length(s[["connections"]])
+            n_daemons <<- if (is.numeric(nc) && nc > 0L) as.integer(nc) else 0L
+          }
+          n_daemons > 0L
+        } else if (is.matrix(d) || is.data.frame(d)) {
+          # Legacy: per-daemon status matrix
           n_daemons <<- NROW(d)
           NROW(d) > 0L
         } else if (is.numeric(d) && length(d) == 1L && d > 0L) {
-          # Daemons configured but status() returns count, not per-daemon matrix.
-          # This happens in some mirai versions when dispatcher mode differs or
-          # daemons are idle. The daemons are still alive — trust the count.
           n_daemons <<- as.integer(d)
           TRUE
         } else {
@@ -221,7 +232,6 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
       }
     }, error = function(e) FALSE)
     if (!mirai_ok && verbose) {
-      # Diagnostic: show what status() actually returned to aid debugging
       diag <- tryCatch({
         s <- mirai::status()
         paste0("status()$daemons class=", paste(class(s$daemons), collapse = ","),
