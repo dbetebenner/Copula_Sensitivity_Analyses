@@ -104,38 +104,37 @@ STEP3_CONFIG <- list(
 
   # ===========================================================================
   # 6. Validation settings (Phase A: deep dive)
+  #
+  #    Three modes (evaluated in this priority order):
+  #      1. targets    — explicit data.frame of (dataset_id, condition_id, subgroup_id)
+  #      2. filter_expr — expression applied to phase_b_systematic_summary.csv
+  #      3. (default)  — single target from dataset_id / condition_id / subgroup_id
   # ===========================================================================
   validation = list(
-    # Dataset and condition for the single-condition showcase
+    # Default single-target fields (used when targets and filter_expr are NULL)
     dataset_id     = "dataset_1",
     condition_id   = NULL,       # NULL = auto-select large condition
     content_area   = "MATHEMATICS",  # Preferred content area for auto-selection
-    # Subgroup selection
-    subgroup_col   = "DISTRICT_NUMBER",  # Column to use for subgroups
+    subgroup_col   = "DISTRICT_NUMBER",
     subgroup_id    = NULL,       # NULL = auto-select by target_subgroup_n
-    min_subgroup_n = 500,        # Minimum students in subgroup
-    target_subgroup_n = 2500,     # Preferred subgroup size
-    # Bootstrap parallelisation via mirai (daemons started by caller)
+    min_subgroup_n = 500,
+    target_subgroup_n = 2500,
+
+    # Multi-target: filter Phase B results (overrides single-target fields above)
+    filter_expr    = NULL,       # e.g. "abs(mean_diff) > 8"
+    content_areas  = NULL,       # e.g. c("MATHEMATICS") — pre-filter before filter_expr
+    max_targets    = 20L,
+
+    # Multi-target: explicit target list (highest priority, overrides filter_expr)
+    targets        = NULL,       # data.frame(dataset_id, condition_id, subgroup_id)
+
+    # mirai bootstrap parallelisation (daemons managed by run_step3.R)
     use_mirai  = FALSE,
-    n_workers  = NULL        # NULL = auto-detect from CPU count
+    n_workers  = NULL            # NULL = auto-detect from CPU count
   ),
 
   # ===========================================================================
-  # 7. Multi-target deep-dive settings (Phase A extension)
-  # ===========================================================================
-  multi_deep_dive = list(
-    # Expression evaluated against phase_b_systematic_summary.csv columns
-    # (e.g., abs(mean_diff) > 8 & content_area == "MATHEMATICS")
-    filter_expr = "abs(mean_diff) > 8",
-    content_areas = c("MATHEMATICS"),
-    max_targets = 20L,
-    # mirai parallelisation: daemons started once, shared across all targets
-    use_mirai  = TRUE,
-    n_workers  = NULL        # NULL = auto-detect from CPU count
-  ),
-
-  # ===========================================================================
-  # 8. Systematic validation settings (Phase B)
+  # 7. Systematic validation settings (Phase B)
   # ===========================================================================
   systematic = list(
     # -----------------------------------------------------------------------
