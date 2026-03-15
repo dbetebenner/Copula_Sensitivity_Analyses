@@ -192,23 +192,48 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   }
 
   # --- Dispatch: mirai (if daemons alive) or sequential fallback ----------
+  #
+  # Daemon check: mirai::status()$daemons can be:
+  #   - a matrix/data.frame (per-daemon status rows) when dispatcher is connected
+  #   - an integer (requested daemon count)  when daemons are configured
+  #   - integer 0L when no daemons are configured
+  # Phase B bypasses this check entirely (uses mirai_map directly with a flag).
+  # We accept any of the first two forms as "daemons alive".
   mirai_ok <- FALSE
+  n_daemons <- 0L
   if (isTRUE(use_mirai) && n_boot > 1L) {
     mirai_ok <- tryCatch({
       requireNamespace("mirai", quietly = TRUE) && {
         s <- mirai::status()
         d <- s$daemons
-        (is.matrix(d) || is.data.frame(d)) && NROW(d) > 0L
+        if (is.matrix(d) || is.data.frame(d)) {
+          n_daemons <<- NROW(d)
+          NROW(d) > 0L
+        } else if (is.numeric(d) && length(d) == 1L && d > 0L) {
+          # Daemons configured but status() returns count, not per-daemon matrix.
+          # This happens in some mirai versions when dispatcher mode differs or
+          # daemons are idle. The daemons are still alive — trust the count.
+          n_daemons <<- as.integer(d)
+          TRUE
+        } else {
+          FALSE
+        }
       }
     }, error = function(e) FALSE)
     if (!mirai_ok && verbose) {
-      cat("  mirai bootstrap requested but no daemons running; falling back to sequential.\n")
+      # Diagnostic: show what status() actually returned to aid debugging
+      diag <- tryCatch({
+        s <- mirai::status()
+        paste0("status()$daemons class=", paste(class(s$daemons), collapse = ","),
+               " value=", deparse(head(s$daemons, 3)))
+      }, error = function(e) paste0("status() error: ", e$message))
+      cat("  mirai bootstrap requested but no daemons detected; falling back to sequential.\n")
+      cat("  Diagnostic: ", diag, "\n")
     }
   }
 
   draw_list <- vector("list", n_boot)
   if (mirai_ok) {
-    n_daemons <- NROW(mirai::status()$daemons)
     if (verbose) cat("  Running bootstrap via mirai (", n_daemons, " daemons)\n", sep = "")
 
     push_ok <- tryCatch({
