@@ -193,12 +193,9 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
 
   # --- Dispatch: mirai (if daemons alive) or sequential fallback ----------
   #
-  # Daemon liveness check — must handle multiple mirai API versions:
-  #   - Current mirai: status()$daemons returns the dispatcher URL (character)
-  #     when daemons are configured with a dispatcher.  Use info() to get the
-  #     actual daemon count and connection state.
-  #   - Legacy mirai: status()$daemons returns a matrix (per-daemon rows) or
-  #     an integer (configured count).
+  # mirai API (current):
+  #   status()$connections  — integer count of active daemon connections
+  #   status()$daemons      — dispatcher URL (character) or 0L if not set
   # Phase B bypasses this entirely (uses mirai_map directly with a flag).
   mirai_ok <- FALSE
   n_daemons <- 0L
@@ -206,25 +203,9 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     mirai_ok <- tryCatch({
       requireNamespace("mirai", quietly = TRUE) && {
         s <- mirai::status()
-        d <- s$daemons
-        if (is.character(d) && length(d) == 1L && nzchar(d)) {
-          # Current mirai: dispatcher URL (e.g. "abstract://...") means daemons
-          # are configured.  Use info() for the actual count.
-          inf <- tryCatch(mirai::info(), error = function(e) NULL)
-          if (!is.null(inf) && is.numeric(inf[["daemons"]])) {
-            n_daemons <<- as.integer(inf[["daemons"]])
-          } else {
-            # info() unavailable or unexpected — infer from status() structure
-            nc <- length(s[["connections"]])
-            n_daemons <<- if (is.numeric(nc) && nc > 0L) as.integer(nc) else 0L
-          }
-          n_daemons > 0L
-        } else if (is.matrix(d) || is.data.frame(d)) {
-          # Legacy: per-daemon status matrix
-          n_daemons <<- NROW(d)
-          NROW(d) > 0L
-        } else if (is.numeric(d) && length(d) == 1L && d > 0L) {
-          n_daemons <<- as.integer(d)
+        n_conn <- s[["connections"]]
+        if (is.numeric(n_conn) && length(n_conn) == 1L && n_conn > 0L) {
+          n_daemons <<- as.integer(n_conn)
           TRUE
         } else {
           FALSE
@@ -234,8 +215,8 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     if (!mirai_ok && verbose) {
       diag <- tryCatch({
         s <- mirai::status()
-        paste0("status()$daemons class=", paste(class(s$daemons), collapse = ","),
-               " value=", deparse(head(s$daemons, 3)))
+        paste0("connections=", deparse(s$connections),
+               " daemons=", deparse(s$daemons))
       }, error = function(e) paste0("status() error: ", e$message))
       cat("  mirai bootstrap requested but no daemons detected; falling back to sequential.\n")
       cat("  Diagnostic: ", diag, "\n")
