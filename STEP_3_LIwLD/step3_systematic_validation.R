@@ -791,12 +791,12 @@ for (ds_id in cfg_sys$datasets) {
     }
 
     refs <- tryCatch(
-      build_condition_reference(STATE_DATA, cond),
+      build_pairs_reference(pairs),
       error = function(e) { cat("    ERROR building refs:", e$message, "\n"); NULL }
     )
     if (is.null(refs)) next
 
-    # Data queries (create_longitudinal_pairs, build_condition_reference) are
+    # Data queries (create_longitudinal_pairs, build_pairs_reference) are
     # complete and used the raw content_area label (e.g. "ELA") to match the
     # CONTENT_AREA column in STATE_DATA.  Remap to the canonical group label
     # now so that all subsequent output rows carry the canonical name

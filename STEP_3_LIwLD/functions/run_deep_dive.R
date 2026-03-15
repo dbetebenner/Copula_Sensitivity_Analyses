@@ -343,9 +343,10 @@ run_deep_dive <- function(dataset_id = NULL,
   log_msg("    Kruskal-Wallis p-value: ", signif(kw_p, 4), "\n")
   log_msg("    Flag violation: ", flag_independence_violation, "\n\n")
 
-  # A.3 references
-  log_msg("A.3  Building reference marginals (state-level ECDFs)...\n")
-  refs <- build_condition_reference(STATE_DATA, cond)
+  # A.3 references (built from matched pairs, not full cross-section,
+  #     to keep marginals consistent with the Step 1 copula)
+  log_msg("A.3  Building reference marginals (paired-data ECDFs)...\n")
+  refs <- build_pairs_reference(pairs)
   log_msg("  Prior reference: n = ", refs$n_prior, "\n")
   log_msg("  Current reference: n = ", refs$n_current, "\n")
 

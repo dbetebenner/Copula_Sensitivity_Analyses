@@ -264,6 +264,42 @@ build_condition_reference <- function(state_data, condition_meta) {
 }
 
 
+#' Build Reference Marginals from Longitudinal Pairs
+#'
+#' Builds prior- and current-grade reference ECDFs from matched pairs rather
+#' than from the full cross-sectional population.  This ensures the marginal
+#' transformations are consistent with the copula (which was estimated from
+#' the same paired population in Step 1).
+#'
+#' @param pairs data.table of longitudinal pairs with columns
+#'   SCALE_SCORE_PRIOR and SCALE_SCORE_CURRENT.
+#'
+#' @return List with ref_prior and ref_current (reference_ecdf objects),
+#'   plus n_prior and n_current counts.
+#'
+#' @export
+build_pairs_reference <- function(pairs) {
+
+  prior_scores   <- pairs$SCALE_SCORE_PRIOR[!is.na(pairs$SCALE_SCORE_PRIOR)]
+  current_scores <- pairs$SCALE_SCORE_CURRENT[!is.na(pairs$SCALE_SCORE_CURRENT)]
+
+  if (length(prior_scores) < 50) {
+    warning("Small reference for prior: n = ", length(prior_scores))
+  }
+  if (length(current_scores) < 50) {
+    warning("Small reference for current: n = ", length(current_scores))
+  }
+
+  list(
+    ref_prior   = create_reference_ecdf(prior_scores),
+    ref_current = create_reference_ecdf(current_scores),
+    n_prior     = length(prior_scores),
+    n_current   = length(current_scores)
+  )
+}
+
+
 cat("STEP 3 reference_marginals.R loaded.\n")
 cat("  Functions: create_reference_ecdf, reference_cdf, reference_quantile,\n")
-cat("             apply_reference_marginals, build_condition_reference\n")
+cat("             apply_reference_marginals, build_condition_reference,\n")
+cat("             build_pairs_reference\n")

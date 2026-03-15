@@ -195,8 +195,11 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   mirai_ok <- FALSE
   if (isTRUE(use_mirai) && n_boot > 1L) {
     mirai_ok <- tryCatch({
-      requireNamespace("mirai", quietly = TRUE) &&
-        is.matrix(mirai::status()$daemons)
+      requireNamespace("mirai", quietly = TRUE) && {
+        s <- mirai::status()
+        d <- s$daemons
+        (is.matrix(d) || is.data.frame(d)) && NROW(d) > 0L
+      }
     }, error = function(e) FALSE)
     if (!mirai_ok && verbose) {
       cat("  mirai bootstrap requested but no daemons running; falling back to sequential.\n")
@@ -205,7 +208,7 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
 
   draw_list <- vector("list", n_boot)
   if (mirai_ok) {
-    n_daemons <- nrow(mirai::status()$daemons)
+    n_daemons <- NROW(mirai::status()$daemons)
     if (verbose) cat("  Running bootstrap via mirai (", n_daemons, " daemons)\n", sep = "")
 
     push_ok <- tryCatch({
