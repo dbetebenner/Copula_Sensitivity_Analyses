@@ -38,7 +38,9 @@ STEP3_COLORS <- list(
   point_est    = ZISSOU1_BASE[1],   # teal
   ci_line      = "grey50",
   reference    = "grey50",
-  loess_trend  = ZISSOU1_BASE[5]    # red
+  loess_trend  = ZISSOU1_BASE[5],   # red
+  truth        = "grey40",           # ground truth density
+  alternative  = "#E69F00"           # amber/orange — alternative copula in comparison panels
 )
 
 REGIME_FAMILY_COLORS <- c(

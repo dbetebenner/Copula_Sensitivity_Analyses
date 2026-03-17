@@ -50,6 +50,12 @@ require(copula)
 #' @param seed Integer. RNG seed for reproducibility. Default NULL.
 #' @param pairing Character. \code{"independent"} (default) draws separate
 #'   indices for U and V; \code{"paired"} draws a single shared index.
+#'   Ignored when \code{linkage_fraction} is explicitly provided.
+#' @param linkage_fraction Numeric (0-1). Continuous linkage parameter.
+#'   When provided, overrides the \code{pairing} parameter:
+#'   1.0 = fully paired, 0.0 = fully independent, intermediate values
+#'   create partial linkage (floor(lf * N) shared, rest independent).
+#'   Default NULL (uses \code{pairing} for backward compatibility).
 #' @param use_mirai Logical. If TRUE and mirai daemons are alive, distribute
 #'   bootstrap replicates via \code{mirai::mirai_map()}. The caller is
 #'   responsible for starting daemons and sourcing required functions via
@@ -84,10 +90,23 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
                               v_weights = NULL,
                               resample_scheme = "srs_bootstrap",
                               pairing = c("independent", "paired"),
+                              linkage_fraction = NULL,
                               use_mirai = FALSE,
                               verbose = TRUE) {
 
   pairing <- match.arg(pairing)
+
+  # Resolve linkage_fraction: explicit value overrides pairing parameter
+  if (!is.null(linkage_fraction)) {
+    linkage_fraction <- as.numeric(linkage_fraction)
+    stopifnot(is.finite(linkage_fraction), linkage_fraction >= 0, linkage_fraction <= 1)
+    is_paired <- (linkage_fraction == 1.0)
+    is_partial <- (linkage_fraction > 0 && linkage_fraction < 1)
+  } else {
+    is_paired <- identical(pairing, "paired")
+    is_partial <- FALSE
+    linkage_fraction <- if (is_paired) 1.0 else 0.0
+  }
 
   if (!is.null(seed)) set.seed(seed)
 
@@ -97,12 +116,10 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
 
   n_u <- length(u_sample)
   n_v <- length(v_sample)
-  is_paired <- identical(pairing, "paired")
 
-  # Paired mode requires equal-length, student-aligned U and V
-
-  if (is_paired && n_u != n_v) {
-    stop("pairing='paired' requires length(u_sample) == length(v_sample) ",
+  # Paired/partial mode requires equal-length, student-aligned U and V
+  if ((is_paired || is_partial) && n_u != n_v) {
+    stop("linkage_fraction > 0 requires length(u_sample) == length(v_sample) ",
          "(got ", n_u, " vs ", n_v, "). ",
          "Vectors must be student-aligned for shared-index resampling.")
   }
@@ -120,16 +137,23 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
   distances   <- numeric(n_boot)
   converged   <- logical(n_boot)
 
-  pairing_label <- if (is_paired) "paired" else "independent"
+  pairing_label <- if (is_paired) "paired" else if (is_partial) {
+    sprintf("partial_%.2f", linkage_fraction)
+  } else "independent"
   if (verbose) cat("Bootstrap sampling uncertainty (", pairing_label, "): ",
                    n_boot, " replicates\n", sep = "")
 
   # Pre-generate deterministic per-replicate seeds so sequential and parallel
   # modes remain reproducible for a fixed top-level seed.
   seeds <- sample.int(.Machine$integer.max, n_boot)
+
+  # Precompute partial linkage sizes (constant across replicates)
+  n_linked   <- as.integer(floor(linkage_fraction * n_u))
+  n_unlinked <- n_u - n_linked
+
   run_one_replicate <- function(b) {
     if (!is.null(seed)) set.seed(seeds[b])
-    # --- Resampling: paired uses shared indices, independent uses separate ---
+    # --- Resampling: paired uses shared indices, partial uses mix, independent uses separate ---
     if (is_paired) {
       # Shared index preserves student-level U<->V linkage
       shared_idx <- sample.int(n_u, n_u, replace = TRUE)
@@ -137,6 +161,25 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
       v_boot <- v_sample[shared_idx]
       uw_boot <- u_weights[shared_idx]
       vw_boot <- v_weights[shared_idx]
+    } else if (is_partial) {
+      # Partial linkage: linked portion shares indices, unlinked draws separately
+      linked_idx <- sample.int(n_u, n_linked, replace = TRUE)
+      u_linked <- u_sample[linked_idx]
+      v_linked <- v_sample[linked_idx]
+      uw_linked <- u_weights[linked_idx]
+      vw_linked <- v_weights[linked_idx]
+
+      u_unlinked_idx <- sample.int(n_u, n_unlinked, replace = TRUE)
+      v_unlinked_idx <- sample.int(n_v, n_unlinked, replace = TRUE)
+      u_unlinked <- u_sample[u_unlinked_idx]
+      v_unlinked <- v_sample[v_unlinked_idx]
+      uw_unlinked <- u_weights[u_unlinked_idx]
+      vw_unlinked <- v_weights[v_unlinked_idx]
+
+      u_boot  <- c(u_linked, u_unlinked)
+      v_boot  <- c(v_linked, v_unlinked)
+      uw_boot <- c(uw_linked, uw_unlinked)
+      vw_boot <- c(vw_linked, vw_unlinked)
     } else if (resample_scheme == "weighted_bootstrap") {
       u_idx <- sample.int(n_u, n_u, replace = TRUE, prob = u_prob)
       v_idx <- sample.int(n_v, n_v, replace = TRUE, prob = v_prob)
@@ -240,6 +283,10 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
         .BOOT_V_PROB        <<- vp_push
         .BOOT_RESAMPLE      <<- rs_push
         .BOOT_PAIRING       <<- pa_push
+        .BOOT_PARTIAL       <<- partial_push
+        .BOOT_LF            <<- lf_push
+        .BOOT_N_LINKED      <<- nl_push
+        .BOOT_N_UNLINKED    <<- nu_push
         .BOOT_SEEDS         <<- seeds_push
         .BOOT_HAS_SEED      <<- hs_push
         TRUE
@@ -257,6 +304,10 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
       vp_push    = v_prob,
       rs_push    = resample_scheme,
       pa_push    = is_paired,
+      partial_push = is_partial,
+      lf_push    = linkage_fraction,
+      nl_push    = n_linked,
+      nu_push    = n_unlinked,
       seeds_push = seeds,
       hs_push    = !is.null(seed))
       pv <- p[]
@@ -280,6 +331,17 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
           v_boot  <- .BOOT_V_SAMPLE[shared_idx]
           uw_boot <- .BOOT_U_WEIGHTS[shared_idx]
           vw_boot <- .BOOT_V_WEIGHTS[shared_idx]
+        } else if (.BOOT_PARTIAL) {
+          # Partial linkage: linked portion shares indices, rest independent
+          linked_idx <- sample.int(n_u, .BOOT_N_LINKED, replace = TRUE)
+          u_linked  <- .BOOT_U_SAMPLE[linked_idx]; v_linked  <- .BOOT_V_SAMPLE[linked_idx]
+          uw_linked <- .BOOT_U_WEIGHTS[linked_idx]; vw_linked <- .BOOT_V_WEIGHTS[linked_idx]
+          u_unl_idx <- sample.int(n_u, .BOOT_N_UNLINKED, replace = TRUE)
+          v_unl_idx <- sample.int(n_v, .BOOT_N_UNLINKED, replace = TRUE)
+          u_boot  <- c(u_linked, .BOOT_U_SAMPLE[u_unl_idx])
+          v_boot  <- c(v_linked, .BOOT_V_SAMPLE[v_unl_idx])
+          uw_boot <- c(uw_linked, .BOOT_U_WEIGHTS[u_unl_idx])
+          vw_boot <- c(vw_linked, .BOOT_V_WEIGHTS[v_unl_idx])
         } else if (.BOOT_RESAMPLE == "weighted_bootstrap") {
           u_idx <- sample.int(n_u, n_u, replace = TRUE, prob = .BOOT_U_PROB)
           v_idx <- sample.int(n_v, n_v, replace = TRUE, prob = .BOOT_V_PROB)
@@ -381,7 +443,8 @@ bootstrap_regime <- function(u_sample, v_sample, kernel_cache,
     n_boot           = n_boot,
     n_converged      = n_converged,
     resample_scheme  = resample_scheme,
-    pairing          = pairing
+    pairing          = pairing,
+    linkage_fraction = linkage_fraction
   )
 }
 

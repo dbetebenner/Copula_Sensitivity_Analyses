@@ -124,6 +124,30 @@ assumption is relaxed.
 **Does not estimate:** Individual students' realised SGPc values — these are unidentified without
 true (x, y) pairs.
 
+### Copula Mode: Canonical vs Best-Fit Comparison
+
+In a real NAEP or TIMSS application, we would not have longitudinal data to fit a per-condition
+copula — we would only have the canonical copula from STEP 1, averaged across conditions. STEP 3
+therefore defaults to using the canonical copula as the primary transition kernel.
+
+However, since we *do* have longitudinal data (and hence the per-condition best-fit copula from
+STEP 1), we can quantify how much estimation accuracy is lost by using the canonical copula
+instead of the "oracle" best-fit. This is the purpose of the **copula comparison mode**, which
+runs the full regime estimation pipeline under both copulas and reports the delta.
+
+The `copula$mode` setting in `config_step3.R` controls this behaviour:
+
+| Mode | Description | Use case |
+|------|-------------|----------|
+| `"comparison"` (default) | Run both canonical and per-condition best-fit copula side-by-side; report deltas | Recommended for validation; quantifies Error 2 copula component |
+| `"canonical_only"` | Use only the canonical copula | Honest NAEP/TIMSS simulation (no oracle access) |
+| `"phase1_best_fit"` | Use only the per-condition best-fit copula | Oracle benchmark (not available in practice) |
+
+In comparison mode, the canonical copula is always the **primary** (the results reported in
+all standard outputs), while the best-fit is the **alternative** whose delta quantifies the
+impact of the canonical copula choice. If the per-condition best-fit copula is not available
+from STEP 1, comparison mode gracefully degrades to `canonical_only`.
+
 ### The Two Error Sources
 
 STEP 3 characterises two independent sources of error in cross-sectional growth inference:
@@ -132,6 +156,11 @@ STEP 3 characterises two independent sources of error in cross-sectional growth 
 |-------|--------|-------|------|
 | **Error 1 — Sampling** | Cross-sectional sample of size N substitutes for full subgroup | Phase B | Degrades precision below ~5,000 students |
 | **Error 2 — Inference** | Canonical copula + Beta family may not match true DGP | Phase A | Bias at full N; characterised by inferred-vs-true comparison |
+
+The copula comparison mode further decomposes Error 2 into its copula-choice component (how much
+does using the canonical vs per-condition best-fit copula matter?) and its regime-family component
+(how much does the Beta distributional assumption matter?). This decomposition is reported in
+the Phase A summary and copula comparison panels.
 
 Phase A provides a full diagnostic at the observed subgroup size. Phase B maps how Error 1
 degrades as N falls to NAEP-scale (~3,000–4,000 per state) and TIMSS-scale (~4,000+ per country).
@@ -236,11 +265,30 @@ STEP_3_LIwLD/
     CONFORMANCE_MATRIX.md                # Audit matrix vs SGPcFlow plan
     visualizations/                      # Publication panels
       phase_a/                           # Phase A diagnostic plots
-        panel_a_cdf_comparison.*         # A: observed vs inferred CDF (+ baselines)
-        panel_b1_objective_surface.*     # B1: objective over (m, kappa)
-        panel_b2_residual_curve.*        # B2: residual diagnostics
-        panel_c_regime_comparison.*      # C: regime density comparison
-        panel_d_recovery_summary.*       # Recovery summary composite
+        phasea_01_marginals_uv_density.* # Marginal U,V density
+        phasea_02a_objective_surface.*   # Objective landscape over (m, log10(kappa))
+        phasea_02b_forward_cdf_check.*   # Observed vs predicted CDF (+ baselines)
+        phasea_02c_residual_diagnostics.*# Residual diagnostics (F_H - F_obs)
+        phasea_03a_regime_density.*      # Inferred regime density vs true SGPc
+        phasea_03b_bootstrap_median.*    # Bootstrap distribution of median SGPc
+        phasea_03c_bootstrap_mean.*      # Bootstrap distribution of mean SGPc
+        phasea_03d_bootstrap_combined.*  # Combined bootstrap panel
+        phasea_03e_recovery_summary.*    # Recovery summary composite
+        phasea_03f_linkage_decomposition.* # Linkage premium decomposition
+        phasea_04_independence_diagnostic.* # P ⊥ U diagnostic by U-quintile
+        phasea_05a_copula_bestfit_forward_cdf.*      # (comparison mode) CDF under best-fit copula
+        phasea_05b_copula_bestfit_regime_density.*   # (comparison mode) Regime under best-fit copula
+        phasea_05c_copula_bestfit_recovery_summary.* # (comparison mode) Recovery under best-fit
+        phasea_05d_copula_comparison_panel.*          # (comparison mode) 2×2 canonical vs best-fit
+        phasea_06a_grid_w1_canonical_cdf.*            # (grid) W1/Canonical CDF
+        phasea_06b_grid_w1_canonical_regime.*         # (grid) W1/Canonical regime
+        phasea_06c_grid_w1_bestfit_cdf.*              # (grid) W1/Best-fit CDF
+        phasea_06d_grid_w1_bestfit_regime.*           # (grid) W1/Best-fit regime
+        phasea_06e_grid_cvm_canonical_cdf.*           # (grid) CvM/Canonical CDF
+        phasea_06f_grid_cvm_canonical_regime.*        # (grid) CvM/Canonical regime
+        phasea_06g_grid_cvm_bestfit_cdf.*             # (grid) CvM/Best-fit CDF
+        phasea_06h_grid_cvm_bestfit_regime.*          # (grid) CvM/Best-fit regime
+        phasea_06_metric_copula_grid.*                # (grid) LaTeX-composed summary
       panel_d_recovery_by_size.*         # D: Phase B precision vs N buckets
       panel_e_recovery_by_span.*         # E: Phase B accuracy vs year span
       panel_f_family_comparison.*        # F: regime family comparison
@@ -324,11 +372,14 @@ Phase A supports three modes, controlled via the `validation` section of `config
    H_hat_S = argmin_{H ∈ H_Beta} W_1( F_obs_V, F_H )
    where F_H(v) = (1/n) * Σ_i H(F_0(v|u_i))
 7. **Compare inferred vs actual** — the key validation against longitudinal ground truth
-8. **Bootstrap uncertainty** — 200 replicates (independent + paired) for confidence intervals,
+8. **Alternative copula estimation** (comparison mode only) — re-run the regime estimation
+   under the per-condition best-fit copula from STEP 1, compute deltas (median SGPc, mean SGPc,
+   W1, CvM) to quantify the cost of the canonical copula choice
+9. **Bootstrap uncertainty** — 200 replicates (independent + paired) for confidence intervals,
    SE estimates, and linkage-premium decomposition. Parallelised via `mirai` when daemons are
    available (see below).
-9. **Independence diagnostic** — tests P_S ⊥ U via Spearman ρ(U, SGPc_true) and Kruskal-Wallis
-10. **Regime family comparison** — Beta vs truncated-exponential vs truncated-uniform sensitivity
+10. **Independence diagnostic** — tests P_S ⊥ U via Spearman ρ(U, SGPc_true) and Kruskal-Wallis
+11. **Regime family comparison** — Beta vs truncated-exponential vs truncated-uniform sensitivity
 
 ### Phase A Bootstrap Parallelisation
 
@@ -364,11 +415,20 @@ loads, so all unspecified fields retain their defaults.
 ### Key Outputs
 
 - `phase_a_summary.csv` — One-row summary: inferred vs true mean/median SGPc, distances,
-  bootstrap CIs, independence diagnostics
+  bootstrap CIs, independence diagnostics, and copula comparison deltas (when in comparison mode)
 - `phase_a_precision_anchor.csv` — Bootstrap precision (SE, CI width) for both pairing modes
-- `phase_a_deep_dive.rds` — Full Phase A results object
+- `phase_a_deep_dive.rds` — Full Phase A results object (includes `copula_sensitivity` list
+  with primary/alternative copula labels, deltas, and fit statistics when in comparison mode)
 - `results/exports/phase_a/*.csv` — tidy exports for plotting
 - `visualizations/phase_a/` — Diagnostic panels + recovery summary + linkage decomposition
+- `visualizations/phase_a/phasea_05a_copula_bestfit_forward_cdf.*` — CDF overlay under
+  best-fit copula (comparison mode only)
+- `visualizations/phase_a/phasea_05b_copula_bestfit_regime_density.*` — Regime density
+  under best-fit copula (comparison mode only)
+- `visualizations/phase_a/phasea_05c_copula_bestfit_recovery_summary.*` — Recovery summary
+  under best-fit copula (comparison mode only)
+- `visualizations/phase_a/phasea_05d_copula_comparison_panel.*` — Side-by-side 2×2 panel:
+  CDF overlay and regime density for canonical vs best-fit copula (comparison mode only)
 - `results/deep_dives/` — Per-target output directories (multi-target modes only)
 - `results/deep_dives/deep_dive_summary.csv` — Combined summary across all targets
 
@@ -483,6 +543,61 @@ Generates the final publication figures and manifests from Phase A and B results
 | I | Independence diagnostic (P ⊥ U check by U-quintile bin) | Phase A |
 | J | Sensitivity summary (copula-param sensitivity + stratified-by-U regimes) | Phase B2/B3 |
 
+### Copula Comparison Panels (comparison mode only)
+
+When `copula$mode = "comparison"`, Phase A generates an additional set of diagnostic panels
+that quantify the impact of the canonical copula choice:
+
+| Panel | File prefix | Description |
+|-------|-------------|-------------|
+| 05a | `phasea_05a_copula_bestfit_forward_cdf` | CDF overlay (observed vs predicted) under the per-condition best-fit copula |
+| 05b | `phasea_05b_copula_bestfit_regime_density` | Inferred regime density under the best-fit copula vs true SGPc distribution |
+| 05c | `phasea_05c_copula_bestfit_recovery_summary` | Recovery summary under the best-fit copula |
+| 05d | `phasea_05d_copula_comparison_panel` | Side-by-side 2×2 panel: canonical vs best-fit CDF overlays (top) and regime densities (bottom) |
+
+These panels make it straightforward to visually assess whether the canonical copula is
+"close enough" for a given condition, or whether the condition's dependence structure is
+sufficiently non-canonical (e.g., Gumbel vs t-copula) to warrant caution in interpreting
+the regime estimates.
+
+### Metric × Copula Summary Grid (comparison + dual-metric mode)
+
+When both `copula$mode = "comparison"` and `distance$optimize = "both"` are active (the
+defaults), Phase A generates a full 2×2 matrix of individual plots — one for each
+combination of optimisation metric (W1, CvM) and copula choice (canonical, best-fit) —
+plus a LaTeX-composed summary grid that brings all four cells together.
+
+**Individual cell plots** (8 PDFs, each generated by the standard `plot_observed_vs_predicted_cdf`
+and `plot_regime_shape` functions):
+
+| Cell | Metric | Copula | CDF filename | Regime filename |
+|------|--------|--------|-------------|----------------|
+| [1,1] | W1 | Canonical | `phasea_06a_grid_w1_canonical_cdf` | `phasea_06b_grid_w1_canonical_regime` |
+| [1,2] | W1 | Best-fit | `phasea_06c_grid_w1_bestfit_cdf` | `phasea_06d_grid_w1_bestfit_regime` |
+| [2,1] | CvM | Canonical | `phasea_06e_grid_cvm_canonical_cdf` | `phasea_06f_grid_cvm_canonical_regime` |
+| [2,2] | CvM | Best-fit | `phasea_06g_grid_cvm_bestfit_cdf` | `phasea_06h_grid_cvm_bestfit_regime` |
+
+**LaTeX summary grid** (`phasea_06_metric_copula_grid.{tex,pdf,svg,png}`):
+Following the STEP 1 pattern (`generate_summary_grid_latex`), the individual PDFs are
+composed into a single grid document via LaTeX `\includegraphics` in `minipage` environments.
+This approach provides precise layout control, native LaTeX typography for the metadata
+summary table, and `fbox`-framed figure inclusion. The grid includes a metrics comparison
+table at the bottom showing median/mean SGPc and fit statistics for all four cells, plus
+copula-choice and metric-choice deltas.
+
+The LaTeX compilation requires `tinytex` (preferred) or a system `pdflatex`; SVG and PNG
+conversions use `pdf2svg` and `pdftoppm` respectively. If compilation tools are unavailable,
+the `.tex` source is retained for manual compilation.
+
+**`phase_a_summary.csv` columns for the 2×2 matrix:**
+
+The summary CSV now includes columns for all four cells. The naming convention is:
+
+- `median_sgpc_inferred` / `mean_sgpc_inferred` — W1-optimised, canonical copula (primary)
+- `cvm_opt_median_sgpc` / `cvm_opt_mean_sgpc` — CvM-optimised, canonical copula
+- `alt_median_sgpc` / `alt_mean_sgpc` — W1-optimised, best-fit copula
+- `alt_cvm_opt_median_sgpc` / `alt_cvm_opt_mean_sgpc` — CvM-optimised, best-fit copula
+
 ---
 
 ## Growth Regime Families
@@ -519,6 +634,7 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
+| `copula$mode` | `"comparison"` | Copula selection mode: `"comparison"` (canonical + best-fit side-by-side), `"canonical_only"`, or `"phase1_best_fit"` |
 | `regime$families` | `c("beta")` | Canonical production family set |
 | `regime$sensitivity_families` | `c("truncexp", "truncunif")` | Optional sensitivity families |
 | `regime$preferred_family` | `"beta"` | Tie-break preferred family |
@@ -586,6 +702,7 @@ After a complete run of Phases A + B + C, the following files are guaranteed in 
 
 | File | Columns | Source |
 |------|---------|--------|
+| `phase_a_summary.csv` | condition_id, subgroup_id, copula_mode, primary_copula, inferred/true median/mean SGPc (W1- and CvM-optimised), distances, alt_copula columns (comparison mode: alt_median_sgpc, alt_mean_sgpc, copula_delta_median, copula_delta_mean, alt_w1, alt_cvm), bootstrap CIs, independence diagnostics | Phase A |
 | `district_summary_grade.csv` | subgroup metadata, inferred/true means and medians, W1 vs uniform, residual metrics, CI width, buckets, quality flags | Phase A |
 | `phase_b_systematic_summary.csv` | dataset_id, condition_id, year_span, content_area, subgroup_id, n_subgroup, regime_family, median/mean SGPc inferred and true, diff, wasserstein1, CI widths, convergence | Phase B |
 | `phase_b_precision_by_n.csv` | pool_id, pool_type, span, content, n_bucket, n_reps, n_converged, N_eff_bucket, median_bias, median_mae, median_rmse, CI widths (90/95) for median and mean | Phase B |
@@ -775,7 +892,8 @@ support.
 | `step3_systematic_validation.R` | Phase B: multi-condition validation with `mirai` parallelisation |
 | `step3_enhanced_panels.R` | Enhanced post-hoc panels from Phase B summary data |
 | `step3_publication_panels.R` | Phase C: figures + manifests + CSV exports |
-| `functions/run_deep_dive.R` | Core Phase A deep-dive logic (extracted for reuse across target modes) |
+| `functions/run_deep_dive.R` | Core Phase A deep-dive logic (extracted for reuse across target modes); includes copula comparison mode (A.6b) |
+| `functions/figure_naming.R` | Single source of truth for Phase A figure filenames (incl. copula comparison panels 05a–05d) |
 | `functions/step3_publication_style.R` | Zissou1 style bridge (shared with STEP 2) |
 | `functions/reference_marginals.R` | `build_pairs_reference()` (paired ECDFs, production default), `build_condition_reference()` (state-level, diagnostic), `create_reference_ecdf()` |
 | `functions/copula_kernel_cache.R` | Precompute F_0(v\|u) on (u,v) grid |
@@ -790,5 +908,6 @@ support.
 | `functions/process_pool_setup.R` | Daemon-compatible function for Stage 1 pool setup |
 | `functions/process_replicate_batch.R` | Daemon-compatible function for Stage 2 replicate processing |
 | `functions/diagnostics_plots.R` | ggplot2 diagnostic visualisations |
+| `functions/copula_metric_grid_latex.R` | LaTeX-based 2×2 metric × copula summary grid (following STEP 1 `generate_summary_grid_latex` pattern) |
 | `functions/manifest_export.R` | JSON/MD export (phase_b_systematic, error sources, bucket classification) |
 | `Figures/Analytic_Explanation/` | Synthetic infographic illustrating the LIwLD workflow |

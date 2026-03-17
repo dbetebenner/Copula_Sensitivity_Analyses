@@ -239,6 +239,91 @@ if (!is.null(phase_b_precision) && nrow(phase_b_precision) > 0 &&
 
 
 ############################################################################
+### Panel D3: Linkage Fraction Curve (Phase B)
+###
+### Shows CI width as a continuous function of linkage fraction (0-1).
+### Requires linkage_fraction column with at least 3 distinct values.
+############################################################################
+
+cat("Panel D3: Linkage Fraction Curve... ")
+if (!is.null(phase_b_precision) && nrow(phase_b_precision) > 0 &&
+    "linkage_fraction" %in% names(phase_b_precision) &&
+    length(unique(phase_b_precision$linkage_fraction)) >= 3) {
+
+  plot_linkage_fraction_curve(
+    precision_dt    = phase_b_precision,
+    n_bucket_focus  = NULL,  # auto-select most common
+    filename        = "panel_d3_linkage_fraction_curve",
+    output_dir      = viz_dir,
+    condition_label = NULL
+  )
+  cat("generated.\n")
+} else {
+  n_lf <- if (!is.null(phase_b_precision) &&
+              "linkage_fraction" %in% names(phase_b_precision)) {
+    length(unique(phase_b_precision$linkage_fraction))
+  } else 0
+  cat(sprintf("skipped (need >= 3 linkage fractions, have %d).\n", n_lf))
+}
+
+
+############################################################################
+### Panel D4: Churn Bookkeeping Summary (Phase B)
+############################################################################
+
+cat("Panel D4: Churn Bookkeeping... ")
+churn_file <- file.path(RESULTS_DIR, "phase_b_churn_bookkeeping.csv")
+if (file.exists(churn_file)) {
+  phase_b_churn <- data.table::fread(churn_file)
+  if (nrow(phase_b_churn) > 0) {
+    # Condition-level summary table (pools with pool_type == "condition")
+    cond_churn <- phase_b_churn[pool_type == "condition"]
+    if (nrow(cond_churn) > 0) {
+      tryCatch({
+        # Heatmap-style summary: alpha/beta by condition
+        churn_long <- data.table::melt(
+          cond_churn,
+          id.vars = c("condition_id", "year_span", "content_area"),
+          measure.vars = c("alpha", "beta"),
+          variable.name = "rate_type", value.name = "retention"
+        )
+        churn_long[, rate_label := fifelse(rate_type == "alpha",
+                                            "Prior (\u03b1)", "Current (\u03b2)")]
+        churn_long[, condition_short := paste0(content_area, " ", year_span, "yr")]
+
+        p_churn <- ggplot(churn_long,
+                          aes(x = rate_label, y = condition_short, fill = retention)) +
+          geom_tile(color = "white", linewidth = 0.5) +
+          geom_text(aes(label = sprintf("%.3f", retention)), size = 3.2) +
+          scale_fill_gradient2(low = "#D7191C", mid = "#FFFFBF", high = "#1A9850",
+                               midpoint = 0.85, limits = c(0.5, 1.0),
+                               name = "Retention Rate") +
+          labs(title = "Churn Bookkeeping: Retention Rates by Condition",
+               subtitle = paste0("n_conditions = ", nrow(cond_churn),
+                                  " | churn types: ",
+                                  paste(unique(cond_churn$churn_type), collapse = ", ")),
+               x = NULL, y = NULL) +
+          theme_publication() +
+          theme(legend.position = "right")
+
+        save_plot_multi(p_churn, "panel_d4_churn_bookkeeping", viz_dir,
+                        width = PLOT_WIDTH, height = max(5, nrow(cond_churn) * 0.6 + 3))
+        cat("generated.\n")
+      }, error = function(e) {
+        cat(sprintf("WARNING: %s\n", e$message))
+      })
+    } else {
+      cat("skipped (no condition-level rows).\n")
+    }
+  } else {
+    cat("skipped (empty churn file).\n")
+  }
+} else {
+  cat("skipped (no churn bookkeeping file).\n")
+}
+
+
+############################################################################
 ### Panel E: Recovery Accuracy by Year Span (Phase B)
 ############################################################################
 
@@ -909,6 +994,31 @@ if (nrow(phase_b_precision) > 0) {
 
       cat("    Mean CI ratio (independent / paired):", linkage_premium$mean_ci_ratio, "\n")
       cat("    Mean MAE ratio:", linkage_premium$mean_mae_ratio, "\n")
+
+      # Append linkage_fraction curve data when partial fractions are available
+      if ("linkage_fraction" %in% names(phase_b_precision) &&
+          length(unique(phase_b_precision$linkage_fraction)) >= 3) {
+        lf_curve <- phase_b_precision[, .(
+          median_ci_width_95 = round(mean(median_ci_width_95, na.rm = TRUE), 4),
+          mean_ci_width_95   = round(mean(mean_ci_width_95,   na.rm = TRUE), 4),
+          median_mae         = round(mean(median_mae, na.rm = TRUE), 4),
+          n_pools            = .N
+        ), by = .(n_bucket, linkage_fraction)][order(n_bucket, -linkage_fraction)]
+
+        linkage_premium$linkage_fraction_curve <- lapply(
+          seq_len(nrow(lf_curve)),
+          function(i) as.list(lf_curve[i])
+        )
+        linkage_premium$linkage_fraction_description <- paste0(
+          "CI width as a continuous function of cohort overlap strength. ",
+          "linkage_fraction = 1.0 is fully paired (longitudinal), 0.0 is fully ",
+          "independent (cross-sectional). Intermediate values simulate designs ",
+          "with partial cohort overlap."
+        )
+        cat("    Linkage fraction curve: ",
+            length(unique(lf_curve$linkage_fraction)), " fractions x ",
+            length(unique(lf_curve$n_bucket)), " N-buckets\n")
+      }
     }
   }
 
@@ -925,7 +1035,10 @@ if (nrow(phase_b_precision) > 0) {
       overall_convergence_rate = overall_conv_rate,
       sampling_modes           = if (has_sampling_mode)
                                    sort(unique(phase_b_precision$sampling_mode))
-                                 else c("paired")
+                                 else c("paired"),
+      linkage_fractions        = if ("linkage_fraction" %in% names(phase_b_precision))
+                                   sort(unique(phase_b_precision$linkage_fraction), decreasing = TRUE)
+                                 else c(1.0)
     ),
     precision_by_n_span = precision_by_n_span,
     year_span_finding   = year_span_finding,
@@ -990,6 +1103,14 @@ if (!is.null(phase_a)) {
         "(TIMSS/NAEP cross-sectional design). The linkage premium ",
         "quantifies the multiplicative cost of (1b); see ",
         "phase_b_systematic$linkage_premium for per-N ratios."
+      ),
+      linkage_fraction_note = paste0(
+        "The linkage_fraction parameter (0.0 to 1.0) maps the continuous ",
+        "space between fully independent (0.0) and fully paired (1.0) cohort ",
+        "designs. Partial overlap designs (e.g., some schools retained across ",
+        "NAEP cycles) correspond to intermediate fractions. See ",
+        "phase_b_systematic$linkage_premium$linkage_fraction_curve for the ",
+        "full CI width curve."
       )
     ),
     variance_decomposition = if (!is.na(var_sampling)) list(

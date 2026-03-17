@@ -196,9 +196,48 @@ run_deep_dive <- function(dataset_id = NULL,
   }
   log_msg("\n")
 
+  # A.1b Churn Bookkeeping and Marginal Comparison
+  churn_bk <- NULL
+  marginal_comp <- NULL
+  if (exists("compute_churn_bookkeeping", mode = "function")) {
+    log_msg("A.1b Churn bookkeeping (S/L/E decomposition)...\n")
+    churn_bk <- tryCatch(
+      compute_churn_bookkeeping(STATE_DATA, pairs, cond, sg_col = sg_col),
+      error = function(e) { log_msg("  WARNING: Churn bookkeeping failed: ", e$message, "\n"); NULL }
+    )
+    if (!is.null(churn_bk)) {
+      cb <- churn_bk$condition
+      log_msg("  Condition-level: n_S = ", format(cb$n_stayers, big.mark = ","),
+              ", n_L = ", format(cb$n_leavers, big.mark = ","),
+              ", n_E = ", format(cb$n_entrants, big.mark = ","), "\n")
+      log_msg("  Retention: alpha = ", cb$alpha, " (prior), beta = ", cb$beta, " (current)\n")
+      log_msg("  Churn type: ", cb$churn_type, "\n")
+    }
+
+    log_msg("  Marginal comparison (compositional ignorability test)...\n")
+    marginal_comp <- tryCatch(
+      compare_marginals_stayer_vs_all(STATE_DATA, pairs, cond),
+      error = function(e) { log_msg("  WARNING: Marginal comparison failed: ", e$message, "\n"); NULL }
+    )
+    if (!is.null(marginal_comp)) {
+      log_msg("  Gamma_U (prior)   = ", marginal_comp$gamma_prior, "\n")
+      log_msg("  Gamma_V (current) = ", marginal_comp$gamma_current, "\n")
+      log_msg("  Compositionally ignorable: ", marginal_comp$compositionally_ignorable, "\n")
+      if (is.finite(marginal_comp$asymmetry_ratio)) {
+        log_msg("  Asymmetry ratio (Gamma_V / Gamma_U) = ", marginal_comp$asymmetry_ratio, "\n")
+      }
+      # Upgrade churn classification if compositional drift detected
+      if (!is.null(churn_bk) && !isTRUE(marginal_comp$compositionally_ignorable)) {
+        churn_bk$condition$churn_type <- paste0(churn_bk$condition$churn_type, "+compositional")
+        log_msg("  Updated churn type: ", churn_bk$condition$churn_type, "\n")
+      }
+    }
+    log_msg("\n")
+  }
+
   # A.2 True SGPc
   log_msg("A.2  Computing true SGPc distribution from longitudinal data...\n")
-  copula_mode <- cfg$copula$mode %||% "phase1_best_fit"
+  copula_mode <- cfg$copula$mode %||% "comparison"
   p1 <- tryCatch(
     load_phase1_condition(
       dataset_id,
@@ -214,17 +253,62 @@ run_deep_dive <- function(dataset_id = NULL,
     )
   }
 
+  # --- Copula loading: primary + optional alternative for comparison mode ---
+  # In "comparison" mode we load both canonical AND per-condition best-fit.
+  # The canonical copula is always the primary (honest NAEP/TIMSS setting);
+  # the best-fit is the alternative whose delta quantifies copula choice impact.
+  alt_copula <- NULL
+  alt_copula_label <- NULL
+  primary_copula_label <- NULL
+
   if (identical(copula_mode, "canonical_only")) {
     canonical <- .load_canon()
     p1_copula <- create_canonical_copula(cond$year_span, cond$content_area, canonical$canonical_params)
-    log_msg("  Copula: canonical (", cond$content_area, ", span=", cond$year_span, ")\n")
+    primary_copula_label <- paste0("Canonical t (", cond$content_area, ", span=", cond$year_span, ")")
+    log_msg("  Copula: ", primary_copula_label, "\n")
+
+  } else if (identical(copula_mode, "comparison")) {
+    # Primary = canonical (the honest setting)
+    canonical <- .load_canon()
+    p1_copula <- create_canonical_copula(cond$year_span, cond$content_area, canonical$canonical_params)
+    primary_copula_label <- paste0("Canonical t (", cond$content_area, ", span=", cond$year_span, ")")
+    log_msg("  Primary copula: ", primary_copula_label, "\n")
+
+    # Alternative = per-condition best-fit from Phase 1
+    if (!is.null(p1) && !is.null(p1$best_fit_copula)) {
+      alt_copula <- p1$best_fit_copula
+      alt_fam <- class(alt_copula)[1]
+      # Extract a readable label for the best-fit copula
+      alt_copula_label <- paste0("Best-fit parametric (", alt_fam, ")")
+      log_msg("  Alternative copula: ", alt_copula_label, "\n")
+      # Check whether canonical and best-fit are effectively the same copula
+      canon_class <- class(p1_copula)[1]
+      if (identical(canon_class, alt_fam)) {
+        canon_params <- tryCatch(copula::getTheta(p1_copula, freeOnly = FALSE, named = TRUE),
+                                 error = function(e) NULL)
+        alt_params <- tryCatch(copula::getTheta(alt_copula, freeOnly = FALSE, named = TRUE),
+                               error = function(e) NULL)
+        if (!is.null(canon_params) && !is.null(alt_params) &&
+            length(canon_params) == length(alt_params) &&
+            all(abs(canon_params - alt_params) < 1e-4)) {
+          log_msg("  NOTE: Canonical and best-fit copulas are identical — comparison will show zero delta.\n")
+        }
+      }
+    } else {
+      log_msg("  WARNING: No Phase 1 best-fit copula found. Comparison mode degrades to canonical_only.\n")
+      copula_mode <- "canonical_only"  # graceful fallback
+    }
+
   } else if (!is.null(p1) && !is.null(p1$best_fit_copula)) {
+    # phase1_best_fit mode
     p1_copula <- p1$best_fit_copula
-    log_msg("  Loaded Phase 1 copula: ", class(p1_copula)[1], "\n")
+    primary_copula_label <- paste0("Best-fit parametric (", class(p1_copula)[1], ")")
+    log_msg("  Loaded Phase 1 copula: ", primary_copula_label, "\n")
   } else {
     log_msg("  WARNING: No Phase 1 copula found. Using canonical t-copula.\n")
     canonical <- .load_canon()
     p1_copula <- create_canonical_copula(cond$year_span, cond$content_area, canonical$canonical_params)
+    primary_copula_label <- paste0("Canonical t (", cond$content_area, ", span=", cond$year_span, ")")
   }
 
   u_full <- rank(pairs$SCALE_SCORE_PRIOR) / (nrow(pairs) + 1)
@@ -374,19 +458,25 @@ run_deep_dive <- function(dataset_id = NULL,
                 round(unlist(kernel_cache$copula_params), 3), collapse = ", "), ")\n")
   log_msg("  Grid: ", cfg$kernel$u_grid_size, "x", cfg$kernel$v_grid_size, "\n\n")
 
-  # A.6 regime fit
-  log_msg("A.6  Estimating growth regime...\n\n")
+  # A.6 regime fit (primary copula)
+  # Resolve which metric(s) to optimize: "both", "wasserstein1", or "cvm"
+  optimize_metric <- cfg$distance$optimize
+  if (is.null(optimize_metric)) optimize_metric <- cfg$distance$primary
+  log_msg("A.6  Estimating growth regime (optimize=", optimize_metric,
+          ", copula=", primary_copula_label, ")...\n\n")
+  a6_start <- Sys.time()
   family_comparison <- compare_regime_families(
     u_sample = u_cross,
     v_sample = v_cross,
     kernel_cache = kernel_cache,
     families = cfg$regime$families,
-    distance_fn = cfg$distance$primary,
+    distance_fn = optimize_metric,
     tie_tolerance = cfg$regime$tie_tolerance,
     preferred_family = cfg$regime$preferred_family,
     grid_resolution = cfg$regime$grid_resolution,
     verbose = isTRUE(verbose)
   )
+  a6_elapsed <- as.numeric(difftime(Sys.time(), a6_start, units = "secs"))
   best_family <- family_comparison$best_family
   best_est <- family_comparison$results[[best_family]]
   log_msg("\n  Best regime family: ", best_family, "\n")
@@ -401,8 +491,132 @@ run_deep_dive <- function(dataset_id = NULL,
           round(best_est$regime$mean * 100 - mean(true_sgpc, na.rm = TRUE), 1),
           " SGP points\n\n")
 
+  # Report CvM-optimized alternative if dual-metric mode was used
+  best_est_cvm <- NULL
+  if (!is.null(best_est$alt_metrics) && !is.null(best_est$alt_metrics$cvm)) {
+    best_est_cvm <- best_est$alt_metrics$cvm
+    log_msg("  --- CvM-optimized alternative ---\n")
+    log_msg("  CvM median SGPc:  ", round(best_est_cvm$regime$median * 100, 1), "\n")
+    log_msg("  CvM mean SGPc:    ", round(best_est_cvm$regime$mean * 100, 1), "\n")
+    median_delta <- abs(best_est$regime$median - best_est_cvm$regime$median) * 100
+    mean_delta <- abs(best_est$regime$mean - best_est_cvm$regime$mean) * 100
+    log_msg("  W1 vs CvM delta:  |median|=", round(median_delta, 2),
+            "  |mean|=", round(mean_delta, 2), " SGP points\n\n")
+  } else if (!is.null(best_est$alt_metrics) && !is.null(best_est$alt_metrics$wasserstein1)) {
+    # Primary was CvM; W1 is the alternative
+    best_est_w1_alt <- best_est$alt_metrics$wasserstein1
+    log_msg("  --- W1-optimized alternative ---\n")
+    log_msg("  W1 median SGPc:   ", round(best_est_w1_alt$regime$median * 100, 1), "\n")
+    log_msg("  W1 mean SGPc:     ", round(best_est_w1_alt$regime$mean * 100, 1), "\n\n")
+  }
+  log_msg("  A.6 elapsed: ", round(a6_elapsed, 1), "s\n\n")
+
+  # A.6b Alternative copula regime estimation (comparison mode only)
+  alt_kernel_cache <- NULL
+  alt_family_comparison <- NULL
+  alt_best_est <- NULL
+  alt_best_family <- NULL
+  copula_sensitivity <- NULL
+
+  if (identical(copula_mode, "comparison") && !is.null(alt_copula)) {
+    log_msg("A.6b Estimating growth regime under alternative copula (",
+            alt_copula_label, ")...\n\n")
+    a6b_start <- Sys.time()
+
+    # Build kernel cache for the alternative copula
+    alt_kernel_cache <- create_kernel_cache(
+      alt_copula,
+      u_grid_size = cfg$kernel$u_grid_size,
+      v_grid_size = cfg$kernel$v_grid_size,
+      boundary_buffer = cfg$kernel$boundary_buffer,
+      compute_quantile = cfg$kernel$compute_quantile
+    )
+    log_msg("  Alt kernel cache built: ", alt_kernel_cache$copula_family, " (",
+            paste(names(alt_kernel_cache$copula_params), "=",
+                  round(unlist(alt_kernel_cache$copula_params), 3), collapse = ", "), ")\n")
+
+    # Run regime estimation with same settings
+    alt_family_comparison <- compare_regime_families(
+      u_sample = u_cross,
+      v_sample = v_cross,
+      kernel_cache = alt_kernel_cache,
+      families = cfg$regime$families,
+      distance_fn = optimize_metric,
+      tie_tolerance = cfg$regime$tie_tolerance,
+      preferred_family = cfg$regime$preferred_family,
+      grid_resolution = cfg$regime$grid_resolution,
+      verbose = isTRUE(verbose)
+    )
+    alt_best_family <- alt_family_comparison$best_family
+    alt_best_est <- alt_family_comparison$results[[alt_best_family]]
+
+    a6b_elapsed <- as.numeric(difftime(Sys.time(), a6b_start, units = "secs"))
+
+    # Compute copula sensitivity deltas
+    median_true <- median(true_sgpc, na.rm = TRUE)
+    mean_true   <- mean(true_sgpc, na.rm = TRUE)
+    # Extract CvM-optimised result under alt copula (4th cell of metric × copula)
+    alt_best_est_cvm <- NULL
+    if (!is.null(alt_best_est$alt_metrics) && !is.null(alt_best_est$alt_metrics$cvm)) {
+      alt_best_est_cvm <- alt_best_est$alt_metrics$cvm
+      log_msg("  Alt copula CvM-optimised: median=",
+              round(alt_best_est_cvm$regime$median * 100, 1),
+              "  mean=", round(alt_best_est_cvm$regime$mean * 100, 1), "\n")
+    }
+
+    copula_sensitivity <- list(
+      primary_copula_label  = primary_copula_label,
+      alt_copula_label      = alt_copula_label,
+      primary_copula        = p1_copula,
+      alt_copula            = alt_copula,
+      # W1-optimised results (primary metric)
+      primary_median_sgpc   = best_est$regime$median * 100,
+      alt_median_sgpc       = alt_best_est$regime$median * 100,
+      primary_mean_sgpc     = best_est$regime$mean * 100,
+      alt_mean_sgpc         = alt_best_est$regime$mean * 100,
+      delta_median_sgpc     = (alt_best_est$regime$median - best_est$regime$median) * 100,
+      delta_mean_sgpc       = (alt_best_est$regime$mean - best_est$regime$mean) * 100,
+      primary_median_diff   = best_est$regime$median * 100 - median_true,
+      alt_median_diff       = alt_best_est$regime$median * 100 - median_true,
+      primary_mean_diff     = best_est$regime$mean * 100 - mean_true,
+      alt_mean_diff         = alt_best_est$regime$mean * 100 - mean_true,
+      primary_w1            = best_est$all_distances$wasserstein1,
+      alt_w1                = alt_best_est$all_distances$wasserstein1,
+      primary_cvm           = best_est$all_distances$cramer_von_mises,
+      alt_cvm               = alt_best_est$all_distances$cramer_von_mises,
+      # CvM-optimised results (secondary metric)
+      primary_cvm_est       = best_est_cvm,       # canonical copula, CvM metric
+      alt_cvm_est           = alt_best_est_cvm,    # best-fit copula, CvM metric
+      # Full result objects for individual plot generation
+      alt_best_est          = alt_best_est,
+      alt_family_comparison = alt_family_comparison,
+      alt_kernel_cache      = alt_kernel_cache
+    )
+
+    log_msg("\n  --- Copula sensitivity comparison ---\n")
+    log_msg("  Primary (", primary_copula_label, "):\n")
+    log_msg("    Median SGPc: ", round(copula_sensitivity$primary_median_sgpc, 1),
+            "  (diff from truth: ", round(copula_sensitivity$primary_median_diff, 1), ")\n")
+    log_msg("    Mean SGPc:   ", round(copula_sensitivity$primary_mean_sgpc, 1),
+            "  (diff from truth: ", round(copula_sensitivity$primary_mean_diff, 1), ")\n")
+    log_msg("    W1: ", round(copula_sensitivity$primary_w1, 6),
+            "  CvM: ", round(copula_sensitivity$primary_cvm, 6), "\n")
+    log_msg("  Alternative (", alt_copula_label, "):\n")
+    log_msg("    Median SGPc: ", round(copula_sensitivity$alt_median_sgpc, 1),
+            "  (diff from truth: ", round(copula_sensitivity$alt_median_diff, 1), ")\n")
+    log_msg("    Mean SGPc:   ", round(copula_sensitivity$alt_mean_sgpc, 1),
+            "  (diff from truth: ", round(copula_sensitivity$alt_mean_diff, 1), ")\n")
+    log_msg("    W1: ", round(copula_sensitivity$alt_w1, 6),
+            "  CvM: ", round(copula_sensitivity$alt_cvm, 6), "\n")
+    log_msg("  Delta (alt - primary):\n")
+    log_msg("    |Median|: ", round(abs(copula_sensitivity$delta_median_sgpc), 2), " SGP points\n")
+    log_msg("    |Mean|:   ", round(abs(copula_sensitivity$delta_mean_sgpc), 2), " SGP points\n")
+    log_msg("  A.6b elapsed: ", round(a6b_elapsed, 1), "s\n\n")
+  }
+
   # A.7 bootstrap
   log_msg("A.7  Bootstrap uncertainty quantification...\n\n")
+  a7_start <- Sys.time()
   boot_results <- bootstrap_regime(
     u_sample = u_cross,
     v_sample = v_cross,
@@ -416,15 +630,18 @@ run_deep_dive <- function(dataset_id = NULL,
     use_mirai = use_mirai,
     verbose = isTRUE(verbose)
   )
+  a7_elapsed <- as.numeric(difftime(Sys.time(), a7_start, units = "secs"))
   log_msg("  Bootstrap median SGPc 95% CI (independent): ",
           paste0("[", round(boot_results$ci_median_sgpc[1], 1), ", ",
                  round(boot_results$ci_median_sgpc[2], 1), "]"), "\n")
   log_msg("  Bootstrap mean SGPc 95% CI (independent):   ",
           paste0("[", round(boot_results$ci_mean_sgpc[1], 1), ", ",
-                 round(boot_results$ci_mean_sgpc[2], 1), "]"), "\n\n")
+                 round(boot_results$ci_mean_sgpc[2], 1), "]"), "\n")
+  log_msg("  A.7 elapsed: ", round(a7_elapsed, 1), "s\n\n")
 
   # A.7b paired bootstrap
   log_msg("A.7b Paired bootstrap (linkage premium decomposition)...\n\n")
+  a7b_start <- Sys.time()
   boot_paired <- bootstrap_regime(
     u_sample = u_cross,
     v_sample = v_cross,
@@ -439,12 +656,14 @@ run_deep_dive <- function(dataset_id = NULL,
     use_mirai = use_mirai,
     verbose = isTRUE(verbose)
   )
+  a7b_elapsed <- as.numeric(difftime(Sys.time(), a7b_start, units = "secs"))
   log_msg("  Bootstrap median SGPc 95% CI (paired):      ",
           paste0("[", round(boot_paired$ci_median_sgpc[1], 1), ", ",
                  round(boot_paired$ci_median_sgpc[2], 1), "]"), "\n")
   log_msg("  Bootstrap mean SGPc 95% CI (paired):        ",
           paste0("[", round(boot_paired$ci_mean_sgpc[1], 1), ", ",
-                 round(boot_paired$ci_mean_sgpc[2], 1), "]"), "\n\n")
+                 round(boot_paired$ci_mean_sgpc[2], 1), "]"), "\n")
+  log_msg("  A.7b elapsed: ", round(a7b_elapsed, 1), "s\n\n")
 
   ci_w_indep_median <- diff(as.numeric(boot_results$ci_median_sgpc))
   ci_w_paired_median <- diff(as.numeric(boot_paired$ci_median_sgpc))
@@ -481,6 +700,50 @@ run_deep_dive <- function(dataset_id = NULL,
     )
   )
 
+  # A.7c Regime contrast and theoretical premium
+  regime_contrast <- NULL
+  theoretical_prem <- NULL
+  if (exists("estimate_regime_all_students", mode = "function") &&
+      !is.null(churn_bk) && churn_bk$condition$n_leavers + churn_bk$condition$n_entrants > 0) {
+    log_msg("A.7c Regime contrast (stayer vs all-student)...\n")
+    a7c_start <- Sys.time()
+    regime_contrast <- tryCatch(
+      estimate_regime_all_students(
+        state_data      = STATE_DATA,
+        condition_meta  = cond,
+        refs_stayer     = refs,
+        kernel_cache    = kernel_cache,
+        regime_family   = best_family,
+        distance_fn     = cfg$distance$primary,
+        grid_resolution = cfg$estimation$grid_resolution %||% 25L,
+        stayer_estimate = best_est
+      ),
+      error = function(e) { log_msg("  WARNING: Regime contrast failed: ", e$message, "\n"); NULL }
+    )
+    if (!is.null(regime_contrast)) {
+      log_msg("  All-student regime: median = ", regime_contrast$median_sgpc_all,
+              ", mean = ", regime_contrast$mean_sgpc_all, "\n")
+      log_msg("  Stayer regime:      median = ", regime_contrast$median_sgpc_stayer,
+              ", mean = ", regime_contrast$mean_sgpc_stayer, "\n")
+      log_msg("  Delta median = ", regime_contrast$delta_median,
+              ", delta mean = ", regime_contrast$delta_mean, " SGPc\n")
+    }
+    a7c_elapsed <- as.numeric(difftime(Sys.time(), a7c_start, units = "secs"))
+    log_msg("  A.7c elapsed: ", round(a7c_elapsed, 1), "s\n\n")
+  }
+
+  if (exists("theoretical_linkage_premium", mode = "function") && !is.null(churn_bk)) {
+    log_msg("A.7d Theoretical partial-linkage premium...\n")
+    cop_rho <- tryCatch(as.numeric(p1_copula@param[1]), error = function(e) NA_real_)
+    emp_alpha <- churn_bk$condition$alpha
+    theoretical_prem <- theoretical_linkage_premium(emp_alpha, cop_rho)
+    log_msg("  alpha = ", theoretical_prem$alpha, ", rho = ", theoretical_prem$rho, "\n")
+    log_msg("  Theoretical mean-scale premium = ", theoretical_prem$mean_scale, "\n")
+    log_msg("  Theoretical CDF-scale premium = ", theoretical_prem$cdf_scale, "\n")
+    log_msg("  Empirical bootstrap premium (median CI ratio) = ",
+            phase_a_linkage_premium$median$ci_ratio, "\n\n")
+  }
+
   # A.8 plots
   log_msg("\nA.8  Generating diagnostic plots...\n")
   viz_dir <- file.path(output_dir, "visualizations", "phase_a")
@@ -500,8 +763,19 @@ run_deep_dive <- function(dataset_id = NULL,
       bootstrap_combined = "phasea_03d_bootstrap_combined",
       recovery_summary = "phasea_03e_recovery_summary",
       linkage_decomposition = "phasea_03f_linkage_decomposition",
-      independence_diagnostic = "phasea_04_independence_diagnostic"
+      independence_diagnostic = "phasea_04_independence_diagnostic",
+      copula_alt_forward_cdf = "phasea_05a_copula_bestfit_forward_cdf",
+      copula_alt_regime_density = "phasea_05b_copula_bestfit_regime_density",
+      copula_alt_recovery_summary = "phasea_05c_copula_bestfit_recovery_summary",
+      copula_comparison_panel = "phasea_05d_copula_comparison_panel"
     )
+  }
+
+  # Copula label for plot subtitles — only annotate when in comparison mode
+  copula_subtitle <- if (identical(copula_mode, "comparison")) {
+    paste0("Copula: ", primary_copula_label)
+  } else {
+    NULL
   }
 
   plot_marginal_uv_density(
@@ -515,24 +789,47 @@ run_deep_dive <- function(dataset_id = NULL,
   )
   best_est$F_tamp <- ecdf(u_cross)(best_est$v_grid)
   best_est$w1_uniform <- wasserstein1(best_est$F_uniform, best_est$F_obs, best_est$v_grid)
+  .cdf_title <- if (!is.null(copula_subtitle)) {
+    paste0("B2. Forward CDF Check — ", sg_label, "\n", copula_subtitle)
+  } else {
+    paste0("B2. Forward CDF Check — ", sg_label)
+  }
   plot_observed_vs_predicted_cdf(
-    best_est, title = paste0("B2. Forward CDF Check — ", sg_label),
+    best_est, title = .cdf_title,
     output_dir = viz_dir, filename = phasea_fig$forward_cdf_check
   )
   plot_objective_surface(
     best_est, output_dir = viz_dir, filename = phasea_fig$objective_surface,
-    title = paste0("Growth Regime Surface — ", sg_label)
+    title = if (!is.null(copula_subtitle)) {
+      paste0("Growth Regime Surface — ", sg_label, "\n", copula_subtitle)
+    } else {
+      paste0("Growth Regime Surface — ", sg_label)
+    }
   )
+  .regime_title <- if (!is.null(copula_subtitle)) {
+    paste0("C. Inferred Regime Density — ", sg_label, "\n", copula_subtitle)
+  } else {
+    paste0("C. Inferred Regime Density — ", sg_label)
+  }
   plot_regime_shape(
-    best_est$regime, true_sgpc, title = paste0("C. Inferred Regime Density — ", sg_label),
+    best_est$regime, true_sgpc, title = .regime_title,
     output_dir = viz_dir, filename = phasea_fig$regime_density, bootstrap = boot_results
   )
   plot_residual_curve(
     best_est, output_dir = viz_dir, filename = phasea_fig$residual_diagnostics,
-    title = paste0("Residual Diagnostics — ", sg_label)
+    title = if (!is.null(copula_subtitle)) {
+      paste0("Residual Diagnostics — ", sg_label, "\n", copula_subtitle)
+    } else {
+      paste0("Residual Diagnostics — ", sg_label)
+    }
   )
+  .recovery_title <- if (!is.null(copula_subtitle)) {
+    paste0("Growth Regime Recovery Summary: ", sg_label, "\n", copula_subtitle)
+  } else {
+    paste0("Growth Regime Recovery Summary: ", sg_label)
+  }
   plot_recovery_summary(
-    best_est, true_sgpc, title = paste0("Growth Regime Recovery Summary: ", sg_label),
+    best_est, true_sgpc, title = .recovery_title,
     output_dir = viz_dir, filename = phasea_fig$recovery_summary
   )
   plot_independence_diagnostic(
@@ -561,6 +858,191 @@ run_deep_dive <- function(dataset_id = NULL,
     title = paste0("Linkage Premium Decomposition — ", sg_label),
     output_dir = viz_dir, filename = phasea_fig$linkage_decomposition
   )
+
+  # --- Churn diagnostic plots ---
+  if (!is.null(churn_bk)) {
+    log_msg("  Generating churn diagnostic plots...\n")
+    tryCatch({
+      plot_churn_decomposition(
+        churn_bk, condition_label = sg_label,
+        filename = phasea_fig$churn_decomposition,
+        output_dir = viz_dir
+      )
+      if (!is.null(marginal_comp)) {
+        plot_marginal_comparison(
+          marginal_comp, condition_label = sg_label,
+          filename = phasea_fig$marginal_comparison,
+          output_dir = viz_dir
+        )
+      }
+      if (!is.null(regime_contrast) && !is.null(regime_contrast$regime_all)) {
+        plot_regime_contrast(
+          regime_contrast, stayer_estimate = best_est,
+          true_sgpc = true_sgpc, condition_label = sg_label,
+          filename = phasea_fig$regime_contrast,
+          output_dir = viz_dir
+        )
+      }
+      plot_churn_summary_panel(
+        churn_bk = churn_bk,
+        marginal_comparison = marginal_comp,
+        regime_contrast = regime_contrast,
+        theoretical_premium = theoretical_prem,
+        stayer_estimate = best_est,
+        empirical_premium = phase_a_linkage_premium,
+        true_sgpc = true_sgpc,
+        condition_label = sg_label,
+        filename = phasea_fig$churn_summary_panel,
+        output_dir = viz_dir
+      )
+      log_msg("  Churn diagnostic plots saved.\n")
+    }, error = function(e) {
+      log_msg("  WARNING: Churn plot generation failed: ", e$message, "\n")
+    })
+  }
+
+  # --- Copula comparison plots (comparison mode only) ---
+  if (!is.null(copula_sensitivity) && !is.null(alt_best_est)) {
+    log_msg("  Generating copula comparison plots...\n")
+    alt_subtitle <- paste0("Copula: ", alt_copula_label)
+
+    # Ensure alt_best_est has uniform/TAMP baselines for plotting
+    alt_best_est$F_uniform <- predict_marginal_cdf(
+      v_grid = alt_best_est$v_grid, u_sample = u_cross,
+      regime = regime_beta(0.5, 2), kernel_cache = alt_kernel_cache
+    )
+    alt_best_est$F_tamp <- ecdf(u_cross)(alt_best_est$v_grid)
+    alt_best_est$w1_uniform <- wasserstein1(alt_best_est$F_uniform, alt_best_est$F_obs, alt_best_est$v_grid)
+
+    # ---- Individual plots for 2×2 grid (Metric × Copula) ----
+    # These individual PDFs are composed into a LaTeX summary grid below.
+
+    # Cell [1,1]: W1 / Canonical — CDF
+    plot_observed_vs_predicted_cdf(
+      best_est,
+      title = paste0("CDF: W1-Optimised — ", copula_subtitle),
+      output_dir = viz_dir, filename = phasea_fig$grid_w1_canonical_cdf
+    )
+    # Cell [1,1]: W1 / Canonical — Regime
+    plot_regime_shape(
+      best_est$regime, true_sgpc,
+      title = paste0("Regime: W1-Optimised — ", copula_subtitle),
+      output_dir = viz_dir, filename = phasea_fig$grid_w1_canonical_regime
+    )
+
+    # Cell [1,2]: W1 / Best-fit — CDF
+    plot_observed_vs_predicted_cdf(
+      alt_best_est,
+      title = paste0("CDF: W1-Optimised — ", alt_subtitle),
+      output_dir = viz_dir, filename = phasea_fig$grid_w1_bestfit_cdf
+    )
+    # Cell [1,2]: W1 / Best-fit — Regime
+    plot_regime_shape(
+      alt_best_est$regime, true_sgpc,
+      title = paste0("Regime: W1-Optimised — ", alt_subtitle),
+      output_dir = viz_dir, filename = phasea_fig$grid_w1_bestfit_regime
+    )
+
+    # Cell [2,1]: CvM / Canonical — if CvM-optimised estimate exists
+    if (!is.null(best_est_cvm)) {
+      # Ensure CvM estimate has baselines
+      if (is.null(best_est_cvm$F_uniform)) {
+        best_est_cvm$F_uniform <- best_est$F_uniform
+        best_est_cvm$F_tamp <- best_est$F_tamp
+        best_est_cvm$w1_uniform <- best_est$w1_uniform
+      }
+      plot_observed_vs_predicted_cdf(
+        best_est_cvm,
+        title = paste0("CDF: CvM-Optimised — ", copula_subtitle),
+        output_dir = viz_dir, filename = phasea_fig$grid_cvm_canonical_cdf
+      )
+      plot_regime_shape(
+        best_est_cvm$regime, true_sgpc,
+        title = paste0("Regime: CvM-Optimised — ", copula_subtitle),
+        output_dir = viz_dir, filename = phasea_fig$grid_cvm_canonical_regime
+      )
+    }
+
+    # Cell [2,2]: CvM / Best-fit — if CvM-optimised alt estimate exists
+    alt_best_est_cvm <- copula_sensitivity$alt_cvm_est
+    if (!is.null(alt_best_est_cvm)) {
+      if (is.null(alt_best_est_cvm$F_uniform)) {
+        alt_best_est_cvm$F_uniform <- alt_best_est$F_uniform
+        alt_best_est_cvm$F_tamp <- alt_best_est$F_tamp
+        alt_best_est_cvm$w1_uniform <- alt_best_est$w1_uniform
+      }
+      plot_observed_vs_predicted_cdf(
+        alt_best_est_cvm,
+        title = paste0("CDF: CvM-Optimised — ", alt_subtitle),
+        output_dir = viz_dir, filename = phasea_fig$grid_cvm_bestfit_cdf
+      )
+      plot_regime_shape(
+        alt_best_est_cvm$regime, true_sgpc,
+        title = paste0("Regime: CvM-Optimised — ", alt_subtitle),
+        output_dir = viz_dir, filename = phasea_fig$grid_cvm_bestfit_regime
+      )
+    }
+
+    # ---- Legacy individual alt copula plots (backward compat) ----
+    plot_observed_vs_predicted_cdf(
+      alt_best_est,
+      title = paste0("B2. Forward CDF Check — ", sg_label, "\n", alt_subtitle),
+      output_dir = viz_dir, filename = phasea_fig$copula_alt_forward_cdf
+    )
+    plot_regime_shape(
+      alt_best_est$regime, true_sgpc,
+      title = paste0("C. Inferred Regime Density — ", sg_label, "\n", alt_subtitle),
+      output_dir = viz_dir, filename = phasea_fig$copula_alt_regime_density
+    )
+    plot_recovery_summary(
+      alt_best_est, true_sgpc,
+      title = paste0("Growth Regime Recovery Summary: ", sg_label, "\n", alt_subtitle),
+      output_dir = viz_dir, filename = phasea_fig$copula_alt_recovery_summary
+    )
+
+    # ---- R-based comparison panel (backward compat) ----
+    if (exists("plot_copula_comparison_panel", mode = "function")) {
+      plot_copula_comparison_panel(
+        primary_est = best_est,
+        alt_est = alt_best_est,
+        true_sgpc = true_sgpc,
+        primary_label = primary_copula_label,
+        alt_label = alt_copula_label,
+        sensitivity = copula_sensitivity,
+        title = paste0("Copula Sensitivity — ", sg_label),
+        output_dir = viz_dir,
+        filename = phasea_fig$copula_comparison_panel
+      )
+    }
+
+    # ---- LaTeX 2×2 summary grid (Metric × Copula) ----
+    if (exists("generate_metric_copula_grid_latex", mode = "function")) {
+      log_msg("  Generating 2×2 metric × copula LaTeX summary grid...\n")
+      tryCatch({
+        generate_metric_copula_grid_latex(
+          output_dir = viz_dir,
+          condition_id = condition_id,
+          subgroup_id = subgroup_id,
+          copula_sensitivity = copula_sensitivity,
+          true_sgpc = true_sgpc,
+          best_est = best_est,
+          best_est_cvm = best_est_cvm,
+          primary_copula_label = primary_copula_label,
+          alt_copula_label = alt_copula_label,
+          figure_map = phasea_fig,
+          compile_pdf = TRUE,
+          keep_tex = TRUE,
+          export_formats = cfg$output$export_formats
+        )
+        log_msg("  LaTeX summary grid saved.\n")
+      }, error = function(e) {
+        log_msg("  WARNING: LaTeX summary grid generation failed: ", e$message, "\n")
+      })
+    }
+
+    log_msg("  Copula comparison plots saved.\n")
+  }
+
   if (exists("write_phasea_legacy_aliases", mode = "function")) {
     write_phasea_legacy_aliases(
       output_dir = viz_dir,
@@ -585,6 +1067,11 @@ run_deep_dive <- function(dataset_id = NULL,
     family_comparison = family_comparison,
     best_family = best_family,
     best_estimate = best_est,
+    best_estimate_cvm = best_est_cvm,
+    optimize_metric = optimize_metric,
+    copula_mode = copula_mode,
+    primary_copula_label = primary_copula_label,
+    copula_sensitivity = copula_sensitivity,
     bootstrap = boot_results,
     bootstrap_paired = boot_paired,
     linkage_premium = phase_a_linkage_premium,
@@ -593,6 +1080,10 @@ run_deep_dive <- function(dataset_id = NULL,
     kernel_cache = kernel_cache,
     references = list(n_prior = refs$n_prior, n_current = refs$n_current),
     copula_used = list(family = kernel_cache$copula_family, params = kernel_cache$copula_params),
+    churn_bookkeeping = churn_bk,
+    marginal_comparison = marginal_comp,
+    regime_contrast = regime_contrast,
+    theoretical_linkage_premium = theoretical_prem,
     config = cfg,
     output_dir = output_dir
   )
@@ -603,11 +1094,43 @@ run_deep_dive <- function(dataset_id = NULL,
     round(100 * (1 - (best_est$all_distances$wasserstein1 / best_est$w1_uniform)), 2)
   } else NA_real_
 
+  # CvM-optimized values (NA if single-metric mode)
+  cvm_median_inferred <- if (!is.null(best_est_cvm)) round(best_est_cvm$regime$median * 100, 2) else NA_real_
+  cvm_mean_inferred   <- if (!is.null(best_est_cvm)) round(best_est_cvm$regime$mean * 100, 2) else NA_real_
+  cvm_median_diff     <- if (!is.null(best_est_cvm)) round(best_est_cvm$regime$median * 100 - median(true_sgpc, na.rm = TRUE), 2) else NA_real_
+  cvm_mean_diff       <- if (!is.null(best_est_cvm)) round(best_est_cvm$regime$mean * 100 - mean(true_sgpc, na.rm = TRUE), 2) else NA_real_
+  cvm_at_cvm_opt      <- if (!is.null(best_est_cvm)) round(best_est_cvm$all_distances$cramer_von_mises, 6) else NA_real_
+  w1_at_cvm_opt       <- if (!is.null(best_est_cvm)) round(best_est_cvm$all_distances$wasserstein1, 6) else NA_real_
+
+  # Copula sensitivity values (NA if not in comparison mode)
+  cs <- copula_sensitivity
+  cs_alt_median_inferred <- if (!is.null(cs)) round(cs$alt_median_sgpc, 2) else NA_real_
+  cs_alt_mean_inferred   <- if (!is.null(cs)) round(cs$alt_mean_sgpc, 2) else NA_real_
+  cs_alt_median_diff     <- if (!is.null(cs)) round(cs$alt_median_diff, 2) else NA_real_
+  cs_alt_mean_diff       <- if (!is.null(cs)) round(cs$alt_mean_diff, 2) else NA_real_
+  cs_delta_median        <- if (!is.null(cs)) round(cs$delta_median_sgpc, 2) else NA_real_
+  cs_delta_mean          <- if (!is.null(cs)) round(cs$delta_mean_sgpc, 2) else NA_real_
+  cs_alt_w1              <- if (!is.null(cs)) round(cs$alt_w1, 6) else NA_real_
+  cs_alt_cvm             <- if (!is.null(cs)) round(cs$alt_cvm, 6) else NA_real_
+
+  # CvM-optimised under alt copula (4th cell: NA if not in comparison mode or single-metric)
+  alt_cvm_est_local <- if (!is.null(cs)) cs$alt_cvm_est else NULL
+  cs_alt_cvm_median <- if (!is.null(alt_cvm_est_local)) round(alt_cvm_est_local$regime$median * 100, 2) else NA_real_
+  cs_alt_cvm_mean   <- if (!is.null(alt_cvm_est_local)) round(alt_cvm_est_local$regime$mean * 100, 2) else NA_real_
+  cs_alt_cvm_median_diff <- if (!is.null(alt_cvm_est_local)) round(alt_cvm_est_local$regime$median * 100 - median(true_sgpc, na.rm = TRUE), 2) else NA_real_
+  cs_alt_cvm_mean_diff   <- if (!is.null(alt_cvm_est_local)) round(alt_cvm_est_local$regime$mean * 100 - mean(true_sgpc, na.rm = TRUE), 2) else NA_real_
+  cs_alt_cvm_cvm    <- if (!is.null(alt_cvm_est_local)) round(alt_cvm_est_local$all_distances$cramer_von_mises, 6) else NA_real_
+  cs_alt_cvm_w1     <- if (!is.null(alt_cvm_est_local)) round(alt_cvm_est_local$all_distances$wasserstein1, 6) else NA_real_
+
   summary_row <- data.frame(
     condition_id = condition_id,
     subgroup_id = subgroup_id,
     n_subgroup = nrow(pairs_sg),
     regime_family = best_family,
+    optimize_metric = optimize_metric,
+    copula_mode = copula_mode,
+    primary_copula = primary_copula_label,
+    # W1-optimized (primary copula)
     median_sgpc_inferred = round(best_est$regime$median * 100, 2),
     mean_sgpc_inferred = round(best_est$regime$mean * 100, 2),
     median_sgpc_true = round(median(true_sgpc, na.rm = TRUE), 2),
@@ -620,6 +1143,31 @@ run_deep_dive <- function(dataset_id = NULL,
     mean_abs_residual = round(mean(abs(best_est$F_pred - best_est$F_obs), na.rm = TRUE), 6),
     wasserstein1 = round(best_est$all_distances$wasserstein1, 6),
     cvm = round(best_est$all_distances$cramer_von_mises, 6),
+    # CvM-optimized (alternative — NA if single-metric mode)
+    cvm_opt_median_sgpc = cvm_median_inferred,
+    cvm_opt_mean_sgpc = cvm_mean_inferred,
+    cvm_opt_median_diff = cvm_median_diff,
+    cvm_opt_mean_diff = cvm_mean_diff,
+    cvm_opt_cvm = cvm_at_cvm_opt,
+    cvm_opt_w1 = w1_at_cvm_opt,
+    # Copula sensitivity: best-fit parametric vs canonical (NA if not comparison mode)
+    alt_copula = if (!is.null(cs)) cs$alt_copula_label else NA_character_,
+    alt_median_sgpc = cs_alt_median_inferred,
+    alt_mean_sgpc = cs_alt_mean_inferred,
+    alt_median_diff = cs_alt_median_diff,
+    alt_mean_diff = cs_alt_mean_diff,
+    copula_delta_median = cs_delta_median,
+    copula_delta_mean = cs_delta_mean,
+    alt_w1 = cs_alt_w1,
+    alt_cvm = cs_alt_cvm,
+    # CvM-optimised under best-fit copula (4th cell — NA if not comparison + dual-metric)
+    alt_cvm_opt_median_sgpc = cs_alt_cvm_median,
+    alt_cvm_opt_mean_sgpc = cs_alt_cvm_mean,
+    alt_cvm_opt_median_diff = cs_alt_cvm_median_diff,
+    alt_cvm_opt_mean_diff = cs_alt_cvm_mean_diff,
+    alt_cvm_opt_cvm = cs_alt_cvm_cvm,
+    alt_cvm_opt_w1 = cs_alt_cvm_w1,
+    # Bootstrap CIs
     boot_ci_lo = round(boot_results$ci_median_sgpc[1], 1),
     boot_ci_hi = round(boot_results$ci_median_sgpc[2], 1),
     boot_ci_mean_lo = round(boot_results$ci_mean_sgpc[1], 1),
@@ -635,6 +1183,22 @@ run_deep_dive <- function(dataset_id = NULL,
     spearman_rho_u_sgpc_true = round(spearman_rho, 6),
     kruskal_p_u_bins = round(kw_p, 8),
     flag_independence_violation = flag_independence_violation,
+    # Churn diagnostics
+    n_prior_all = if (!is.null(churn_bk)) churn_bk$condition$n_prior_all else NA_integer_,
+    n_current_all = if (!is.null(churn_bk)) churn_bk$condition$n_current_all else NA_integer_,
+    n_stayers = if (!is.null(churn_bk)) churn_bk$condition$n_stayers else NA_integer_,
+    n_leavers = if (!is.null(churn_bk)) churn_bk$condition$n_leavers else NA_integer_,
+    n_entrants = if (!is.null(churn_bk)) churn_bk$condition$n_entrants else NA_integer_,
+    alpha_retention = if (!is.null(churn_bk)) churn_bk$condition$alpha else NA_real_,
+    beta_retention = if (!is.null(churn_bk)) churn_bk$condition$beta else NA_real_,
+    churn_type = if (!is.null(churn_bk)) churn_bk$condition$churn_type else NA_character_,
+    gamma_prior = if (!is.null(marginal_comp)) marginal_comp$gamma_prior else NA_real_,
+    gamma_current = if (!is.null(marginal_comp)) marginal_comp$gamma_current else NA_real_,
+    compositionally_ignorable = if (!is.null(marginal_comp)) marginal_comp$compositionally_ignorable else NA,
+    regime_delta_median = if (!is.null(regime_contrast)) regime_contrast$delta_median else NA_real_,
+    regime_delta_mean = if (!is.null(regime_contrast)) regime_contrast$delta_mean else NA_real_,
+    theoretical_premium_mean = if (!is.null(theoretical_prem)) theoretical_prem$mean_scale else NA_real_,
+    theoretical_premium_cdf = if (!is.null(theoretical_prem)) theoretical_prem$cdf_scale else NA_real_,
     stringsAsFactors = FALSE
   )
   data.table::fwrite(summary_row, file.path(output_dir, "phase_a_summary.csv"))

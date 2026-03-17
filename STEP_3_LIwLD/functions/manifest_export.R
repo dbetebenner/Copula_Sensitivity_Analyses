@@ -176,7 +176,7 @@ export_step3_manifest <- function(results,
     "| Error | Source | Phase | Controlled By |",
     "|-------|--------|-------|---------------|",
     "| **Error 1a — Subsampling** | Cross-sectional sample of size N substitutes for full subgroup (paired design) | Phase B systematic (paired mode) | Increases N; degrades precision below ~5,000 students |",
-    "| **Error 1b — Cohort mismatch** | Prior and current cohorts are different students (TIMSS/NAEP) | Phase B systematic (independent mode) | Linkage premium: multiplicative CI inflation vs paired; see linkage premium table |",
+    "| **Error 1b — Cohort mismatch** | Prior and current cohorts are different students (TIMSS/NAEP) | Phase B systematic (linkage_fraction = 0.0) | Linkage premium: multiplicative CI inflation vs paired; linkage_fraction sweep maps the continuous space |",
     "| **Error 2 — Inference** | Canonical copula + Beta family may not match true data-generating process | Phase A deep-dive | Robustness checks: copula sensitivity (B2), family comparison (Phase A), U-independence diagnostic |",
     "",
     "Phase A provides a full diagnostic at the observed subgroup size (N ~ 2,500–6,000).",
@@ -325,6 +325,36 @@ export_step3_manifest <- function(results,
         }
         md_lines <- c(md_lines, "")
       }
+
+      # Linkage fraction curve table (when partial fractions available)
+      if (!is.null(lp$linkage_fraction_curve) && length(lp$linkage_fraction_curve) > 0) {
+        md_lines <- c(md_lines,
+          "#### Linkage Fraction Curve: CI Width by Overlap Strength",
+          "",
+          "The linkage_fraction parameter maps the continuous space between fully ",
+          "independent (0.0) and fully paired (1.0) cohort designs. Intermediate values ",
+          "simulate partial overlap (e.g., some schools retained across NAEP cycles).",
+          "",
+          "| Linkage Fraction | N | 95% CI Width (Median) | 95% CI Width (Mean) | MAE | Pools |",
+          "|------------------|-------|----------------------|---------------------|------|-------|"
+        )
+        for (row in lp$linkage_fraction_curve) {
+          md_lines <- c(md_lines,
+            paste0("| ", sprintf("%.0f%%", row$linkage_fraction * 100),
+                   " | ", formatC(row$n_bucket, format = "d", big.mark = ","),
+                   " | ", round(row$median_ci_width_95, 1),
+                   " | ", round(row$mean_ci_width_95, 1),
+                   " | ", round(row$median_mae, 1),
+                   " | ", row$n_pools, " |")
+          )
+        }
+        md_lines <- c(md_lines,
+          "",
+          "_CI width decreases monotonically as linkage_fraction increases from 0 to 1,_",
+          "_quantifying the precision gain from partial or full cohort overlap._",
+          ""
+        )
+      }
     }
   }
 
@@ -450,7 +480,7 @@ export_step3_manifest <- function(results,
     "| `phase_a_precision_anchor.csv` | Phase A baseline N₀/SE₀/CI-width anchor for scaling narrative |",
     "| `phase_a_summary.csv` | One-row Phase A summary for reporting |",
     "| `phase_b_systematic_summary.csv` | Phase B per-subgroup condition summaries (all conditions run) |",
-    "| `phase_b_precision_by_n.csv` | Phase B precision operating characteristics by N bucket (includes sampling_mode column) |",
+    "| `phase_b_precision_by_n.csv` | Phase B precision operating characteristics by N bucket (includes linkage_fraction and sampling_mode columns) |",
     "| `visualizations/panel_d2_precision_decomposition.*` | Phase B paired vs independent cohort precision decomposition (linkage premium) |",
     "| `phase_b_pool_registry.csv` | Phase B pooled-source registry with eligibility metadata |",
     "| `phase_b_replicates.RData` | Phase B replicate-level raw results (200 draws × N × conditions) |",
@@ -492,6 +522,10 @@ export_step3_manifest <- function(results,
     'lp$mean_ci_ratio                    # mean CI multiplier across N buckets',
     'lp$premium_by_n_bucket              # per-N breakdown: ci_ratio, mae_ratio',
     'lp$precision_by_n_span_mode         # full cross-tab: (year_span x n_bucket x sampling_mode)',
+    '',
+    '# --- Linkage fraction curve: CI width as a function of cohort overlap ---',
+    '# linkage_fraction = 1.0 (fully paired) to 0.0 (fully independent)',
+    'lf_curve <- lp$linkage_fraction_curve  # list of (linkage_fraction, n_bucket, ci_width)',
     '',
     '# --- Error decomposition ---',
     'manifest$error_sources$inference   # Error 2: bias at full N',
@@ -676,6 +710,55 @@ export_phase_a_manifest <- function(phase_a_results,
     manifest$linkage_premium <- phase_a_results$linkage_premium
   }
 
+  # Churn diagnostics
+  if (!is.null(phase_a_results$churn_bookkeeping)) {
+    cb <- phase_a_results$churn_bookkeeping$condition
+    manifest$churn_diagnostics <- list(
+      n_prior_all     = cb$n_prior_all,
+      n_current_all   = cb$n_current_all,
+      n_stayers       = cb$n_stayers,
+      n_leavers       = cb$n_leavers,
+      n_entrants      = cb$n_entrants,
+      alpha_retention = cb$alpha,
+      beta_retention  = cb$beta,
+      churn_asymmetry = cb$churn_asymmetry,
+      churn_type      = cb$churn_type
+    )
+  }
+  if (!is.null(phase_a_results$marginal_comparison)) {
+    if (is.null(manifest$churn_diagnostics)) manifest$churn_diagnostics <- list()
+    mc <- phase_a_results$marginal_comparison
+    manifest$churn_diagnostics$marginal_comparison <- list(
+      gamma_prior   = mc$gamma_prior,
+      gamma_current = mc$gamma_current,
+      compositionally_ignorable = mc$compositionally_ignorable,
+      asymmetry_ratio = mc$asymmetry_ratio
+    )
+  }
+  if (!is.null(phase_a_results$regime_contrast)) {
+    if (is.null(manifest$churn_diagnostics)) manifest$churn_diagnostics <- list()
+    rc <- phase_a_results$regime_contrast
+    manifest$churn_diagnostics$regime_contrast <- list(
+      delta_median = rc$delta_median,
+      delta_mean   = rc$delta_mean,
+      median_sgpc_stayer = rc$median_sgpc_stayer,
+      median_sgpc_all    = rc$median_sgpc_all,
+      mean_sgpc_stayer   = rc$mean_sgpc_stayer,
+      mean_sgpc_all      = rc$mean_sgpc_all
+    )
+  }
+  if (!is.null(phase_a_results$theoretical_linkage_premium)) {
+    if (is.null(manifest$churn_diagnostics)) manifest$churn_diagnostics <- list()
+    tp <- phase_a_results$theoretical_linkage_premium
+    manifest$churn_diagnostics$theoretical_premium <- list(
+      alpha = tp$alpha,
+      rho   = tp$rho,
+      tau   = tp$tau,
+      mean_scale = tp$mean_scale,
+      cdf_scale  = tp$cdf_scale
+    )
+  }
+
   manifest$output_files <- list(
       phase_a_rds = file.path(output_dir, "phase_a_deep_dive.rds"),
       phase_a_analytic_payload = file.path(output_dir, "phase_a_analytic_payload.rds"),
@@ -802,6 +885,72 @@ export_phase_a_manifest <- function(phase_a_results,
       "_This single-N anchor complements Phase B's Panel D2, which maps the premium across N values._",
       ""
     )
+  }
+
+  # Churn diagnostics markdown section
+  if (!is.null(manifest$churn_diagnostics)) {
+    cd <- manifest$churn_diagnostics
+    md_lines <- c(md_lines,
+      "## Churn Diagnostics (S/L/E Decomposition)",
+      "",
+      "Student churn creates partial linkage: some students are stayers (S, observed at both waves),",
+      "some are leavers (L, prior wave only), some are entrants (E, current wave only).",
+      "",
+      "| Quantity | Value |",
+      "|----------|-------|",
+      paste0("| Prior wave (all students) | ", format(cd$n_prior_all, big.mark = ","), " |"),
+      paste0("| Current wave (all students) | ", format(cd$n_current_all, big.mark = ","), " |"),
+      paste0("| Stayers (matched pairs) | ", format(cd$n_stayers, big.mark = ","), " |"),
+      paste0("| Leavers (prior only) | ", format(cd$n_leavers, big.mark = ","), " |"),
+      paste0("| Entrants (current only) | ", format(cd$n_entrants, big.mark = ","), " |"),
+      paste0("| Alpha (prior retention) | ", cd$alpha_retention, " |"),
+      paste0("| Beta (current retention) | ", cd$beta_retention, " |"),
+      paste0("| Churn type | ", cd$churn_type, " |"),
+      ""
+    )
+    if (!is.null(cd$marginal_comparison)) {
+      mcc <- cd$marginal_comparison
+      md_lines <- c(md_lines,
+        "### Compositional Ignorability Test",
+        "",
+        "Wasserstein-1 distances between all-student and stayer-only marginals:",
+        "",
+        paste0("- **Gamma_U (prior):** ", mcc$gamma_prior),
+        paste0("- **Gamma_V (current):** ", mcc$gamma_current),
+        paste0("- **Compositionally ignorable:** ", mcc$compositionally_ignorable),
+        if (is.finite(mcc$asymmetry_ratio %||% NA_real_))
+          paste0("- **Asymmetry ratio (Gamma_V / Gamma_U):** ", mcc$asymmetry_ratio,
+                 if (mcc$asymmetry_ratio > 2) " _(possible observability churn)_" else "")
+        else NULL,
+        ""
+      )
+    }
+    if (!is.null(cd$regime_contrast)) {
+      rcc <- cd$regime_contrast
+      md_lines <- c(md_lines,
+        "### Regime Contrast (Stayer vs All-Student)",
+        "",
+        paste0("- **Stayer regime:** median = ", rcc$median_sgpc_stayer,
+               ", mean = ", rcc$mean_sgpc_stayer),
+        paste0("- **All-student regime:** median = ", rcc$median_sgpc_all,
+               ", mean = ", rcc$mean_sgpc_all),
+        paste0("- **Delta median:** ", rcc$delta_median, " SGPc"),
+        paste0("- **Delta mean:** ", rcc$delta_mean, " SGPc"),
+        ""
+      )
+    }
+    if (!is.null(cd$theoretical_premium)) {
+      tpc <- cd$theoretical_premium
+      md_lines <- c(md_lines,
+        "### Theoretical Partial-Linkage Premium",
+        "",
+        paste0("At alpha = ", tpc$alpha, ", rho = ", tpc$rho, " (tau = ", tpc$tau, "):"),
+        "",
+        paste0("- **Mean-scale SE multiplier:** ", tpc$mean_scale),
+        paste0("- **CDF-scale SE multiplier:** ", tpc$cdf_scale),
+        ""
+      )
+    }
   }
 
   md_lines <- c(md_lines,

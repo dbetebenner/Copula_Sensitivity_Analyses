@@ -110,6 +110,7 @@ all_results               <- list()
 summary_rows              <- list()
 copula_sensitivity_rows   <- list()
 independence_sensitivity_rows <- list()
+churn_bookkeeping_rows    <- list()
 pool_registry_rows        <- list()
 replicate_rows            <- list()
 row_counter               <- 0L
@@ -429,7 +430,7 @@ process_pool_setup <- function(
 #
 # This inline definition is the SEQUENTIAL FALLBACK. The daemon workers use
 # the version sourced from functions/process_replicate_batch.R (which supports
-# sampling_mode="paired"|"independent"). This inline copy must stay in sync.
+# linkage_fraction 0.0-1.0). This inline copy must stay in sync.
 process_replicate_batch <- function(
   pool_idx, n_bucket, rep_start, rep_end,
   pool_seed_base,
@@ -437,28 +438,45 @@ process_replicate_batch <- function(
   ds_id, condition_id,
   year_span, content_area,
   phaseb_progress_file_abs,
-  sampling_mode = "paired"
+  sampling_mode = NULL,
+  linkage_fraction = NULL
 ) {
   t0 <- proc.time()[["elapsed"]]
+
+  # Resolve linkage_fraction from explicit value or legacy sampling_mode
+  if (is.null(linkage_fraction)) {
+    if (!is.null(sampling_mode)) {
+      linkage_fraction <- if (identical(sampling_mode, "paired")) 1.0 else 0.0
+    } else {
+      linkage_fraction <- 1.0
+    }
+  }
+  linkage_fraction <- as.numeric(linkage_fraction)
+  stopifnot(is.finite(linkage_fraction), linkage_fraction >= 0, linkage_fraction <= 1)
+
+  # Derive sampling_mode label for output compatibility
+  sampling_mode_label <- if (linkage_fraction == 1.0) {
+    "paired"
+  } else if (linkage_fraction == 0.0) {
+    "independent"
+  } else {
+    sprintf("partial_%.2f", linkage_fraction)
+  }
 
   sg_idx <- .PHASEB_POOL_DEFS[[pool_idx]]$sg_idx
   reps   <- seq.int(rep_start, rep_end)
   rows   <- vector("list", length(reps))
 
-  is_independent <- identical(sampling_mode, "independent")
-
   has_preloaded_truth <- exists(".PHASEB_TRUE_SGPC_FULL", inherits = TRUE) &&
                          !is.null(.PHASEB_TRUE_SGPC_FULL)
 
-  if (is_independent) {
+  # For non-fully-paired modes, use full-pool truth (fixed target, not per-replicate)
+  is_fully_paired <- (linkage_fraction == 1.0)
+  if (!is_fully_paired) {
     pool_truth_median <- if (exists(".PHASEB_TRUE_POOL_MEDIAN", inherits = TRUE))
                            .PHASEB_TRUE_POOL_MEDIAN[[pool_idx]] else NA_real_
     pool_truth_mean   <- if (exists(".PHASEB_TRUE_POOL_MEAN",   inherits = TRUE))
                            .PHASEB_TRUE_POOL_MEAN[[pool_idx]]   else NA_real_
-    if (is.na(pool_truth_median) || is.na(pool_truth_mean)) {
-      cat(sprintf("WARNING: [W%d] pool=%s independent mode without pool truth — results will be NA\n",
-                  Sys.getpid(), pool_id))
-    }
   }
 
   # grid_resolution: respect config rep_grid_resolution (same as daemon version)
@@ -468,25 +486,21 @@ process_replicate_batch <- function(
     else as.integer(gr)
   }
 
+  # Encode linkage_fraction into seed offset for reproducibility across fractions
+  lf_seed_offset <- as.integer(round(linkage_fraction * 100))
+
   for (ri in seq_along(reps)) {
     rep_idx <- reps[[ri]]
-    # Seed offset of 500000L for independent mode intentionally decorrelates
-    # the random streams. Both modes use valid random numbers; the offset
-    # ensures different student draws, not a systematic bias source.
     set.seed(pool_seed_base + as.integer(n_bucket) * 1000L + rep_idx +
-               if (is_independent) 500000L else 0L)
+               lf_seed_offset * 10000L)
 
-    if (is_independent) {
-      # Independent cohort design (TIMSS/NAEP): separate draws for U and V
-      u_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
-      v_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
-      u_rep <- reference_cdf(.PHASEB_SS_PRIOR[u_obs_idx],   .PHASEB_REFS$ref_prior)
-      v_rep <- reference_cdf(.PHASEB_SS_CURRENT[v_obs_idx], .PHASEB_REFS$ref_current)
-      true_median <- pool_truth_median
-      true_mean   <- pool_truth_mean
-    } else {
-      # Paired subsampling (original behaviour)
-      rep_obs_idx <- sample(sg_idx, size = as.integer(n_bucket), replace = FALSE)
+    n_bkt <- as.integer(n_bucket)
+    n_linked   <- as.integer(floor(linkage_fraction * n_bkt))
+    n_unlinked <- n_bkt - n_linked
+
+    if (n_linked == n_bkt) {
+      # ---- Fully paired (linkage_fraction == 1.0) ----
+      rep_obs_idx <- sample(sg_idx, size = n_bkt, replace = FALSE)
       if (has_preloaded_truth) {
         true_rep <- .PHASEB_TRUE_SGPC_FULL[rep_obs_idx]
       } else {
@@ -499,6 +513,31 @@ process_replicate_batch <- function(
       v_rep <- reference_cdf(.PHASEB_SS_CURRENT[rep_obs_idx], .PHASEB_REFS$ref_current)
       true_median <- median(true_rep, na.rm = TRUE)
       true_mean   <- mean(true_rep,   na.rm = TRUE)
+
+    } else if (n_linked == 0L) {
+      # ---- Fully independent (linkage_fraction == 0.0) ----
+      u_obs_idx <- sample(sg_idx, size = n_bkt, replace = FALSE)
+      v_obs_idx <- sample(sg_idx, size = n_bkt, replace = FALSE)
+      u_rep <- reference_cdf(.PHASEB_SS_PRIOR[u_obs_idx],   .PHASEB_REFS$ref_prior)
+      v_rep <- reference_cdf(.PHASEB_SS_CURRENT[v_obs_idx], .PHASEB_REFS$ref_current)
+      true_median <- pool_truth_median
+      true_mean   <- pool_truth_mean
+
+    } else {
+      # ---- Partial linkage (0 < linkage_fraction < 1) ----
+      linked_idx <- sample(sg_idx, size = n_linked, replace = FALSE)
+      u_linked <- reference_cdf(.PHASEB_SS_PRIOR[linked_idx],   .PHASEB_REFS$ref_prior)
+      v_linked <- reference_cdf(.PHASEB_SS_CURRENT[linked_idx], .PHASEB_REFS$ref_current)
+
+      u_unlinked_idx <- sample(sg_idx, size = n_unlinked, replace = FALSE)
+      v_unlinked_idx <- sample(sg_idx, size = n_unlinked, replace = FALSE)
+      u_unlinked <- reference_cdf(.PHASEB_SS_PRIOR[u_unlinked_idx],   .PHASEB_REFS$ref_prior)
+      v_unlinked <- reference_cdf(.PHASEB_SS_CURRENT[v_unlinked_idx], .PHASEB_REFS$ref_current)
+
+      u_rep <- c(u_linked, u_unlinked)
+      v_rep <- c(v_linked, v_unlinked)
+      true_median <- pool_truth_median
+      true_mean   <- pool_truth_mean
     }
 
     est_rep <- tryCatch(
@@ -539,7 +578,8 @@ process_replicate_batch <- function(
       n_bucket         = as.integer(n_bucket),
       n_eff_bucket     = as.numeric(n_bucket),
       outer_rep        = rep_idx,
-      sampling_mode    = sampling_mode,
+      sampling_mode    = sampling_mode_label,
+      linkage_fraction = linkage_fraction,
       converged        = converged,
       inferred_median  = inferred_median,
       inferred_mean    = inferred_mean,
@@ -555,13 +595,13 @@ process_replicate_batch <- function(
   }
 
   elapsed <- proc.time()[["elapsed"]] - t0
-  cat(sprintf("[W%d] %s | %s pool=%s bkt=%d reps=%d-%d | %.1fs\n",
+  cat(sprintf("[W%d] %s | lf=%.2f pool=%s bkt=%d reps=%d-%d | %.1fs\n",
               Sys.getpid(), format(Sys.time(), "%H:%M:%S"),
-              sampling_mode, pool_id, n_bucket, rep_start, rep_end, elapsed))
+              linkage_fraction, pool_id, n_bucket, rep_start, rep_end, elapsed))
   # Append completion record to shared progress file
   tryCatch(
-    cat(sprintf("DONE|%s|%s|%d|%d|%d|%.2f\n",
-                sampling_mode, pool_id, n_bucket, rep_start, rep_end, elapsed),
+    cat(sprintf("DONE|lf=%.2f|%s|%d|%d|%d|%.2f\n",
+                linkage_fraction, pool_id, n_bucket, rep_start, rep_end, elapsed),
         file = phaseb_progress_file_abs, append = TRUE),
     error = function(e) invisible(NULL)
   )
@@ -943,6 +983,72 @@ for (ds_id in cfg_sys$datasets) {
                   length(subgroups), length(district_pools), length(cluster_pools)))
     if (length(subgroups) == 0) next
 
+    # ---- B.0: Churn bookkeeping per condition and pool ----
+    condition_churn <- NULL
+    if (exists("compute_churn_bookkeeping", mode = "function")) {
+      condition_churn <- tryCatch(
+        compute_churn_bookkeeping(STATE_DATA, pairs, cond, sg_col = sg_col),
+        error = function(e) { cat("    WARNING: Churn bookkeeping failed:", e$message, "\n"); NULL }
+      )
+      if (!is.null(condition_churn)) {
+        cc <- condition_churn$condition
+        cat(sprintf("    Churn: S=%s, L=%s, E=%s | alpha=%.3f, beta=%.3f | %s\n",
+                    format(cc$n_stayers, big.mark = ","),
+                    format(cc$n_leavers, big.mark = ","),
+                    format(cc$n_entrants, big.mark = ","),
+                    cc$alpha, cc$beta, cc$churn_type))
+        # Save condition-level churn row
+        churn_row <- data.table::data.table(
+          dataset_id    = ds_id,
+          condition_id  = condition_id,
+          year_span     = cond$year_span,
+          content_area  = cond$content_area,
+          pool_id       = "CONDITION_TOTAL",
+          pool_type     = "condition",
+          n_prior_all   = cc$n_prior_all,
+          n_current_all = cc$n_current_all,
+          n_stayers     = cc$n_stayers,
+          n_leavers     = cc$n_leavers,
+          n_entrants    = cc$n_entrants,
+          alpha         = cc$alpha,
+          beta          = cc$beta,
+          churn_asymmetry = cc$churn_asymmetry,
+          churn_type    = cc$churn_type
+        )
+        churn_bookkeeping_rows[[length(churn_bookkeeping_rows) + 1L]] <- churn_row
+
+        # Per-pool churn from subgroup breakdown
+        if (!is.null(condition_churn$subgroup) && nrow(condition_churn$subgroup) > 0) {
+          sg_churn <- condition_churn$subgroup
+          for (pi in seq_along(subgroups)) {
+            pool <- subgroups[[pi]]
+            pool_sg_id <- as.character(pool$id)
+            sg_match <- sg_churn[as.character(get(sg_col)) == pool_sg_id]
+            if (nrow(sg_match) > 0) {
+              pool_churn_row <- data.table::data.table(
+                dataset_id    = ds_id,
+                condition_id  = condition_id,
+                year_span     = cond$year_span,
+                content_area  = cond$content_area,
+                pool_id       = pool$pool_id %||% paste0(condition_id, "__", pool_sg_id),
+                pool_type     = pool$pool_type %||% "district",
+                n_prior_all   = sg_match$n_prior_all[1],
+                n_current_all = sg_match$n_current_all[1],
+                n_stayers     = sg_match$n_stayers[1],
+                n_leavers     = sg_match$n_leavers[1],
+                n_entrants    = sg_match$n_entrants[1],
+                alpha         = sg_match$alpha[1],
+                beta          = sg_match$beta[1],
+                churn_asymmetry = sg_match$churn_asymmetry[1],
+                churn_type    = sg_match$churn_type[1]
+              )
+              churn_bookkeeping_rows[[length(churn_bookkeeping_rows) + 1L]] <- pool_churn_row
+            }
+          }
+        }
+      }
+    }
+
     ##################################################################
     ### Stage 1: Full-pool setup (parallel via mirai_map OR sequential)
     ###
@@ -1162,11 +1268,21 @@ for (ds_id in cfg_sys$datasets) {
     pool_truth_mean   <- list()
     ti <- 0L
 
-    # Determine which sampling modes to run (paired, independent, or both)
-    sampling_modes <- cfg_sys$sampling_modes
-    if (is.null(sampling_modes) || length(sampling_modes) == 0) {
-      sampling_modes <- "paired"  # backward compatible default
+    # Determine linkage fractions to sweep.
+    # Backward compat: if legacy sampling_modes is set but linkage_fractions
+    # is not, map "paired" -> 1.0, "independent" -> 0.0.
+    linkage_fractions <- cfg_sys$linkage_fractions
+    if (is.null(linkage_fractions) || length(linkage_fractions) == 0) {
+      if (!is.null(cfg_sys$sampling_modes) && length(cfg_sys$sampling_modes) > 0) {
+        linkage_fractions <- vapply(cfg_sys$sampling_modes, function(sm) {
+          if (identical(sm, "paired")) 1.0 else 0.0
+        }, numeric(1), USE.NAMES = FALSE)
+        linkage_fractions <- sort(unique(linkage_fractions), decreasing = TRUE)
+      } else {
+        linkage_fractions <- 1.0  # default: matched pairs only
+      }
     }
+    linkage_fractions <- sort(unique(as.numeric(linkage_fractions)), decreasing = TRUE)
 
     for (pi in seq_along(pool_setups)) {
       setup <- pool_setups[[pi]]
@@ -1176,10 +1292,10 @@ for (ds_id in cfg_sys$datasets) {
         sg_idx     = setup$sg_idx,
         subgroup_id = setup$subgroup_id
       )
-      # Precompute full-pool truth summaries for independent-mode replicates.
-      # In independent mode, per-replicate truth is undefined (U and V come
-      # from different students), so error is measured against the fixed
-      # full-pool summary.
+      # Precompute full-pool truth summaries for non-fully-paired replicates.
+      # When linkage_fraction < 1.0, per-replicate truth is undefined (U and V
+      # may come from different students), so error is measured against the
+      # fixed full-pool summary.
       if (!is.null(true_sgpc_full)) {
         pool_true <- true_sgpc_full[setup$sg_idx]
         pool_truth_median[[pi]] <- median(pool_true, na.rm = TRUE)
@@ -1188,24 +1304,24 @@ for (ds_id in cfg_sys$datasets) {
         pool_truth_median[[pi]] <- NA_real_
         pool_truth_mean[[pi]]   <- NA_real_
       }
-      for (sm in sampling_modes) {
+      for (lf in linkage_fractions) {
         for (nb in setup$eligible_buckets) {
           for (rb_start in seq(1L, outer_reps, by = rep_batch_size)) {
             rb_end <- min(rb_start + rep_batch_size - 1L, outer_reps)
             ti <- ti + 1L
             tasks[[ti]] <- list(
-              pool_idx       = pi,
-              n_bucket       = as.integer(nb),
-              rep_start      = rb_start,
-              rep_end        = rb_end,
-              pool_seed_base = setup$seed_base,
-              pool_id        = setup$pool_id,
-              pool_type      = setup$pool_type,
-              ds_id          = ds_id,
-              condition_id   = condition_id,
-              year_span      = cond$year_span,
-              content_area   = cond$content_area,
-              sampling_mode  = sm
+              pool_idx         = pi,
+              n_bucket         = as.integer(nb),
+              rep_start        = rb_start,
+              rep_end          = rb_end,
+              pool_seed_base   = setup$seed_base,
+              pool_id          = setup$pool_id,
+              pool_type        = setup$pool_type,
+              ds_id            = ds_id,
+              condition_id     = condition_id,
+              year_span        = cond$year_span,
+              content_area     = cond$content_area,
+              linkage_fraction = lf
             )
           }
         }
@@ -1313,7 +1429,7 @@ for (ds_id in cfg_sys$datasets) {
             year_span              = task$year_span,
             content_area           = task$content_area,
             phaseb_progress_file_abs = pf,
-            sampling_mode          = task$sampling_mode %||% "paired"
+            linkage_fraction       = task$linkage_fraction %||% 1.0
           )
         }
         environment(worker_lambda) <- globalenv()
@@ -1388,7 +1504,7 @@ for (ds_id in cfg_sys$datasets) {
             year_span              = task$year_span,
             content_area           = task$content_area,
             phaseb_progress_file_abs = pf_abs,
-            sampling_mode          = task$sampling_mode %||% "paired"
+            linkage_fraction       = task$linkage_fraction %||% 1.0
           ),
           error = function(e) {
             cat("      ERROR task", ti, ":", e$message, "\n")
@@ -1490,11 +1606,16 @@ if (length(summary_rows) > 0) {
   save(phase_b_replicates,      file = file.path(RESULTS_DIR, "phase_b_replicates.RData"))
 
   if (nrow(phase_b_replicates) > 0) {
-    # Backward compat: ensure sampling_mode column exists before aggregation.
-    # Old replicate tables (pre-sampling-mode feature) will lack this column;
-    # default to "paired" which was the only mode previously.
+    # Backward compat: ensure sampling_mode and linkage_fraction columns exist
+    # before aggregation. Old replicate tables may lack these columns.
     if (!"sampling_mode" %in% names(phase_b_replicates)) {
       phase_b_replicates[, sampling_mode := "paired"]
+    }
+    if (!"linkage_fraction" %in% names(phase_b_replicates)) {
+      phase_b_replicates[, linkage_fraction := fifelse(
+        sampling_mode == "paired", 1.0,
+        fifelse(sampling_mode == "independent", 0.0, NA_real_)
+      )]
     }
     phase_b_precision_by_n <- phase_b_replicates[, .(
       n_reps            = .N,
@@ -1530,12 +1651,12 @@ if (length(summary_rows) > 0) {
       kappa_hat_q25     = round(quantile(kappa_hat[converged %in% TRUE], 0.25, na.rm = TRUE), 4),
       kappa_hat_q75     = round(quantile(kappa_hat[converged %in% TRUE], 0.75, na.rm = TRUE), 4),
       kappa_hat_q90     = round(quantile(kappa_hat[converged %in% TRUE], 0.90, na.rm = TRUE), 4)
-    ), by = .(pool_id, pool_type, span, content, n_bucket, sampling_mode)]
+    ), by = .(pool_id, pool_type, dataset_id, span, content, n_bucket, sampling_mode, linkage_fraction)]
   } else {
     phase_b_precision_by_n <- data.table(
-      pool_id = character(), pool_type = character(),
+      pool_id = character(), pool_type = character(), dataset_id = character(),
       span = integer(), content = character(), n_bucket = integer(),
-      sampling_mode = character(),
+      sampling_mode = character(), linkage_fraction = numeric(),
       n_reps = integer(), n_converged = integer(), N_eff_bucket = numeric(),
       median_bias = numeric(), median_mae = numeric(), median_rmse = numeric(),
       median_ci_width_90 = numeric(), median_ci_width_95 = numeric(),
@@ -1555,9 +1676,13 @@ if (length(summary_rows) > 0) {
   fwrite(phase_b_copula_sensitivity,       file.path(RESULTS_DIR, "phase_b_copula_sensitivity.csv"))
   fwrite(phase_b_independence_sensitivity, file.path(RESULTS_DIR, "phase_b_independence_sensitivity.csv"))
 
+  phase_b_churn_bookkeeping <- if (length(churn_bookkeeping_rows) > 0) rbindlist(churn_bookkeeping_rows, fill = TRUE) else data.table()
+  fwrite(phase_b_churn_bookkeeping, file.path(RESULTS_DIR, "phase_b_churn_bookkeeping.csv"))
+
   cat("\n  Saved: phase_b_systematic_summary.csv, phase_b_pool_registry.csv, phase_b_precision_by_n.csv\n")
   cat("  Saved: phase_b_replicates.RData, phase_b_all_results.rds\n")
   cat("  Saved: phase_b_copula_sensitivity.csv, phase_b_independence_sensitivity.csv\n")
+  cat("  Saved: phase_b_churn_bookkeeping.csv\n")
 } else {
   cat("No results to compile.\n")
   phase_b_summary <- data.table()

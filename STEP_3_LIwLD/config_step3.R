@@ -32,9 +32,11 @@ STEP3_CONFIG <- list(
     params_source = "STEP_1_manifest",      # Load from Phase 1 manifest
     year_span     = NULL,                   # NULL = detect from condition
     n_param_draws = 25,                     # For copula uncertainty
-    # "canonical_only" = always use canonical copula (honest NAEP/TIMSS setting)
+    # "comparison"      = run both canonical AND per-condition best-fit copula
+    #                     side-by-side, reporting deltas (recommended default)
+    # "canonical_only"  = always use canonical copula (honest NAEP/TIMSS setting)
     # "phase1_best_fit" = use per-condition best-fit copula (oracle benchmark)
-    mode          = "canonical_only"
+    mode          = "comparison"
   ),
 
   kernel = list(
@@ -75,8 +77,12 @@ STEP3_CONFIG <- list(
   # 4. Distance metric
   # ===========================================================================
   distance = list(
-    primary   = "wasserstein1",    # Optimiser objective
+    primary   = "wasserstein1",    # Primary optimiser objective
     secondary = "cvm",             # Reported alongside
+    # "both" = optimise under W1 and CvM in a single grid sweep (negligible
+    # overhead — the expensive predict_marginal_cdf call is shared).
+    # "wasserstein1" or "cvm" = single-metric only (original behaviour).
+    optimize  = "both",
     v_grid_n  = 201                # Number of CDF evaluation points
   ),
 
@@ -175,19 +181,33 @@ STEP3_CONFIG <- list(
     year_spans  = c(1, 2, 4),       # Test these spans
     content_areas = c("READING", "MATHEMATICS"),  # NAEP/TIMSS-relevant domains
 
-    # Sampling mode decomposition -----------------------------------------------
-    # Phase B replicates can run under two sampling designs:
-    #   "paired"      — same student indices for both U and V (original).
-    #                    Measures subsampling variability only.
-    #   "independent" — separate random draws for U and V, mirroring
-    #                    TIMSS/NAEP where Grade 4 and Grade 8 are different
-    #                    students tested in the same year.
-    #                    Captures full cross-sectional sampling uncertainty.
-    # When both are enabled, the precision-by-N table includes a
-    # sampling_mode dimension, and the decomposition panel (panel_d2)
-    # directly quantifies the "linkage premium" — the precision cost
-    # of not having longitudinal pairing.
-    sampling_modes = c("paired", "independent"),  # or just c("paired") to skip
+    # Linkage fraction sweep -------------------------------------------------------
+    # Controls the degree of student-level pairing between prior and current
+    # cohorts in Phase B replicates. Continuous parameter from 0.0 to 1.0:
+    #
+    #   1.0           — Fully paired (matched pairs): same student indices for
+    #                    both U and V. Measures subsampling variability only
+    #                    (Error 1a). Analogous to a dependent-samples t-test.
+    #
+    #   0.0           — Fully independent: separate random draws for U and V,
+    #                    mirroring TIMSS/NAEP where Grade 4 and Grade 8 are
+    #                    different students tested in the same year. Captures
+    #                    full cross-sectional sampling uncertainty (Error 1a + 1b).
+    #
+    #   0 < lf < 1    — Partial linkage: floor(lf * N) students share indices,
+    #                    remaining students draw independently. Simulates designs
+    #                    with partial cohort overlap (e.g. some schools retained
+    #                    across NAEP cycles, or auxiliary-variable pseudo-pairing).
+    #
+    # The precision-by-N table includes a linkage_fraction dimension, and the
+    # linkage premium panel maps CI width as a continuous function of overlap
+    # strength, giving practitioners a lookup for their specific design.
+    #
+    # Default: c(1.0, 0.0) matches the original paired/independent decomposition.
+    # Add intermediate values (e.g. 0.25, 0.5, 0.75) to map the full curve.
+    # Current: matched-pairs only — aligns with state assessment systems that
+    # infer growth for the population of students with complete records.
+    linkage_fractions = c(1.0),
     # "step2_empirical" = load sgpc_emp from STEP 2 outputs (no recomputation)
     # "recompute" = compute true SGPc on-the-fly via sgpc_engine (fallback)
     truth_source = "step2_empirical",

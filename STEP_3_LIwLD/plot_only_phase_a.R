@@ -52,6 +52,7 @@ require(wesanderson)
 source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
 source(file.path(STEP3_ROOT, "functions/figure_naming.R"))
 source(file.path(STEP3_ROOT, "functions/diagnostics_plots.R"))
+source(file.path(STEP3_ROOT, "functions/copula_metric_grid_latex.R"))
 source(file.path(STEP3_ROOT, "config_step3.R"))
 
 if (!dir.exists(VIZ_DIR)) {
