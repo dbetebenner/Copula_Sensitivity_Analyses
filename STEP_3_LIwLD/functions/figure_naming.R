@@ -42,7 +42,9 @@ get_phasea_figure_map <- function() {
     churn_decomposition       = "phasea_07a_churn_decomposition",
     marginal_comparison       = "phasea_07b_marginal_comparison",
     regime_contrast           = "phasea_07c_regime_contrast",
-    churn_summary_panel       = "phasea_07d_churn_summary_panel"
+    churn_summary_panel       = "phasea_07d_churn_summary_panel",
+    # Precision sweep (A.9): N-operating curve from condition pool subsampling
+    precision_sweep           = "phasea_08_precision_sweep"
   )
 }
 

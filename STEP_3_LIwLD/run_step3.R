@@ -73,6 +73,7 @@ source(file.path(STEP3_ROOT, "functions/distance_metrics.R"))
 source(file.path(STEP3_ROOT, "functions/optimize_regime.R"))
 source(file.path(STEP3_ROOT, "functions/optimize_regime_stratified.R"))
 source(file.path(STEP3_ROOT, "functions/bootstrap_uncertainty.R"))
+source(file.path(STEP3_ROOT, "functions/precision_sweep.R"))
 source(file.path(STEP3_ROOT, "functions/run_deep_dive.R"))
 source(file.path(STEP3_ROOT, "functions/step3_publication_style.R"))
 source(file.path(STEP3_ROOT, "functions/figure_naming.R"))
@@ -277,6 +278,25 @@ if (!exists("STEP3_PHASE_B") || STEP3_PHASE_B) {
   })
 } else {
   cat("Phase B skipped (STEP3_PHASE_B = FALSE)\n\n")
+}
+
+############################################################################
+### PHASE B DEEP-DIVE: Single-Target Systematic Validation
+############################################################################
+
+cat("====================================================================\n")
+cat("PHASE B DEEP-DIVE: Single-Target Validation\n")
+cat("====================================================================\n\n")
+
+if (isTRUE(STEP3_PHASE_B_DEEP_DIVE %||% FALSE)) {
+  tryCatch({
+    source(file.path(STEP3_ROOT, "step3_phaseb_deep_dive.R"), local = FALSE)
+  }, error = function(e) {
+    cat("ERROR in Phase B Deep-Dive: ", e$message, "\n")
+    cat("Continuing to Phase C...\n\n")
+  })
+} else {
+  cat("Phase B deep-dive skipped (STEP3_PHASE_B_DEEP_DIVE not TRUE)\n\n")
 }
 
 ############################################################################

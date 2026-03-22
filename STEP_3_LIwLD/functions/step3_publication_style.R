@@ -135,5 +135,21 @@ geom_ref_vline <- function(xintercept, ...) {
 }
 
 
+############################################################################
+### Sampling-context captions for plot footnotes
+############################################################################
+
+CAPTION_BOOTSTRAP <- paste0(
+  "Uncertainty: bootstrap with replacement from observed N ",
+  "(state census / superpopulation framing). ",
+  "Not representative of NAEP/TIMSS repeated-sampling uncertainty.")
+
+CAPTION_SUBSAMPLE <- paste0(
+  "Uncertainty: subsample without replacement from condition pool ",
+  "(NAEP/TIMSS population-sampling framing). ",
+  "Bootstrap anchor shown at observed N for comparison.")
+
+
 cat("STEP 3 step3_publication_style.R loaded.\n")
 cat("  theme_publication(), save_plot_multi(), STEP3_COLORS, REGIME_FAMILY_COLORS\n")
+cat("  CAPTION_BOOTSTRAP, CAPTION_SUBSAMPLE\n")

@@ -165,6 +165,36 @@ the Phase A summary and copula comparison panels.
 Phase A provides a full diagnostic at the observed subgroup size. Phase B maps how Error 1
 degrades as N falls to NAEP-scale (~3,000–4,000 per state) and TIMSS-scale (~4,000+ per country).
 
+### Sampling Framework: Bootstrap vs Subsampling
+
+STEP 3 uses two distinct resampling strategies to quantify Error 1, each serving a different
+inferential framing:
+
+| Framing | Method | Population model | Relevant phase/step | Use case |
+|---------|--------|------------------|---------------------|----------|
+| **State census / superpopulation** | Bootstrap with replacement from observed N | The observed subgroup *is* the population; variability comes from hypothetical repetitions | Phase A (A.7/A.7b) | State assessment systems where all students with matched records are observed |
+| **NAEP/TIMSS population sampling** | Subsample without replacement from condition pool | The N students are a *sample* from a larger population; variability comes from which students happen to be sampled | Phase A (A.9), Phase B, Phase B deep-dive | NAEP, TIMSS, and any design where the observed cohort is a sample from a target population |
+
+**Why the distinction matters:**
+
+- **Bootstrap (A.7/A.7b):** Resampling with replacement from the observed N students simulates
+  what would happen if the *same population* were observed under repeated measurement noise.
+  CI widths under this frame reflect sampling error within the observed census — appropriate
+  for a state assessment where every student with a valid score pair is included.
+
+- **Subsampling (A.9 / Phase B):** Drawing without replacement from a larger condition pool
+  simulates what would happen if a *different random sample* of N students were drawn from
+  the population. CI widths under this frame reflect the uncertainty that comes from observing
+  only a subset of the population — appropriate for NAEP (state samples of ~3,000–4,000) or
+  TIMSS (country samples of ~4,000+).
+
+**Linkage premium interpretation:** Under both frameworks, the *ratio* of independent to paired
+CI width (the linkage premium) quantifies the precision cost of breaking student-level linkage.
+However, the *absolute* CI widths differ: bootstrap CIs at the observed subgroup N are typically
+narrower than subsampling CIs at the same N, because bootstrap resamples are drawn from a
+smaller, more homogeneous source population. The A.9 precision sweep panel overlays both
+frameworks for direct comparison.
+
 ### Methodological Note: Reference Marginals (Paired vs State-Level)
 
 The reference marginal ECDFs (F_X^ref, F_Y^ref) that transform raw scores to pseudo-observations
@@ -240,6 +270,7 @@ STEP_3_LIwLD/
     distance_metrics.R                   # Wasserstein-1, CvM, KS
     optimize_regime.R                    # Grid search + local refinement
     bootstrap_uncertainty.R              # Sampling + copula uncertainty loops
+    precision_sweep.R                    # Phase B-style subsampling N-sweep (A.9)
     bucket_classification.R              # K=3/K=5 bucket probabilities + stability
     build_cluster_pools.R                # Growth-stratified super-district pools
     diagnostics_plots.R                  # ggplot2 diagnostic plots
@@ -248,6 +279,8 @@ STEP_3_LIwLD/
     phase_a_deep_dive.rds                # Phase A full results
     phase_a_analytic_payload.rds         # Notation-aligned payload for figure assembly
     phase_a_summary.csv                  # Phase A key metrics
+    phase_a_precision_sweep.csv          # A.9 N-operating curve replicates (subsampling)
+    phase_a_precision_sweep_summary.csv  # A.9 aggregated by (N, linkage_fraction)
     phase_b_systematic_summary.csv       # Phase B per-subgroup condition summaries
     phase_b_pool_registry.csv            # Phase B pool registry + eligibility
     phase_b_precision_by_n.csv           # Phase B precision operating table by N bucket
@@ -276,6 +309,7 @@ STEP_3_LIwLD/
         phasea_03e_recovery_summary.*    # Recovery summary composite
         phasea_03f_linkage_decomposition.* # Linkage premium decomposition
         phasea_04_independence_diagnostic.* # P ⊥ U diagnostic by U-quintile
+        phasea_08_precision_sweep.*       # A.9 CI width vs N (subsampling + bootstrap anchor)
         phasea_05a_copula_bestfit_forward_cdf.*      # (comparison mode) CDF under best-fit copula
         phasea_05b_copula_bestfit_regime_density.*   # (comparison mode) Regime under best-fit copula
         phasea_05c_copula_bestfit_recovery_summary.* # (comparison mode) Recovery under best-fit
@@ -296,6 +330,7 @@ STEP_3_LIwLD/
       panel_h_district_summary_grade.*   # H: district summary grade panel
       panel_i_independence_diagnostic.*  # I: independence diagnostic (P ⊥ U check)
       panel_j_sensitivity_summary.*      # J: sensitivity summary (B2/B3)
+    deep_dives/{tag}/phase_b_deep_dive/  # Phase B single deep-dive outputs
     exports/phase_a/                     # Tidy export bridge for figure assembly
       step3_cdf_curves.csv
       step3_objective_surface.csv
@@ -339,6 +374,21 @@ source("STEP_3_LIwLD/run_step3.R")
 # Phase C only (publication panels, requires A and/or B results)
 STEP3_PHASE_A <- FALSE; STEP3_PHASE_B <- FALSE
 source("STEP_3_LIwLD/run_step3.R")
+
+# Phase B single deep-dive (requires systematic$single_target in config)
+STEP3_PHASE_A <- FALSE; STEP3_PHASE_B <- FALSE; STEP3_PHASE_C <- FALSE
+STEP3_PHASE_B_DEEP_DIVE <- TRUE
+STEP3_CONFIG_OVERRIDES <- list(
+  systematic = list(
+    single_target = list(
+      dataset_id = "dataset_1",
+      condition_id = "2008_G5_G6_MATHEMATICS",
+      subgroup_id = "0020"
+    )
+  ),
+  validation = list(precision_sweep = TRUE)
+)
+source("STEP_3_LIwLD/run_step3.R")
 ```
 
 ---
@@ -375,15 +425,23 @@ Phase A supports three modes, controlled via the `validation` section of `config
 8. **Alternative copula estimation** (comparison mode only) — re-run the regime estimation
    under the per-condition best-fit copula from STEP 1, compute deltas (median SGPc, mean SGPc,
    W1, CvM) to quantify the cost of the canonical copula choice
-9. **Bootstrap uncertainty** — 200 replicates (independent + paired) for confidence intervals,
-   SE estimates, and linkage-premium decomposition. Parallelised via `mirai` when daemons are
-   available (see below).
+9. **Bootstrap uncertainty (state-census / superpopulation framing)** — 200 replicates
+   (independent + paired) resampled *with replacement* from the observed subgroup N. Provides
+   confidence intervals, SE estimates, and linkage-premium decomposition under the assumption
+   that the observed subgroup is the population of interest. Parallelised via `mirai` when
+   daemons are available (see below).
 10. **Independence diagnostic** — tests P_S ⊥ U via Spearman ρ(U, SGPc_true) and Kruskal-Wallis
 11. **Regime family comparison** — Beta vs truncated-exponential vs truncated-uniform sensitivity
+12. **Precision sweep (NAEP/TIMSS / population-sampling framing)** *(optional, gated by
+   `validation$precision_sweep = TRUE`)* — Generates an N-operating curve by subsampling
+   *without replacement* from the full condition pool across configurable N buckets and linkage
+   fractions (paired + independent). Produces `phase_a_precision_sweep.csv` and a panel
+   (`phasea_08_precision_sweep`) showing CI width vs N with bootstrap anchor points from step 9
+   for direct comparison of the two sampling frameworks.
 
 ### Phase A Bootstrap Parallelisation
 
-Bootstrap replicates (step 8) are dispatched via `mirai_map()` when `use_mirai = TRUE` (the
+Bootstrap replicates (step 9) are dispatched via `mirai_map()` when `use_mirai = TRUE` (the
 default). Daemons are started **once** in `run_step3.R` and shared across Phase A and Phase B.
 The data push uses `mirai::everywhere()` with `.BOOT_*` global variables (`<<-` assignment).
 The worker lambda's environment is set to `globalenv()` so each daemon resolves function lookups
@@ -417,6 +475,8 @@ loads, so all unspecified fields retain their defaults.
 - `phase_a_summary.csv` — One-row summary: inferred vs true mean/median SGPc, distances,
   bootstrap CIs, independence diagnostics, and copula comparison deltas (when in comparison mode)
 - `phase_a_precision_anchor.csv` — Bootstrap precision (SE, CI width) for both pairing modes
+- `phase_a_precision_sweep.csv` — A.9 replicate-level data (when `precision_sweep = TRUE`)
+- `phase_a_precision_sweep_summary.csv` — A.9 summary by (N, linkage_fraction)
 - `phase_a_deep_dive.rds` — Full Phase A results object (includes `copula_sensitivity` list
   with primary/alternative copula labels, deltas, and fit statistics when in comparison mode)
 - `results/exports/phase_a/*.csv` — tidy exports for plotting
@@ -439,10 +499,18 @@ loads, so all unspecified fields retain their defaults.
 Extends Phase A across multiple conditions and subgroups to assess **precision operating
 characteristics** under diverse settings — directly addressing the NAEP and TIMSS use cases.
 
+- **Sampling framework:** Subsampling *without replacement* from condition-level pools
+  (NAEP/TIMSS population-sampling framing). Each replicate is a fresh draw of N students
+  from the pool — **not** a bootstrap. `median_ci_width_95` and `mean_ci_width_95` in
+  `phase_b_precision_by_n.csv` reflect this subsampling uncertainty.
 - **N buckets:** 1,000 / 2,500 / 5,000 / 7,500 / 10,000
   (NAEP state-level: ~3,000–4,000; TIMSS country-level: ~4,000+)
 - **Eligibility:** N_pool ≥ N_bucket × (1 + 0.10)
 - **Outer reps:** 200 per eligible `pool × N` cell
+- **Linkage fractions:** `c(0.0, 1.0)` by default — `1.0` = fully paired (same student
+  indices for U and V), `0.0` = fully independent (separate random draws, simulating
+  TIMSS/NAEP cross-sectional design). Add intermediate values (e.g., 0.25, 0.5, 0.75)
+  to map the linkage premium curve.
 - **Pool design:** district pools + growth-stratified cluster pools (Low/Typical/High)
 - **Year spans:** 1-year, 2-year, 4-year gaps
 - **Content areas:** all available (Mathematics, Reading/Writing, etc.)
@@ -651,6 +719,10 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 | `validation$content_area` | `"MATHEMATICS"` | Preferred Phase A content area |
 | `validation$min_subgroup_n` | `500` | Minimum subgroup size |
 | `validation$target_subgroup_n` | `2500` | Preferred Phase A subgroup size |
+| `validation$precision_sweep` | `FALSE` | Enable step A.9 (Phase B-style subsampling N-sweep within Phase A) |
+| `validation$sweep_n_buckets` | `NULL` | N buckets for A.9 (NULL = use `systematic$n_buckets`) |
+| `validation$sweep_reps` | `200L` | Replicates per A.9 cell |
+| `systematic$single_target` | `list(NULL, NULL, NULL)` | Phase B deep-dive target (dataset_id, condition_id, subgroup_id) |
 | `systematic$n_conditions_per_dataset` | `10` | Conditions for Phase B |
 | `systematic$n_buckets` | `c(1000, 2500, 5000, 7500, 10000)` | Phase B sample-size buckets |
 | `systematic$eligibility_buffer` | `0.10` | Eligibility margin for bucket sampling |
@@ -660,6 +732,7 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 | `systematic$cluster_min_pool_n` | `500` | Minimum pooled N required for a cluster stratum |
 | `systematic$use_parallel` | `TRUE` | Run Phase B Stage 2 with `mirai` |
 | `systematic$rep_batch_size` | `5L` | Replicates per parallel task; **set 5 for r8g.48xlarge, 25 for r8g.4xlarge** |
+| `systematic$linkage_fractions` | `c(0.0, 1.0)` | Degree of student-level pairing (0.0 = independent, 1.0 = paired) |
 | `seed` | `20260210` | RNG seed for reproducibility |
 
 ---
@@ -715,6 +788,8 @@ After a complete run of Phases A + B + C, the following files are guaranteed in 
 | `exports/phase_a/step3_fit_metrics.csv` | subgroup_id, w1_uniform, w1_best, w1_reduction_pct, cvm, max_abs_residual, mean_abs_residual | Phase A |
 | `exports/phase_a/step3_bootstrap_draws.csv` | subgroup_id, boot_id, m_hat, kappa_hat, median_sgpc, mean_sgpc, converged | Phase A |
 | `exports/phase_a/step3_bootstrap_summary.csv` | subgroup_id, ci95_median_lo, ci95_median_hi, ci95_mean_lo, ci95_mean_hi, se_median, n_boot, n_converged | Phase A |
+| `phase_a_precision_sweep.csv` | n_bucket, linkage_fraction, replicate, inferred_median, inferred_mean, true_median, true_mean, converged, sampling_mode, median_error, mean_error | Phase A (A.9) |
+| `phase_a_precision_sweep_summary.csv` | n_bucket, linkage_fraction, sampling_mode, n_reps, n_converged, median_ci_width_95, mean_ci_width_95, median_mae, mean_mae, median_bias, mean_bias | Phase A (A.9) |
 
 ### Machine-Readable Manifests
 
@@ -891,6 +966,7 @@ support.
 | `step3_validation_deep_dive.R` | Phase A: unified deep-validation runner (single / multi-target / Phase B filter modes) |
 | `step3_systematic_validation.R` | Phase B: multi-condition validation with `mirai` parallelisation |
 | `step3_enhanced_panels.R` | Enhanced post-hoc panels from Phase B summary data |
+| `step3_phaseb_deep_dive.R` | Phase B single deep-dive: run_deep_dive() + precision sweep for one target |
 | `step3_publication_panels.R` | Phase C: figures + manifests + CSV exports |
 | `functions/run_deep_dive.R` | Core Phase A deep-dive logic (extracted for reuse across target modes); includes copula comparison mode (A.6b) |
 | `functions/figure_naming.R` | Single source of truth for Phase A figure filenames (incl. copula comparison panels 05a–05d) |
@@ -903,6 +979,7 @@ support.
 | `functions/optimize_regime.R` | Grid search + optim() (single pool) |
 | `functions/optimize_regime_stratified.R` | Stratified regime estimation (per U-bin) for independence sensitivity |
 | `functions/bootstrap_uncertainty.R` | Sampling + copula uncertainty; `mirai`-parallel dispatch via `mirai_map()` |
+| `functions/precision_sweep.R` | Self-contained subsampling N-sweep for A.9 and Phase B deep-dive; `run_precision_sweep()` + `plot_precision_sweep()` |
 | `functions/bucket_classification.R` | K=3/K=5 bucket probabilities + stability |
 | `functions/build_cluster_pools.R` | Growth-stratified super-district pool construction |
 | `functions/process_pool_setup.R` | Daemon-compatible function for Stage 1 pool setup |

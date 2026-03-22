@@ -449,7 +449,8 @@ if (exists("phase_b_precision") && nrow(phase_b_precision) > 0) {
   }
 
   # ---- Helper: build a CI-width panel for a given metric ----
-  build_ci_panel <- function(dt, metric = c("median", "mean"), ylim = D_YLIM) {
+  build_ci_panel <- function(dt, metric = c("median", "mean"), ylim = D_YLIM,
+                             sampling_context = NULL) {
     metric <- match.arg(metric)
     ci_col <- paste0(metric, "_ci_width_95")
     label  <- if (metric == "median") "Median" else "Mean"
@@ -464,7 +465,7 @@ if (exists("phase_b_precision") && nrow(phase_b_precision) > 0) {
 
     y_label <- ylim[2] * 0.93
 
-    ggplot(agg, aes(x = n_bucket, y = ci_avg, color = pool_type)) +
+    p <- ggplot(agg, aes(x = n_bucket, y = ci_avg, color = pool_type)) +
       annotate("rect", xmin = 3000, xmax = 4000, ymin = -Inf, ymax = Inf,
                fill = alpha(D_NAEP_COLOR, 0.12)) +
       annotate("text", x = 3500, y = y_label,
@@ -491,9 +492,16 @@ if (exists("phase_b_precision") && nrow(phase_b_precision) > 0) {
              " SGPc estimate across independent cross-sectional draws?\n",
              "IQR across pools; shaded zones mark NAEP and TIMSS sample-size ranges"),
            x = "Sample Size (N)",
-           y = paste0("Precision \u2014 95% CI Width of ", label, " SGPc")) +
+           y = paste0("Precision \u2014 95% CI Width of ", label, " SGPc"),
+           caption = sampling_context) +
       theme_publication(base_size = 9) +
       theme(legend.position = c(0.83, 0.82))
+
+    if (!is.null(sampling_context)) {
+      p <- p + theme(plot.caption = element_text(size = 7, color = "grey50",
+                                                  hjust = 0, margin = margin(t = 6)))
+    }
+    p
   }
 
   # ---- Helper: annotate a two-panel (MAE | CI) row ----
@@ -512,10 +520,13 @@ if (exists("phase_b_precision") && nrow(phase_b_precision) > 0) {
   }
 
   # ---- Build the six sub-panels ----
+  .subsample_caption <- if (exists("CAPTION_SUBSAMPLE", inherits = TRUE)) {
+    get("CAPTION_SUBSAMPLE", inherits = TRUE)
+  } else NULL
   p_mae_median <- build_mae_panel(phase_b_precision, "median")
-  p_ci_median  <- build_ci_panel(phase_b_precision,  "median")
+  p_ci_median  <- build_ci_panel(phase_b_precision,  "median", sampling_context = .subsample_caption)
   p_mae_mean   <- build_mae_panel(phase_b_precision, "mean")
-  p_ci_mean    <- build_ci_panel(phase_b_precision,  "mean")
+  p_ci_mean    <- build_ci_panel(phase_b_precision,  "mean", sampling_context = .subsample_caption)
 
   # ---- Standalone: Median SGPc (MAE + CI width) ----
   p_d_median <- annotate_d_row(p_mae_median, p_ci_median, "Median")

@@ -136,7 +136,13 @@ STEP3_CONFIG <- list(
 
     # mirai bootstrap parallelisation (daemons managed by run_step3.R)
     use_mirai  = TRUE,
-    n_workers  = NULL            # NULL = auto-detect from CPU count
+    n_workers  = NULL,           # NULL = auto-detect from CPU count
+
+    # Precision sweep (A.9): Phase B-style subsampling from condition pool
+    # Generates N-operating curves under the NAEP/TIMSS population-sampling frame.
+    precision_sweep   = FALSE,   # set TRUE to enable step A.9
+    sweep_n_buckets   = NULL,    # NULL = use systematic$n_buckets
+    sweep_reps        = 200L     # replicates per (N-bucket × linkage-fraction) cell
   ),
 
   # ===========================================================================
@@ -212,6 +218,14 @@ STEP3_CONFIG <- list(
     # "recompute" = compute true SGPc on-the-fly via sgpc_engine (fallback)
     truth_source = "step2_empirical",
     step2_results_dir = "STEP_2_SGPc_Sensitivity/results",
+
+    # Phase B single deep-dive: focus Phase B on one condition/subgroup.
+    # Set all three fields to activate; leave NULL for standard systematic run.
+    single_target = list(
+      dataset_id   = NULL,       # e.g. "dataset_1"
+      condition_id = NULL,       # e.g. "2008_G5_G6_MATHEMATICS"
+      subgroup_id  = NULL        # e.g. "0020"
+    ),
 
     # Per-dataset condition filters ----------------------------------------
     # Applied after the global year_span and content_area filters.

@@ -367,6 +367,11 @@ run_deep_dive <- function(dataset_id = NULL,
   log_msg("    Median: ", round(median(true_sgpc, na.rm = TRUE), 1), "\n")
   log_msg("    SD: ", round(sd(true_sgpc, na.rm = TRUE), 1), "\n\n")
 
+  # True SGPc for all condition students (needed by A.9 precision sweep)
+  true_sgpc_full <- sgpc_engine(u_full, v_full, p1_copula, scale = "percentile")
+  log_msg("  True SGPc for full condition pool: n = ", length(true_sgpc_full),
+          ", mean = ", round(mean(true_sgpc_full, na.rm = TRUE), 1), "\n\n")
+
   # Independence diagnostics (P ⟂ U within subgroup)
   assump_cfg <- cfg$assumptions$independence
   u_bins <- as.integer(assump_cfg$u_bins)
@@ -700,6 +705,76 @@ run_deep_dive <- function(dataset_id = NULL,
     )
   )
 
+  # A.9 Precision sweep (NAEP/TIMSS / population-sampling framing)
+  precision_sweep_results <- NULL
+  if (isTRUE(cfg$validation$precision_sweep)) {
+    log_msg("A.9  Precision sweep from condition pool (subsampling w/o replacement)...\n\n")
+    if (!exists("run_precision_sweep", mode = "function")) {
+      log_msg("  WARNING: run_precision_sweep() not loaded. Skipping A.9.\n\n")
+    } else {
+      a9_start <- Sys.time()
+      sweep_n_buckets <- cfg$validation$sweep_n_buckets %||% cfg$systematic$n_buckets
+      sweep_reps <- cfg$validation$sweep_reps %||% 200L
+      precision_sweep_results <- run_precision_sweep(
+        pairs          = pairs,
+        refs           = refs,
+        kernel_cache   = kernel_cache,
+        true_sgpc_full = true_sgpc_full,
+        n_buckets      = sweep_n_buckets,
+        outer_reps     = sweep_reps,
+        linkage_fractions = c(0.0, 1.0),
+        regime_family  = best_family,
+        distance_fn    = cfg$distance$primary,
+        grid_resolution = cfg$regime$rep_grid_resolution %||% 10L,
+        seed           = cfg$seed,
+        use_mirai      = use_mirai,
+        verbose        = isTRUE(verbose)
+      )
+      a9_elapsed <- as.numeric(difftime(Sys.time(), a9_start, units = "secs"))
+      log_msg("  A.9 elapsed: ", round(a9_elapsed, 1), "s\n")
+      log_msg("  Pool N = ", precision_sweep_results$n_pool,
+              ", replicates = ", nrow(precision_sweep_results$replicates), "\n\n")
+
+      # Write CSV outputs
+      data.table::fwrite(precision_sweep_results$replicates,
+                         file.path(output_dir, "phase_a_precision_sweep.csv"))
+      data.table::fwrite(precision_sweep_results$summary,
+                         file.path(output_dir, "phase_a_precision_sweep_summary.csv"))
+      log_msg("  Saved: phase_a_precision_sweep.csv, phase_a_precision_sweep_summary.csv\n")
+
+      # Construct bootstrap anchor from in-memory results for the sweep plot
+      boot_anchor <- data.table::data.table(
+        n0 = rep(nrow(pairs_sg), 4L),
+        pairing = c("independent", "independent", "paired", "paired"),
+        measure = c("median_sgpc", "mean_sgpc", "median_sgpc", "mean_sgpc"),
+        ci95_width = c(
+          round(diff(as.numeric(boot_results$ci_median_sgpc)), 4),
+          round(diff(as.numeric(boot_results$ci_mean_sgpc)), 4),
+          round(diff(as.numeric(boot_paired$ci_median_sgpc)), 4),
+          round(diff(as.numeric(boot_paired$ci_mean_sgpc)), 4)
+        )
+      )
+
+      sweep_caption <- if (exists("CAPTION_SUBSAMPLE", inherits = TRUE)) {
+        get("CAPTION_SUBSAMPLE", inherits = TRUE)
+      } else NULL
+
+      tryCatch({
+        plot_precision_sweep(
+          sweep_summary     = precision_sweep_results$summary,
+          bootstrap_anchor  = boot_anchor,
+          title             = paste0("Precision Sweep — ", sg_label),
+          sampling_context  = sweep_caption,
+          output_dir        = viz_dir,
+          filename          = phasea_fig$precision_sweep %||% "phasea_08_precision_sweep"
+        )
+        log_msg("  Precision sweep panel saved.\n\n")
+      }, error = function(e) {
+        log_msg("  WARNING: Precision sweep plot failed: ", e$message, "\n\n")
+      })
+    }
+  }
+
   # A.7c Regime contrast and theoretical premium
   regime_contrast <- NULL
   theoretical_prem <- NULL
@@ -771,7 +846,8 @@ run_deep_dive <- function(dataset_id = NULL,
       copula_alt_forward_cdf = "phasea_05a_copula_bestfit_forward_cdf",
       copula_alt_regime_density = "phasea_05b_copula_bestfit_regime_density",
       copula_alt_recovery_summary = "phasea_05c_copula_bestfit_recovery_summary",
-      copula_comparison_panel = "phasea_05d_copula_comparison_panel"
+      copula_comparison_panel = "phasea_05d_copula_comparison_panel",
+      precision_sweep = "phasea_08_precision_sweep"
     )
   }
 
@@ -851,15 +927,21 @@ run_deep_dive <- function(dataset_id = NULL,
     title = paste0("Bootstrap Uncertainty: Mean SGPc — ", sg_label),
     output_dir = viz_dir, filename = phasea_fig$bootstrap_mean
   )
+  .boot_caption <- if (exists("CAPTION_BOOTSTRAP", inherits = TRUE)) {
+    get("CAPTION_BOOTSTRAP", inherits = TRUE)
+  } else NULL
+
   plot_bootstrap_sgpc_combined(
     boot_results, true_sgpc = true_sgpc,
     title = paste0("Bootstrap Uncertainty: Median & Mean SGPc — ", sg_label),
+    sampling_context = .boot_caption,
     output_dir = viz_dir, filename = phasea_fig$bootstrap_combined
   )
   plot_linkage_decomposition(
     boot_independent = boot_results, boot_paired = boot_paired, true_sgpc = true_sgpc,
     linkage_premium = phase_a_linkage_premium,
     title = paste0("Linkage Premium Decomposition — ", sg_label),
+    sampling_context = .boot_caption,
     output_dir = viz_dir, filename = phasea_fig$linkage_decomposition
   )
 
@@ -1056,8 +1138,8 @@ run_deep_dive <- function(dataset_id = NULL,
   }
   log_msg("  Plots saved to: ", viz_dir, "\n\n")
 
-  # A.9 save results
-  log_msg("A.9  Saving Phase A results...\n")
+  # A.10 save results
+  log_msg("A.10 Saving Phase A results...\n")
   phase_a_results <- list(
     condition_id = condition_id,
     condition_meta = cond,
@@ -1088,6 +1170,8 @@ run_deep_dive <- function(dataset_id = NULL,
     marginal_comparison = marginal_comp,
     regime_contrast = regime_contrast,
     theoretical_linkage_premium = theoretical_prem,
+    precision_sweep = precision_sweep_results,
+    true_sgpc_full = true_sgpc_full,
     config = cfg,
     output_dir = output_dir
   )

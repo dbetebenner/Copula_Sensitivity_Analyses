@@ -801,6 +801,7 @@ plot_bootstrap_sgpc <- function(bootstrap,
 plot_bootstrap_sgpc_combined <- function(bootstrap,
                                          true_sgpc = NULL,
                                          title = "Bootstrap Uncertainty — SGPc",
+                                         sampling_context = NULL,
                                          output_dir = "results/visualizations",
                                          filename = "panel_bootstrap_sgpc_combined") {
 
@@ -817,12 +818,21 @@ plot_bootstrap_sgpc_combined <- function(bootstrap,
     )
   )
 
+  caption_theme <- if (!is.null(sampling_context)) {
+    theme(plot.caption = element_text(size = 7, color = "grey50",
+                                      hjust = 0, margin = margin(t = 6)))
+  } else {
+    theme()
+  }
+
   combined <- p_median | p_mean
   combined <- combined +
     plot_annotation(title = title,
                     subtitle = subtitle,
+                    caption = sampling_context,
                     theme = theme(plot.title = element_text(face = "bold",
-                                                            size = 14, hjust = 0)))
+                                                            size = 14, hjust = 0)) +
+                      caption_theme)
 
   save_plot_multi(combined, filename, output_dir,
                   width = PLOT_WIDTH * 1.6, height = PLOT_HEIGHT)
@@ -1369,6 +1379,7 @@ plot_linkage_decomposition <- function(boot_independent,
                                         true_sgpc = NULL,
                                         linkage_premium = NULL,
                                         title = "Linkage Premium Decomposition",
+                                        sampling_context = NULL,
                                         output_dir = "results/visualizations",
                                         filename = "phasea_03f_linkage_decomposition") {
 
@@ -1469,15 +1480,23 @@ plot_linkage_decomposition <- function(boot_independent,
     paste0("Linkage premium (CI ratio): median=", lp_med, "x | mean=", lp_mean, "x")
   )
 
+  caption_theme <- if (!is.null(sampling_context)) {
+    theme(plot.caption = element_text(size = 7, color = "grey50",
+                                      hjust = 0, margin = margin(t = 6)))
+  } else {
+    theme()
+  }
+
   combined <- p_median | p_mean
   combined <- combined +
     plot_annotation(
       title = title,
       subtitle = subtitle,
+      caption = sampling_context,
       theme = theme(
         plot.title = element_text(face = "bold", size = 14, hjust = 0),
         plot.subtitle = element_text(size = 10, hjust = 0, color = "grey40")
-      )
+      ) + caption_theme
     )
 
   save_plot_multi(combined, filename, output_dir,
