@@ -746,7 +746,11 @@ run_deep_dive <- function(dataset_id = NULL,
 
   # A.8 plots
   log_msg("\nA.8  Generating diagnostic plots...\n")
-  viz_dir <- file.path(output_dir, "visualizations", "phase_a")
+  # Each deep dive is scoped to its own pool_id subdirectory so that
+  # successive runs (different conditions, subgroups, or dates) never
+  # overwrite each other.  pool_id_tag = "{condition_id}__{subgroup_id}".
+  pool_id_tag <- paste0(condition_id, "__", subgroup_id)
+  viz_dir <- file.path(output_dir, "visualizations", "phase_a", pool_id_tag)
   if (!dir.exists(viz_dir)) dir.create(viz_dir, recursive = TRUE)
   sg_label <- paste0(condition_id, " / ", sg_col, " = ", subgroup_id)
   phasea_fig <- if (exists("get_phasea_figure_map", mode = "function")) {
@@ -1240,9 +1244,10 @@ run_deep_dive <- function(dataset_id = NULL,
   phase_a_exports <- export_phase_a_figure_data(
     phase_a_results = phase_a_results,
     output_dir = output_dir,
-    write_files = TRUE
+    write_files = TRUE,
+    export_subdir = pool_id_tag
   )
-  export_phase_a_dir <- file.path(output_dir, "exports", "phase_a")
+  export_phase_a_dir <- file.path(output_dir, "exports", "phase_a", pool_id_tag)
   if (!dir.exists(export_phase_a_dir)) dir.create(export_phase_a_dir, recursive = TRUE)
   data.table::fwrite(independence_diagnostics, file.path(export_phase_a_dir, "step3_independence_diagnostics.csv"))
 
@@ -1257,8 +1262,8 @@ run_deep_dive <- function(dataset_id = NULL,
 
   log_msg("  Saved: phase_a_deep_dive.rds, phase_a_summary.csv\n")
   log_msg("  Saved: phase_a_precision_anchor.csv\n")
-  log_msg("  Saved: phase_a_analytic_payload.rds and exports/phase_a/*.csv\n")
-  log_msg("  Saved: exports/phase_a/step3_independence_diagnostics.csv\n")
+  log_msg("  Saved: visualizations/phase_a/", pool_id_tag, "/ (plots)\n")
+  log_msg("  Saved: exports/phase_a/", pool_id_tag, "/*.csv\n")
   log_msg("  Saved: phase_a_manifest.json, phase_a_manifest.md\n")
   log_msg("\n--- Phase A complete ---\n\n")
 

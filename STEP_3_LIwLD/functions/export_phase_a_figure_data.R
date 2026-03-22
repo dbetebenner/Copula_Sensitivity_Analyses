@@ -76,7 +76,8 @@ extract_regime_grid <- function(est) {
 
 export_phase_a_figure_data <- function(phase_a_results,
                                        output_dir = "results",
-                                       write_files = TRUE) {
+                                       write_files = TRUE,
+                                       export_subdir = NULL) {
   stopifnot(is.list(phase_a_results))
 
   est <- phase_a_results$best_estimate
@@ -263,7 +264,11 @@ export_phase_a_figure_data <- function(phase_a_results,
   )
 
   if (isTRUE(write_files)) {
-    export_dir <- file.path(output_dir, "exports", "phase_a")
+    export_dir <- if (!is.null(export_subdir) && nzchar(export_subdir)) {
+      file.path(output_dir, "exports", "phase_a", export_subdir)
+    } else {
+      file.path(output_dir, "exports", "phase_a")
+    }
     if (!dir.exists(export_dir)) dir.create(export_dir, recursive = TRUE)
 
     saveRDS(payload, file.path(output_dir, "phase_a_analytic_payload.rds"))
