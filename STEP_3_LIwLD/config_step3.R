@@ -207,7 +207,7 @@ STEP3_CONFIG <- list(
     # Add intermediate values (e.g. 0.25, 0.5, 0.75) to map the full curve.
     # Current: matched-pairs only — aligns with state assessment systems that
     # infer growth for the population of students with complete records.
-    linkage_fractions = c(1.0),
+    linkage_fractions = c(0.0, 1.0),
     # "step2_empirical" = load sgpc_emp from STEP 2 outputs (no recomputation)
     # "recompute" = compute true SGPc on-the-fly via sgpc_engine (fallback)
     truth_source = "step2_empirical",
