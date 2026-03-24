@@ -1,0 +1,57 @@
+%%%%
+%%%% step3_styles.tex - Shared PSTricks/LaTeX definitions for Margins infographic
+%%%%
+%%%% Canonical notation, colors, and macros used across all panel files.
+%%%% INPUT this file in each panel document.
+%%%%
+
+%%% Zissou-aligned color palette (matching STEP 3 publication style)
+\definecolor{zissouTeal}{HTML}{3B9AB2}
+\definecolor{zissouRed}{HTML}{F21A00}
+\definecolor{zissouAmber}{HTML}{E1AF00}
+
+%%% Margin-specific palette
+\definecolor{priorU}{HTML}{009292}
+\definecolor{currentV}{HTML}{B66DFF}
+\definecolor{inferredV}{HTML}{000000}
+\definecolor{populationRef}{HTML}{AAAAAA}
+\definecolor{cdfArrow}{HTML}{E1AF00}
+\definecolor{subgroupFill}{HTML}{3B9AB2}
+
+%%% Scatter plot: stayer / leaver / entrant palette
+\definecolor{stayerColor}{HTML}{3B9AB2}    % Zissou teal — linked students
+\definecolor{leaverColor}{HTML}{F21A00}    % Zissou red  — prior-only (leavers)
+\definecolor{entrantColor}{HTML}{E1AF00}   % Zissou amber — current-only (entrants)
+
+%%% Curve colors for margin strips
+\definecolor{pdfPriorColor}{HTML}{009292}   % Prior PDF curve
+\definecolor{pdfCurrentColor}{HTML}{B66DFF} % Current PDF curve
+\definecolor{cdfPriorColor}{HTML}{009292}   % Prior CDF curve
+\definecolor{cdfCurrentColor}{HTML}{B66DFF} % Current CDF curve
+
+%%% Standard greys
+\definecolor{panelGrey}{gray}{0.65}
+\definecolor{bodyGrey}{gray}{0.25}
+\definecolor{subtitleGrey}{gray}{0.30}
+\definecolor{borderGrey}{gray}{0.85}
+\definecolor{gridLight}{gray}{0.92}
+\definecolor{fillGrey}{gray}{0.95}
+\definecolor{labelGrey}{gray}{0.40}
+
+%%% Canonical notation macros (use \providecommand for safety)
+\providecommand{\HS}{H_S}
+\providecommand{\HShat}{\widehat{H}_S}
+\providecommand{\HU}{H_U}
+\providecommand{\FH}{F_H}
+\providecommand{\FHhat}{\widehat{F}_H}
+\providecommand{\Fobs}{F_{\mathrm{obs}}}
+\providecommand{\Fzero}{F_0}
+\providecommand{\SGPcFlow}{\textit{\textsf{SGPcFlow}}}
+\providecommand{\SGPc}{\textit{SGPc}}
+\providecommand{\Wone}{W_1}
+
+%%% Margins-specific notation
+\providecommand{\Fxref}{F_X^{\mathrm{ref}}}
+\providecommand{\Fyref}{F_Y^{\mathrm{ref}}}
+\providecommand{\Fxinv}{(F_X^{\mathrm{ref}})^{-1}}
+\providecommand{\Fyinv}{(F_Y^{\mathrm{ref}})^{-1}}

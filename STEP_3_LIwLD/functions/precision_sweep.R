@@ -54,7 +54,7 @@ run_precision_sweep <- function(pairs,
                                 refs,
                                 kernel_cache,
                                 true_sgpc_full,
-                                n_buckets   = c(1000L, 2500L, 5000L, 7500L, 10000L),
+                                n_buckets   = c(1000L, 2500L, 5000L),
                                 outer_reps  = 200L,
                                 linkage_fractions = c(0.0, 1.0),
                                 regime_family = "beta",
@@ -99,90 +99,241 @@ run_precision_sweep <- function(pairs,
 
   seed_base <- if (!is.null(seed)) as.integer(seed) else 42L
 
-  .run_one <- function(n_bucket, linkage_fraction, replicate) {
-    lf_offset <- as.integer(round(linkage_fraction * 100))
-    set.seed(seed_base + as.integer(n_bucket) * 1000L + replicate + lf_offset * 10000L)
+  # Pre-compute per-task seeds for reproducibility under both dispatch modes
+  task_seeds <- seed_base +
+    as.integer(task_grid$n_bucket) * 1000L +
+    task_grid$replicate +
+    as.integer(round(task_grid$linkage_fraction * 100)) * 10000L
 
-    n_bkt      <- as.integer(n_bucket)
-    n_linked   <- as.integer(floor(linkage_fraction * n_bkt))
-    n_unlinked <- n_bkt - n_linked
-    pool_idx   <- seq_len(n_pool)
-
-    if (n_linked == n_bkt) {
-      rep_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
-      true_rep <- true_sgpc_full[rep_idx]
-      u_rep <- reference_cdf(ss_prior[rep_idx],   refs$ref_prior)
-      v_rep <- reference_cdf(ss_current[rep_idx], refs$ref_current)
-      true_med <- median(true_rep, na.rm = TRUE)
-      true_mn  <- mean(true_rep,   na.rm = TRUE)
-
-    } else if (n_linked == 0L) {
-      u_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
-      v_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
-      u_rep <- reference_cdf(ss_prior[u_idx],   refs$ref_prior)
-      v_rep <- reference_cdf(ss_current[v_idx], refs$ref_current)
-      true_med <- pool_truth_median
-      true_mn  <- pool_truth_mean
-
-    } else {
-      linked_idx <- sample(pool_idx, size = n_linked, replace = FALSE)
-      u_linked <- reference_cdf(ss_prior[linked_idx],   refs$ref_prior)
-      v_linked <- reference_cdf(ss_current[linked_idx], refs$ref_current)
-
-      u_unlinked_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
-      v_unlinked_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
-      u_unlinked <- reference_cdf(ss_prior[u_unlinked_idx],   refs$ref_prior)
-      v_unlinked <- reference_cdf(ss_current[v_unlinked_idx], refs$ref_current)
-
-      u_rep <- c(u_linked, u_unlinked)
-      v_rep <- c(v_linked, v_unlinked)
-      true_med <- pool_truth_median
-      true_mn  <- pool_truth_mean
-    }
-
-    est <- tryCatch(
-      estimate_regime(
-        u_sample        = u_rep,
-        v_sample        = v_rep,
-        kernel_cache    = kernel_cache,
-        regime_family   = regime_family,
-        distance_fn     = distance_fn,
-        grid_resolution = grid_resolution,
-        verbose         = FALSE
-      ),
-      error = function(e) NULL
-    )
-
-    if (is.null(est)) {
-      list(inferred_median = NA_real_, inferred_mean = NA_real_,
-           true_median = true_med, true_mean = true_mn,
-           converged = FALSE, m_hat = NA_real_, kappa_hat = NA_real_)
-    } else {
-      list(
-        inferred_median = as.numeric(est$regime$median) * 100,
-        inferred_mean   = as.numeric(est$regime$mean)   * 100,
-        true_median     = true_med,
-        true_mean       = true_mn,
-        converged       = TRUE,
-        m_hat           = round(est$m_hat, 4),
-        kappa_hat       = round(est$kappa_hat, 4)
-      )
+  # --- Dispatch: mirai (if daemons alive) or sequential fallback ----------
+  mirai_ok <- FALSE
+  n_daemons <- 0L
+  if (isTRUE(use_mirai) && nrow(task_grid) > 1L) {
+    mirai_ok <- tryCatch({
+      requireNamespace("mirai", quietly = TRUE) && {
+        n_conn <- mirai::status()[["connections"]]
+        is.numeric(n_conn) && length(n_conn) == 1L && n_conn > 0L
+      }
+    }, error = function(e) FALSE)
+    if (mirai_ok) {
+      n_daemons <- tryCatch(as.integer(mirai::status()[["connections"]]),
+                            error = function(e) 0L)
+    } else if (verbose) {
+      diag <- tryCatch({
+        s <- mirai::status()
+        paste0("connections=", deparse(s$connections),
+               " daemons=", deparse(s$daemons))
+      }, error = function(e) paste0("status() error: ", e$message))
+      cat("  mirai sweep requested but no daemons detected; falling back to sequential.\n")
+      cat("  Diagnostic: ", diag, "\n")
     }
   }
 
-  if (verbose) cat("  Running", nrow(task_grid), "replicate estimations...\n")
+  n_tasks <- nrow(task_grid)
+  if (verbose) cat("  Running", n_tasks, "replicate estimations")
 
-  results_list <- vector("list", nrow(task_grid))
-  for (i in seq_len(nrow(task_grid))) {
-    r <- task_grid[i]
-    out <- .run_one(r$n_bucket, r$linkage_fraction, r$replicate)
-    results_list[[i]] <- c(
-      list(n_bucket = r$n_bucket, linkage_fraction = r$linkage_fraction,
-           replicate = r$replicate),
-      out
-    )
-    if (verbose && i %% 500 == 0) {
-      cat(sprintf("    %d / %d replicates complete\n", i, nrow(task_grid)))
+  results_list <- vector("list", n_tasks)
+
+  if (mirai_ok) {
+    if (verbose) cat(" via mirai (", n_daemons, " daemons)...\n", sep = "")
+
+    push_ok <- tryCatch({
+      p <- mirai::everywhere({
+        .SWEEP_SS_PRIOR      <<- ssp_push
+        .SWEEP_SS_CURRENT    <<- ssc_push
+        .SWEEP_REFS          <<- refs_push
+        .SWEEP_KERNEL_CACHE  <<- kc_push
+        .SWEEP_TRUE_SGPC     <<- ts_push
+        .SWEEP_POOL_MED      <<- pm_push
+        .SWEEP_POOL_MN       <<- pmn_push
+        .SWEEP_N_POOL        <<- np_push
+        .SWEEP_REGIME_FAMILY <<- rf_push
+        .SWEEP_DISTANCE_FN   <<- df_push
+        .SWEEP_GRID_RES      <<- gr_push
+        TRUE
+      },
+      ssp_push  = ss_prior,
+      ssc_push  = ss_current,
+      refs_push = refs,
+      kc_push   = kernel_cache,
+      ts_push   = true_sgpc_full,
+      pm_push   = pool_truth_median,
+      pmn_push  = pool_truth_mean,
+      np_push   = n_pool,
+      rf_push   = regime_family,
+      df_push   = distance_fn,
+      gr_push   = grid_resolution)
+      pv <- p[]
+      all(vapply(pv, isTRUE, logical(1)))
+    }, error = function(e) {
+      if (verbose) cat("  WARNING: mirai data push failed: ", e$message, "\n")
+      FALSE
+    })
+
+    if (isTRUE(push_ok)) {
+      tasks <- lapply(seq_len(n_tasks), function(i) {
+        list(n_bucket = task_grid$n_bucket[i],
+             linkage_fraction = task_grid$linkage_fraction[i],
+             replicate = task_grid$replicate[i],
+             task_seed = task_seeds[i])
+      })
+
+      sweep_lambda <- function(task) {
+        set.seed(task$task_seed)
+        n_bkt      <- as.integer(task$n_bucket)
+        lf         <- task$linkage_fraction
+        n_linked   <- as.integer(floor(lf * n_bkt))
+        n_unlinked <- n_bkt - n_linked
+        pool_idx   <- seq_len(.SWEEP_N_POOL)
+
+        if (n_linked == n_bkt) {
+          rep_idx  <- sample(pool_idx, size = n_bkt, replace = FALSE)
+          true_rep <- .SWEEP_TRUE_SGPC[rep_idx]
+          u_rep    <- reference_cdf(.SWEEP_SS_PRIOR[rep_idx],   .SWEEP_REFS$ref_prior)
+          v_rep    <- reference_cdf(.SWEEP_SS_CURRENT[rep_idx], .SWEEP_REFS$ref_current)
+          true_med <- median(true_rep, na.rm = TRUE)
+          true_mn  <- mean(true_rep,   na.rm = TRUE)
+        } else if (n_linked == 0L) {
+          u_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
+          v_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
+          u_rep <- reference_cdf(.SWEEP_SS_PRIOR[u_idx],   .SWEEP_REFS$ref_prior)
+          v_rep <- reference_cdf(.SWEEP_SS_CURRENT[v_idx], .SWEEP_REFS$ref_current)
+          true_med <- .SWEEP_POOL_MED
+          true_mn  <- .SWEEP_POOL_MN
+        } else {
+          linked_idx <- sample(pool_idx, size = n_linked, replace = FALSE)
+          u_linked   <- reference_cdf(.SWEEP_SS_PRIOR[linked_idx],   .SWEEP_REFS$ref_prior)
+          v_linked   <- reference_cdf(.SWEEP_SS_CURRENT[linked_idx], .SWEEP_REFS$ref_current)
+          u_unl_idx  <- sample(pool_idx, size = n_unlinked, replace = FALSE)
+          v_unl_idx  <- sample(pool_idx, size = n_unlinked, replace = FALSE)
+          u_rep <- c(u_linked, reference_cdf(.SWEEP_SS_PRIOR[u_unl_idx],   .SWEEP_REFS$ref_prior))
+          v_rep <- c(v_linked, reference_cdf(.SWEEP_SS_CURRENT[v_unl_idx], .SWEEP_REFS$ref_current))
+          true_med <- .SWEEP_POOL_MED
+          true_mn  <- .SWEEP_POOL_MN
+        }
+
+        est <- tryCatch(
+          estimate_regime(u_rep, v_rep, .SWEEP_KERNEL_CACHE,
+                          regime_family   = .SWEEP_REGIME_FAMILY,
+                          distance_fn     = .SWEEP_DISTANCE_FN,
+                          grid_resolution = .SWEEP_GRID_RES,
+                          verbose         = FALSE),
+          error = function(e) NULL)
+
+        if (is.null(est)) {
+          list(inferred_median = NA_real_, inferred_mean = NA_real_,
+               true_median = true_med, true_mean = true_mn,
+               converged = FALSE, m_hat = NA_real_, kappa_hat = NA_real_)
+        } else {
+          list(inferred_median = as.numeric(est$regime$median) * 100,
+               inferred_mean   = as.numeric(est$regime$mean)   * 100,
+               true_median = true_med, true_mean = true_mn,
+               converged = TRUE,
+               m_hat     = round(est$m_hat, 4),
+               kappa_hat = round(est$kappa_hat, 4))
+        }
+      }
+      environment(sweep_lambda) <- globalenv()
+
+      mirai_res <- mirai::mirai_map(.x = tasks, .f = sweep_lambda)
+      raw_list  <- mirai_res[]
+
+      n_errs <- sum(vapply(raw_list, function(x)
+        inherits(x, "miraiError") || inherits(x, "errorValue"), logical(1)))
+      if (n_errs > 0 && verbose) {
+        cat("  WARNING:", n_errs, "mirai replicate(s) returned errors\n")
+      }
+      for (i in seq_along(raw_list)) {
+        out <- raw_list[[i]]
+        if (inherits(out, "miraiError") || inherits(out, "errorValue")) {
+          out <- list(inferred_median = NA_real_, inferred_mean = NA_real_,
+                      true_median = NA_real_, true_mean = NA_real_,
+                      converged = FALSE, m_hat = NA_real_, kappa_hat = NA_real_)
+        }
+        results_list[[i]] <- c(
+          list(n_bucket = task_grid$n_bucket[i],
+               linkage_fraction = task_grid$linkage_fraction[i],
+               replicate = task_grid$replicate[i]),
+          out)
+      }
+    } else {
+      mirai_ok <- FALSE
+    }
+  }
+
+  if (!mirai_ok) {
+    if (verbose) cat(" sequentially...\n")
+
+    .run_one <- function(n_bucket, linkage_fraction, replicate, task_seed) {
+      set.seed(task_seed)
+      n_bkt      <- as.integer(n_bucket)
+      n_linked   <- as.integer(floor(linkage_fraction * n_bkt))
+      n_unlinked <- n_bkt - n_linked
+      pool_idx   <- seq_len(n_pool)
+
+      if (n_linked == n_bkt) {
+        rep_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
+        true_rep <- true_sgpc_full[rep_idx]
+        u_rep <- reference_cdf(ss_prior[rep_idx],   refs$ref_prior)
+        v_rep <- reference_cdf(ss_current[rep_idx], refs$ref_current)
+        true_med <- median(true_rep, na.rm = TRUE)
+        true_mn  <- mean(true_rep,   na.rm = TRUE)
+      } else if (n_linked == 0L) {
+        u_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
+        v_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
+        u_rep <- reference_cdf(ss_prior[u_idx],   refs$ref_prior)
+        v_rep <- reference_cdf(ss_current[v_idx], refs$ref_current)
+        true_med <- pool_truth_median
+        true_mn  <- pool_truth_mean
+      } else {
+        linked_idx <- sample(pool_idx, size = n_linked, replace = FALSE)
+        u_linked <- reference_cdf(ss_prior[linked_idx],   refs$ref_prior)
+        v_linked <- reference_cdf(ss_current[linked_idx], refs$ref_current)
+        u_unl_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
+        v_unl_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
+        u_rep <- c(u_linked, reference_cdf(ss_prior[u_unl_idx],   refs$ref_prior))
+        v_rep <- c(v_linked, reference_cdf(ss_current[v_unl_idx], refs$ref_current))
+        true_med <- pool_truth_median
+        true_mn  <- pool_truth_mean
+      }
+
+      est <- tryCatch(
+        estimate_regime(u_sample = u_rep, v_sample = v_rep,
+                        kernel_cache = kernel_cache,
+                        regime_family = regime_family,
+                        distance_fn   = distance_fn,
+                        grid_resolution = grid_resolution,
+                        verbose = FALSE),
+        error = function(e) NULL)
+
+      if (is.null(est)) {
+        list(inferred_median = NA_real_, inferred_mean = NA_real_,
+             true_median = true_med, true_mean = true_mn,
+             converged = FALSE, m_hat = NA_real_, kappa_hat = NA_real_)
+      } else {
+        list(inferred_median = as.numeric(est$regime$median) * 100,
+             inferred_mean   = as.numeric(est$regime$mean)   * 100,
+             true_median = true_med, true_mean = true_mn,
+             converged = TRUE,
+             m_hat     = round(est$m_hat, 4),
+             kappa_hat = round(est$kappa_hat, 4))
+      }
+    }
+
+    progress_interval <- max(1L, min(100L, n_tasks %/% 20L))
+    for (i in seq_len(n_tasks)) {
+      r <- task_grid[i]
+      out <- .run_one(r$n_bucket, r$linkage_fraction, r$replicate, task_seeds[i])
+      results_list[[i]] <- c(
+        list(n_bucket = r$n_bucket, linkage_fraction = r$linkage_fraction,
+             replicate = r$replicate),
+        out)
+      if (verbose && (i %% progress_interval == 0 || i == n_tasks)) {
+        cat(sprintf("    %d / %d replicates complete  (N=%s, lf=%.1f)\n",
+                    i, n_tasks,
+                    format(r$n_bucket, big.mark = ","),
+                    r$linkage_fraction))
+      }
     }
   }
 

@@ -1,0 +1,342 @@
+############################################################################
+### Functions for Creating Longitudinal Pairs from Colorado Data
+############################################################################
+
+#' Create Longitudinal Pairs Dataset
+#' 
+#' Extracts valid prior-current grade pairs for copula analysis from
+#' Colorado longitudinal assessment data
+#' 
+#' @param data data.table with columns: ID, GRADE, YEAR, CONTENT_AREA, SCALE_SCORE
+#' @param grade_prior Prior grade level
+#' @param grade_current Current grade level
+#' @param year_prior Prior year
+#' @param year_current Current year (if NULL, calculated from year_prior and grade span)
+#' @param content_prior Content area for prior grade
+#' @param content_current Content area for current grade (for cross-content analysis)
+#' @param min_valid_score Minimum valid scale score (to filter out missing/invalid)
+#' @param dataset_id Optional dataset identifier for filtering combined multi-dataset data
+#' 
+#' @return data.table with columns: ID, SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT,
+#'         GRADE_PRIOR, GRADE_CURRENT, YEAR_PRIOR, YEAR_CURRENT, CONTENT_PRIOR, CONTENT_CURRENT
+create_longitudinal_pairs <- function(data,
+                                      grade_prior,
+                                      grade_current,
+                                      year_prior,
+                                      year_current = NULL,
+                                      content_prior = "MATHEMATICS",
+                                      content_current = NULL,
+                                      min_valid_score = 200,
+                                      dataset_id = NULL) {
+  
+  require(data.table)
+  
+  # Filter by dataset_id if provided (for multi-dataset processing)
+  # This allows processing combined datasets where data has a DATASET column
+  if (!is.null(dataset_id) && "DATASET" %in% names(data)) {
+    data <- data[DATASET == dataset_id]
+  }
+  
+  # Set content_current to content_prior if not specified (within-content analysis)
+  if (is.null(content_current)) {
+    content_current <- content_prior
+  }
+  
+  # Calculate year_current if not specified
+  if (is.null(year_current)) {
+    grade_span <- grade_current - grade_prior
+    year_prior_numeric <- as.numeric(year_prior)
+    year_current <- as.character(year_prior_numeric + grade_span)
+  }
+  
+  # Calculate year_span early for SGP column detection
+  year_span <- as.numeric(year_current) - as.numeric(year_prior)
+  
+  # Extract prior grade data
+  data_prior <- data[GRADE == grade_prior & 
+                     YEAR == year_prior & 
+                     CONTENT_AREA == content_prior &
+                     !is.na(SCALE_SCORE) &
+                     SCALE_SCORE >= min_valid_score,
+                     .(ID, SCALE_SCORE_PRIOR = SCALE_SCORE)]
+  
+  # Extract current grade data
+  # Build column selection dynamically to include SGP columns and grouping variables
+  base_cols <- c("ID", "SCALE_SCORE")
+  group_cols <- character(0)
+  sgp_cols <- character(0)
+  
+  # CRITICAL: Check for grouping variables (SCHOOL_NUMBER, DISTRICT_NUMBER)
+  # These are REQUIRED for group-level aggregation in Step 2 publication figures
+  if ("SCHOOL_NUMBER" %in% names(data)) {
+    group_cols <- c(group_cols, "SCHOOL_NUMBER")
+  } else {
+    stop("CRITICAL ERROR: SCHOOL_NUMBER column not found in data.\n",
+         "  This column is REQUIRED for Step 2 group-level analyses.\n",
+         "  Check your data source and ensure SCHOOL_NUMBER is present.")
+  }
+  
+  if ("DISTRICT_NUMBER" %in% names(data)) {
+    group_cols <- c(group_cols, "DISTRICT_NUMBER")
+  } else {
+    stop("CRITICAL ERROR: DISTRICT_NUMBER column not found in data.\n",
+         "  This column is REQUIRED for Step 2 group-level analyses.\n",
+         "  Check your data source and ensure DISTRICT_NUMBER is present.")
+  }
+  
+  # Check for span-specific SGP columns (new naming convention: SGP_ORDER_1_SPAN_N_YEAR)
+  span_suffix <- paste0("_SPAN_", year_span, "_YEAR")
+  sgp_order_span_col <- paste0("SGP_ORDER_1", span_suffix)
+  sgp_span_col <- paste0("SGP", span_suffix)
+  
+  if (sgp_order_span_col %in% names(data)) {
+    sgp_cols <- c(sgp_cols, sgp_order_span_col)
+  }
+  if (sgp_span_col %in% names(data)) {
+    sgp_cols <- c(sgp_cols, sgp_span_col)
+  }
+  
+  # Fallback: Check for legacy SGP columns (backwards compatibility)
+  if (length(sgp_cols) == 0) {
+    if ("SGP_ORDER_1" %in% names(data)) {
+      sgp_cols <- c(sgp_cols, "SGP_ORDER_1")
+    }
+    if ("SGP" %in% names(data)) {
+      sgp_cols <- c(sgp_cols, "SGP")
+    }
+  }
+  
+  all_cols <- c(base_cols, group_cols, sgp_cols)
+  
+  data_current <- data[GRADE == grade_current & 
+                       YEAR == year_current & 
+                       CONTENT_AREA == content_current &
+                       !is.na(SCALE_SCORE) &
+                       SCALE_SCORE >= min_valid_score,
+                       ..all_cols]
+  
+  # Rename SCALE_SCORE to SCALE_SCORE_CURRENT
+  setnames(data_current, "SCALE_SCORE", "SCALE_SCORE_CURRENT")
+  
+  # Merge on ID to get matched pairs
+  pairs <- merge(data_prior, data_current, by = "ID")
+  
+  # Add metadata
+  pairs[, `:=`(
+    GRADE_PRIOR = grade_prior,
+    GRADE_CURRENT = grade_current,
+    YEAR_PRIOR = year_prior,
+    YEAR_CURRENT = year_current,
+    CONTENT_PRIOR = content_prior,
+    CONTENT_CURRENT = content_current,
+    GRADE_SPAN = grade_current - grade_prior,
+    YEAR_SPAN = as.numeric(year_current) - as.numeric(year_prior)
+  )]
+  
+  # Report results
+  cat("Longitudinal pairs created:\n")
+  cat("  Prior: Grade", grade_prior, content_prior, year_prior, 
+      "- N =", nrow(data_prior), "\n")
+  cat("  Current: Grade", grade_current, content_current, year_current, 
+      "- N =", nrow(data_current), "\n")
+  cat("  Matched pairs: N =", nrow(pairs), "\n")
+  cat("  Grade span:", grade_current - grade_prior, "years\n")
+  cat("  Time span:", as.numeric(year_current) - as.numeric(year_prior), "years\n")
+  
+  # Report grouping variables
+  if (length(group_cols) > 0) {
+    cat("  Grouping variables included:", paste(group_cols, collapse = ", "), "\n")
+    for (col in group_cols) {
+      n_valid <- sum(!is.na(pairs[[col]]))
+      cat(sprintf("    %s: %d valid (%.1f%%)\n", col, n_valid, 100 * n_valid / nrow(pairs)))
+    }
+  }
+  
+  # Report SGP columns if present
+  if (length(sgp_cols) > 0) {
+    cat("  SGP columns included:", paste(sgp_cols, collapse = ", "), "\n")
+    for (col in sgp_cols) {
+      n_valid <- sum(!is.na(pairs[[col]]))
+      cat(sprintf("    %s: %d valid (%.1f%%)\n", col, n_valid, 100 * n_valid / nrow(pairs)))
+    }
+  }
+  cat("\n")
+  
+  return(pairs)
+}
+
+#' Resolve a valid year_prior for a given grade span and content area
+#'
+#' Uses the data to find a year_prior where both prior and current years
+#' exist for the requested grades/content. Falls back to the latest valid
+#' prior year if the provided year is unavailable.
+resolve_year_prior <- function(data,
+                               grade_prior,
+                               grade_current,
+                               content_prior = "MATHEMATICS",
+                               content_current = NULL,
+                               year_prior = NULL,
+                               dataset_id = NULL) {
+  require(data.table)
+
+  if (is.null(content_current)) {
+    content_current <- content_prior
+  }
+
+  if (!is.null(dataset_id) && "DATASET" %in% names(data)) {
+    data <- data[DATASET == dataset_id]
+  }
+
+  grade_span <- grade_current - grade_prior
+
+  years_prior <- data[GRADE == grade_prior & CONTENT_AREA == content_prior, unique(YEAR)]
+  years_current <- data[GRADE == grade_current & CONTENT_AREA == content_current, unique(YEAR)]
+
+  if (length(years_prior) == 0 || length(years_current) == 0) {
+    return(NA_character_)
+  }
+
+  years_prior_num <- as.numeric(as.character(years_prior))
+  years_current_num <- as.numeric(as.character(years_current))
+  
+  # Remove any NA values from year conversion
+  years_prior_num <- years_prior_num[!is.na(years_prior_num)]
+  years_current_num <- years_current_num[!is.na(years_current_num)]
+  
+  if (length(years_prior_num) == 0 || length(years_current_num) == 0) {
+    warning(sprintf("No valid numeric years found for grade %d -> %d, content %s -> %s",
+                   grade_prior, grade_current, content_prior, content_current))
+    return(NA_character_)
+  }
+
+  valid_prior <- years_prior_num[years_prior_num + grade_span %in% years_current_num]
+  if (length(valid_prior) == 0) {
+    warning(sprintf("No valid year_prior found where year_prior + %d exists for grade %d -> %d",
+                   grade_span, grade_prior, grade_current))
+    return(NA_character_)
+  }
+
+  if (!is.null(year_prior)) {
+    year_prior_num <- as.numeric(as.character(year_prior))
+    if (!is.na(year_prior_num) && year_prior_num %in% valid_prior) {
+      return(as.character(year_prior_num))
+    } else if (!is.na(year_prior_num)) {
+      warning(sprintf("Requested year_prior %d not valid. Valid years: %s. Using max: %d",
+                     year_prior_num, 
+                     paste(sort(valid_prior), collapse = ", "),
+                     max(valid_prior)))
+    }
+  }
+
+  # Final safety check before return
+  best_year <- max(valid_prior, na.rm = TRUE)
+  if (is.infinite(best_year) || is.na(best_year)) {
+    warning("Could not determine valid year_prior (got -Inf or NA)")
+    return(NA_character_)
+  }
+  
+  return(as.character(best_year))
+}
+
+
+#' Create Multiple Longitudinal Pair Sets
+#' 
+#' Create multiple longitudinal pair configurations for comprehensive analysis
+#' 
+#' @param data Colorado longitudinal data
+#' @param configurations List of configuration lists, each with grade_prior, grade_current, etc.
+#' 
+#' @return List of longitudinal pair data.tables
+create_multiple_pairs <- function(data, configurations) {
+  
+  pairs_list <- vector("list", length(configurations))
+  names(pairs_list) <- sapply(configurations, function(cfg) {
+    paste0("G", cfg$grade_prior, "to", cfg$grade_current, "_", 
+           cfg$year_prior, "_", cfg$content_prior)
+  })
+  
+  for (i in seq_along(configurations)) {
+    cfg <- configurations[[i]]
+    
+    pairs_list[[i]] <- create_longitudinal_pairs(
+      data = data,
+      grade_prior = cfg$grade_prior,
+      grade_current = cfg$grade_current,
+      year_prior = cfg$year_prior,
+      year_current = cfg$year_current,
+      content_prior = cfg$content_prior,
+      content_current = cfg$content_current,
+      min_valid_score = if(!is.null(cfg$min_valid_score)) cfg$min_valid_score else 200
+    )
+  }
+  
+  return(pairs_list)
+}
+
+
+#' Get Available Longitudinal Configurations
+#' 
+#' Identify all valid grade/year/content combinations available in data
+#' 
+#' @param data Colorado longitudinal data
+#' @param min_grade_span Minimum grade span to consider (default 1)
+#' @param max_grade_span Maximum grade span to consider (default 5)
+#' @param min_pairs Minimum number of matched pairs required
+#' 
+#' @return data.table of available configurations with sample sizes
+get_available_configurations <- function(data, 
+                                        min_grade_span = 1,
+                                        max_grade_span = 5,
+                                        min_pairs = 100) {
+  
+  require(data.table)
+  
+  # Get unique grade/year/content combinations with counts
+  available <- data[!is.na(SCALE_SCORE) & SCALE_SCORE >= 200,
+                   .(N = .N),
+                   by = .(GRADE, YEAR, CONTENT_AREA)]
+  
+  setkey(available, GRADE, YEAR, CONTENT_AREA)
+  
+  # Create all possible prior-current combinations
+  configs <- CJ(
+    grade_prior = unique(available$GRADE),
+    grade_current = unique(available$GRADE),
+    year_prior = unique(available$YEAR),
+    content_area = unique(available$CONTENT_AREA)
+  )
+  
+  # Filter for valid grade spans
+  configs <- configs[grade_current > grade_prior &
+                     (grade_current - grade_prior) >= min_grade_span &
+                     (grade_current - grade_prior) <= max_grade_span]
+  
+  # Calculate expected current year based on grade span
+  configs[, year_current := as.character(as.numeric(year_prior) + 
+                                         (grade_current - grade_prior))]
+  
+  # Check if both grades exist in the data
+  configs[, valid := FALSE]
+  
+  for (i in 1:nrow(configs)) {
+    prior_exists <- nrow(available[GRADE == configs$grade_prior[i] &
+                                   YEAR == configs$year_prior[i] &
+                                   CONTENT_AREA == configs$content_area[i]]) > 0
+    
+    current_exists <- nrow(available[GRADE == configs$grade_current[i] &
+                                     YEAR == configs$year_current[i] &
+                                     CONTENT_AREA == configs$content_area[i]]) > 0
+    
+    configs$valid[i] <- prior_exists & current_exists
+  }
+  
+  configs <- configs[valid == TRUE]
+  configs[, valid := NULL]
+  
+  cat("Found", nrow(configs), "valid longitudinal configurations\n")
+  cat("Grade spans:", paste(sort(unique(configs$grade_current - configs$grade_prior)), 
+                            collapse = ", "), "\n")
+  cat("Content areas:", paste(unique(configs$content_area), collapse = ", "), "\n\n")
+  
+  return(configs[order(grade_prior, grade_current, year_prior, content_area)])
+}

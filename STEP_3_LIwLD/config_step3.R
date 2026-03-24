@@ -141,7 +141,7 @@ STEP3_CONFIG <- list(
     # Precision sweep (A.9): Phase B-style subsampling from condition pool
     # Generates N-operating curves under the NAEP/TIMSS population-sampling frame.
     precision_sweep   = FALSE,   # set TRUE to enable step A.9
-    sweep_n_buckets   = NULL,    # NULL = use systematic$n_buckets
+    sweep_n_buckets   = c(1000L, 2500L, 5000L),  # Phase A default; override for larger sweeps
     sweep_reps        = 200L     # replicates per (N-bucket × linkage-fraction) cell
   ),
 

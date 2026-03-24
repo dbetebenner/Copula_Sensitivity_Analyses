@@ -1,0 +1,126 @@
+%%%%
+%%%% Panel text: Explanation of the marginal transformation, scatter, and linkage
+%%%%
+%%%% Prose + mathematics describing:
+%%%%   1. The probability-integral transform (raw -> pseudo-observations)
+%%%%   2. Why reference CDFs are population-level, not subgroup-level
+%%%%   3. What linkage means probabilistically (stayers, leavers, entrants)
+%%%%   4. The subgroup versus population distinction
+%%%%   5. What the scatter plot reveals about dependence structure
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=7.8in,paperheight=7.0in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/scatter_params}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{7.8in}
+  \vspace{0.1in}
+  \hspace{0.2in}%
+  \begin{minipage}{7.4in}
+    \small\raggedright\color{bodyGrey}
+
+    \textbf{The probability-integral transform.}\enspace
+    Suppose we observe prior scores $X = (x_1,\dots,x_{n_X})$ and current scores
+    $Y = (y_1,\dots,y_{n_Y})$ for a subgroup $S$ (e.g., a TIMSS country or a
+    NAEP state). The scores live on assessment-specific metric scales whose
+    units carry no intrinsic cross-time meaning. To place both margins on a
+    common, metric-free footing we apply fixed \emph{reference} cumulative
+    distribution functions (CDFs), computed over the full assessment population,
+    to obtain \emph{pseudo-observations} on $[0,1]$:
+    %
+    \begin{equation}
+      u_i \;=\; \Fxref(x_i),
+      \qquad
+      v_j \;=\; \Fyref(y_j),
+      \tag{M.1}
+    \end{equation}
+    %
+    where $\Fxref$ and $\Fyref$ are the prior-grade and current-grade population CDFs,
+    respectively. This is the classical \emph{probability-integral transform} (PIT):
+    if $\Fxref$ is the true marginal CDF of $X$, then $U = \Fxref(X)$ is uniformly
+    distributed on $[0,1]$.
+
+    \vspace{6pt}
+    \textbf{Population versus subgroup.}\enspace
+    The reference CDFs are defined over the \emph{full population}, not over $S$.
+    Consequently, the marginal distribution of $U$ within subgroup~$S$ is
+    generally \emph{not} uniform---it reflects $S$'s position relative to the
+    population. The marginal density plots in the outer margin strips illustrate
+    this: the grey-shaded population density is symmetric and centered, while the
+    colored subgroup density is shifted toward lower quantiles, reflecting a
+    below-average subgroup. The population-level $\mathrm{Uniform}(0,1)$
+    serves as the baseline against which subgroup departures are measured.
+
+    \vspace{6pt}
+    \textbf{Stayers, leavers, and entrants.}\enspace
+    When prior and current scores come from the \emph{same students} measured
+    longitudinally, we observe linked pairs $(x_i, y_i)$---and hence pairs
+    $(u_i, v_i)$---that carry information about how achievement at two time
+    points co-varies within individuals. These \emph{stayers} appear as
+    scatter dots in the center panel and as rug marks on both axes. Formally,
+    linked data are draws from a joint law,
+    %
+    \begin{equation}
+      (U_i, V_i) \;\stackrel{\text{i.i.d.}}{\sim}\; C\bigl(\Fxref(x), \Fyref(y)\bigr),
+      \tag{M.2}
+    \end{equation}
+    %
+    where $C$ is the copula encoding within-subject dependence (Sklar's theorem).
+    \emph{Leavers}---students present in the prior round but not the
+    current one---appear only as rug marks on the bottom axis. \emph{Entrants}---students
+    new to the current round---appear only as rug marks on the left axis. All
+    three groups contribute to the marginal distributions, but only stayers
+    contribute to the empirical copula.$^{\mbox{\footnotesize{3}}}$
+
+    \vspace{6pt}
+    \textbf{Non-linkage and cross-sectional designs.}\enspace
+    Cross-sectional assessment programs (NAEP, TIMSS, PIRLS) draw independent
+    samples at each occasion. The analyst observes only the marginal
+    distributions,
+    %
+    \begin{equation}
+      X_1,\dots,X_{n_X} \;\stackrel{\text{i.i.d.}}{\sim}\; F_X,
+      \qquad
+      Y_1,\dots,Y_{n_Y} \;\stackrel{\text{i.i.d.}}{\sim}\; F_Y,
+      \tag{M.3}
+    \end{equation}
+    %
+    with no within-subject pairing observed. In terms of the scatter plot,
+    this corresponds to having only the rug plots (marginals) with no scatter
+    dots (copula). The coupling---the copula $C$ that would connect them---is
+    entirely missing and must be supplied by an external model or
+    assumption.$^{\mbox{\footnotesize{4}}}$
+
+    \vspace{6pt}
+    \textbf{What the marginals preserve and what they discard.}\enspace
+    The transform $x \mapsto u = \Fxref(x)$ is monotone and (if $\Fxref$ is
+    continuous) invertible, so no ordinal information is lost.$^{\mbox{\footnotesize{1}}}$
+    What is discarded is the \emph{metric structure}: the difference
+    $x_2 - x_1$ depends on the scale, but the rank ordering
+    $u_1 < u_2$ is scale-invariant. This is precisely the property exploited by
+    Sklar's theorem, which factors any joint distribution $H(x,y)$ as
+    %
+    \begin{equation}
+      H(x,y) \;=\; C\bigl(F_X(x),\, F_Y(y)\bigr),
+      \tag{M.4}
+    \end{equation}
+    %
+    separating the marginal behavior ($F_X$, $F_Y$) from the dependence
+    structure ($C$). The CDF strips in the margin make this factorization
+    visually explicit: the CDF curves are the ``bridges'' that carry raw scores
+    into copula space, and the scatter in the interior reveals the dependence
+    structure that remains after the marginals have been removed.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

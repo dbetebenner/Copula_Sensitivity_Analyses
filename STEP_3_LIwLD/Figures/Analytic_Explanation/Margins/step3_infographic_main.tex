@@ -1,0 +1,134 @@
+%%%%
+%%%% step3_infographic_main.tex - Margins infographic assembler
+%%%%
+%%%% Layout (~8in wide, vertical):
+%%%%   1. Title + subtitles
+%%%%   2. Header band (3 sections)
+%%%%   3. Compound scatter graphic (CDF margins + rug + scatter)
+%%%%   4. Text panel (prose + mathematics)
+%%%%   5. Footnotes
+%%%%
+%%%% All panel PDFs are pre-compiled; this file composes them.
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=8.5in,paperheight=20.0in,margin=0in]{geometry}
+\usepackage{graphicx}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\newlength{\fnlabelwidth}
+\setlength{\fnlabelwidth}{0.075in}
+\newcommand{\fnline}[2]{%
+  \par\noindent
+  \makebox[\fnlabelwidth][l]{$^{#1}$}%
+  \parbox[t]{\dimexpr\linewidth-\fnlabelwidth\relax}{#2}%
+  \par
+}
+
+\pagestyle{empty}
+\begin{document}
+
+%% =========================================================================
+%% TITLE BLOCK
+%% =========================================================================
+\noindent
+\hspace{0.35in}%
+\raisebox{0pt}[0.7in][0pt]{%
+  \parbox{7.5in}{%
+    \vspace{0.40in}
+    {\LARGE\bfseries From Scores to Pseudo-Observations: The Marginal Transformation}
+
+    \vspace{0.06in}
+    {\large\bfseries Stripping Metric Structure via the Probability-Integral Transform}
+
+    \vspace{0.08in}
+    {\normalsize\color{subtitleGrey}%
+      Stayers, leavers, and entrants
+      in copula-based longitudinal inference without longitudinal data}%
+  }}
+
+\vspace{0.85in}
+
+%% =========================================================================
+%% HEADER BAND
+%% =========================================================================
+\noindent
+\hspace{0.35in}%
+\includegraphics[width=7.8in,height=0.85in]{outputs/step3_header_band.pdf}%
+
+\vspace{0.15in}
+
+%% =========================================================================
+%% COMPOUND SCATTER GRAPHIC
+%% =========================================================================
+\noindent
+\hspace{0.35in}%
+\includegraphics[width=7.8in]{outputs/step3_panel_scatter_graphic.pdf}%
+
+\vspace{0.20in}
+
+%% =========================================================================
+%% TEXT PANEL
+%% =========================================================================
+\noindent
+\hspace{0.15in}%
+\includegraphics[width=8.0in]{outputs/step3_panel_text.pdf}%
+
+\vspace{0.30in}
+
+%% =========================================================================
+%% FOOTNOTES
+%% =========================================================================
+\noindent
+\hspace{0.45in}%
+\begin{minipage}[t]{7.5in}
+\footnotesize\raggedright
+\setlength{\parskip}{0pt}
+
+\fnline{1}{The transform $x \mapsto u = \Fxref(x)$ is invertible when $\Fxref$
+is continuous (strictly increasing on its support). In discrete or
+mixed-continuous settings, the CDF is not strictly monotone and the
+generalized inverse $F^{-1}(u) = \inf\{x : F(x) \ge u\}$ is used.
+This distinction matters when working with score scales that have mass
+points (e.g., integer-valued test scores). In such cases, randomized
+ranks or mid-rank adjustments are sometimes applied to ensure a
+continuous marginal on $[0,1]$; see Genest \& Ne\v{s}lehov\'{a} (2007)
+and R\"{u}schendorf (2009) for details on pseudo-observation
+construction under ties.}
+
+\vspace{4pt}
+\fnline{2}{The reference CDFs $\Fxref$ and $\Fyref$ are computed over the
+\emph{full assessment population}---the complete set of examinees
+across all subgroups in a given grade and year. They are \emph{not}
+subgroup-specific. This ensures that all subgroups are mapped to
+the \emph{same} reference scale, so that a quantile of $u = 0.30$
+means ``at the 30th percentile of the population'' regardless of
+which subgroup the student belongs to. The subgroup's marginal
+density of $U$ then reflects its distributional position within
+the population.}
+
+\vspace{4pt}
+\fnline{3}{Stayers are students observed in both the prior and current
+assessment rounds; their linked pairs $(u_i, v_i)$ constitute
+draws from the copula $C(\Fxref(x), \Fyref(y))$. Leavers appear
+only in the prior round (prior-only observations) and entrants
+appear only in the current round (current-only observations).
+All three groups contribute to the marginal distributions, but
+only stayers contribute to the empirical copula.}
+
+\vspace{4pt}
+\fnline{4}{In cross-sectional assessment programs (NAEP, TIMSS, PIRLS),
+independent samples are drawn at each occasion and no student-level
+pairing exists. The analyst observes only the marginal distributions,
+so the copula $C$ must be supplied externally---typically from
+canonical copula tables calibrated on longitudinal datasets in
+similar content areas and year-spans (see the Overview infographic,
+Panel~B1). The non-linkage premium calculations in the companion
+appendix quantify the precision cost of this information loss.}
+
+\end{minipage}
+
+\end{document}

@@ -720,7 +720,7 @@ All tuneable parameters live in `config_step3.R`. Key settings:
 | `validation$min_subgroup_n` | `500` | Minimum subgroup size |
 | `validation$target_subgroup_n` | `2500` | Preferred Phase A subgroup size |
 | `validation$precision_sweep` | `FALSE` | Enable step A.9 (Phase B-style subsampling N-sweep within Phase A) |
-| `validation$sweep_n_buckets` | `NULL` | N buckets for A.9 (NULL = use `systematic$n_buckets`) |
+| `validation$sweep_n_buckets` | `c(1000, 2500, 5000)` | N buckets for A.9 precision sweep |
 | `validation$sweep_reps` | `200L` | Replicates per A.9 cell |
 | `systematic$single_target` | `list(NULL, NULL, NULL)` | Phase B deep-dive target (dataset_id, condition_id, subgroup_id) |
 | `systematic$n_conditions_per_dataset` | `10` | Conditions for Phase B |

@@ -1,0 +1,49 @@
+%%%%
+%%%% step3_header_band.tex - Header band for Margins infographic
+%%%%
+%%%% Three-section band:
+%%%%   Left:   Score distributions (PDF)
+%%%%   Center: CDF transform (PIT)
+%%%%   Right:  Pseudo-observation scatter
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=7.8in,paperheight=0.85in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{tikz}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\pagestyle{empty}
+\begin{document}
+\noindent
+\begin{tikzpicture}[x=1in,y=1in]
+  \definecolor{headerDark}{RGB}{210,210,208}
+  \definecolor{headerLight}{RGB}{225,225,223}
+
+  % Base darker band
+  \fill[headerDark] (0,0.05) rectangle (7.8,0.80);
+
+  % Lighter middle section with chevrons (CDF panel)
+  \fill[headerLight]
+    (2.60,0.05) -- (5.05,0.05) -- (5.25,0.425) -- (5.05,0.80) --
+    (2.45,0.80) -- (2.65,0.425) -- (2.45,0.05) -- cycle;
+
+  % Left header: Score distributions
+  \node[anchor=west,align=left,text width=2.20in] at (0.15,0.43) {%
+    {\small\bfseries Raw score distributions}\\[-2pt]
+    {\scriptsize Prior and current densities for subgroup $S$}};
+
+  % Center header: CDF transform
+  \node[anchor=west,align=left,text width=2.10in] at (2.75,0.43) {%
+    {\small\bfseries Probability-integral transform}\\[-2pt]
+    {\scriptsize Scores $\to$ quantiles via $\Fxref$, $\Fyref$}};
+
+  % Right header: Pseudo-observation scatter
+  \node[anchor=west,align=left,text width=2.30in] at (5.35,0.43) {%
+    {\small\bfseries Pseudo-observation scatter}\\[-2pt]
+    {\scriptsize Stayers, leavers, and entrants on $[0,1]^2$}};
+
+\end{tikzpicture}
+
+\end{document}
