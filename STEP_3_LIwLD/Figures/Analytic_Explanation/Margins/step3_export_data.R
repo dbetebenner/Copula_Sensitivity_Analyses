@@ -50,7 +50,8 @@ pairs_csv <- file.path(data_dir, "longitudinal_pairs.csv")
 subgroup_filter <- quote(DISTRICT_NUMBER == "0020")
 
 # Maximum scatter dots to render (subsample for visual clarity)
-max_scatter_dots <- 400
+max_pop_scatter_dots <- 5000   # Population background cloud (grey)
+max_sub_scatter_dots <- 1000   # Subgroup foreground dots (purple)
 
 # Maximum rug marks per axis (too many overflows TeX memory)
 max_rug_stayers <- 600
@@ -61,6 +62,9 @@ score_display_max <- NULL   # e.g., 800
 
 # Grid resolution for PDF/CDF curves
 n_grid <- 512
+
+# STEP 1 copula-fit results — dataset ID must match results subdirectory name
+step1_dataset_id <- "dataset_1"
 
 
 ###############################################################################
@@ -130,6 +134,141 @@ cat("    Entrants:", nrow(sub_entrants), "\n")
 
 
 ###############################################################################
+## 2b. Join STEP 1 copula-fit results for this condition
+###############################################################################
+
+step1_csv <- file.path(
+  normalizePath(file.path(margins_dir, "../../../../STEP_1_Family_Selection/results"),
+                mustWork = FALSE),
+  step1_dataset_id, "phase1_copula_family_comparison.csv")
+
+if (file.exists(step1_csv)) {
+  cat("\nLoading STEP 1 copula-fit results...\n")
+  s1 <- fread(step1_csv)
+
+  gp  <- as.integer(pairs$GRADE_PRIOR[1])
+  gc  <- as.integer(pairs$GRADE_CURRENT[1])
+  yp  <- pairs$YEAR_PRIOR[1]
+  yc  <- pairs$YEAR_CURRENT[1]
+  ca  <- pairs$CONTENT_AREA[1]
+
+  s1_cond <- s1[grade_prior == gp & grade_current == gc &
+                year_prior == yp & year_current == yc &
+                content_area == ca]
+
+  if (nrow(s1_cond) > 0) {
+    s1_best <- s1_cond[delta_aic_vs_best == 0]
+    if (nrow(s1_best) > 1) s1_best <- s1_best[1]  # tie-break
+
+    s1_second <- s1_cond[delta_aic_vs_best > 0][order(delta_aic_vs_best)][1]
+
+    copula_family   <- s1_best$family
+    copula_tau      <- s1_best$tau
+    copula_rho_sp   <- round(sin(pi / 2 * copula_tau), 3)
+    copula_rho_par  <- s1_best$correlation_rho
+    copula_df       <- s1_best$degrees_freedom
+    copula_tail_lo  <- s1_best$tail_dep_lower
+    copula_tail_hi  <- s1_best$tail_dep_upper
+    copula_delta_aic <- s1_second$delta_aic_vs_best
+    copula_second   <- s1_second$family
+
+    cat("  Condition  :", paste(gp, "->", gc, yp, ca), "\n")
+    cat("  Best family:", copula_family, "\n")
+    cat("  tau =", round(copula_tau, 3),
+        " rho_s =", copula_rho_sp,
+        " rho_par =", round(copula_rho_par, 3), "\n")
+    cat("  df =", round(copula_df, 1),
+        " lambda =", round(copula_tail_lo, 3), "\n")
+    cat("  2nd family :", copula_second,
+        " delta_AIC =", round(copula_delta_aic, 1), "\n")
+
+    step1_available <- TRUE
+  } else {
+    cat("\n  WARNING: No STEP 1 match for condition",
+        paste(gp, "->", gc, yp, ca), "— copula macros will use placeholders.\n")
+    step1_available <- FALSE
+  }
+  rm(s1)
+} else {
+  cat("\n  WARNING: STEP 1 results CSV not found at:\n    ", step1_csv,
+      "\n    Copula macros will use placeholders.\n")
+  step1_available <- FALSE
+}
+
+
+###############################################################################
+## 2c. Export copula CDF contour data for _2 scatter panel
+###############################################################################
+
+contours_available <- FALSE
+
+if (step1_available) {
+  cond_dir_name <- sprintf("%s_G%s_G%s_%s", yc, gp, gc, ca)
+  contour_rds_dir <- file.path(
+    normalizePath(file.path(margins_dir, "../../../../STEP_1_Family_Selection/results"),
+                  mustWork = FALSE),
+    step1_dataset_id, "contour_plots", cond_dir_name)
+
+  copula_rds   <- file.path(contour_rds_dir, "copula_results.rds")
+  emp_cop_rds  <- file.path(contour_rds_dir, "empirical_copulas.rds")
+
+  if (file.exists(copula_rds) && file.exists(emp_cop_rds)) {
+    cat("\nExporting copula CDF contour data...\n")
+    require(copula)
+
+    cr  <- readRDS(copula_rds)
+    ec  <- readRDS(emp_cop_rds)
+    t_cop   <- cr[[copula_family]]$copula
+    emp_cop <- ec$bernstein
+
+    n_grid <- 101L
+    gseq   <- seq(0, 1, length.out = n_grid)
+    uv     <- as.matrix(expand.grid(u = gseq, v = gseq))
+
+    cat("  Evaluating t-copula CDF on", n_grid, "x", n_grid, "grid...\n")
+    t_cdf_mat <- matrix(pCopula(uv, t_cop), nrow = n_grid)
+
+    cat("  Evaluating Bernstein empirical CDF (this may take ~60s)...\n")
+    emp_cdf_mat <- matrix(pCopula(uv, emp_cop), nrow = n_grid)
+
+    contour_levels <- seq(0.1, 0.9, by = 0.1)
+
+    write_contour_dat <- function(grid, zmat, prefix, levels) {
+      for (lv in levels) {
+        cl <- contourLines(grid, grid, zmat, levels = lv)
+        tag <- sprintf("%03d", round(lv * 100))
+        fname <- sprintf("%s_%s.dat", prefix, tag)
+        if (length(cl) > 0) {
+          pts <- do.call(rbind, lapply(cl, function(seg) {
+            rbind(cbind(seg$x, seg$y), c(NA, NA))
+          }))
+          pts <- pts[!is.na(pts[,1]), , drop = FALSE]
+          writeLines(paste(round(pts[,1], 6), round(pts[,2], 6)),
+                     file.path(data_dir, fname))
+        } else {
+          writeLines("", file.path(data_dir, fname))
+        }
+        cat("  ", fname, "\n")
+      }
+    }
+
+    cat("Writing t-copula contour .dat files...\n")
+    write_contour_dat(gseq, t_cdf_mat, "contour_t_cdf", contour_levels)
+
+    cat("Writing empirical contour .dat files...\n")
+    write_contour_dat(gseq, emp_cdf_mat, "contour_emp_cdf", contour_levels)
+
+    contours_available <- TRUE
+    rm(cr, ec, t_cop, emp_cop, uv, t_cdf_mat, emp_cdf_mat)
+    gc(verbose = FALSE)
+  } else {
+    cat("\n  WARNING: Copula RDS files not found in:\n    ", contour_rds_dir,
+        "\n    Contour export skipped.\n")
+  }
+}
+
+
+###############################################################################
 ## 3. Population reference distributions (F_X^ref, F_Y^ref)
 ##    Fit normal to ALL students' marginals
 ###############################################################################
@@ -173,7 +312,11 @@ cat("\nComputing pseudo-observations...\n")
 
 pit <- function(s, mu, sd) pnorm(s, mean = mu, sd = sd)
 
-# Stayers
+# Population stayers (for background scatter cloud)
+u_pop_stayers <- pit(pop_stayers$SCALE_SCORE_PRIOR, pop_mu_x, pop_sd_x)
+v_pop_stayers <- pit(pop_stayers$SCALE_SCORE_CURRENT, pop_mu_y, pop_sd_y)
+
+# Subgroup stayers
 u_sub_stayers <- pit(sub_stayers$SCALE_SCORE_PRIOR, pop_mu_x, pop_sd_x)
 v_sub_stayers <- pit(sub_stayers$SCALE_SCORE_CURRENT, pop_mu_y, pop_sd_y)
 
@@ -185,6 +328,8 @@ v_sub_entrants <- pit(sub_entrants$SCALE_SCORE_CURRENT, pop_mu_y, pop_sd_y)
 
 # Clamp to (0.005, 0.995) so dots don't sit right on the frame
 clamp01 <- function(x) pmax(0.005, pmin(0.995, x))
+u_pop_stayers  <- clamp01(u_pop_stayers)
+v_pop_stayers  <- clamp01(v_pop_stayers)
 u_sub_stayers  <- clamp01(u_sub_stayers)
 v_sub_stayers  <- clamp01(v_sub_stayers)
 u_sub_leavers  <- clamp01(u_sub_leavers)
@@ -195,21 +340,38 @@ v_sub_entrants <- clamp01(v_sub_entrants)
 ## 6. Subsample scatter dots for visual clarity
 ###############################################################################
 
-n_stayers_actual <- nrow(sub_stayers)
-n_leavers_actual <- nrow(sub_leavers)
-n_entrants_actual <- nrow(sub_entrants)
+n_pop_stayers_actual <- nrow(pop_stayers)
+n_stayers_actual     <- nrow(sub_stayers)
+n_leavers_actual     <- nrow(sub_leavers)
+n_entrants_actual    <- nrow(sub_entrants)
 
-if (n_stayers_actual > max_scatter_dots) {
-  set.seed(42)
-  idx <- sample.int(n_stayers_actual, max_scatter_dots)
-  u_scatter <- u_sub_stayers[idx]
-  v_scatter <- v_sub_stayers[idx]
-  n_scatter <- max_scatter_dots
-  cat("  Subsampled", max_scatter_dots, "of", n_stayers_actual, "stayers for scatter\n")
+# Population background cloud
+if (n_pop_stayers_actual > max_pop_scatter_dots) {
+  set.seed(41)
+  idx_pop <- sample.int(n_pop_stayers_actual, max_pop_scatter_dots)
+  u_pop_scatter <- u_pop_stayers[idx_pop]
+  v_pop_scatter <- v_pop_stayers[idx_pop]
+  n_pop_scatter <- max_pop_scatter_dots
+  cat("  Subsampled", max_pop_scatter_dots, "of",
+      format(n_pop_stayers_actual, big.mark = ","), "population stayers for scatter\n")
 } else {
-  u_scatter <- u_sub_stayers
-  v_scatter <- v_sub_stayers
-  n_scatter <- n_stayers_actual
+  u_pop_scatter <- u_pop_stayers
+  v_pop_scatter <- v_pop_stayers
+  n_pop_scatter <- n_pop_stayers_actual
+}
+
+# Subgroup foreground dots
+if (n_stayers_actual > max_sub_scatter_dots) {
+  set.seed(42)
+  idx_sub <- sample.int(n_stayers_actual, max_sub_scatter_dots)
+  u_sub_scatter <- u_sub_stayers[idx_sub]
+  v_sub_scatter <- v_sub_stayers[idx_sub]
+  n_sub_scatter <- max_sub_scatter_dots
+  cat("  Subsampled", max_sub_scatter_dots, "of", n_stayers_actual, "subgroup stayers for scatter\n")
+} else {
+  u_sub_scatter <- u_sub_stayers
+  v_sub_scatter <- v_sub_stayers
+  n_sub_scatter <- n_stayers_actual
 }
 
 
@@ -282,15 +444,36 @@ write_dat(round(cdf_current, 6),     round(y_grid, 2), "cdf_Fyref.dat")
 
 
 ###############################################################################
-## 9. Scatter dots (TeX snippets)
+## 9. Scatter dots (TeX snippets) — two layers
 ###############################################################################
 
 cat("\nScatter dots...\n")
 
-scatter_tex <- sprintf(
-  "  \\psdot[dotsize=2.0pt,linecolor=stayerColor,fillcolor=stayerColor,dotstyle=*](%s,%s)%%",
-  round(u_scatter, 4), round(v_scatter, 4))
-write_tex_lines(scatter_tex, "scatter_stayers.tex")
+# Population background cloud (grey, smaller dots)
+pop_scatter_tex <- sprintf(
+  "  \\psdot[dotsize=1.5pt,linecolor=populationRef,fillcolor=populationRef,dotstyle=*](%s,%s)%%",
+  round(u_pop_scatter, 4), round(v_pop_scatter, 4))
+write_tex_lines(pop_scatter_tex, "scatter_population.tex")
+cat("  Population:", n_pop_scatter, "dots\n")
+
+# Subgroup foreground dots (purple, larger dots)
+sub_scatter_tex <- sprintf(
+  "  \\psdot[dotsize=2.0pt,linecolor=subgroupColor,fillcolor=subgroupColor,dotstyle=*](%s,%s)%%",
+  round(u_sub_scatter, 4), round(v_sub_scatter, 4))
+write_tex_lines(sub_scatter_tex, "scatter_subgroup.tex")
+cat("  Subgroup:", n_sub_scatter, "dots\n")
+
+# Variant _2: smaller, lighter dots so contour lines are prominent
+pop_scatter_tex_2 <- sprintf(
+  "  \\psdot[dotsize=0.8pt,linecolor=populationRef,fillcolor=populationRef,dotstyle=*](%s,%s)%%",
+  round(u_pop_scatter, 4), round(v_pop_scatter, 4))
+write_tex_lines(pop_scatter_tex_2, "scatter_population_2.tex")
+
+sub_scatter_tex_2 <- sprintf(
+  "  \\psdot[dotsize=1.0pt,linecolor=subgroupColor,fillcolor=subgroupColor,dotstyle=*](%s,%s)%%",
+  round(u_sub_scatter, 4), round(v_sub_scatter, 4))
+write_tex_lines(sub_scatter_tex_2, "scatter_subgroup_2.tex")
+cat("  _2 variants (smaller dots) written\n")
 
 
 ###############################################################################
@@ -329,6 +512,57 @@ rug_left <- c(
           round(v_sub_entrants, 4), round(v_sub_entrants, 4))
 )
 write_tex_lines(rug_left, "rug_left.tex")
+
+
+###############################################################################
+## 10b. Rug density curves (replaces rug tick marks in the panel)
+###############################################################################
+
+cat("Rug density curves...\n")
+
+u_grid_01 <- seq(0, 1, length.out = n_grid)
+
+# --- Bottom strip (u-axis) ---
+# Subgroup density: stayers + leavers, normalized to U(0,1) = 1.0
+u_sub_all  <- c(u_sub_stayers, u_sub_leavers)
+d_u_sub    <- density(u_sub_all, from = 0, to = 1, n = n_grid)
+write_dat(round(u_grid_01, 6), round(d_u_sub$y, 6), "rug_bottom_sub_kde.dat")
+
+# Smoothed P(leaver | u) via loess
+u_combined  <- c(u_sub_stayers, u_sub_leavers)
+leaver_ind  <- c(rep(0L, length(u_sub_stayers)), rep(1L, length(u_sub_leavers)))
+fit_u       <- loess(leaver_ind ~ u_combined, span = 0.3, surface = "direct")
+prop_leaver <- pmax(0, pmin(1, predict(fit_u, newdata = u_grid_01)))
+write_dat(round(u_grid_01, 6), round(prop_leaver, 6), "rug_bottom_leaver_prop.dat")
+
+# --- Left strip (v-axis) ---
+# Subgroup density: stayers + entrants, normalized to U(0,1) = 1.0
+# Rotated orientation: columns are (density_value, v_coord)
+v_sub_all  <- c(v_sub_stayers, v_sub_entrants)
+d_v_sub    <- density(v_sub_all, from = 0, to = 1, n = n_grid)
+write_dat(round(d_v_sub$y, 6), round(u_grid_01, 6), "rug_left_sub_kde.dat")
+
+# Smoothed P(entrant | v) via loess
+v_combined   <- c(v_sub_stayers, v_sub_entrants)
+entrant_ind  <- c(rep(0L, length(v_sub_stayers)), rep(1L, length(v_sub_entrants)))
+fit_v        <- loess(entrant_ind ~ v_combined, span = 0.3, surface = "direct")
+prop_entrant <- pmax(0, pmin(1, predict(fit_v, newdata = u_grid_01)))
+write_dat(round(prop_entrant, 6), round(u_grid_01, 6), "rug_left_entrant_prop.dat")
+
+# rug_density_params.tex no longer carries macros
+writeLines(character(0), file.path(data_dir, "rug_density_params.tex"))
+cat("  rug_density_params.tex \n")
+
+cat("  Bottom strip: subgroup n =", length(u_sub_all),
+    " leavers n =", length(u_sub_leavers), "\n")
+cat("  Left strip:   subgroup n =", length(v_sub_all),
+    " entrants n =", length(v_sub_entrants), "\n")
+cat("  Leaver proportion range: [",
+    round(min(prop_leaver, na.rm=TRUE), 3), ",",
+    round(max(prop_leaver, na.rm=TRUE), 3), "]\n")
+cat("  Entrant proportion range: [",
+    round(min(prop_entrant, na.rm=TRUE), 3), ",",
+    round(max(prop_entrant, na.rm=TRUE), 3), "]\n")
 
 
 ###############################################################################
@@ -385,10 +619,22 @@ param_lines <- c(
   sprintf("\\def\\popSdX{%.1f}", pop_sd_x),
   sprintf("\\def\\popMuY{%.1f}", pop_mu_y),
   sprintf("\\def\\popSdY{%.1f}", pop_sd_y),
-  sprintf("\\def\\nStayers{%d}", n_stayers_actual),
-  sprintf("\\def\\nLeavers{%d}", n_leavers_actual),
-  sprintf("\\def\\nEntrants{%d}", n_entrants_actual),
-  sprintf("\\def\\nScatter{%d}", n_scatter),
+  sprintf("\\def\\nPopStayers{%s}",  format(nrow(pop_stayers),  big.mark = ",")),
+  sprintf("\\def\\nPopLeavers{%s}",  format(nrow(pop_leavers),  big.mark = ",")),
+  sprintf("\\def\\nPopEntrants{%s}", format(nrow(pop_entrants), big.mark = ",")),
+  sprintf("\\def\\popAlpha{%.2f}",
+          nrow(pop_stayers) / (nrow(pop_stayers) + nrow(pop_leavers))),
+  sprintf("\\def\\popBeta{%.2f}",
+          nrow(pop_stayers) / (nrow(pop_stayers) + nrow(pop_entrants))),
+  sprintf("\\def\\nStayers{%s}",  format(n_stayers_actual,  big.mark = ",")),
+  sprintf("\\def\\nLeavers{%s}",  format(n_leavers_actual,  big.mark = ",")),
+  sprintf("\\def\\nEntrants{%s}", format(n_entrants_actual, big.mark = ",")),
+  sprintf("\\def\\subAlpha{%.2f}",
+          n_stayers_actual / (n_stayers_actual + n_leavers_actual)),
+  sprintf("\\def\\subBeta{%.2f}",
+          n_stayers_actual / (n_stayers_actual + n_entrants_actual)),
+  sprintf("\\def\\nPopScatter{%d}", n_pop_scatter),
+  sprintf("\\def\\nSubScatter{%d}", n_sub_scatter),
   sprintf("\\def\\matchRate{%s}",
           round(n_stayers_actual / max(n_stayers_actual + n_leavers_actual,
                                        n_stayers_actual + n_entrants_actual) * 100, 0)),
@@ -409,6 +655,8 @@ param_lines <- c(
   sprintf("\\def\\exampleV{%s}", round(v_example, 4)),
   sprintf("\\def\\exampleXnorm{%s}", round(x_example_norm, 6)),
   sprintf("\\def\\exampleYnorm{%s}", round(y_example_norm, 6)),
+  sprintf("\\def\\exampleURound{%s}", formatC(round(u_example, 2), format = "f", digits = 2)),
+  sprintf("\\def\\exampleVRound{%s}", formatC(round(v_example, 2), format = "f", digits = 2)),
   "",
   "%% Score tick labels (pre-computed, normalized to [0,1])",
   sprintf("\\def\\nScoreTicks{%d}", length(tick_values)),
@@ -419,7 +667,32 @@ param_lines <- c(
   "",
   "%% Max density values (for reference)",
   sprintf("\\def\\maxPdfPrior{%s}", round(max(d_x$y) * 1.1, 6)),
-  sprintf("\\def\\maxPdfCurrent{%s}", round(max(d_y$y) * 1.1, 6))
+  sprintf("\\def\\maxPdfCurrent{%s}", round(max(d_y$y) * 1.1, 6)),
+  "",
+  "%% STEP 1 copula-fit results",
+  if (step1_available) c(
+    sprintf("\\def\\copulaFamily{%s}",       copula_family),
+    sprintf("\\def\\copulaTau{%.3f}",         copula_tau),
+    sprintf("\\def\\copulaRhoSp{%.3f}",       copula_rho_sp),
+    sprintf("\\def\\copulaRhoPar{%.3f}",      copula_rho_par),
+    sprintf("\\def\\copulaDf{%.1f}",           copula_df),
+    sprintf("\\def\\copulaTailLo{%.3f}",       copula_tail_lo),
+    sprintf("\\def\\copulaTailHi{%.3f}",       copula_tail_hi),
+    sprintf("\\def\\copulaDeltaAIC{%.1f}",     copula_delta_aic),
+    sprintf("\\def\\copulaSecondFamily{%s}",
+            paste0(toupper(substring(copula_second, 1, 1)),
+                   substring(copula_second, 2)))
+  ) else c(
+    "\\def\\copulaFamily{--}",
+    "\\def\\copulaTau{--}",
+    "\\def\\copulaRhoSp{--}",
+    "\\def\\copulaRhoPar{--}",
+    "\\def\\copulaDf{--}",
+    "\\def\\copulaTailLo{--}",
+    "\\def\\copulaTailHi{--}",
+    "\\def\\copulaDeltaAIC{--}",
+    "\\def\\copulaSecondFamily{--}"
+  )
 )
 write_tex_lines(param_lines, "scatter_params.tex")
 
@@ -438,11 +711,11 @@ trace_lines <- c(
   sprintf("\\def\\exampleY{%s}", round(y_example, 1)),
   sprintf("\\def\\exampleU{%s}", round(u_example, 4)),
   sprintf("\\def\\exampleV{%s}", round(v_example, 4)),
-  sprintf("\\def\\nLinked{%d}", n_stayers_actual),
-  sprintf("\\def\\nOrphanU{%d}", n_leavers_actual),
-  sprintf("\\def\\nOrphanV{%d}", n_entrants_actual),
-  sprintf("\\def\\nTotalU{%d}", n_stayers_actual + n_leavers_actual),
-  sprintf("\\def\\nTotalV{%d}", n_stayers_actual + n_entrants_actual),
+  sprintf("\\def\\nLinked{%s}",  format(n_stayers_actual,                          big.mark = ",")),
+  sprintf("\\def\\nOrphanU{%s}", format(n_leavers_actual,                          big.mark = ",")),
+  sprintf("\\def\\nOrphanV{%s}", format(n_entrants_actual,                         big.mark = ",")),
+  sprintf("\\def\\nTotalU{%s}",  format(n_stayers_actual + n_leavers_actual,       big.mark = ",")),
+  sprintf("\\def\\nTotalV{%s}",  format(n_stayers_actual + n_entrants_actual,      big.mark = ",")),
   sprintf("\\def\\linkageRate{%s}",
           round(n_stayers_actual / max(n_stayers_actual + n_leavers_actual,
                                        n_stayers_actual + n_entrants_actual) * 100, 0)),
@@ -458,6 +731,6 @@ write_tex_lines(trace_lines, "cdf_trace_points.tex")
 
 cat("\n=== Scatter data export complete ===\n")
 cat("  Score range:", score_min, "-", score_max, "\n")
-cat("  Scatter dots:", n_scatter, "of", n_stayers_actual, "stayers\n")
+cat("  Scatter dots: pop =", n_pop_scatter, ", sub =", n_sub_scatter, "\n")
 cat("  Rug marks: bottom =", length(u_sub_stayers) + length(u_sub_leavers),
     " left =", length(v_sub_stayers) + length(v_sub_entrants), "\n")

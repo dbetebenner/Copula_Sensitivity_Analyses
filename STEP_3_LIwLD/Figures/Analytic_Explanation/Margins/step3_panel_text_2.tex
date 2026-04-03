@@ -1,0 +1,131 @@
+%%%%
+%%%% Panel text (variant 2): Sklar's theorem and copula dependence structure
+%%%%
+%%%% Prose + mathematics describing:
+%%%%   1. Sklar's factorization: margins + copula
+%%%%   2. Interpretation of CDF level curves on [0,1]^2
+%%%%   3. Empirical vs. parametric copula fit
+%%%%   4. What the contour overlay reveals about dependence
+%%%%   5. Connection back to growth percentiles
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=7.8in,paperheight=7.5in,margin=0in]{geometry}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath,amssymb}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/scatter_params}
+
+\pagestyle{empty}
+\begin{document}
+
+\noindent
+\begin{minipage}[t]{7.8in}
+  \vspace{0.1in}
+  \hspace{0.2in}%
+  \begin{minipage}{7.4in}
+    \small\raggedright\color{bodyGrey}
+
+    \textbf{From scatter to distribution function.}\enspace
+    The scatter plot in the companion figure displays individual pseudo-observation
+    pairs $(u_i, v_i)$---a bivariate \emph{density} view of the data. Point clouds
+    like this are natural for revealing clustering, outliers, and the general shape
+    of dependence, but they correspond to the joint \emph{density}~$h(u,v)$, not to
+    the joint \emph{distribution function}~$H(u,v) = \Pr(U \le u,\, V \le v)$.
+    Sklar's theorem, however, operates at the level of \emph{distribution functions}:
+    it decomposes the joint CDF, not the joint density. The contour lines overlaid on
+    the scatter bridge this gap. Each contour traces out a level set of the copula
+    CDF, $\{(u,v) : C(u,v) = c\}$, converting the point-cloud picture into an
+    equivalent distributional picture.  In essence, the scatter shows \emph{where mass
+    is concentrated} (a density perspective), while the contours show \emph{how much
+    mass is accumulated} below any point in the unit square (a CDF perspective).
+    Understanding both views simultaneously is key to interpreting what Sklar's
+    theorem unlocks: a clean separation of marginal behavior from dependence
+    structure, stated entirely in the language of distribution
+    functions.$^{\mbox{\footnotesize{1}}}$
+
+    \vspace{6pt}
+    \textbf{Sklar's theorem and the copula factorization.}\enspace
+    Any bivariate distribution $H(x,y)$ with continuous marginals $F_X$ and $F_Y$
+    can be uniquely decomposed as
+    %
+    \begin{equation}
+      H(x,y) \;=\; C\bigl(F_X(x),\, F_Y(y)\bigr),
+      \tag{M.4}
+    \end{equation}
+    %
+    where $C\colon [0,1]^2 \to [0,1]$ is the \emph{copula}---a bivariate CDF with
+    $\mathrm{Uniform}(0,1)$ margins that encodes the full dependence structure
+    between $X$ and $Y$ independently of the marginal scales.
+    The accompanying figure makes this factorization visually explicit.
+    The CDF strips on the bottom and left carry raw scores into the unit square
+    ($u = \Fxref(x)$, $v = \Fyref(y)$), while the density/proportion strips
+    show how the subgroup's marginals depart from the population baseline.
+    What remains in the interior---the bivariate pattern of the
+    scatter---is governed entirely by the copula~$C$.$^{\mbox{\footnotesize{2}}}$
+
+    \vspace{6pt}
+    \textbf{Interpreting the CDF level curves.}\enspace
+    Overlaid on the scatter are level curves of the copula CDF,
+    $\{(u,v) : C(u,v) = c\}$ for $c = 0.1, 0.2, \ldots, 0.9$.
+    Each curve bounds a region of the unit square such that
+    $C(u,v) = c$ means that, under the fitted dependence model, a fraction
+    $c$ of the population has \emph{both} a prior pseudo-observation $\leq u$
+    and a current pseudo-observation $\leq v$. Equivalently,
+    $C(u,v) = \Pr(U \leq u,\; V \leq v)$.
+    The spacing and curvature of the contours reflect the strength and shape of
+    dependence: under independence ($C = \Pi$, the product copula) these curves
+    would be rectangular hyperbolas; with positive dependence they ``bow'' toward
+    the main diagonal, concentrating probability mass along
+    it.$^{\mbox{\footnotesize{3}}}$
+
+    \vspace{6pt}
+    \textbf{Empirical versus parametric copula.}\enspace
+    Two sets of contours are displayed: \textit{dashed grey} lines show
+    the empirical Bernstein copula estimated non-parametrically from the linked
+    data, and \textit{solid colored} lines show the best-fitting parametric copula
+    (a \textit{t}-copula with $\mathrm{df} = \copulaDf$).
+    The close agreement between the two confirms that the parametric family
+    captures the essential dependence features of the data, including symmetric
+    tail dependence ($\lambda = \copulaTailLo$) and overall rank
+    correlation ($\tau = \copulaTau$, $\rho_s = \copulaRhoSp$).
+    Where the two sets of contours diverge---typically in the tails---the
+    empirical contours reveal local structure that the parametric model
+    smooths over.$^{\mbox{\footnotesize{4}}}$
+
+    \vspace{6pt}
+    \textbf{From copula to growth percentiles.}\enspace
+    Given the copula $C$, the conditional distribution of current achievement
+    given prior achievement follows immediately:
+    %
+    \begin{equation}
+      F_{V \mid U}(v \mid u)
+        \;=\; \frac{\partial\, C(u,v)}{\partial\, u},
+      \tag{M.5}
+    \end{equation}
+    %
+    which yields a student-level growth percentile for each observed
+    pair $(u_i,v_i)$. The CDF level curves in the figure are thus directly
+    related to growth percentiles: fixing $u$ and reading off the $v$-values
+    at each contour level traces out the conditional quantile function.
+    Only \emph{stayers}---students measured at both occasions---contribute paired
+    observations to the empirical copula; leavers and entrants appear solely
+    in the marginal strips.$^{\mbox{\footnotesize{5}}}$
+
+    \vspace{6pt}
+    \textbf{Sensitivity to copula choice.}\enspace
+    The primary visual comparison between the empirical and parametric contours
+    highlights the robustness (or fragility) of model-based growth percentiles.
+    If the contour sets are nearly coincident, as in the present case
+    ($\Delta\mathrm{AIC} = \copulaDeltaAIC$ vs.\ the next-best family), the
+    parametric copula is an adequate summary and the resulting growth percentiles
+    are stable. Visible divergence would signal that percentile estimates near the
+    affected quantile regions are sensitive to the copula specification---a key
+    diagnostic for growth-model calibration.
+
+  \end{minipage}
+  \vspace{0.1in}
+\end{minipage}
+
+\end{document}

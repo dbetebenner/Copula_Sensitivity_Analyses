@@ -1,5 +1,5 @@
 %%%%
-%%%% step3_infographic_main.tex - Margins infographic assembler
+%%%% step3_infographic_main_1.tex - Margins infographic assembler (variant _1)
 %%%%
 %%%% Layout (~8in wide, vertical):
 %%%%   1. Title + subtitles
@@ -11,7 +11,7 @@
 %%%% All panel PDFs are pre-compiled; this file composes them.
 %%%%
 \documentclass[10pt]{article}
-\usepackage[paperwidth=8.5in,paperheight=20.0in,margin=0in]{geometry}
+\usepackage[paperwidth=8.5in,paperheight=22.1in,margin=0in]{geometry}
 \usepackage{graphicx}
 \usepackage[svgnames]{xcolor}
 \usepackage{amsmath}
@@ -39,7 +39,7 @@
 \raisebox{0pt}[0.7in][0pt]{%
   \parbox{7.5in}{%
     \vspace{0.40in}
-    {\LARGE\bfseries From Scores to Pseudo-Observations: The Marginal Transformation}
+    {\LARGE\bfseries From Scaled Scores to Pseudo-Observations}
 
     \vspace{0.06in}
     {\large\bfseries Stripping Metric Structure via the Probability-Integral Transform}
@@ -57,7 +57,7 @@
 %% =========================================================================
 \noindent
 \hspace{0.35in}%
-\includegraphics[width=7.8in,height=0.85in]{outputs/step3_header_band.pdf}%
+\colorbox{FigureBoxBg}{\includegraphics[width=7.8in,height=0.85in]{outputs/step3_header_band_1.pdf}}%
 
 \vspace{0.15in}
 
@@ -66,7 +66,7 @@
 %% =========================================================================
 \noindent
 \hspace{0.35in}%
-\includegraphics[width=7.8in]{outputs/step3_panel_scatter_graphic.pdf}%
+{\setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.5pt}\fcolorbox{headerDark}{FigureBoxBg}{\includegraphics[width=7.8in]{outputs/step3_panel_scatter_graphic_1.pdf}}}%
 
 \vspace{0.20in}
 
@@ -75,7 +75,7 @@
 %% =========================================================================
 \noindent
 \hspace{0.15in}%
-\includegraphics[width=8.0in]{outputs/step3_panel_text.pdf}%
+\includegraphics[width=8.0in]{outputs/step3_panel_text_1.pdf}%
 
 \vspace{0.30in}
 
@@ -108,19 +108,21 @@ the \emph{same} reference scale, so that a quantile of $u = 0.30$
 means ``at the 30th percentile of the population'' regardless of
 which subgroup the student belongs to. The subgroup's marginal
 density of $U$ then reflects its distributional position within
-the population.}
+the population. In the margin strips, the grey $U(0,1)$ band is
+the population baseline; subgroup density and the conditional
+leaver/entrant proportion overlays are interpreted relative to it.}
 
 \vspace{4pt}
 \fnline{3}{Stayers are students observed in both the prior and current
-assessment rounds; their linked pairs $(u_i, v_i)$ constitute
-draws from the copula $C(\Fxref(x), \Fyref(y))$. Leavers appear
-only in the prior round (prior-only observations) and entrants
-appear only in the current round (current-only observations).
-All three groups contribute to the marginal distributions, but
-only stayers contribute to the empirical copula.}
+assessment rounds; after PIT mapping, their linked pairs $(u_i, v_i)$
+provide paired draws governed by copula $C$. Leavers appear only
+in the prior round (prior-only observations) and entrants appear only
+in the current round (current-only observations). All three groups
+contribute to the marginal distributions, but only stayers contribute
+to the empirical copula.}
 
 \vspace{4pt}
-\fnline{4}{In cross-sectional assessment programs (NAEP, TIMSS, PIRLS),
+\fnline{4}{In cross-sectional assessment programs (NAEP, TIMSS),
 independent samples are drawn at each occasion and no student-level
 pairing exists. The analyst observes only the marginal distributions,
 so the copula $C$ must be supplied externally---typically from

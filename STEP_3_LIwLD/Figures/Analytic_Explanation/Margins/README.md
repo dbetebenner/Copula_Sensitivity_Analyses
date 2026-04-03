@@ -54,8 +54,9 @@ All data is synthetic (generated in `step3_export_data.R`):
 
 - **Spaghetti plot for linkage:** Horizontal lines connecting U_i to V_i make coupling visible at a glance. Orphan observations appear as × marks, naturally representing partial linkage.
 - **Uniform reference:** The population Uniform(0,1) is shown as a dashed reference in the non-linked panel, highlighting that subgroup marginals deviate from uniform.
-- **CDF trace arrows:** The amber dashed arrows in the CDF panels make the PIT visually concrete for non-technical readers.
+- **CDF trace arrows:** Dashed arrows in the CDF panels make the PIT visually concrete for non-technical readers. The trace uses a warm taupe (`pitTraceColor`) to avoid collision with linkage-class colors.
 - **"Lose linkage" arrow:** The central arrow between the two spaghetti panels explicitly labels the transition from linked to non-linked as a loss of information.
+- **Color semantics:** Color encodes meaning, not axis. Population-reference elements (CDF curves, PDF fill/border) use a grey family. Subgroup density curves use a single shared hue (`subgroupColor`) for both X and Y margins. Linkage classes (stayers, leavers, entrants) occupy a separate color channel (Zissou teal/red/amber). The PIT trace is visually distinct from all three linkage classes.
 
 ## Dependencies
 

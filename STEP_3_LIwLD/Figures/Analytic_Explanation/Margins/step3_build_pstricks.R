@@ -31,14 +31,21 @@ if (!dir.exists(data_dir))   dir.create(data_dir, recursive = TRUE)
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
 # ---------------------------------------------------------------------------
-# Build configuration
+# Build configuration — infographic registry
 # ---------------------------------------------------------------------------
-infographic_release_version <- "0.2.0"
-infographic_release_stem <- "Margins_Marginal_Transformation"
-infographic_release_pdf <- file.path(
-  output_dir,
-  sprintf("%s_v%s.pdf", infographic_release_stem, infographic_release_version)
+# Each entry: assembler stem, human-readable release name, semver version.
+# To add a new variant, append a list() entry here.
+infographics <- list(
+  list(assembler    = "step3_infographic_main_1",
+       release_stem = "Margins_Marginal_Transformation",
+       version      = "0.3.0"),
+
+  list(assembler    = "step3_infographic_main_2",
+       release_stem = "Margins_Copula_Dependence",
+       version      = "0.1.0")
 )
+
+infographic_variants <- vapply(infographics, `[[`, "", "assembler")
 
 cat("\n=== Margins Infographic Build (Scatter Design) ===\n")
 cat("  Margins dir  :", margins_dir, "\n")
@@ -103,12 +110,13 @@ cat("\n")
 # whatever bounding box it auto-detects (rarely correct for PSTricks).
 # ---------------------------------------------------------------------------
 custom_bounding_boxes <- list(
-  # Tight-crop bbox for scatter panel: c(llx, lly, urx, ury) in PostScript pts
+  # Tight-crop bbox for scatter panels: c(llx, lly, urx, ury) in PostScript pts
   # dvips -E auto-detects a tiny bbox because PSTricks specials are invisible
   # to DVI bbox tracking.  These values were measured via gs -sDEVICE=bbox.
   # Re-measure after layout changes: the build prints the auto-detected bbox
   # AND the gs-measured content bbox for tuning.
-  step3_panel_scatter_graphic = c(0, -100, 486, 784)
+  step3_panel_scatter_graphic_1 = c(0, 250, 486, 784),
+  step3_panel_scatter_graphic_2 = c(0, 250, 516, 784)
 )
 
 apply_custom_bounding_box <- function(ps_file, bbox) {
@@ -250,11 +258,13 @@ compile_xelatex <- function(name) {
 cat("--- Step 2: Compile panels ---\n")
 
 graphic_panels <- c(
-  "step3_panel_scatter_graphic"
+  "step3_panel_scatter_graphic_1",
+  "step3_panel_scatter_graphic_2"
 )
 
 text_panels <- c(
-  "step3_panel_text"
+  "step3_panel_text_1",
+  "step3_panel_text_2"
 )
 
 ok <- TRUE
@@ -268,26 +278,26 @@ if (!ok) warning("One or more panels failed to compile.")
 # 5. Assemble final infographic
 # ---------------------------------------------------------------------------
 
-cat("\n--- Step 3: Assemble infographic ---\n")
-compile_xelatex("step3_header_band")
-compile_xelatex("step3_infographic_main")
+cat("\n--- Step 3: Assemble infographics ---\n")
+compile_xelatex("step3_header_band_1")
+compile_xelatex("step3_header_band_2")
 
-final_pdf <- file.path(output_dir, "step3_infographic_main.pdf")
-if (file.exists(final_pdf)) {
-  copied <- file.copy(final_pdf, infographic_release_pdf, overwrite = TRUE)
-  if (copied && file.exists(infographic_release_pdf)) {
-    cat("  Release PDF:", infographic_release_pdf, "\n")
-  } else {
-    warning("Could not create release-named PDF copy: ", infographic_release_pdf)
+export_outputs <- function(stem, release_pdf = NULL) {
+  final_pdf <- file.path(output_dir, paste0(stem, ".pdf"))
+  if (!file.exists(final_pdf)) return(invisible(NULL))
+
+  if (!is.null(release_pdf)) {
+    copied <- file.copy(final_pdf, release_pdf, overwrite = TRUE)
+    if (copied && file.exists(release_pdf)) cat("  Release PDF:", release_pdf, "\n")
   }
 
-  png_out <- file.path(output_dir, "step3_infographic_main.png")
+  png_out <- file.path(output_dir, paste0(stem, ".png"))
   system2("gs", c("-q", "-dBATCH", "-dNOPAUSE", "-sDEVICE=png16m",
                   "-r300", paste0("-sOutputFile=", png_out), final_pdf),
           stdout = FALSE, stderr = FALSE)
   if (file.exists(png_out)) cat("  PNG:", png_out, "\n")
 
-  svg_out <- file.path(output_dir, "step3_infographic_main.svg")
+  svg_out <- file.path(output_dir, paste0(stem, ".svg"))
   if (Sys.which("pdf2svg") != "") {
     system2("pdf2svg", c(final_pdf, svg_out), stdout = FALSE, stderr = FALSE)
     if (file.exists(svg_out)) cat("  SVG:", svg_out, "\n")
@@ -306,6 +316,13 @@ if (file.exists(final_pdf)) {
   }
 }
 
+for (ig in infographics) {
+  compile_xelatex(ig$assembler)
+  release_pdf <- file.path(output_dir,
+    sprintf("%s_v%s.pdf", ig$release_stem, ig$version))
+  export_outputs(ig$assembler, release_pdf = release_pdf)
+}
+
 
 # ---------------------------------------------------------------------------
 # 6. Cleanup
@@ -313,7 +330,8 @@ if (file.exists(final_pdf)) {
 
 cat("\n--- Cleanup ---\n")
 all_stems <- c(graphic_panels, text_panels,
-               "step3_header_band", "step3_infographic_main")
+               "step3_header_band_1", "step3_header_band_2",
+               infographic_variants)
 cleanup_suffixes <- c(".aux", ".log", ".dvi", ".fls", ".fdb_latexmk", ".out", ".synctex.gz")
 old_wd <- setwd(margins_dir)
 for (stem in all_stems) {
@@ -325,5 +343,11 @@ for (stem in all_stems) {
 setwd(old_wd)
 
 cat("\n=== Build complete ===\n")
-cat("Final PDF :", file.path(output_dir, "step3_infographic_main.pdf"), "\n")
-cat("Final PNG :", file.path(output_dir, "step3_infographic_main.png"), "\n\n")
+for (ig in infographics) {
+  tag <- sub("step3_infographic_main_", "", ig$assembler)
+  release_name <- sprintf("%s_v%s", ig$release_stem, ig$version)
+  cat(sprintf("  [_%s]  PDF: %s\n", tag, file.path(output_dir, paste0(ig$assembler, ".pdf"))))
+  cat(sprintf("         PNG: %s\n", file.path(output_dir, paste0(ig$assembler, ".png"))))
+  cat(sprintf("     Release: %s\n", file.path(output_dir, paste0(release_name, ".pdf"))))
+}
+cat("\n")

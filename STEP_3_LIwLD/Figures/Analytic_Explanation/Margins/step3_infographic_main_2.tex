@@ -1,0 +1,142 @@
+%%%%
+%%%% step3_infographic_main_2.tex - Margins infographic assembler (variant _2)
+%%%%
+%%%% Layout (~8in wide, vertical):
+%%%%   1. Title + subtitles
+%%%%   2. Header band (3 sections)
+%%%%   3. Compound scatter graphic (CDF margins + rug + scatter)
+%%%%   4. Text panel (prose + mathematics)
+%%%%   5. Footnotes
+%%%%
+%%%% All panel PDFs are pre-compiled; this file composes them.
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=8.5in,paperheight=22.1in,margin=0in]{geometry}
+\usepackage{graphicx}
+\usepackage[svgnames]{xcolor}
+\usepackage{amsmath}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+
+\newlength{\fnlabelwidth}
+\setlength{\fnlabelwidth}{0.075in}
+\newcommand{\fnline}[2]{%
+  \par\noindent
+  \makebox[\fnlabelwidth][l]{$^{#1}$}%
+  \parbox[t]{\dimexpr\linewidth-\fnlabelwidth\relax}{#2}%
+  \par
+}
+
+\pagestyle{empty}
+\begin{document}
+
+%% =========================================================================
+%% TITLE BLOCK
+%% =========================================================================
+\noindent
+\hspace{0.35in}%
+\raisebox{0pt}[0.7in][0pt]{%
+  \parbox{7.5in}{%
+    \vspace{0.40in}
+    {\LARGE\bfseries From Pseudo-Observation Scatter to Copula}
+
+    \vspace{0.06in}
+    {\large\bfseries Sklar's Decomposition: Margins and Dependence Structure}
+
+    \vspace{0.08in}
+    {\normalsize\color{subtitleGrey}%
+      Empirical and parametric copula CDF level curves overlaid on the pseudo-observation scatter}%
+  }}
+
+\vspace{0.85in}
+
+%% =========================================================================
+%% HEADER BAND
+%% =========================================================================
+\noindent
+\hspace{0.35in}%
+\colorbox{FigureBoxBg}{\includegraphics[width=7.8in,height=0.85in]{outputs/step3_header_band_2.pdf}}%
+
+\vspace{0.15in}
+
+%% =========================================================================
+%% COMPOUND SCATTER GRAPHIC
+%% =========================================================================
+\noindent
+\hspace{0.35in}%
+{\setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.5pt}\fcolorbox{headerDark}{FigureBoxBg}{\includegraphics[width=7.8in]{outputs/step3_panel_scatter_graphic_2.pdf}}}%
+
+\vspace{0.20in}
+
+%% =========================================================================
+%% TEXT PANEL
+%% =========================================================================
+\noindent
+\hspace{0.15in}%
+\includegraphics[width=8.0in]{outputs/step3_panel_text_2.pdf}%
+
+\vspace{0.30in}
+
+%% =========================================================================
+%% FOOTNOTES
+%% =========================================================================
+\noindent
+\hspace{0.45in}%
+\begin{minipage}[t]{7.5in}
+\footnotesize\raggedright
+\setlength{\parskip}{0pt}
+
+\fnline{1}{The scatter plot depicts individual pseudo-observation pairs
+$(u_i, v_i)$---a density-level view of the data showing where mass
+is concentrated. Sklar's theorem, however, operates at the level of
+\emph{distribution functions}, not densities. The CDF contour lines
+overlaid on the scatter convert the density picture into an
+equivalent distributional one: each contour traces the locus
+$\{(u,v) : C(u,v) = c\}$, showing how much probability mass is
+accumulated below any point in $[0,1]^2$. Reading the two views
+together---scatter for shape, contours for accumulation---is
+essential for understanding the factorization that Sklar's theorem
+provides.}
+
+\vspace{4pt}
+\fnline{2}{Sklar's theorem (1959) guarantees that every bivariate
+distribution function $H$ with continuous marginals admits a
+\emph{unique} copula representation $H(x,y) = C(F_X(x), F_Y(y))$.
+The copula $C$ captures all dependence information that is invariant
+to monotone transformations of the margins.  The CDF strips on the
+bottom and left of the figure visualize the marginal transforms
+$F_X^{\mathrm{ref}}$ and $F_Y^{\mathrm{ref}}$; the copula $C$
+governs the interior pattern.}
+
+\vspace{4pt}
+\fnline{3}{A level curve $\{(u,v) : C(u,v) = c\}$ is the locus of all
+pseudo-observation pairs for which exactly a fraction $c$ of the
+population has both prior and current scores below the
+corresponding quantiles.  Under the independence copula
+$\Pi(u,v) = uv$ these curves are rectangular hyperbolas; positive
+dependence ``pulls'' them toward the diagonal.  The $C = 0.5$
+contour partitions the unit square into two equal-probability
+regions.}
+
+\vspace{4pt}
+\fnline{4}{The empirical Bernstein copula is a smoothed non-parametric
+estimator constructed from the linked stayer pairs.  The parametric
+\textit{t}-copula, fitted by maximum pseudo-likelihood, provides a
+parsimonious summary with explicit tail dependence parameter
+$\lambda$ and degrees-of-freedom~$\nu$. Close agreement between
+the two sets of contours indicates that the parametric model
+captures the essential dependence features of the data.}
+
+\vspace{4pt}
+\fnline{5}{The conditional CDF $F_{V|U}(v \mid u) = \partial C(u,v) /
+\partial u$ yields a student-level growth percentile for each
+linked pair $(u_i, v_i)$.  Fixing $u$ and tracing through the
+contour levels effectively reads off the quantile function of $V$
+given~$U = u$. Sensitivity of these growth percentiles to copula
+choice can be assessed by comparing the conditional distributions
+implied by the empirical and parametric copulas.}
+
+\end{minipage}
+
+\end{document}

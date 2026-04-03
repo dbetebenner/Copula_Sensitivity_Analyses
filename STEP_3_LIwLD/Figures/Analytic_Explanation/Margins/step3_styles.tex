@@ -10,32 +10,43 @@
 \definecolor{zissouRed}{HTML}{F21A00}
 \definecolor{zissouAmber}{HTML}{E1AF00}
 
-%%% Margin-specific palette
-\definecolor{priorU}{HTML}{009292}
-\definecolor{currentV}{HTML}{B66DFF}
-\definecolor{inferredV}{HTML}{000000}
-\definecolor{populationRef}{HTML}{AAAAAA}
-\definecolor{cdfArrow}{HTML}{E1AF00}
-\definecolor{subgroupFill}{HTML}{3B9AB2}
+%%% Population vs subgroup — the primary semantic distinction
+\definecolor{populationRef}{HTML}{AAAAAA}   % Population PDF border / fill outline
+\definecolor{cdfRefColor}{HTML}{888888}     % Population-reference CDF curve (F_X^ref, F_Y^ref)
+\definecolor{subgroupColor}{HTML}{3B9AB2}   % Zissou teal — subgroup density curve (both margins)
 
-%%% Scatter plot: stayer / leaver / entrant palette
-\definecolor{stayerColor}{HTML}{3B9AB2}    % Zissou teal — linked students
-\definecolor{leaverColor}{HTML}{F21A00}    % Zissou red  — prior-only (leavers)
-\definecolor{entrantColor}{HTML}{E1AF00}   % Zissou amber — current-only (entrants)
+%%% Linkage classes — stayer / leaver / entrant
+\definecolor{leaverColor}{HTML}{FF00FF}     % Magenta — prior-only (leavers) students in U but not in V
+\definecolor{entrantColor}{HTML}{00FF00}    % Green — current-only (entrants) students in V but not in U
 
-%%% Curve colors for margin strips
-\definecolor{pdfPriorColor}{HTML}{009292}   % Prior PDF curve
-\definecolor{pdfCurrentColor}{HTML}{B66DFF} % Current PDF curve
-\definecolor{cdfPriorColor}{HTML}{009292}   % Prior CDF curve
-\definecolor{cdfCurrentColor}{HTML}{B66DFF} % Current CDF curve
+%%% Parametric copula — fitted model contour lines
+\definecolor{parametricCopulaColor}{HTML}{E39802}
+
+%%% PIT trace — transformation annotation (distinct from linkage)
+\definecolor{pitTraceColor}{HTML}{F21A00}   % Zissou orange — process/annotation tone
+\definecolor{pitTextColor}{HTML}{F98D80}   % Zissou orange lighter — text color
+
+%%% Legacy aliases (kept for any downstream references)
+\colorlet{priorU}{subgroupColor}
+\colorlet{currentV}{subgroupColor}
+\colorlet{cdfArrow}{pitTraceColor}
+\colorlet{pdfPriorColor}{subgroupColor}
+\colorlet{pdfCurrentColor}{subgroupColor}
+\colorlet{cdfPriorColor}{cdfRefColor}
+\colorlet{cdfCurrentColor}{cdfRefColor}
+\colorlet{inferredV}{subgroupColor}
+
+%%% Header-band border tones (shared with step3_header_band.tex)
+\definecolor{headerDark}{RGB}{210,210,208}
+\definecolor{headerLight}{RGB}{225,225,223}
 
 %%% Standard greys
 \definecolor{panelGrey}{gray}{0.65}
 \definecolor{bodyGrey}{gray}{0.25}
-\definecolor{subtitleGrey}{gray}{0.30}
-\definecolor{borderGrey}{gray}{0.85}
-\definecolor{gridLight}{gray}{0.92}
-\definecolor{fillGrey}{gray}{0.95}
+\definecolor{titleGrey}{gray}{0.15}
+\definecolor{subtitleGrey}{gray}{0.15}
+\definecolor{borderGrey}{gray}{0.75}
+\definecolor{fillGrey}{gray}{0.85}
 \definecolor{labelGrey}{gray}{0.40}
 
 %%% Canonical notation macros (use \providecommand for safety)

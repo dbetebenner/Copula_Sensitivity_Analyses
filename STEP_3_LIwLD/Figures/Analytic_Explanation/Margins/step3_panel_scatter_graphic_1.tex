@@ -1,0 +1,359 @@
+%%%%
+%%%% step3_panel_scatter_graphic_1.tex - Compound scatter with layered margins
+%%%%
+%%%% Variant _1: Data-focused scatter (no copula fit annotation)
+%%%%
+%%%% Layout (all coordinates normalized to [0,1]):
+%%%%   Center: Scatter U vs V, 4.0in x 4.0in
+%%%%   Bottom (outside->inside): PDF | CDF | Rug
+%%%%   Left (outside->inside): PDF | CDF | Rug
+%%%%   All strips share the same [0,1] axis with the scatter they adjoin.
+%%%%
+%%%% Compiled via: latex -> dvips -E -> gs -> PDF
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=9.0in,paperheight=9.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+\usepackage{amsbsy}
+
+\input{step3_styles}
+\input{data/scatter_params}
+
+\pagestyle{empty}
+\begin{document}
+
+%%%%
+%%%% LAYOUT (inches from page origin)
+%%%%
+%%%%  scatter: 4.0 x 4.0,  origin at (1.85, 1.85)
+%%%%                        extends to (5.85, 5.85)
+%%%%
+%%%%  Bottom rug:  4.0 wide x 0.25 tall, at (1.85, ~1.97)
+%%%%  Bottom CDF:  4.0 wide x 0.55 tall, at (1.85, 1.10)
+%%%%  Bottom PDF:  4.0 wide x 0.45 tall, at (1.85, 0.55)
+%%%%
+%%%%  Left rug:    0.25 wide x 4.0 tall, at (~1.60, 1.85)
+%%%%  Left CDF:    0.55 wide x 4.0 tall, at (1.10, 1.85)
+%%%%  Left PDF:    0.45 wide x 4.0 tall, at (0.55, 1.85)
+%%%%
+
+\psset{unit=1in}
+\begin{pspicture}(-0.1,-0.1)(7.9,7.6)
+
+  %% =======================================================================
+  %% TITLE
+  %% =======================================================================
+  \rput[tl](0.1,7.4){\textsf{\large\bfseries\textcolor{titleGrey}{%
+    Pseudo-observation scatter:\ \ $u_i = \Fxref(x_i)$\enspace vs.\enspace $v_i = \Fyref(y_i)$}}}
+  \rput[tl](0.1,7.14){\textsf{\small\textcolor{subtitleGrey}{%
+    Population $P$: \nPopStayers\ stayers, \nPopLeavers\ leavers, \nPopEntrants\ entrants | $\alpha := \frac{n_s}{n_s + n_l} = \popAlpha$;\enspace $\beta := \frac{n_s}{n_s + n_e} = \popBeta$}}}
+  \rput[tl](0.1,6.94){\textsf{\small\textcolor{subtitleGrey}{%
+    Subgroup $M$: \nStayers\ stayers, \nLeavers\ leavers, \nEntrants\ entrants | $\alpha_m := \frac{n_s}{n_s + n_l} = \subAlpha$;\enspace $\beta_m := \frac{n_s}{n_s + n_e} = \subBeta$}}}
+
+
+  %% =======================================================================
+  %% SCATTER PLOT: U vs V on [0,1]^2  (4.0in x 4.0in at origin 1.85,1.85)
+  %% =======================================================================
+  \rput(4.1,4.5){%
+    \psset{xunit=4.5in,yunit=4.5in}%
+    \begin{pspicture}(-0.01,-0.01)(1.02,1.02)
+
+      %% Frame
+      \psframe[linecolor=borderGrey,linewidth=0.5pt](0,0)(1,1)
+
+      %% Population cloud (grey, background)
+      \input{data/scatter_population}
+      %% Subgroup dots (purple, foreground)
+      \input{data/scatter_subgroup}
+
+      %% PIT example point with projection lines to both axes
+      \psline[linecolor=pitTraceColor,linewidth=0.4pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1]%
+        (\exampleU,\exampleV)(\exampleU,0)
+      \psline[linecolor=pitTraceColor,linewidth=0.4pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1]%
+        (\exampleU,\exampleV)(0,\exampleV)
+      \psdot[dotsize=7pt,linecolor=pitTraceColor,dotstyle=o](\exampleU,\exampleV)
+      \psdot[dotsize=3pt,linecolor=pitTraceColor,dotstyle=*](\exampleU,\exampleV)
+
+    \end{pspicture}%
+  }
+
+  %% Scatter axis labels
+  \rput(3.85,1.55){\textsf{\scriptsize\textcolor{pitTraceColor}{$u = \Fxref(x)$}}}
+  \rput{90}(1.15,4.15){\textsf{\scriptsize\textcolor{pitTraceColor}{$v = \Fyref(y)$}}}
+
+  %% [0,1] tick labels (between rug and scatter)
+  \rput(1.86,2.15){\textsf{\tiny\textcolor{pitTraceColor}{0}}}
+  \rput(2.75,2.15){\textsf{\tiny\textcolor{pitTraceColor}{.2}}}
+  \rput(3.64,2.15){\textsf{\tiny\textcolor{pitTraceColor}{.4}}}
+  \rput(4.53,2.15){\textsf{\tiny\textcolor{pitTraceColor}{.6}}}
+  \rput(5.42,2.15){\textsf{\tiny\textcolor{pitTraceColor}{.8}}}
+  \rput(6.31,2.15){\textsf{\tiny\textcolor{pitTraceColor}{1}}}
+
+  \rput[r]{-90}(1.76,2.24){\textsf{\tiny\textcolor{pitTraceColor}{0}}}
+  \rput[r]{-90}(1.76,3.134){\textsf{\tiny\textcolor{pitTraceColor}{.2}}}
+  \rput[r]{-90}(1.76,4.028){\textsf{\tiny\textcolor{pitTraceColor}{.4}}}
+  \rput[r]{-90}(1.76,4.922){\textsf{\tiny\textcolor{pitTraceColor}{.6}}}
+  \rput[r]{-90}(1.76,5.816){\textsf{\tiny\textcolor{pitTraceColor}{.8}}}
+  \rput[r]{-90}(1.76,6.71){\textsf{\tiny\textcolor{pitTraceColor}{1}}}
+
+
+  %% =======================================================================
+  %% BOTTOM DENSITY STRIP: u on [0,1], 4.5in wide x 0.25in tall
+  %% Grey background = U(0,1) reference; subgroup KDE normalized to U(0,1)=1.0
+  %% (KDE naturally overflows above grey where subgroup is over-represented)
+  %% Thin leaver proportion line near strip bottom on literal [0,1] scale
+  %% =======================================================================
+  \rput(4.08,1.875){%
+    \psset{xunit=4.5in,yunit=0.3in}%
+    \begin{pspicture}(0,0)(1,1)
+      %% Background rectangle — U(0,1) reference fills the full strip
+      \psframe[fillstyle=solid,fillcolor=fillGrey,linecolor=borderGrey,linewidth=0.2pt](0,0)(1,1)
+      \rput(0.5,0.5){\textsf{\normalsize\textcolor{white}{$U(0,1)$}}}
+      \psline[linecolor=pitTraceColor,linewidth=0.4pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1]%
+        (\exampleU,1.6)(\exampleU,0)
+      %% Bottom dashed line to illustrate PIT transformation to [0,1]
+      \psline[linecolor=pitTraceColor,linewidth=0.6pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1](0,-0.01)(1,-0.01)%
+      %% Subgroup density (stayers+leavers), normalized so U(0,1)=1.0
+      \readdata{\dataRugBotSub}{data/rug_bottom_sub_kde.dat}
+      \listplot[linecolor=subgroupColor,linewidth=0.7pt,plotstyle=line,linecap=1]{\dataRugBotSub}
+      %% Smoothed P(leaver|u) on literal [0,1] scale (~0.06-0.07, near bottom)
+      \readdata{\dataRugBotProp}{data/rug_bottom_leaver_prop.dat}
+      \listplot[linecolor=leaverColor,linewidth=0.3pt,plotstyle=line,linecap=1]{\dataRugBotProp}
+    \end{pspicture}%
+  }
+
+  %% =======================================================================
+  %% BOTTOM PDF: Prior density, normalized coords [0,1] x [0,1]
+  %% 4.5in wide x 0.45in tall
+  %% FLIPPED: Density bulge points downward
+  %% =======================================================================
+  \rput(4.1,0.7){%
+    \psset{xunit=4.5in,yunit=0.45in}%
+    \begin{pspicture}(-0.01,-0.15)(1.02,1.08)
+
+      \readdata{\dataPdfBotPop}{data/pdf_bottom_pop_norm.dat}
+      \readdata{\dataPdfBotSub}{data/pdf_bottom_sub_norm.dat}
+
+      %% Flip the entire plot vertically (y -> 1-y)
+      \rput(0,1){\psscalebox{1 -1}{%
+        %% Population reference (grey fill)
+        \pscustom[fillstyle=solid,fillcolor=fillGrey,linecolor=populationRef,linewidth=0.4pt,linecap=1]{%
+          \psline(0,0)
+          \listplot[plotstyle=line]{\dataPdfBotPop}
+          \psline(1,0)
+          \closepath}
+
+        %% Subgroup density
+        \listplot[linecolor=subgroupColor,linewidth=1.0pt,plotstyle=line,linecap=1]{\dataPdfBotSub}
+
+        %% Baseline
+        \psline[linecolor=borderGrey,linewidth=0.3pt,linecap=1](0,0)(1,0)
+      }}%
+
+      %% Score tick labels (below)
+      \rput[t](0.1,-0.08){\textsf{\tiny\textcolor{panelGrey}{300}}}
+      \rput[t](0.3,-0.08){\textsf{\tiny\textcolor{panelGrey}{400}}}
+      \rput[t](0.5,-0.08){\textsf{\tiny\textcolor{panelGrey}{500}}}
+      \rput[t](0.7,-0.08){\textsf{\tiny\textcolor{panelGrey}{600}}}
+      \rput[t](0.9,-0.08){\textsf{\tiny\textcolor{panelGrey}{700}}}
+
+      %% Score axis label
+      \rput[t](0.5,-0.3){\textsf{\footnotesize\textcolor{labelGrey}{Prior score $x$}}}
+
+      %% Strip label
+      \rput[l](-0.075,0.5){\textsf{\scriptsize\textcolor{labelGrey}{$f_X$}}}
+
+      %% PIT example point with projection lines to both axes
+      \rput(\exampleXnorm, 0.85){\textsf{\tiny\textcolor{labelGrey}{\exampleX}}}
+
+    \end{pspicture}%
+  }
+
+  %% =======================================================================
+  %% BOTTOM CDF: F_X^ref, normalized score [0,1] -> cdf [0,1]
+  %% 4.5in wide x 0.55in tall
+  %% =======================================================================
+  \rput(4.1,1.35){%
+    \psset{xunit=4.5in,yunit=0.55in}%
+    \begin{pspicture}(-0.01,-0.06)(1.02,1.05)%
+
+      \readdata{\dataCdfBot}{data/cdf_bottom.dat}%
+
+      %% Frame
+      \psline[linecolor=borderGrey,linewidth=0.3pt,linecap=1](0,0)(1,0)
+      \psline[linecolor=pitTraceColor,linewidth=0.5pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1](0,0)(0,1.14)
+
+      %% CDF curve (population reference)
+      \listplot[linecolor=cdfRefColor,linewidth=1.2pt,plotstyle=line,linecap=1]{\dataCdfBot}
+      \listplot[linecolor=pitTraceColor,linewidth=0.2pt,plotstyle=line,linecap=1]{\dataCdfBot}
+
+      %% Trace arrow: example point (PIT transformation)
+      \psline[linecolor=cdfRefColor,linewidth=0.6pt,linestyle=dashed,dash=2.5pt 1.5pt,linecap=1]{->}%
+        (\exampleXnorm,-0.21)(\exampleXnorm,\exampleU)
+      \psline[linecolor=pitTraceColor,linewidth=0.6pt,linestyle=dashed,dash=2.5pt 1.5pt,linecap=1]{->}%
+        (\exampleXnorm,\exampleU)(0.015,\exampleU)
+      \psdot[dotsize=3pt,linecolor=pitTraceColor](\exampleXnorm,\exampleU)
+      \psdot[dotsize=5pt,linecolor=pitTraceColor,dotstyle=o](0.0,\exampleU)
+      \psdot[dotsize=2pt,linecolor=pitTraceColor,dotstyle=*](0.0,\exampleU)
+
+      %% Label
+      \rput[l](-0.08,0.5){\textsf{\scriptsize\textcolor{pitTraceColor}{$\Fxref$}}}
+      \rput[l](-0.015,0.0){\textsf{\tiny\textcolor{pitTraceColor}{0}}}
+      \rput[l](-0.015,1.0){\textsf{\tiny\textcolor{pitTraceColor}{1}}}
+      \rput[l](-0.041,\exampleU){\textsf{\tiny\textcolor{pitTraceColor}{\exampleURound}}}
+
+      %% PIT label
+      \rput{-90}(0.95, 0.4){\textsf{\scriptsize\textcolor{pitTextColor}{Probability}}}
+      \rput{-90}(0.925, 0.4){\textsf{\scriptsize\textcolor{pitTextColor}{Integral}}}
+      \rput{-90}(0.9, 0.4){\textsf{\scriptsize\textcolor{pitTextColor}{Transform}}}
+
+    \end{pspicture}%
+  }
+
+  %% =======================================================================
+  %% LEFT DENSITY STRIP: v on [0,1], 0.25in wide x 4.5in tall
+  %% Grey background = U(0,1) reference; subgroup KDE normalized to U(0,1)=1.0
+  %% (KDE naturally overflows to the right where subgroup is over-represented)
+  %% Thin entrant proportion line near strip left edge on literal [0,1] scale
+  %% =======================================================================
+  \rput(1.475,4.475){%
+    \psset{xunit=0.3in,yunit=4.5in}%
+    \begin{pspicture}(0,0)(1,1)
+      %% Background rectangle — U(0,1) reference fills the full strip
+      \psframe[fillstyle=solid,fillcolor=fillGrey,linecolor=borderGrey,linewidth=0.2pt](0,0)(1,1)
+      \rput{-90}(0.5,0.5){\textsf{\normalsize\textcolor{white}{$U(0,1)$}}}
+      \psline[linecolor=pitTraceColor,linewidth=0.4pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1]%
+        (0,\exampleV)(1.6,\exampleV)
+      %% Left dashed line to illustrate PIT transformation to [0,1]
+      \psline[linecolor=pitTraceColor,linewidth=0.6pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1](-0.01,0)(-0.01,1)%
+      %% Subgroup density (stayers+entrants), normalized so U(0,1)=1.0
+      \readdata{\dataRugLeftSub}{data/rug_left_sub_kde.dat}
+      \listplot[linecolor=subgroupColor,linewidth=0.8pt,plotstyle=line,linecap=1]{\dataRugLeftSub}
+      %% Smoothed P(entrant|v) on literal [0,1] scale (~0.06-0.07, near left edge)
+      \readdata{\dataRugLeftProp}{data/rug_left_entrant_prop.dat}
+      \listplot[linecolor=entrantColor,linewidth=0.3pt,plotstyle=line,linecap=1]{\dataRugLeftProp}
+    \end{pspicture}%
+  }
+
+    %% =======================================================================
+  %% LEFT PDF: Current density, normalized coords [0,1] x [0,1]
+  %% 0.45in wide x 4.5in tall
+  %% FLIPPED: Density bulge points leftward
+  %% =======================================================================
+  \rput(0.3,4.5){%
+    \psset{xunit=0.45in,yunit=4.5in}%
+    \begin{pspicture}(-0.10,-0.01)(1.08,1.02)
+
+      \readdata{\dataPdfLeftPop}{data/pdf_left_pop_norm.dat}
+      \readdata{\dataPdfLeftSub}{data/pdf_left_sub_norm.dat}
+
+      %% Flip the entire plot horizontally (x -> 1-x)
+      \rput(1,0){\psscalebox{-1 1}{%
+        %% Population reference (grey fill)
+        \pscustom[fillstyle=solid,fillcolor=fillGrey,linecolor=populationRef,linewidth=0.4pt,linecap=1]{%
+          \psline(0,0)
+          \listplot[plotstyle=line]{\dataPdfLeftPop}
+          \psline(0,1)
+          \closepath}
+
+        %% Subgroup density
+        \listplot[linecolor=subgroupColor,linewidth=1.0pt,plotstyle=line,linecap=1]{\dataPdfLeftSub}
+
+        %% Baseline
+        \psline[linecolor=borderGrey,linewidth=0.3pt,linecap=1](0,0)(0,1)
+      }}%
+
+      %% Score tick labels (left of strip)
+      \rput[r]{90}(-0.06,0.1){\textsf{\tiny\textcolor{panelGrey}{300}}}
+      \rput[r]{90}(-0.06,0.3){\textsf{\tiny\textcolor{panelGrey}{400}}}
+      \rput[r]{90}(-0.06,0.5){\textsf{\tiny\textcolor{panelGrey}{500}}}
+      \rput[r]{90}(-0.06,0.7){\textsf{\tiny\textcolor{panelGrey}{600}}}
+      \rput[r]{90}(-0.06,0.9){\textsf{\tiny\textcolor{panelGrey}{700}}}
+
+      %% Score axis label (rotated)
+      \rput[b]{90}(-0.3,0.5){\textsf{\footnotesize\textcolor{labelGrey}{Current score $y$}}}
+
+      %% Strip label
+      \rput[t](0.5,-0.05){\textsf{\scriptsize\textcolor{labelGrey}{$f_Y$}}}
+
+      %% PIT example point with projection lines to both axes
+      \rput[t]{90}(0.85,\exampleYnorm){\textsf{\tiny\textcolor{labelGrey}{\exampleY}}}
+
+    \end{pspicture}%
+  }
+
+  %% =======================================================================
+  %% LEFT CDF: F_Y^ref, cdf [0,1] x normalized score [0,1]
+  %% 0.55in wide x 4.5in tall
+  %% =======================================================================
+  \rput(1.0,4.5){%
+    \psset{xunit=0.55in,yunit=4.5in}%
+    \begin{pspicture}(-0.06,-0.01)(1.05,1.02)
+
+      \readdata{\dataCdfLeft}{data/cdf_left.dat}
+
+      %% Frame
+      \psline[linecolor=borderGrey,linewidth=0.3pt,linecap=1](0,1)(0,0)
+      \psline[linecolor=pitTraceColor,linewidth=0.5pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1](0,0)(1.07,0)
+
+      %% CDF curve (population reference)
+      \listplot[linecolor=cdfRefColor,linewidth=1.2pt,plotstyle=line,linecap=1]{\dataCdfLeft}
+      \listplot[linecolor=pitTraceColor,linewidth=0.2pt,plotstyle=line,linecap=1]{\dataCdfLeft}
+
+      %% Trace arrow: example point (PIT transformation)
+      \psline[linecolor=cdfRefColor,linewidth=0.6pt,linestyle=dashed,dash=2.5pt 1.5pt,linecap=1]{->}%
+        (-0.32,\exampleYnorm)(\exampleV,\exampleYnorm)
+      \psline[linecolor=pitTraceColor,linewidth=0.6pt,linestyle=dashed,dash=2.5pt 1.5pt,linecap=1]{->}%
+        (\exampleV,\exampleYnorm)(\exampleV,0.015)
+      \psdot[dotsize=3pt,linecolor=pitTraceColor](\exampleV,\exampleYnorm)
+      \psdot[dotsize=5pt,linecolor=pitTraceColor,dotstyle=o](\exampleV,0.0)
+      \psdot[dotsize=2pt,linecolor=pitTraceColor,dotstyle=*](\exampleV,0.0)
+
+      %% Label
+      \rput[t](0.5,-0.05){\textsf{\scriptsize\textcolor{pitTraceColor}{$\Fyref$}}}
+      \rput[t]{-90}(0,-0.01){\textsf{\tiny\textcolor{pitTraceColor}{0}}}
+      \rput[t]{-90}(1,-0.01){\textsf{\tiny\textcolor{pitTraceColor}{1}}}
+      \rput{-90}(\exampleV,-0.028){\textsf{\tiny\textcolor{pitTraceColor}{\exampleVRound}}}
+
+      %% PIT label
+      \rput(0.3, 0.95){\textsf{\scriptsize\textcolor{pitTextColor}{Probability}}}
+      \rput(0.3, 0.925){\textsf{\scriptsize\textcolor{pitTextColor}{Integral}}}
+      \rput(0.3, 0.9){\textsf{\scriptsize\textcolor{pitTextColor}{Transform}}}
+
+    \end{pspicture}%
+  }
+
+  %% =======================================================================
+  %% LEGEND (upper-left, inside scatter area)
+  %% =======================================================================
+  \rput[tl](2.0,6.6){%
+    \psscalebox{0.85 0.85}{%
+      \psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=white,opacity=0.2,framesep=3pt,linewidth=0.5pt]{%
+        \begin{tabular}{@{}r@{\hspace{3pt}}l@{}}
+          {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%
+            \psline[linecolor=populationRef,linewidth=0.5pt,linecap=1](0,0)(0.2,0)%
+            \psdot[dotsize=3.0pt,linecolor=populationRef,dotstyle=*](0.1,0)}}} &
+          \textsf{\footnotesize Population $P$} \\[2pt]
+          {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%
+            \psline[linecolor=subgroupColor,linewidth=0.8pt,linecap=1](0,0)(0.2,0)%
+            \psdot[dotsize=3.5pt,linecolor=subgroupColor,dotstyle=*](0.1,0)}}} &
+          \textsf{\footnotesize Subgroup $M$} \\[2pt]
+          {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%
+            \psline[linecolor=leaverColor,linewidth=0.8pt,linecap=1](0,0)(0.2,0)}}} &
+          \textsf{\footnotesize Leavers} \\[2pt]
+          {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%
+            \psline[linecolor=entrantColor,linewidth=0.8pt,linecap=1](0,0)(0.2,0)}}} &
+          \textsf{\footnotesize Entrants} \\[2pt]
+          {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%
+            \psline[linecolor=pitTraceColor,linewidth=0.8pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1](0,0)(0.2,0)}}} &
+          \textsf{\footnotesize PIT trace}
+        \end{tabular}%
+      }}}
+
+\end{pspicture}
+
+\end{document}
