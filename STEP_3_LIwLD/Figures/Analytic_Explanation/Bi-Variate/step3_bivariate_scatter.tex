@@ -1,0 +1,167 @@
+%%%%
+%%%% step3_bivariate_scatter.tex - Simple bivariate scatter with marginal densities
+%%%%
+%%%% A simplified scatter plot in scaled-score space (no PIT transformation)
+%%%% showing the general longitudinal data analysis situation:
+%%%%   - Bottom margin:  f_X  (prior score density)
+%%%%   - Left margin:    f_Y  (current score density)
+%%%%   - Center:         h(X,Y)  joint scatter
+%%%%
+%%%% Compiled via: latex -> dvips -E -> gs -> PDF
+%%%%
+\documentclass[10pt]{article}
+\usepackage[svgnames,usenames,dvips]{xcolor}
+\usepackage[paperwidth=8.0in,paperheight=8.0in,margin=0in]{geometry}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+\usepackage{amsbsy}
+
+\input{step3_styles}
+\input{data/bivariate_params}
+
+\pagestyle{empty}
+\begin{document}
+
+%%%%
+%%%% LAYOUT (inches from page origin)
+%%%%
+%%%%  Scatter:    4.5 x 4.5,  origin at (2.0, 2.0)
+%%%%  Bottom PDF: 4.5 wide x 0.80 tall, below scatter
+%%%%  Left PDF:   0.80 wide x 4.5 tall, left of scatter
+%%%%
+
+\psset{unit=1in}
+\begin{pspicture}(-0.1,-0.1)(7.5,7.5)
+
+  %% =======================================================================
+  %% TITLE
+  %% =======================================================================
+  \rput[tl](0.15,7.35){\textsf{\large\bfseries\textcolor{titleGrey}{%
+    Bivariate scatter:\ \ Prior score $X$\enspace vs.\enspace Current score $Y$}}}
+  \rput[tl](0.15,7.08){\textsf{\small\textcolor{subtitleGrey}{%
+    Grade \gradePrior\ (\yearPrior) $\rightarrow$ Grade \gradeCurrent\ (\yearCurrent) | \contentArea\ |
+    $n = $ \nStayers\ linked students |
+    $r = \rhoXY$}}}
+
+
+  %% =======================================================================
+  %% SCATTER PLOT: X vs Y in normalized score coords  (4.5in x 4.5in)
+  %% =======================================================================
+  \rput(4.2,4.2){%
+    \psset{xunit=4.5in,yunit=4.5in}%
+    \begin{pspicture}(-0.01,-0.01)(1.02,1.02)
+
+      %% Frame
+      \psframe[linecolor=borderGrey,linewidth=0.5pt](0,0)(1,1)
+
+      %% Light grid lines at tick positions
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0.153846,0)(0.153846,1)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0.307692,0)(0.307692,1)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0.461538,0)(0.461538,1)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0.615385,0)(0.615385,1)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0.769231,0)(0.769231,1)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0.923077,0)(0.923077,1)
+
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0,0.153846)(1,0.153846)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0,0.307692)(1,0.307692)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0,0.461538)(1,0.461538)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0,0.615385)(1,0.615385)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0,0.769231)(1,0.769231)
+      \psline[linecolor=borderGrey,linewidth=0.2pt,linestyle=dashed,dash=1pt 2pt](0,0.923077)(1,0.923077)
+
+      %% Population scatter dots
+      \input{data/scatter_population_scaled}
+
+    \end{pspicture}%
+  }
+
+  %% Joint density label — inside scatter area
+  \rput(2.7,5.85){\textsf{\Large\textcolor{notationColor}{$\hXY$}}}
+
+  %% X-axis tick labels (between bottom PDF and scatter)
+  \rput(2.0,1.78){\textsf{\tiny\textcolor{panelGrey}{300}}}
+  \rput(2.69,1.78){\textsf{\tiny\textcolor{panelGrey}{400}}}
+  \rput(3.38,1.78){\textsf{\tiny\textcolor{panelGrey}{500}}}
+  \rput(4.07,1.78){\textsf{\tiny\textcolor{panelGrey}{600}}}
+  \rput(4.77,1.78){\textsf{\tiny\textcolor{panelGrey}{700}}}
+  \rput(5.46,1.78){\textsf{\tiny\textcolor{panelGrey}{800}}}
+
+  %% Y-axis tick labels (between left PDF and scatter)
+  \rput[r]{0}(1.73,2.0){\textsf{\tiny\textcolor{panelGrey}{300}}}
+  \rput[r]{0}(1.73,2.69){\textsf{\tiny\textcolor{panelGrey}{400}}}
+  \rput[r]{0}(1.73,3.38){\textsf{\tiny\textcolor{panelGrey}{500}}}
+  \rput[r]{0}(1.73,4.07){\textsf{\tiny\textcolor{panelGrey}{600}}}
+  \rput[r]{0}(1.73,4.77){\textsf{\tiny\textcolor{panelGrey}{700}}}
+  \rput[r]{0}(1.73,5.46){\textsf{\tiny\textcolor{panelGrey}{800}}}
+
+
+  %% =======================================================================
+  %% BOTTOM PDF:  f_X  (prior score density)
+  %% 4.5in wide x 0.80in tall, density bulge points downward
+  %% =======================================================================
+  \rput(4.2,1.15){%
+    \psset{xunit=4.5in,yunit=0.80in}%
+    \begin{pspicture}(-0.01,-0.15)(1.02,1.08)
+
+      \readdata{\dataPdfBotPop}{data/pdf_bottom_pop_scaled.dat}
+
+      %% Flip vertically (density grows downward)
+      \rput(0,1){\psscalebox{1 -1}{%
+        %% Filled density
+        \pscustom[fillstyle=solid,fillcolor=densityFillX,linecolor=densityLineX,opacity=0.5,linewidth=0.6pt,linecap=1]{%
+          \psline(0,0)
+          \listplot[plotstyle=line]{\dataPdfBotPop}
+          \psline(1,0)
+          \closepath}
+
+        %% Baseline
+        \psline[linecolor=borderGrey,linewidth=0.3pt,linecap=1](0,0)(1,0)
+      }}%
+
+      %% Axis label
+      \rput[t](0.5,-0.22){\textsf{\footnotesize\textcolor{labelGrey}{Prior score $X$}}}
+
+      %% Strip label
+      \rput[l](-0.075,0.5){\textsf{\normalsize\textcolor{notationColor}{$\fX$}}}
+
+    \end{pspicture}%
+  }
+
+
+  %% =======================================================================
+  %% LEFT PDF:  f_Y  (current score density)
+  %% 0.80in wide x 4.5in tall, density bulge points leftward
+  %% =======================================================================
+  \rput(0.85,4.2){%
+    \psset{xunit=0.80in,yunit=4.5in}%
+    \begin{pspicture}(-0.10,-0.01)(1.08,1.02)
+
+      \readdata{\dataPdfLeftPop}{data/pdf_left_pop_scaled.dat}
+
+      %% Flip horizontally (density grows leftward)
+      \rput(1,0){\psscalebox{-1 1}{%
+        %% Filled density
+        \pscustom[fillstyle=solid,fillcolor=densityFillY,linecolor=densityLineY,opacity=0.5,linewidth=0.6pt,linecap=1]{%
+          \psline(0,0)
+          \listplot[plotstyle=line]{\dataPdfLeftPop}
+          \psline(0,1)
+          \closepath}
+
+        %% Baseline
+        \psline[linecolor=borderGrey,linewidth=0.3pt,linecap=1](0,0)(0,1)
+      }}%
+
+      %% Axis label (rotated)
+      \rput[b]{90}(-0.3,0.5){\textsf{\footnotesize\textcolor{labelGrey}{Current score $Y$}}}
+
+      %% Strip label
+      \rput[t](0.5,-0.05){\textsf{\normalsize\textcolor{notationColor}{$\fY$}}}
+
+    \end{pspicture}%
+  }
+
+\end{pspicture}
+
+\end{document}

@@ -1,0 +1,69 @@
+/* Panel #5 — Current V distributions. */
+
+.host {
+  width: 100%;
+  height: 100%;
+}
+.host svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.axis,
+.axisTick {
+  stroke: var(--e-border-panel);
+  stroke-width: 1px;
+}
+.axisLabel {
+  fill: var(--e-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.popLine {
+  fill: none;
+  stroke: var(--e-population-stroke);
+  stroke-width: var(--e-stroke);
+  stroke-dasharray: 4 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.subObsLine {
+  fill: none;
+  stroke: var(--e-subgroup-observed);
+  stroke-width: var(--e-stroke-bold);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.subFill {
+  fill: var(--e-subgroup-fill);
+  opacity: 0.32;
+}
+
+/*
+ * Subgroup INDUCED — same hue as observed (same role: subgroup quantity),
+ * dotted stroke (different epistemic status: inferred via G).  The hue
+ * sameness is deliberate: the audience should read "this is the same
+ * subgroup, told a different way," not "this is something new."
+ */
+.subInducedLine {
+  fill: none;
+  stroke: var(--e-subgroup-induced);
+  stroke-width: var(--e-stroke);
+  stroke-dasharray: 1.5 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/*
+ * W₁ shaded band: the closed area between sub_obs_cdf and sub_induced_cdf.
+ * In 1D the L¹ area between two CDFs IS the Wasserstein-1 distance, so this
+ * region literally visualizes what the estimator is minimizing.  Renders
+ * only meaningfully in CDF mode; opacity is driven by the morph tween.
+ */
+.w1Band {
+  fill: var(--e-w1-band);
+  stroke: none;
+}

@@ -21,14 +21,23 @@ if (!exists("regime_beta", mode = "function")) {
     return("")
   })
   if (nzchar(.epfd_dir)) {
-    for (.dep in c("regime_families.R", "predict_v_cdf.R",
-                   "distance_metrics.R", "copula_kernel_cache.R")) {
+    for (.dep in c(
+      "regime_families.R",
+      "predict_v_cdf.R",
+      "distance_metrics.R",
+      "copula_kernel_cache.R"
+    )) {
       .f <- file.path(.epfd_dir, .dep)
       if (file.exists(.f)) source(.f, local = FALSE)
     }
   }
-  rm(list = c(".epfd_dir", ".dep", ".f")[c(".epfd_dir", ".dep", ".f") %in%
-    ls(envir = environment())], envir = environment())
+  rm(
+    list = c(".epfd_dir", ".dep", ".f")[
+      c(".epfd_dir", ".dep", ".f") %in%
+        ls(envir = environment())
+    ],
+    envir = environment()
+  )
 }
 
 safe_subgroup_id <- function(phase_a_results) {
@@ -47,8 +56,22 @@ extract_regime_grid <- function(est) {
     ))
   }
 
-  m_col <- if ("m" %in% names(gs)) "m" else if ("regime_param_1" %in% names(gs)) "regime_param_1" else "theta1"
-  k_col <- if ("kappa" %in% names(gs)) "kappa" else if ("regime_param_2" %in% names(gs)) "regime_param_2" else if ("theta2" %in% names(gs)) "theta2" else NA_character_
+  m_col <- if ("m" %in% names(gs)) {
+    "m"
+  } else if ("regime_param_1" %in% names(gs)) {
+    "regime_param_1"
+  } else {
+    "theta1"
+  }
+  k_col <- if ("kappa" %in% names(gs)) {
+    "kappa"
+  } else if ("regime_param_2" %in% names(gs)) {
+    "regime_param_2"
+  } else if ("theta2" %in% names(gs)) {
+    "theta2"
+  } else {
+    NA_character_
+  }
   if (is.na(k_col)) {
     return(data.table(
       m = as.numeric(gs[[m_col]]),
@@ -74,10 +97,12 @@ extract_regime_grid <- function(est) {
   dt[]
 }
 
-export_phase_a_figure_data <- function(phase_a_results,
-                                       output_dir = "results",
-                                       write_files = TRUE,
-                                       export_subdir = NULL) {
+export_phase_a_figure_data <- function(
+  phase_a_results,
+  output_dir = "results",
+  write_files = TRUE,
+  export_subdir = NULL
+) {
   stopifnot(is.list(phase_a_results))
 
   est <- phase_a_results$best_estimate
@@ -106,7 +131,11 @@ export_phase_a_figure_data <- function(phase_a_results,
     F_uniform <- rep(NA_real_, length(est$v_grid))
   }
 
-  F_tamp <- if (has_u) ecdf(u_sample)(est$v_grid) else rep(NA_real_, length(est$v_grid))
+  F_tamp <- if (has_u) {
+    ecdf(u_sample)(est$v_grid)
+  } else {
+    rep(NA_real_, length(est$v_grid))
+  }
   residual <- est$F_pred - est$F_obs
 
   cdf_curves <- data.table(
@@ -121,13 +150,22 @@ export_phase_a_figure_data <- function(phase_a_results,
 
   objective_surface <- extract_regime_grid(est)
   objective_surface[, subgroup_id := subgroup_id]
-  setcolorder(objective_surface, c("subgroup_id", "m", "kappa", "log10_kappa", "distance_w1", "is_optimum"))
+  setcolorder(
+    objective_surface,
+    c("subgroup_id", "m", "kappa", "log10_kappa", "distance_w1", "is_optimum")
+  )
 
   p_grid <- seq(0.001, 0.999, length.out = 500)
   density_hat <- est$regime$density(p_grid)
   density_uniform <- rep(1, length(p_grid))
   density_true <- if (!is.null(phase_a_results$true_sgpc)) {
-    kd <- density(phase_a_results$true_sgpc / 100, from = 0.001, to = 0.999, n = 500, bw = "SJ")
+    kd <- density(
+      phase_a_results$true_sgpc / 100,
+      from = 0.001,
+      to = 0.999,
+      n = 500,
+      bw = "SJ"
+    )
     approx(kd$x, kd$y, xout = p_grid, rule = 2)$y
   } else {
     rep(NA_real_, length(p_grid))
@@ -141,13 +179,21 @@ export_phase_a_figure_data <- function(phase_a_results,
     density_true = density_true
   )
 
-  w1_uniform <- if (all(is.na(F_uniform))) NA_real_ else wasserstein1(F_uniform, est$F_obs, est$v_grid)
+  w1_uniform <- if (all(is.na(F_uniform))) {
+    NA_real_
+  } else {
+    wasserstein1(F_uniform, est$F_obs, est$v_grid)
+  }
   w1_best <- est$all_distances$wasserstein1
   fit_metrics <- data.table(
     subgroup_id = subgroup_id,
     w1_uniform = w1_uniform,
     w1_best = w1_best,
-    w1_reduction_pct = ifelse(isTRUE(w1_uniform > 0), 100 * (1 - (w1_best / w1_uniform)), NA_real_),
+    w1_reduction_pct = ifelse(
+      isTRUE(w1_uniform > 0),
+      100 * (1 - (w1_best / w1_uniform)),
+      NA_real_
+    ),
     cvm = est$all_distances$cramer_von_mises,
     max_abs_residual = max(abs(residual), na.rm = TRUE),
     mean_abs_residual = mean(abs(residual), na.rm = TRUE)
@@ -159,9 +205,17 @@ export_phase_a_figure_data <- function(phase_a_results,
       subgroup_id = subgroup_id,
       boot_id = seq_along(boot$median_sgpc_draws),
       m_hat = if (!is.null(boot$m_draws)) boot$m_draws else NA_real_,
-      kappa_hat = if (!is.null(boot$kappa_draws)) boot$kappa_draws else NA_real_,
+      kappa_hat = if (!is.null(boot$kappa_draws)) {
+        boot$kappa_draws
+      } else {
+        NA_real_
+      },
       median_sgpc = boot$median_sgpc_draws,
-      mean_sgpc = if (!is.null(boot$mean_sgpc_draws)) boot$mean_sgpc_draws else NA_real_,
+      mean_sgpc = if (!is.null(boot$mean_sgpc_draws)) {
+        boot$mean_sgpc_draws
+      } else {
+        NA_real_
+      },
       converged = !is.na(boot$median_sgpc_draws)
     )
   } else {
@@ -203,7 +257,11 @@ export_phase_a_figure_data <- function(phase_a_results,
   kernel_slices <- data.table()
   quantile_slices <- data.table()
   if (has_kernel && has_u) {
-    u_q <- as.numeric(quantile(u_sample, probs = c(0.1, 0.5, 0.9), na.rm = TRUE))
+    u_q <- as.numeric(quantile(
+      u_sample,
+      probs = c(0.1, 0.5, 0.9),
+      na.rm = TRUE
+    ))
     u_lbl <- c("u_q10", "u_q50", "u_q90")
     for (i in seq_along(u_q)) {
       u_val <- rep(u_q[i], length(est$v_grid))
@@ -214,7 +272,11 @@ export_phase_a_figure_data <- function(phase_a_results,
           slice = u_lbl[i],
           u = u_q[i],
           v = est$v_grid,
-          F0 = kernel_conditional_cdf(v = est$v_grid, u = u_val, cache = kernel_cache)
+          F0 = kernel_conditional_cdf(
+            v = est$v_grid,
+            u = u_val,
+            cache = kernel_cache
+          )
         )
       )
     }
@@ -229,7 +291,11 @@ export_phase_a_figure_data <- function(phase_a_results,
             slice = u_lbl[i],
             u = u_q[i],
             p = p_grid_small,
-            Q0 = kernel_conditional_quantile(p = p_grid_small, u = u_val, cache = kernel_cache)
+            Q0 = kernel_conditional_quantile(
+              p = p_grid_small,
+              u = u_val,
+              cache = kernel_cache
+            )
           )
         )
       }
@@ -258,7 +324,9 @@ export_phase_a_figure_data <- function(phase_a_results,
     regime_density = regime_density,
     bootstrap_summary = bootstrap_summary,
     independence_diagnostics = phase_a_results$independence_diagnostics,
-    flag_independence_violation = isTRUE(phase_a_results$flag_independence_violation),
+    flag_independence_violation = isTRUE(
+      phase_a_results$flag_independence_violation
+    ),
     copula_used = phase_a_results$copula_used,
     seed = phase_a_results$config$seed
   )
@@ -269,20 +337,38 @@ export_phase_a_figure_data <- function(phase_a_results,
     } else {
       file.path(output_dir, "exports", "phase_a")
     }
-    if (!dir.exists(export_dir)) dir.create(export_dir, recursive = TRUE)
+    if (!dir.exists(export_dir)) {
+      dir.create(export_dir, recursive = TRUE)
+    }
 
     saveRDS(payload, file.path(output_dir, "phase_a_analytic_payload.rds"))
     fwrite(cdf_curves, file.path(export_dir, "step3_cdf_curves.csv"))
-    fwrite(objective_surface, file.path(export_dir, "step3_objective_surface.csv"))
+    fwrite(
+      objective_surface,
+      file.path(export_dir, "step3_objective_surface.csv")
+    )
     fwrite(regime_density, file.path(export_dir, "step3_regime_density.csv"))
     fwrite(fit_metrics, file.path(export_dir, "step3_fit_metrics.csv"))
     fwrite(bootstrap_draws, file.path(export_dir, "step3_bootstrap_draws.csv"))
-    fwrite(bootstrap_summary, file.path(export_dir, "step3_bootstrap_summary.csv"))
+    fwrite(
+      bootstrap_summary,
+      file.path(export_dir, "step3_bootstrap_summary.csv")
+    )
     if (!is.null(phase_a_results$independence_diagnostics)) {
-      fwrite(as.data.table(phase_a_results$independence_diagnostics), file.path(export_dir, "step3_independence_diagnostics.csv"))
+      fwrite(
+        as.data.table(phase_a_results$independence_diagnostics),
+        file.path(export_dir, "step3_independence_diagnostics.csv")
+      )
     }
-    if (nrow(kernel_slices) > 0) fwrite(kernel_slices, file.path(export_dir, "step3_kernel_slices.csv"))
-    if (nrow(quantile_slices) > 0) fwrite(quantile_slices, file.path(export_dir, "step3_quantile_slices.csv"))
+    if (nrow(kernel_slices) > 0) {
+      fwrite(kernel_slices, file.path(export_dir, "step3_kernel_slices.csv"))
+    }
+    if (nrow(quantile_slices) > 0) {
+      fwrite(
+        quantile_slices,
+        file.path(export_dir, "step3_quantile_slices.csv")
+      )
+    }
   }
 
   list(

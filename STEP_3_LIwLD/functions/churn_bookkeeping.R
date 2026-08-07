@@ -51,50 +51,59 @@
 #'     not provided or not present in state_data)}
 #'
 #' @export
-compute_churn_bookkeeping <- function(state_data, pairs, condition_meta,
-                                       sg_col = NULL,
-                                       asymmetry_threshold = 0.05) {
-
+compute_churn_bookkeeping <- function(
+  state_data,
+  pairs,
+  condition_meta,
+  sg_col = NULL,
+  asymmetry_threshold = 0.05
+) {
   # ---- Condition-level counts ----
-  prior_mask <- state_data$GRADE  == condition_meta$grade_prior &
-                state_data$YEAR   == condition_meta$year_prior &
-                state_data$CONTENT_AREA == condition_meta$content_area &
-                !is.na(state_data$SCALE_SCORE)
-  current_mask <- state_data$GRADE  == condition_meta$grade_current &
-                  state_data$YEAR   == condition_meta$year_current &
-                  state_data$CONTENT_AREA == condition_meta$content_area &
-                  !is.na(state_data$SCALE_SCORE)
+  prior_mask <- state_data$GRADE == condition_meta$grade_prior &
+    state_data$YEAR == condition_meta$year_prior &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
+  current_mask <- state_data$GRADE == condition_meta$grade_current &
+    state_data$YEAR == condition_meta$year_current &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
 
-  n_prior_all   <- sum(prior_mask)
+  n_prior_all <- sum(prior_mask)
   n_current_all <- sum(current_mask)
-  n_stayers     <- nrow(pairs)
-  n_leavers     <- max(0L, n_prior_all - n_stayers)
-  n_entrants    <- max(0L, n_current_all - n_stayers)
+  n_stayers <- nrow(pairs)
+  n_leavers <- max(0L, n_prior_all - n_stayers)
+  n_entrants <- max(0L, n_current_all - n_stayers)
 
   alpha <- if (n_prior_all > 0) n_stayers / n_prior_all else NA_real_
-  beta  <- if (n_current_all > 0) n_stayers / n_current_all else NA_real_
+  beta <- if (n_current_all > 0) n_stayers / n_current_all else NA_real_
 
   churn_asymmetry <- if (is.finite(alpha) && is.finite(beta)) {
     abs(alpha - beta)
-  } else NA_real_
+  } else {
+    NA_real_
+  }
 
   churn_type <- classify_churn_type(alpha, beta, asymmetry_threshold)
 
   condition_dt <- data.table::data.table(
-    n_prior_all     = n_prior_all,
-    n_current_all   = n_current_all,
-    n_stayers       = n_stayers,
-    n_leavers       = n_leavers,
-    n_entrants      = n_entrants,
-    alpha           = round(alpha, 4),
-    beta            = round(beta, 4),
+    n_prior_all = n_prior_all,
+    n_current_all = n_current_all,
+    n_stayers = n_stayers,
+    n_leavers = n_leavers,
+    n_entrants = n_entrants,
+    alpha = round(alpha, 4),
+    beta = round(beta, 4),
     churn_asymmetry = round(churn_asymmetry, 4),
-    churn_type      = churn_type
+    churn_type = churn_type
   )
 
   # ---- Per-subgroup breakdown ----
   subgroup_dt <- NULL
-  if (!is.null(sg_col) && sg_col %in% names(state_data) && sg_col %in% names(pairs)) {
+  if (
+    !is.null(sg_col) &&
+      sg_col %in% names(state_data) &&
+      sg_col %in% names(pairs)
+  ) {
     prior_sub <- state_data[prior_mask, .N, by = sg_col]
     data.table::setnames(prior_sub, "N", "n_prior_all")
     current_sub <- state_data[current_mask, .N, by = sg_col]
@@ -110,19 +119,37 @@ compute_churn_bookkeeping <- function(state_data, pairs, condition_meta,
       data.table::set(subgroup_dt, which(is.na(subgroup_dt[[col]])), col, 0L)
     }
 
-    subgroup_dt[, n_leavers  := pmax(0L, n_prior_all - n_stayers)]
+    subgroup_dt[, n_leavers := pmax(0L, n_prior_all - n_stayers)]
     subgroup_dt[, n_entrants := pmax(0L, n_current_all - n_stayers)]
-    subgroup_dt[, alpha := fifelse(n_prior_all > 0, n_stayers / n_prior_all, NA_real_)]
-    subgroup_dt[, beta  := fifelse(n_current_all > 0, n_stayers / n_current_all, NA_real_)]
-    subgroup_dt[, churn_asymmetry := fifelse(
-      is.finite(alpha) & is.finite(beta), abs(alpha - beta), NA_real_
-    )]
-    subgroup_dt[, churn_type := mapply(classify_churn_type, alpha, beta,
-                                        MoreArgs = list(threshold = asymmetry_threshold))]
+    subgroup_dt[,
+      alpha := fifelse(n_prior_all > 0, n_stayers / n_prior_all, NA_real_)
+    ]
+    subgroup_dt[,
+      beta := fifelse(n_current_all > 0, n_stayers / n_current_all, NA_real_)
+    ]
+    subgroup_dt[,
+      churn_asymmetry := fifelse(
+        is.finite(alpha) & is.finite(beta),
+        abs(alpha - beta),
+        NA_real_
+      )
+    ]
+    subgroup_dt[,
+      churn_type := mapply(
+        classify_churn_type,
+        alpha,
+        beta,
+        MoreArgs = list(threshold = asymmetry_threshold)
+      )
+    ]
 
     # Round for readability
     for (col in c("alpha", "beta", "churn_asymmetry")) {
-      data.table::set(subgroup_dt, j = col, value = round(subgroup_dt[[col]], 4))
+      data.table::set(
+        subgroup_dt,
+        j = col,
+        value = round(subgroup_dt[[col]], 4)
+      )
     }
   }
 
@@ -148,10 +175,12 @@ compute_churn_bookkeeping <- function(state_data, pairs, condition_meta,
 #' @return Character scalar.
 #' @export
 classify_churn_type <- function(alpha, beta, threshold = 0.05) {
-  if (!is.finite(alpha) || !is.finite(beta)) return("unknown")
+  if (!is.finite(alpha) || !is.finite(beta)) {
+    return("unknown")
+  }
 
   asymmetry <- abs(alpha - beta)
-  min_rate  <- min(alpha, beta)
+  min_rate <- min(alpha, beta)
 
   if (min_rate >= 0.90 && asymmetry <= threshold) {
     return("benign")
@@ -159,9 +188,9 @@ classify_churn_type <- function(alpha, beta, threshold = 0.05) {
   if (asymmetry > threshold) {
     # Asymmetric: which wave is losing students?
     if (beta < alpha - threshold) {
-      return("observability")   # current-wave concentrated loss
+      return("observability") # current-wave concentrated loss
     } else if (alpha < beta - threshold) {
-      return("observability_prior")  # prior-wave concentrated loss (rare)
+      return("observability_prior") # prior-wave concentrated loss (rare)
     }
   }
   return("demographic")
@@ -195,59 +224,78 @@ classify_churn_type <- function(alpha, beta, threshold = 0.05) {
 #'     indicate current-wave observability churn.}
 #'
 #' @export
-compare_marginals_stayer_vs_all <- function(state_data, pairs, condition_meta,
-                                             n_grid = 500L) {
-
+compare_marginals_stayer_vs_all <- function(
+  state_data,
+  pairs,
+  condition_meta,
+  n_grid = 500L
+) {
   # All-student scores
-  prior_mask <- state_data$GRADE  == condition_meta$grade_prior &
-                state_data$YEAR   == condition_meta$year_prior &
-                state_data$CONTENT_AREA == condition_meta$content_area &
-                !is.na(state_data$SCALE_SCORE)
-  current_mask <- state_data$GRADE  == condition_meta$grade_current &
-                  state_data$YEAR   == condition_meta$year_current &
-                  state_data$CONTENT_AREA == condition_meta$content_area &
-                  !is.na(state_data$SCALE_SCORE)
+  prior_mask <- state_data$GRADE == condition_meta$grade_prior &
+    state_data$YEAR == condition_meta$year_prior &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
+  current_mask <- state_data$GRADE == condition_meta$grade_current &
+    state_data$YEAR == condition_meta$year_current &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
 
-  prior_all   <- state_data$SCALE_SCORE[prior_mask]
+  prior_all <- state_data$SCALE_SCORE[prior_mask]
   current_all <- state_data$SCALE_SCORE[current_mask]
 
   # Stayer-only scores
-  prior_stayer   <- pairs$SCALE_SCORE_PRIOR[!is.na(pairs$SCALE_SCORE_PRIOR)]
+  prior_stayer <- pairs$SCALE_SCORE_PRIOR[!is.na(pairs$SCALE_SCORE_PRIOR)]
   current_stayer <- pairs$SCALE_SCORE_CURRENT[!is.na(pairs$SCALE_SCORE_CURRENT)]
 
   # Wasserstein-1 on ECDFs evaluated on common grid
-  gamma_prior   <- ecdf_wasserstein1(prior_all, prior_stayer, n_grid)
+  gamma_prior <- ecdf_wasserstein1(prior_all, prior_stayer, n_grid)
   gamma_current <- ecdf_wasserstein1(current_all, current_stayer, n_grid)
 
   # Practical threshold: W1 < 1% of the score range (min 0.01 to avoid zero)
-  range_prior   <- tryCatch(diff(range(c(prior_all, prior_stayer), na.rm = TRUE)),
-                             error = function(e) NA_real_)
-  range_current <- tryCatch(diff(range(c(current_all, current_stayer), na.rm = TRUE)),
-                             error = function(e) NA_real_)
-  thresh_prior   <- max(0.01 * (range_prior %||% 1), 0.01)
+  range_prior <- tryCatch(
+    diff(range(c(prior_all, prior_stayer), na.rm = TRUE)),
+    error = function(e) NA_real_
+  )
+  range_current <- tryCatch(
+    diff(range(c(current_all, current_stayer), na.rm = TRUE)),
+    error = function(e) NA_real_
+  )
+  thresh_prior <- max(0.01 * (range_prior %||% 1), 0.01)
   thresh_current <- max(0.01 * (range_current %||% 1), 0.01)
 
-  ignorable <- is.finite(gamma_prior) && is.finite(gamma_current) &&
-               (gamma_prior <= thresh_prior) && (gamma_current <= thresh_current)
+  ignorable <- is.finite(gamma_prior) &&
+    is.finite(gamma_current) &&
+    (gamma_prior <= thresh_prior) &&
+    (gamma_current <= thresh_current)
 
   asymmetry_ratio <- if (is.finite(gamma_prior) && gamma_prior > 0) {
     gamma_current / gamma_prior
-  } else NA_real_
+  } else {
+    NA_real_
+  }
 
   list(
-    gamma_prior   = round(gamma_prior, 4),
+    gamma_prior = round(gamma_prior, 4),
     gamma_current = round(gamma_current, 4),
-    prior_scores_all     = prior_all,
-    prior_scores_stayer  = prior_stayer,
-    current_scores_all     = current_all,
-    current_scores_stayer  = current_stayer,
+    prior_scores_all = prior_all,
+    prior_scores_stayer = prior_stayer,
+    current_scores_all = current_all,
+    current_scores_stayer = current_stayer,
     compositionally_ignorable = ignorable,
     asymmetry_ratio = round(asymmetry_ratio, 2),
     description = paste0(
       "Marginal comparison: W1(F_all, F_stayer). ",
-      "Gamma_prior = ", round(gamma_prior, 2), ", ",
-      "Gamma_current = ", round(gamma_current, 2), ". ",
-      if (ignorable) "Compositionally ignorable." else "Compositional drift detected."
+      "Gamma_prior = ",
+      round(gamma_prior, 2),
+      ", ",
+      "Gamma_current = ",
+      round(gamma_current, 2),
+      ". ",
+      if (ignorable) {
+        "Compositionally ignorable."
+      } else {
+        "Compositional drift detected."
+      }
     )
   )
 }
@@ -280,87 +328,98 @@ compare_marginals_stayer_vs_all <- function(state_data, pairs, condition_meta,
 #'   \item{u_all, v_all}{Pseudo-observations for the all-student sample.}
 #'
 #' @export
-estimate_regime_all_students <- function(state_data, condition_meta,
-                                          refs_stayer,
-                                          kernel_cache,
-                                          regime_family,
-                                          distance_fn,
-                                          grid_resolution = 25L,
-                                          stayer_estimate = NULL) {
-
+estimate_regime_all_students <- function(
+  state_data,
+  condition_meta,
+  refs_stayer,
+  kernel_cache,
+  regime_family,
+  distance_fn,
+  grid_resolution = 25L,
+  stayer_estimate = NULL
+) {
   # All-student scores at each wave
-  prior_mask <- state_data$GRADE  == condition_meta$grade_prior &
-                state_data$YEAR   == condition_meta$year_prior &
-                state_data$CONTENT_AREA == condition_meta$content_area &
-                !is.na(state_data$SCALE_SCORE)
-  current_mask <- state_data$GRADE  == condition_meta$grade_current &
-                  state_data$YEAR   == condition_meta$year_current &
-                  state_data$CONTENT_AREA == condition_meta$content_area &
-                  !is.na(state_data$SCALE_SCORE)
+  prior_mask <- state_data$GRADE == condition_meta$grade_prior &
+    state_data$YEAR == condition_meta$year_prior &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
+  current_mask <- state_data$GRADE == condition_meta$grade_current &
+    state_data$YEAR == condition_meta$year_current &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
 
-  prior_all   <- state_data$SCALE_SCORE[prior_mask]
+  prior_all <- state_data$SCALE_SCORE[prior_mask]
   current_all <- state_data$SCALE_SCORE[current_mask]
 
   # Map all-student scores to pseudo-observations using stayer-based ECDFs.
   # This keeps the reference frame consistent: U and V are quantiles of the
   # stayer population, but now computed for all students.
-  u_all <- pmin(pmax(refs_stayer$ref_prior(prior_all),   1e-6), 1 - 1e-6)
+  u_all <- pmin(pmax(refs_stayer$ref_prior(prior_all), 1e-6), 1 - 1e-6)
   v_all <- pmin(pmax(refs_stayer$ref_current(current_all), 1e-6), 1 - 1e-6)
 
   # Estimate regime from cross-sectional marginals (no pairing assumed)
   est_all <- tryCatch(
-    estimate_regime(u_all, v_all, kernel_cache,
-                    regime_family   = regime_family,
-                    distance_fn     = distance_fn,
-                    grid_resolution = grid_resolution,
-                    verbose         = FALSE),
+    estimate_regime(
+      u_all,
+      v_all,
+      kernel_cache,
+      regime_family = regime_family,
+      distance_fn = distance_fn,
+      grid_resolution = grid_resolution,
+      verbose = FALSE
+    ),
     error = function(e) NULL
   )
 
   if (is.null(est_all)) {
     return(list(
-      regime_all   = NULL,
+      regime_all = NULL,
       delta_median = NA_real_,
-      delta_mean   = NA_real_,
-      w1_regime    = NA_real_,
-      u_all = u_all, v_all = v_all,
-      description  = "Regime estimation from all-student marginals failed."
+      delta_mean = NA_real_,
+      w1_regime = NA_real_,
+      u_all = u_all,
+      v_all = v_all,
+      description = "Regime estimation from all-student marginals failed."
     ))
   }
 
   median_all <- est_all$regime$median * 100
-  mean_all   <- est_all$regime$mean * 100
+  mean_all <- est_all$regime$mean * 100
 
   delta_median <- NA_real_
-  delta_mean   <- NA_real_
-  w1_regime    <- NA_real_
+  delta_mean <- NA_real_
+  w1_regime <- NA_real_
   median_stayer <- NA_real_
-  mean_stayer   <- NA_real_
+  mean_stayer <- NA_real_
 
   if (!is.null(stayer_estimate)) {
     median_stayer <- stayer_estimate$regime$median * 100
-    mean_stayer   <- stayer_estimate$regime$mean * 100
-    delta_median  <- round(median_all - median_stayer, 2)
-    delta_mean    <- round(mean_all - mean_stayer, 2)
+    mean_stayer <- stayer_estimate$regime$mean * 100
+    delta_median <- round(median_all - median_stayer, 2)
+    delta_mean <- round(mean_all - mean_stayer, 2)
   }
 
   list(
-    regime_all     = est_all,
+    regime_all = est_all,
     median_sgpc_all = round(median_all, 2),
-    mean_sgpc_all   = round(mean_all, 2),
+    mean_sgpc_all = round(mean_all, 2),
     median_sgpc_stayer = round(median_stayer, 2),
-    mean_sgpc_stayer   = round(mean_stayer, 2),
-    delta_median   = delta_median,
-    delta_mean     = delta_mean,
-    w1_regime      = w1_regime,
-    u_all          = u_all,
-    v_all          = v_all,
-    n_prior_all    = length(prior_all),
-    n_current_all  = length(current_all),
-    description    = paste0(
+    mean_sgpc_stayer = round(mean_stayer, 2),
+    delta_median = delta_median,
+    delta_mean = delta_mean,
+    w1_regime = w1_regime,
+    u_all = u_all,
+    v_all = v_all,
+    n_prior_all = length(prior_all),
+    n_current_all = length(current_all),
+    description = paste0(
       "Regime contrast: all-student vs stayer-only. ",
-      "Delta_median = ", delta_median, " SGPc, ",
-      "Delta_mean = ", delta_mean, " SGPc."
+      "Delta_median = ",
+      delta_median,
+      " SGPc, ",
+      "Delta_mean = ",
+      delta_mean,
+      " SGPc."
     )
   )
 }
@@ -383,8 +442,11 @@ estimate_regime_all_students <- function(state_data, condition_meta,
 theoretical_linkage_premium <- function(alpha, rho) {
   if (!is.finite(alpha) || !is.finite(rho)) {
     return(list(
-      mean_scale = NA_real_, cdf_scale = NA_real_,
-      tau = NA_real_, alpha = alpha, rho = rho
+      mean_scale = NA_real_,
+      cdf_scale = NA_real_,
+      tau = NA_real_,
+      alpha = alpha,
+      rho = rho
     ))
   }
 
@@ -392,21 +454,31 @@ theoretical_linkage_premium <- function(alpha, rho) {
 
   mean_scale <- if (abs(1 - rho) > 1e-10) {
     sqrt((1 - alpha * rho) / (1 - rho))
-  } else NA_real_
+  } else {
+    NA_real_
+  }
 
   cdf_scale <- if (abs(1 - tau) > 1e-10) {
     sqrt((1 - alpha * tau) / (1 - tau))
-  } else NA_real_
+  } else {
+    NA_real_
+  }
 
   list(
     mean_scale = round(mean_scale, 4),
-    cdf_scale  = round(cdf_scale, 4),
-    tau        = round(tau, 4),
-    alpha      = round(alpha, 4),
-    rho        = round(rho, 4),
+    cdf_scale = round(cdf_scale, 4),
+    tau = round(tau, 4),
+    alpha = round(alpha, 4),
+    rho = round(rho, 4),
     description = paste0(
-      "Theoretical premium at alpha=", round(alpha, 3), ", rho=", round(rho, 3),
-      ": mean-scale=", round(mean_scale, 3), ", CDF-scale=", round(cdf_scale, 3)
+      "Theoretical premium at alpha=",
+      round(alpha, 3),
+      ", rho=",
+      round(rho, 3),
+      ": mean-scale=",
+      round(mean_scale, 3),
+      ", CDF-scale=",
+      round(cdf_scale, 3)
     )
   )
 }
@@ -428,15 +500,19 @@ theoretical_linkage_premium <- function(alpha, rho) {
 ecdf_wasserstein1 <- function(x, y, n_grid = 500L) {
   x <- x[!is.na(x)]
   y <- y[!is.na(y)]
-  if (length(x) < 2 || length(y) < 2) return(NA_real_)
-  rng  <- range(c(x, y), na.rm = TRUE)
-  if (!is.finite(rng[1]) || !is.finite(rng[2]) || rng[1] == rng[2]) return(NA_real_)
+  if (length(x) < 2 || length(y) < 2) {
+    return(NA_real_)
+  }
+  rng <- range(c(x, y), na.rm = TRUE)
+  if (!is.finite(rng[1]) || !is.finite(rng[2]) || rng[1] == rng[2]) {
+    return(NA_real_)
+  }
   grid <- seq(rng[1], rng[2], length.out = n_grid)
-  F1   <- ecdf(x)(grid)
-  F2   <- ecdf(y)(grid)
+  F1 <- ecdf(x)(grid)
+  F2 <- ecdf(y)(grid)
   # Trapezoidal integration of |F1 − F2|
   diffs <- abs(F1 - F2)
-  dx    <- diff(grid)
+  dx <- diff(grid)
   sum(dx * (diffs[-length(diffs)] + diffs[-1]) / 2)
 }
 

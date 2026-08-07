@@ -34,15 +34,15 @@ manual_results <- list()
 
 for (fname in names(families)) {
   cat("Family:", fname, "\n")
-  
+
   # Fit
   fit <- fitCopula(families[[fname]], test_data, method = "ml")
   cat("  Parameter:", coef(fit), "\n")
-  
+
   # Manually compute GoF statistic from data
   obs_stat <- copula:::gofTn(fit@copula, test_data, method = "Sn")
   cat("  Observed statistic:", obs_stat, "\n")
-  
+
   # Manually run bootstrap
   boot_stats <- numeric(10)
   for (b in 1:10) {
@@ -51,20 +51,24 @@ for (fname in names(families)) {
     # Compute statistic for bootstrap sample
     boot_stats[b] <- copula:::gofTn(fit@copula, boot_sample, method = "Sn")
   }
-  
+
   cat("  Bootstrap statistics:\n")
   print(sort(boot_stats))
-  
+
   # Compute p-value
   pval <- mean(boot_stats >= obs_stat)
   cat("  Manual p-value:", pval, "\n\n")
-  
+
   manual_results[[fname]] <- pval
 }
 
 cat("Manual p-values (should vary):\n")
 print(unlist(manual_results))
-cat("\nAre manual p-values identical?:", length(unique(unlist(manual_results))) == 1, "\n\n")
+cat(
+  "\nAre manual p-values identical?:",
+  length(unique(unlist(manual_results))) == 1,
+  "\n\n"
+)
 
 cat("====================================================================\n")
 cat("TESTING: gofCopula() with same data\n")
@@ -74,24 +78,30 @@ gof_results <- list()
 
 for (fname in names(families)) {
   cat("Family:", fname, "\n")
-  
+
   fit <- fitCopula(families[[fname]], test_data, method = "ml")
-  
-  gof <- gofCopula(fit@copula, 
-                   x = test_data,
-                   method = "Sn",
-                   simulation = "pb",
-                   N = 10,
-                   verbose = FALSE)
-  
+
+  gof <- gofCopula(
+    fit@copula,
+    x = test_data,
+    method = "Sn",
+    simulation = "pb",
+    N = 10,
+    verbose = FALSE
+  )
+
   cat("  gofCopula() p-value:", gof$p.value, "\n\n")
-  
+
   gof_results[[fname]] <- gof$p.value
 }
 
 cat("gofCopula() p-values:\n")
 print(unlist(gof_results))
-cat("\nAre gofCopula() p-values identical?:", length(unique(unlist(gof_results))) == 1, "\n\n")
+cat(
+  "\nAre gofCopula() p-values identical?:",
+  length(unique(unlist(gof_results))) == 1,
+  "\n\n"
+)
 
 cat("====================================================================\n")
 cat("TESTING: Does the SAME fitted copula give different p-values?\n")
@@ -103,17 +113,23 @@ fit_gaussian <- fitCopula(normalCopula(dim = 2), test_data, method = "ml")
 # Run gofCopula 5 times
 repeated_pvals <- numeric(5)
 for (i in 1:5) {
-  gof <- gofCopula(fit_gaussian@copula, 
-                   x = test_data,
-                   method = "Sn",
-                   simulation = "pb",
-                   N = 10,
-                   verbose = FALSE)
+  gof <- gofCopula(
+    fit_gaussian@copula,
+    x = test_data,
+    method = "Sn",
+    simulation = "pb",
+    N = 10,
+    verbose = FALSE
+  )
   repeated_pvals[i] <- gof$p.value
   cat("  Run", i, "p-value:", gof$p.value, "\n")
 }
 
-cat("\nAre repeated p-values identical?:", length(unique(repeated_pvals)) == 1, "\n")
+cat(
+  "\nAre repeated p-values identical?:",
+  length(unique(repeated_pvals)) == 1,
+  "\n"
+)
 
 if (length(unique(repeated_pvals)) > 1) {
   cat("✓ gofCopula() varies across runs (as expected)\n\n")
@@ -132,4 +148,3 @@ cat("Specifically check:\n")
 cat("  1. Is pseudo_obs being passed by reference and modified?\n")
 cat("  2. Is there a shared state variable being reused?\n")
 cat("  3. Are we calling gofCopula() with the wrong copula object?\n\n")
-

@@ -1,0 +1,59 @@
+/* Cross — 3×3 CSS Grid; "+" pattern via grid-template-areas. */
+
+.cross {
+  /* position: relative — host for absolute-positioned overlays (Tour caption).
+     Kept on the cross itself so the dimension chain from .crossFrame > * /
+     .embedFrame stays a single hop and percentage heights resolve cleanly. */
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+
+  /*
+   * The cross is *square per cell* in the canonical layout: each grid cell is
+   * the same width and height so panels read as visually balanced.  Side
+   * panels (#1, #5) get one cell each in the middle row; #2 and #4 get one
+   * cell each in their respective rows; #3 sits in the center.  The empty
+   * corner cells (top-left, top-right, bottom-left, bottom-right) absorb
+   * spacing so the cross "breathes."
+   */
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows:    1fr 1fr 1fr;
+  grid-template-areas:
+    ".  p2 . "
+    "p1 p3 p5"
+    ".  p4 . ";
+  gap: var(--p-space-3);
+  padding: var(--p-space-4);
+  box-sizing: border-box;
+}
+
+/* Embed mode — chrome is hidden, so reclaim the chrome's vertical budget. */
+.embed {
+  padding: var(--p-space-3);
+  gap: var(--p-space-3);
+}
+
+/* Tablet: tighten gaps, keep cross. */
+@media (max-width: 1279px) and (min-width: 768px) {
+  .cross {
+    gap: var(--p-space-2);
+    padding: var(--p-space-3);
+  }
+}
+
+/* Mobile: linear stack in numeric order (the natural reading sequence). */
+@media (max-width: 767px) {
+  .cross {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(5, minmax(220px, 1fr));
+    grid-template-areas:
+      "p1"
+      "p2"
+      "p3"
+      "p4"
+      "p5";
+    gap: var(--p-space-2);
+    padding: var(--p-space-3);
+  }
+}

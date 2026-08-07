@@ -25,13 +25,16 @@ cat("====================================================================\n\n")
 
 cat("TEST 1: Loading Phase 1 helper functions...\n")
 
-tryCatch({
-  source("STEP_2_SGPc_Sensitivity/phase1_data_loader.R")
-  cat("  ✓ phase1_data_loader.R loaded successfully\n")
-}, error = function(e) {
-  cat("  ✗ ERROR:", e$message, "\n")
-  stop("Cannot proceed without helper functions")
-})
+tryCatch(
+  {
+    source("STEP_2_SGPc_Sensitivity/phase1_data_loader.R")
+    cat("  ✓ phase1_data_loader.R loaded successfully\n")
+  },
+  error = function(e) {
+    cat("  ✗ ERROR:", e$message, "\n")
+    stop("Cannot proceed without helper functions")
+  }
+)
 
 ############################################################################
 ### TEST 2: Load Canonical Parameters
@@ -39,15 +42,22 @@ tryCatch({
 
 cat("\nTEST 2: Loading canonical parameters...\n")
 
-canonical_data <- tryCatch({
-  load_canonical_parameters()
-}, error = function(e) {
-  cat("  ✗ ERROR:", e$message, "\n")
-  stop("Cannot load canonical parameters. Run Phase 1 analysis first.")
-})
+canonical_data <- tryCatch(
+  {
+    load_canonical_parameters()
+  },
+  error = function(e) {
+    cat("  ✗ ERROR:", e$message, "\n")
+    stop("Cannot load canonical parameters. Run Phase 1 analysis first.")
+  }
+)
 
 cat("  ✓ Manifest loaded:", length(canonical_data$manifest), "top-level keys\n")
-cat("  ✓ Canonical parameters:", nrow(canonical_data$canonical_params), "strata\n")
+cat(
+  "  ✓ Canonical parameters:",
+  nrow(canonical_data$canonical_params),
+  "strata\n"
+)
 
 ############################################################################
 ### TEST 3: Check Phase 1 Condition Availability
@@ -73,26 +83,41 @@ cat("\nTEST 4: Loading sample condition from Phase 1...\n")
 if (length(conditions) > 0) {
   test_condition <- conditions[1]
   cat("  Testing with:", test_condition, "\n")
-  
-  phase1_result <- tryCatch({
-    load_phase1_condition(test_dataset, test_condition)
-  }, error = function(e) {
-    cat("  ✗ ERROR:", e$message, "\n")
-    return(NULL)
-  })
-  
+
+  phase1_result <- tryCatch(
+    {
+      load_phase1_condition(test_dataset, test_condition)
+    },
+    error = function(e) {
+      cat("  ✗ ERROR:", e$message, "\n")
+      return(NULL)
+    }
+  )
+
   if (!is.null(phase1_result)) {
     cat("  ✓ Condition loaded successfully\n")
-    cat("    - Empirical copula:", !is.null(phase1_result$empirical_copula), "\n")
+    cat(
+      "    - Empirical copula:",
+      !is.null(phase1_result$empirical_copula),
+      "\n"
+    )
     cat("    - Best-fit copula:", !is.null(phase1_result$best_fit_copula), "\n")
     cat("    - Copula params:", !is.null(phase1_result$copula_params), "\n")
-    
+
     if (!is.null(phase1_result$empirical_copula)) {
-      cat("    - Empirical copula class:", class(phase1_result$empirical_copula), "\n")
+      cat(
+        "    - Empirical copula class:",
+        class(phase1_result$empirical_copula),
+        "\n"
+      )
     }
-    
+
     if (!is.null(phase1_result$best_fit_copula)) {
-      cat("    - Best-fit copula class:", class(phase1_result$best_fit_copula), "\n")
+      cat(
+        "    - Best-fit copula class:",
+        class(phase1_result$best_fit_copula),
+        "\n"
+      )
     }
   }
 } else {
@@ -108,7 +133,7 @@ cat("\nTEST 5: Testing condition ID parsing...\n")
 if (length(conditions) > 0) {
   test_condition <- conditions[1]
   parsed <- parse_condition_id(test_condition)
-  
+
   cat("  Condition:", test_condition, "\n")
   cat("  Parsed:\n")
   cat("    - Year prior:", parsed$year_prior, "\n")
@@ -128,18 +153,31 @@ cat("\nTEST 6: Creating canonical copula from manifest...\n")
 test_span <- 1
 test_content <- "MATHEMATICS"
 
-tryCatch({
-  canonical_cop <- create_canonical_copula(
-    test_span, 
-    test_content, 
-    canonical_data$canonical_params
-  )
-  cat("  ✓ Created canonical t-copula for", test_span, "year", test_content, "\n")
-  cat("    Class:", class(canonical_cop), "\n")
-  cat("    Parameters:", paste(names(canonical_cop@parameters), collapse = ", "), "\n")
-}, error = function(e) {
-  cat("  ✗ ERROR:", e$message, "\n")
-})
+tryCatch(
+  {
+    canonical_cop <- create_canonical_copula(
+      test_span,
+      test_content,
+      canonical_data$canonical_params
+    )
+    cat(
+      "  ✓ Created canonical t-copula for",
+      test_span,
+      "year",
+      test_content,
+      "\n"
+    )
+    cat("    Class:", class(canonical_cop), "\n")
+    cat(
+      "    Parameters:",
+      paste(names(canonical_cop@parameters), collapse = ", "),
+      "\n"
+    )
+  },
+  error = function(e) {
+    cat("  ✗ ERROR:", e$message, "\n")
+  }
+)
 
 ############################################################################
 ### TEST 7: Check sgpc_engine Availability
@@ -150,14 +188,14 @@ cat("\nTEST 7: Checking sgpc_engine availability...\n")
 if (file.exists("functions/sgpc_engine.R")) {
   source("functions/sgpc_engine.R")
   cat("  ✓ sgpc_engine.R loaded successfully\n")
-  
+
   # Test with sample data
   u <- runif(100, 0.01, 0.99)
   v <- runif(100, 0.01, 0.99)
-  
+
   test_cop <- normalCopula(param = 0.7)
   sgpc_test <- sgpc_engine(u, v, test_cop, scale = "percentile")
-  
+
   cat("  ✓ sgpc_engine() works (test output length:", length(sgpc_test), ")\n")
 } else {
   cat("  ✗ sgpc_engine.R not found\n")

@@ -1,0 +1,46 @@
+%%%%
+%%%% step3_infographic_panel_c.tex - Standalone Panel C PDF for colleagues
+%%%%
+%%%% Contains: title, Panel C graphic, Panel C text. No footnotes.
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.5in,paperheight=9.8in,margin=0in]{geometry}
+\usepackage{graphicx}
+\usepackage[svgnames]{xcolor}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+%% --- Title block (from header band wording) ---
+\noindent
+\hspace{0.25in}%
+\parbox{4.0in}{%
+  \vspace{0.20in}
+  {\large\bfseries C. Recover inferred latent SGPc density
+    $\symbf{P_S} \symbf{\sim} \symbf{\GShat}$}
+
+  \vspace{0.04in}
+  {\normalsize\color{subtitleGrey}%
+    Report density/summary: $\mathrm{mean}\,\SGPc = 100\hat{m}$}%
+  \vspace{0.15in}
+}
+
+%% --- Graphic ---
+\noindent
+\hspace{0.25in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_C_graphic.pdf}%
+
+\vspace{0.10in}
+
+%% --- Text panel ---
+\noindent
+\hspace{0.25in}%
+\begin{minipage}[t]{3.85in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_C_text.pdf}%
+\end{minipage}%
+
+\end{document}

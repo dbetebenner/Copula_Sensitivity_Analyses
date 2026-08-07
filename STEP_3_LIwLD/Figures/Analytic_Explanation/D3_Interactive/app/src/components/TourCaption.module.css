@@ -1,0 +1,125 @@
+/* TourCaption — narration strip pinned to the bottom of the cross frame.
+   Shown only in Tour mode.  Cross-fades between steps. */
+
+/*
+ * The caption lives in the cross's BOTTOM-RIGHT empty corner — the grid
+ * cell at row 3, column 3 (which is unused because Panel #4 sits in row 3,
+ * column 2).  Anchoring there keeps the caption from overlapping any of the
+ * five panels and gives it a contained "quote bubble" footprint rather than
+ * a horizon-spanning bar competing with the data for attention.
+ *
+ * The caption is intentionally theme-INDEPENDENT: it must stay legible
+ * regardless of how the host has restyled the rest of the app (translucent
+ * panels, a warm slide canvas, parent overrides of theme tokens, etc.).
+ * So we hardcode its colors instead of reaching through the token chain.
+ */
+.caption {
+  position: absolute;
+  right: var(--p-space-4);
+  bottom: var(--p-space-4);
+  width: 380px;
+  max-width: calc(100% - 2 * var(--p-space-4));
+  /* Don't allow the caption to grow taller than ~half the cross — captions
+     are short paragraphs by design, but the cap is here as a safeguard. */
+  max-height: 50%;
+  z-index: 5;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--p-space-2);
+
+  padding: var(--p-space-3) var(--p-space-4);
+  background: rgb(15, 23, 42);            /* solid slate-900 — opaque so embed-mode translucency on the panel layer doesn't leak through */
+  color: #f8fafc;                         /* hardcoded slate-50 for guaranteed contrast */
+  border-radius: var(--e-radius);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.32);
+
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--p-space-3);
+}
+
+.playBtn {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--e-handle);
+  color: #1c1917;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 120ms var(--e-ease);
+}
+.playBtn:hover { transform: scale(1.06); }
+.playBtn:active { transform: scale(0.96); }
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dot {
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  padding: 0;
+  transition: background 120ms var(--e-ease), transform 120ms var(--e-ease);
+}
+.dot:hover { background: rgba(255, 255, 255, 0.5); }
+.dotActive {
+  background: var(--e-handle);
+  transform: scale(1.25);
+}
+
+.body {
+  margin: 0;
+  font-size: var(--p-text-base);
+  line-height: 1.45;
+  color: #f8fafc;                         /* hardcoded — see note on .caption */
+  opacity: 1;
+  transition: opacity 180ms var(--e-ease);
+}
+.bodyFading {
+  opacity: 0;
+}
+
+/* Embed mode (~1280×720): same bottom-right corner, slightly tighter. */
+@media (max-width: 1280px) and (max-height: 720px) {
+  .caption {
+    width: 320px;
+    right: var(--p-space-3);
+    bottom: var(--p-space-3);
+    padding: var(--p-space-2) var(--p-space-3);
+  }
+  .body {
+    font-size: var(--p-text-sm);
+  }
+}
+
+/* Mobile linear stack: no "corner" available, revert to full-width strip
+   pinned along the bottom of the viewport. */
+@media (max-width: 767px) {
+  .caption {
+    left: var(--p-space-3);
+    right: var(--p-space-3);
+    bottom: var(--p-space-3);
+    width: auto;
+    max-width: none;
+    max-height: none;
+  }
+}

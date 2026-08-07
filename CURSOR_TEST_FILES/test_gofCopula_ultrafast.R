@@ -10,22 +10,30 @@ cat("====================================================================\n\n")
 
 # Check gofCopula package version
 if (!requireNamespace("gofCopula", quietly = TRUE)) {
-  stop("\n\nERROR: gofCopula package not installed!\n",
-       "Please install from your local fork:\n",
-       "  devtools::install('~/GitHub/DBetebenner/gofCopula/main')\n\n")
+  stop(
+    "\n\nERROR: gofCopula package not installed!\n",
+    "Please install from your local fork:\n",
+    "  devtools::install('~/GitHub/DBetebenner/gofCopula/main')\n\n"
+  )
 }
 
 gofCopula_version <- packageVersion("gofCopula")
 required_version <- "0.4.4"
 
 if (gofCopula_version < required_version) {
-  stop("\n\nERROR: gofCopula version too old!\n",
-       "  Found: ", as.character(gofCopula_version), "\n",
-       "  Required: >= ", required_version, "\n",
-       "  This version has the t-copula parameter boundary bug.\n\n",
-       "Please rebuild the fixed package:\n",
-       "  cd ~/GitHub/DBetebenner/gofCopula/main\n",
-       "  R CMD INSTALL .\n\n")
+  stop(
+    "\n\nERROR: gofCopula version too old!\n",
+    "  Found: ",
+    as.character(gofCopula_version),
+    "\n",
+    "  Required: >= ",
+    required_version,
+    "\n",
+    "  This version has the t-copula parameter boundary bug.\n\n",
+    "Please rebuild the fixed package:\n",
+    "  cd ~/GitHub/DBetebenner/gofCopula/main\n",
+    "  R CMD INSTALL .\n\n"
+  )
 }
 
 cat("Package Version Check:\n")
@@ -94,7 +102,13 @@ elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
 cat("\n====================================================================\n")
 cat("RESULTS\n")
 cat("====================================================================\n")
-cat("Total time:", round(elapsed, 1), "seconds (", round(elapsed/60, 2), "minutes)\n\n")
+cat(
+  "Total time:",
+  round(elapsed, 1),
+  "seconds (",
+  round(elapsed / 60, 2),
+  "minutes)\n\n"
+)
 
 # Extract and display results
 pvalues <- sapply(fit_results$results, function(x) x$gof_pvalue)
@@ -157,15 +171,30 @@ cat("Estimated runtime for full analysis:\n")
 cat("  21 conditions (dataset 2) × 5 families:\n")
 cat("    M=10:   ", round(elapsed * 21 / 60, 1), "minutes\n")
 cat("    M=100:  ", round(elapsed * 21 * 10 / 60, 1), "minutes\n")
-cat("    M=1000: ", round(elapsed * 21 * 100 / 60, 1), "minutes (", 
-    round(elapsed * 21 * 100 / 3600, 1), "hours)\n\n")
+cat(
+  "    M=1000: ",
+  round(elapsed * 21 * 100 / 60, 1),
+  "minutes (",
+  round(elapsed * 21 * 100 / 3600, 1),
+  "hours)\n\n"
+)
 
 cat("  129 conditions (all datasets) × 5 families:\n")
 cat("    M=10:   ", round(elapsed * 129 / 60, 1), "minutes\n")
-cat("    M=100:  ", round(elapsed * 129 * 10 / 60, 1), "minutes (", 
-    round(elapsed * 129 * 10 / 3600, 1), "hours)\n")
-cat("    M=1000: ", round(elapsed * 129 * 100 / 60, 1), "minutes (", 
-    round(elapsed * 129 * 100 / 3600, 1), "hours)\n\n")
+cat(
+  "    M=100:  ",
+  round(elapsed * 129 * 10 / 60, 1),
+  "minutes (",
+  round(elapsed * 129 * 10 / 3600, 1),
+  "hours)\n"
+)
+cat(
+  "    M=1000: ",
+  round(elapsed * 129 * 100 / 60, 1),
+  "minutes (",
+  round(elapsed * 129 * 100 / 3600, 1),
+  "hours)\n\n"
+)
 
 cat("====================================================================\n")
 cat("FINAL VERDICT\n")
@@ -178,11 +207,13 @@ if (n_unique_pvals >= 4 && all_have_pvals && all_use_gofCopula) {
   cat("1. Scale up to M=1000 for production\n")
   cat("2. Run full analysis on all 129 conditions\n")
   cat("3. Address comonotonic copula separately (if needed for paper)\n")
-  cat("4. Expected production runtime: ~", round(elapsed * 129 * 100 / 3600, 1), 
-      "hours for M=1000\n\n")
+  cat(
+    "4. Expected production runtime: ~",
+    round(elapsed * 129 * 100 / 3600, 1),
+    "hours for M=1000\n\n"
+  )
 } else {
   cat("✗ ISSUES DETECTED\n\n")
   cat("Review the results above to diagnose problems.\n")
   cat("Do not proceed to M=1000 until these are resolved.\n\n")
 }
-

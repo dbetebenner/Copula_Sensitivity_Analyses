@@ -35,10 +35,15 @@ if (!file.exists(dataset_file)) {
     paste0(test_dataset, ".rda")
   )
   dataset_file <- alt_paths[file.exists(alt_paths)][1]
-  
+
   if (is.na(dataset_file)) {
-    stop("Test dataset not found. Tried:\n  ", 
-         paste(c(file.path("SGP", paste0(test_dataset, ".Rdata")), alt_paths), collapse = "\n  "))
+    stop(
+      "Test dataset not found. Tried:\n  ",
+      paste(
+        c(file.path("SGP", paste0(test_dataset, ".Rdata")), alt_paths),
+        collapse = "\n  "
+      )
+    )
   }
 }
 
@@ -68,8 +73,15 @@ cat("Testing with condition:", test_condition, "\n\n")
 cond_meta <- parse_condition_id(test_condition)
 cat("Condition metadata:\n")
 cat("  Year:", cond_meta$year_prior, "\n")
-cat("  Grade span:", cond_meta$grade_prior, "->", cond_meta$grade_current, 
-    "(", cond_meta$year_span, "year)\n")
+cat(
+  "  Grade span:",
+  cond_meta$grade_prior,
+  "->",
+  cond_meta$grade_current,
+  "(",
+  cond_meta$year_span,
+  "year)\n"
+)
 cat("  Content:", cond_meta$content_area, "\n\n")
 
 # Load Phase 1 results
@@ -114,9 +126,19 @@ cat("Computing SGPc variants...\n")
 
 # 1. Empirical
 if (!is.null(phase1_results$empirical_copula)) {
-  sgpc_emp <- sgpc_engine(u, v, phase1_results$empirical_copula, scale = "percentile")
-  cat("  ✓ SGPc_emp computed (range:", min(sgpc_emp, na.rm = TRUE), "-", 
-      max(sgpc_emp, na.rm = TRUE), ")\n")
+  sgpc_emp <- sgpc_engine(
+    u,
+    v,
+    phase1_results$empirical_copula,
+    scale = "percentile"
+  )
+  cat(
+    "  ✓ SGPc_emp computed (range:",
+    min(sgpc_emp, na.rm = TRUE),
+    "-",
+    max(sgpc_emp, na.rm = TRUE),
+    ")\n"
+  )
 } else {
   # Create on-the-fly
   emp_cop <- empCopula(cbind(u, v), smoothing = "beta")
@@ -126,14 +148,23 @@ if (!is.null(phase1_results$empirical_copula)) {
 
 # 2. Best-fit parametric
 if (!is.null(phase1_results$best_fit_copula)) {
-  sgpc_best <- sgpc_engine(u, v, phase1_results$best_fit_copula, scale = "percentile")
+  sgpc_best <- sgpc_engine(
+    u,
+    v,
+    phase1_results$best_fit_copula,
+    scale = "percentile"
+  )
   cat("  ✓ SGPc_best computed\n")
 } else {
   cat("  ⚠ SGPc_best: No best-fit copula available\n")
 }
 
 # 3. Canonical averaged
-canonical_cop <- create_canonical_copula(cond_meta$year_span, cond_meta$content_area, canonical_params)
+canonical_cop <- create_canonical_copula(
+  cond_meta$year_span,
+  cond_meta$content_area,
+  canonical_params
+)
 sgpc_avg <- sgpc_engine(u, v, canonical_cop, scale = "percentile")
 cat("  ✓ SGPc_avg computed (canonical t-copula)\n")
 
@@ -154,15 +185,27 @@ cat("  ✓ SGPc_comonotonic computed\n\n")
 cat("Comparing variants:\n")
 cat("  Empirical vs Canonical:\n")
 cat("    Correlation: r =", round(cor(sgpc_emp, sgpc_avg), 3), "\n")
-cat("    MAD:", round(mean(abs(sgpc_emp - sgpc_avg)), 2), "percentile points\n\n")
+cat(
+  "    MAD:",
+  round(mean(abs(sgpc_emp - sgpc_avg)), 2),
+  "percentile points\n\n"
+)
 
 cat("  Empirical vs Gaussian:\n")
 cat("    Correlation: r =", round(cor(sgpc_emp, sgpc_gaussian), 3), "\n")
-cat("    MAD:", round(mean(abs(sgpc_emp - sgpc_gaussian)), 2), "percentile points\n\n")
+cat(
+  "    MAD:",
+  round(mean(abs(sgpc_emp - sgpc_gaussian)), 2),
+  "percentile points\n\n"
+)
 
 cat("  Empirical vs Comonotonic:\n")
 cat("    Correlation: r =", round(cor(sgpc_emp, sgpc_comon), 3), "\n")
-cat("    MAD:", round(mean(abs(sgpc_emp - sgpc_comon)), 2), "percentile points\n\n")
+cat(
+  "    MAD:",
+  round(mean(abs(sgpc_emp - sgpc_comon)), 2),
+  "percentile points\n\n"
+)
 
 ############################################################################
 ### SUMMARY
@@ -179,4 +222,6 @@ cat("  - SGPc variants can be computed\n")
 cat("  - Comparisons are meaningful\n\n")
 
 cat("Ready to run full analysis on all datasets.\n")
-cat("Estimated runtime per dataset: 30-90 minutes (depending on parallel mode)\n\n")
+cat(
+  "Estimated runtime per dataset: 30-90 minutes (depending on parallel mode)\n\n"
+)

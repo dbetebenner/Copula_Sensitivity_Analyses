@@ -92,7 +92,9 @@ source(file.path(STEP3_ROOT, "config_step3.R"))
 # Apply runtime overrides (set STEP3_CONFIG_OVERRIDES before sourcing this script)
 if (exists("STEP3_CONFIG_OVERRIDES") && is.list(STEP3_CONFIG_OVERRIDES)) {
   for (.sec in names(STEP3_CONFIG_OVERRIDES)) {
-    if (is.list(STEP3_CONFIG_OVERRIDES[[.sec]]) && is.list(STEP3_CONFIG[[.sec]])) {
+    if (
+      is.list(STEP3_CONFIG_OVERRIDES[[.sec]]) && is.list(STEP3_CONFIG[[.sec]])
+    ) {
       for (.key in names(STEP3_CONFIG_OVERRIDES[[.sec]])) {
         STEP3_CONFIG[[.sec]][[.key]] <- STEP3_CONFIG_OVERRIDES[[.sec]][[.key]]
       }
@@ -109,17 +111,24 @@ source(file.path(PROJECT_ROOT, "dataset_configs.R"))
 
 # Create results directory
 RESULTS_DIR <- file.path(STEP3_ROOT, "results")
-if (!dir.exists(RESULTS_DIR)) dir.create(RESULTS_DIR, recursive = TRUE)
+if (!dir.exists(RESULTS_DIR)) {
+  dir.create(RESULTS_DIR, recursive = TRUE)
+}
 
 VIZ_DIR <- file.path(RESULTS_DIR, "visualizations")
-if (!dir.exists(VIZ_DIR)) dir.create(VIZ_DIR, recursive = TRUE)
+if (!dir.exists(VIZ_DIR)) {
+  dir.create(VIZ_DIR, recursive = TRUE)
+}
 
 # Set seed
 set.seed(STEP3_CONFIG$seed)
 
 # Export run metadata
-export_run_metadata(STEP3_CONFIG, output_dir = RESULTS_DIR,
-                    seed = STEP3_CONFIG$seed)
+export_run_metadata(
+  STEP3_CONFIG,
+  output_dir = RESULTS_DIR,
+  seed = STEP3_CONFIG$seed
+)
 
 # Runtime methodology snapshot for uncertainty decomposition and reproducibility
 unc_method_path <- file.path(RESULTS_DIR, "uncertainty_methodology.md")
@@ -131,7 +140,10 @@ unc_lines <- c(
   "## Sampling uncertainty",
   paste0("- resample_scheme: `", STEP3_CONFIG$uncertainty$resample_scheme, "`"),
   paste0("- n_bootstrap: ", STEP3_CONFIG$uncertainty$n_bootstrap),
-  paste0("- bootstrap_grid_resolution: ", STEP3_CONFIG$uncertainty$bootstrap_grid_resolution),
+  paste0(
+    "- bootstrap_grid_resolution: ",
+    STEP3_CONFIG$uncertainty$bootstrap_grid_resolution
+  ),
   "",
   "## Copula uncertainty",
   paste0("- n_copula_draws: ", STEP3_CONFIG$uncertainty$n_copula_draws),
@@ -140,7 +152,10 @@ unc_lines <- c(
   "",
   "## Regime families",
   paste0("- primary_family: ", STEP3_CONFIG$regime$primary_family),
-  paste0("- sensitivity_families: ", paste(STEP3_CONFIG$regime$sensitivity_families, collapse = ", ")),
+  paste0(
+    "- sensitivity_families: ",
+    paste(STEP3_CONFIG$regime$sensitivity_families, collapse = ", ")
+  ),
   "",
   "## Assumption diagnostics",
   paste0("- independence test: ", STEP3_CONFIG$assumptions$independence$test),
@@ -160,77 +175,119 @@ daemons_live <- FALSE
 if (isTRUE(STEP3_CONFIG$validation$use_mirai)) {
   mirai_available <- requireNamespace("mirai", quietly = TRUE)
   if (!mirai_available) {
-    cat("WARNING: use_mirai=TRUE but `mirai` package not available; bootstrap will run sequentially.\n\n")
+    cat(
+      "WARNING: use_mirai=TRUE but `mirai` package not available; bootstrap will run sequentially.\n\n"
+    )
   } else {
     n_cores_total <- parallel::detectCores(logical = TRUE)
     n_workers_cfg <- STEP3_CONFIG$validation$n_workers
-    if (!is.null(n_workers_cfg) && is.finite(as.integer(n_workers_cfg)) &&
-        as.integer(n_workers_cfg) >= 2L) {
+    if (
+      !is.null(n_workers_cfg) &&
+        is.finite(as.integer(n_workers_cfg)) &&
+        as.integer(n_workers_cfg) >= 2L
+    ) {
       n_workers <- as.integer(n_workers_cfg)
     } else {
-      n_workers <- max(2L, if (n_cores_total <= 48L) n_cores_total - 2L
-                           else n_cores_total - 4L)
+      n_workers <- max(
+        2L,
+        if (n_cores_total <= 48L) {
+          n_cores_total - 2L
+        } else {
+          n_cores_total - 4L
+        }
+      )
     }
 
-    cat("Initialising ", n_workers, " mirai daemons (",
-        n_cores_total, " CPUs available)...\n", sep = "")
+    cat(
+      "Initialising ",
+      n_workers,
+      " mirai daemons (",
+      n_cores_total,
+      " CPUs available)...\n",
+      sep = ""
+    )
 
-    daemon_ok <- tryCatch({
-      mirai::daemons(n = n_workers, output = TRUE, retry = FALSE)
-      TRUE
-    }, error = function(e) {
-      cat("  WARNING: daemon creation failed: ", e$message, "\n")
-      FALSE
-    })
+    daemon_ok <- tryCatch(
+      {
+        mirai::daemons(n = n_workers, output = TRUE, retry = FALSE)
+        TRUE
+      },
+      error = function(e) {
+        cat("  WARNING: daemon creation failed: ", e$message, "\n")
+        FALSE
+      }
+    )
 
     if (daemon_ok) {
-      STEP3_ROOT_ABS   <- normalizePath(STEP3_ROOT, mustWork = TRUE)
+      STEP3_ROOT_ABS <- normalizePath(STEP3_ROOT, mustWork = TRUE)
       PROJECT_ROOT_ABS <- normalizePath(PROJECT_ROOT, mustWork = TRUE)
 
-      init_ok <- tryCatch({
-        init_push <- mirai::everywhere({
-          tryCatch(setwd(proj_root_push), error = function(e) NULL)
-          suppressPackageStartupMessages({
-            library(data.table)
-            library(copula)
-          })
-          data.table::setDTthreads(1L)
-          Sys.setenv(
-            OMP_NUM_THREADS        = "1",
-            MKL_NUM_THREADS        = "1",
-            OPENBLAS_NUM_THREADS   = "1",
-            VECLIB_MAXIMUM_THREADS = "1",
-            NUMEXPR_NUM_THREADS    = "1"
+      init_ok <- tryCatch(
+        {
+          init_push <- mirai::everywhere(
+            {
+              tryCatch(setwd(proj_root_push), error = function(e) NULL)
+              suppressPackageStartupMessages({
+                library(data.table)
+                library(copula)
+              })
+              data.table::setDTthreads(1L)
+              Sys.setenv(
+                OMP_NUM_THREADS = "1",
+                MKL_NUM_THREADS = "1",
+                OPENBLAS_NUM_THREADS = "1",
+                VECLIB_MAXIMUM_THREADS = "1",
+                NUMEXPR_NUM_THREADS = "1"
+              )
+              for (ff in c(
+                file.path(proj_root_push, "functions/sgpc_engine.R"),
+                file.path(s3_root_push, "functions/reference_marginals.R"),
+                file.path(s3_root_push, "functions/copula_kernel_cache.R"),
+                file.path(s3_root_push, "functions/regime_families.R"),
+                file.path(s3_root_push, "functions/predict_v_cdf.R"),
+                file.path(s3_root_push, "functions/distance_metrics.R"),
+                file.path(s3_root_push, "functions/optimize_regime.R"),
+                file.path(
+                  s3_root_push,
+                  "functions/optimize_regime_stratified.R"
+                )
+              )) {
+                tryCatch(source(ff), error = function(e) {
+                  cat(
+                    "[DAEMON",
+                    Sys.getpid(),
+                    "] ERROR sourcing",
+                    ff,
+                    ":",
+                    conditionMessage(e),
+                    "\n"
+                  )
+                  stop(e)
+                })
+              }
+              TRUE
+            },
+            proj_root_push = PROJECT_ROOT_ABS,
+            s3_root_push = STEP3_ROOT_ABS
           )
-          for (ff in c(
-            file.path(proj_root_push, "functions/sgpc_engine.R"),
-            file.path(s3_root_push,   "functions/reference_marginals.R"),
-            file.path(s3_root_push,   "functions/copula_kernel_cache.R"),
-            file.path(s3_root_push,   "functions/regime_families.R"),
-            file.path(s3_root_push,   "functions/predict_v_cdf.R"),
-            file.path(s3_root_push,   "functions/distance_metrics.R"),
-            file.path(s3_root_push,   "functions/optimize_regime.R"),
-            file.path(s3_root_push,   "functions/optimize_regime_stratified.R")
-          )) {
-            tryCatch(source(ff), error = function(e) {
-              cat("[DAEMON", Sys.getpid(), "] ERROR sourcing", ff, ":",
-                  conditionMessage(e), "\n")
-              stop(e)
-            })
-          }
-          TRUE
-        },
-        proj_root_push = PROJECT_ROOT_ABS,
-        s3_root_push   = STEP3_ROOT_ABS)
 
-        init_vals <- init_push[]
-        n_ok <- sum(vapply(init_vals, isTRUE, logical(1)))
-        cat("  Daemons initialised: ", n_ok, "/", n_workers, " ready\n", sep = "")
-        n_ok == n_workers
-      }, error = function(e) {
-        cat("  WARNING: daemon init failed: ", e$message, "\n")
-        FALSE
-      })
+          init_vals <- init_push[]
+          n_ok <- sum(vapply(init_vals, isTRUE, logical(1)))
+          cat(
+            "  Daemons initialised: ",
+            n_ok,
+            "/",
+            n_workers,
+            " ready\n",
+            sep = ""
+          )
+          n_ok == n_workers
+        },
+        error = function(e) {
+          cat("  WARNING: daemon init failed: ", e$message, "\n")
+          FALSE
+        }
+      )
 
       if (isTRUE(init_ok)) {
         daemons_live <- TRUE
@@ -251,12 +308,18 @@ cat("PHASE A: Deep Validation\n")
 cat("====================================================================\n\n")
 
 if (!exists("STEP3_PHASE_A") || STEP3_PHASE_A) {
-  tryCatch({
-    source(file.path(STEP3_ROOT, "step3_validation_deep_dive.R"), local = FALSE)
-  }, error = function(e) {
-    cat("ERROR in Phase A: ", e$message, "\n")
-    cat("Continuing to Phase B...\n\n")
-  })
+  tryCatch(
+    {
+      source(
+        file.path(STEP3_ROOT, "step3_validation_deep_dive.R"),
+        local = FALSE
+      )
+    },
+    error = function(e) {
+      cat("ERROR in Phase A: ", e$message, "\n")
+      cat("Continuing to Phase B...\n\n")
+    }
+  )
 } else {
   cat("Phase A skipped (STEP3_PHASE_A = FALSE)\n\n")
 }
@@ -270,12 +333,18 @@ cat("PHASE B: Systematic Validation\n")
 cat("====================================================================\n\n")
 
 if (!exists("STEP3_PHASE_B") || STEP3_PHASE_B) {
-  tryCatch({
-    source(file.path(STEP3_ROOT, "step3_systematic_validation.R"), local = FALSE)
-  }, error = function(e) {
-    cat("ERROR in Phase B: ", e$message, "\n")
-    cat("Continuing to Phase C...\n\n")
-  })
+  tryCatch(
+    {
+      source(
+        file.path(STEP3_ROOT, "step3_systematic_validation.R"),
+        local = FALSE
+      )
+    },
+    error = function(e) {
+      cat("ERROR in Phase B: ", e$message, "\n")
+      cat("Continuing to Phase C...\n\n")
+    }
+  )
 } else {
   cat("Phase B skipped (STEP3_PHASE_B = FALSE)\n\n")
 }
@@ -289,12 +358,15 @@ cat("PHASE B DEEP-DIVE: Single-Target Validation\n")
 cat("====================================================================\n\n")
 
 if (isTRUE(STEP3_PHASE_B_DEEP_DIVE %||% FALSE)) {
-  tryCatch({
-    source(file.path(STEP3_ROOT, "step3_phaseb_deep_dive.R"), local = FALSE)
-  }, error = function(e) {
-    cat("ERROR in Phase B Deep-Dive: ", e$message, "\n")
-    cat("Continuing to Phase C...\n\n")
-  })
+  tryCatch(
+    {
+      source(file.path(STEP3_ROOT, "step3_phaseb_deep_dive.R"), local = FALSE)
+    },
+    error = function(e) {
+      cat("ERROR in Phase B Deep-Dive: ", e$message, "\n")
+      cat("Continuing to Phase C...\n\n")
+    }
+  )
 } else {
   cat("Phase B deep-dive skipped (STEP3_PHASE_B_DEEP_DIVE not TRUE)\n\n")
 }
@@ -308,11 +380,14 @@ cat("PHASE C: Publication Panels and Manifest Export\n")
 cat("====================================================================\n\n")
 
 if (!exists("STEP3_PHASE_C") || STEP3_PHASE_C) {
-  tryCatch({
-    source(file.path(STEP3_ROOT, "step3_publication_panels.R"), local = FALSE)
-  }, error = function(e) {
-    cat("ERROR in Phase C: ", e$message, "\n")
-  })
+  tryCatch(
+    {
+      source(file.path(STEP3_ROOT, "step3_publication_panels.R"), local = FALSE)
+    },
+    error = function(e) {
+      cat("ERROR in Phase C: ", e$message, "\n")
+    }
+  )
 } else {
   cat("Phase C skipped (STEP3_PHASE_C = FALSE)\n\n")
 }

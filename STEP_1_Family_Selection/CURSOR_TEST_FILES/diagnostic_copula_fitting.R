@@ -9,7 +9,9 @@ require(splines2)
 
 # Load Colorado data if not already loaded
 if (!exists("Colorado_Data_LONG")) {
-  load("/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData")
+  load(
+    "/Users/conet/SGP Dropbox/Damian Betebenner/Colorado/Data/Archive/February_2016/Colorado_Data_LONG.RData"
+  )
   Colorado_Data_LONG <- as.data.table(Colorado_Data_LONG)
 }
 
@@ -58,26 +60,53 @@ pdf("diagnostic_pseudo_obs.pdf", width = 8, height = 8)
 par(mfrow = c(2, 2))
 
 # Main scatter plot
-plot(U, V, pch = 20, cex = 0.3, col = rgb(0, 0, 0, 0.3),
-     main = "Pseudo-Observations (U,V)",
-     xlab = "U (Prior)", ylab = "V (Current)")
+plot(
+  U,
+  V,
+  pch = 20,
+  cex = 0.3,
+  col = rgb(0, 0, 0, 0.3),
+  main = "Pseudo-Observations (U,V)",
+  xlab = "U (Prior)",
+  ylab = "V (Current)"
+)
 abline(0, 1, col = "red", lty = 2)
 grid()
 
 # Marginal histograms
-hist(U, breaks = 50, main = "Marginal: U (Prior)", 
-     xlab = "U", col = "lightblue", border = "white")
+hist(
+  U,
+  breaks = 50,
+  main = "Marginal: U (Prior)",
+  xlab = "U",
+  col = "lightblue",
+  border = "white"
+)
 abline(v = c(0, 1), col = "red", lty = 2)
 
-hist(V, breaks = 50, main = "Marginal: V (Current)", 
-     xlab = "V", col = "lightgreen", border = "white")
+hist(
+  V,
+  breaks = 50,
+  main = "Marginal: V (Current)",
+  xlab = "V",
+  col = "lightgreen",
+  border = "white"
+)
 abline(v = c(0, 1), col = "red", lty = 2)
 
 # Tail concentration
-plot(U, V, pch = 20, cex = 0.5, col = rgb(0, 0, 0, 0.5),
-     xlim = c(0, 0.2), ylim = c(0, 0.2),
-     main = "Lower Tail (Zoom)",
-     xlab = "U (Prior)", ylab = "V (Current)")
+plot(
+  U,
+  V,
+  pch = 20,
+  cex = 0.5,
+  col = rgb(0, 0, 0, 0.5),
+  xlim = c(0, 0.2),
+  ylim = c(0, 0.2),
+  main = "Lower Tail (Zoom)",
+  xlab = "U (Prior)",
+  ylab = "V (Current)"
+)
 abline(0, 1, col = "red", lty = 2)
 grid()
 
@@ -109,8 +138,11 @@ cop_frank <- frankCopula(dim = 2)
 fit_frank <- fitCopula(cop_frank, pseudo_obs, method = "ml")
 cat("  Parameter (theta):", fit_frank@estimate, "\n")
 cat("  Kendall's tau (tau(copula)):", tau(fit_frank@copula), "\n")
-cat("  Kendall's tau (from theta formula):", 
-    1 - 4/fit_frank@estimate * (1 - copula::debye1(fit_frank@estimate)), "\n")
+cat(
+  "  Kendall's tau (from theta formula):",
+  1 - 4 / fit_frank@estimate * (1 - copula::debye1(fit_frank@estimate)),
+  "\n"
+)
 cat("  Log-likelihood:", fit_frank@loglik, "\n")
 cat("  AIC:", -2 * fit_frank@loglik + 2, "\n\n")
 
@@ -128,7 +160,11 @@ cop_clay <- claytonCopula(dim = 2)
 fit_clay <- fitCopula(cop_clay, pseudo_obs, method = "ml")
 cat("  Parameter (theta):", fit_clay@estimate, "\n")
 cat("  Kendall's tau (tau(copula)):", tau(fit_clay@copula), "\n")
-cat("  Kendall's tau (from formula):", fit_clay@estimate / (fit_clay@estimate + 2), "\n")
+cat(
+  "  Kendall's tau (from formula):",
+  fit_clay@estimate / (fit_clay@estimate + 2),
+  "\n"
+)
 cat("  Log-likelihood:", fit_clay@loglik, "\n")
 cat("  AIC:", -2 * fit_clay@loglik + 2, "\n\n")
 
@@ -137,7 +173,7 @@ cop_gumb <- gumbelCopula(dim = 2)
 fit_gumb <- fitCopula(cop_gumb, pseudo_obs, method = "ml")
 cat("  Parameter (theta):", fit_gumb@estimate, "\n")
 cat("  Kendall's tau (tau(copula)):", tau(fit_gumb@copula), "\n")
-cat("  Kendall's tau (from formula):", 1 - 1/fit_gumb@estimate, "\n")
+cat("  Kendall's tau (from formula):", 1 - 1 / fit_gumb@estimate, "\n")
 cat("  Log-likelihood:", fit_gumb@loglik, "\n")
 cat("  AIC:", -2 * fit_gumb@loglik + 2, "\n\n")
 
@@ -147,13 +183,27 @@ cat("====================================================================\n\n")
 
 results_compare <- data.frame(
   Family = c("Gaussian", "Frank", "t", "Clayton", "Gumbel"),
-  LogLik = c(fit_gauss@loglik, fit_frank@loglik, fit_t@loglik, 
-             fit_clay@loglik, fit_gumb@loglik),
-  AIC = c(-2*fit_gauss@loglik + 2, -2*fit_frank@loglik + 2, 
-          -2*fit_t@loglik + 4, -2*fit_clay@loglik + 2, 
-          -2*fit_gumb@loglik + 2),
-  Tau = c(tau(fit_gauss@copula), tau(fit_frank@copula), tau(fit_t@copula),
-          tau(fit_clay@copula), tau(fit_gumb@copula))
+  LogLik = c(
+    fit_gauss@loglik,
+    fit_frank@loglik,
+    fit_t@loglik,
+    fit_clay@loglik,
+    fit_gumb@loglik
+  ),
+  AIC = c(
+    -2 * fit_gauss@loglik + 2,
+    -2 * fit_frank@loglik + 2,
+    -2 * fit_t@loglik + 4,
+    -2 * fit_clay@loglik + 2,
+    -2 * fit_gumb@loglik + 2
+  ),
+  Tau = c(
+    tau(fit_gauss@copula),
+    tau(fit_frank@copula),
+    tau(fit_t@copula),
+    tau(fit_clay@copula),
+    tau(fit_gumb@copula)
+  )
 )
 
 results_compare$Delta_AIC <- results_compare$AIC - min(results_compare$AIC)
@@ -173,7 +223,9 @@ cat("Best family by AIC:", results_compare$Family[1], "\n")
 cat("Second best:", results_compare$Family[2], "\n")
 cat("Difference:", results_compare$Delta_AIC[2], "\n\n")
 
-if (results_compare$Family[1] == "Frank" && results_compare$Delta_AIC[2] > 1000) {
+if (
+  results_compare$Family[1] == "Frank" && results_compare$Delta_AIC[2] > 1000
+) {
   cat("⚠️  WARNING: Frank copula still dominating with large AIC advantage.\n")
   cat("    This suggests the bug fixes may not be working correctly.\n")
   cat("    Please review the copula fitting code.\n\n")
@@ -184,4 +236,3 @@ if (results_compare$Family[1] == "Frank" && results_compare$Delta_AIC[2] > 1000)
 cat("====================================================================\n")
 cat("DIAGNOSTIC COMPLETE\n")
 cat("====================================================================\n\n")
-

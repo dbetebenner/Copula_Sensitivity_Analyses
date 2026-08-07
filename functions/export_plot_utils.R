@@ -3,7 +3,7 @@
 # ==============================================================================
 #
 # Purpose:
-#   Simplify the workflow for exporting R plots to multiple formats (PDF, SVG, 
+#   Simplify the workflow for exporting R plots to multiple formats (PDF, SVG,
 #   PNG) with a single function call. This eliminates code duplication and makes
 #   it easy for AI assistants to generate multi-format exports.
 #
@@ -104,14 +104,13 @@ export_plot_multi_format <- function(
   verbose = TRUE,
   ...
 ) {
-  
   # Validate required packages
   validate_export_packages(formats)
-  
+
   # Validate formats
   valid_formats <- c("pdf", "svg", "png")
   formats <- match.arg(formats, valid_formats, several.ok = TRUE)
-  
+
   # Parse filename and build output paths
   file_info <- parse_filename_template(base_filename)
   output_paths <- build_output_paths(
@@ -120,91 +119,97 @@ export_plot_multi_format <- function(
     formats = formats,
     png_suffix = png_suffix
   )
-  
+
   # Prepare background setting
   if (bg_transparent) {
     bg_setting <- rgb(1, 1, 1, alpha = 0.0)
   } else {
     bg_setting <- bg_color
   }
-  
+
   # Export to each format
   for (fmt in formats) {
     if (verbose) {
       message(sprintf("Exporting to %s: %s", toupper(fmt), output_paths[[fmt]]))
     }
-    
+
     # Open the appropriate device
-    tryCatch({
-      
-      if (fmt == "pdf") {
-        pdf(
-          file = output_paths$pdf,
-          width = width,
-          height = height,
-          bg = bg_setting,
-          ...
-        )
-      } else if (fmt == "svg") {
-        # Check if svg_fonts should be passed
-        if (!is.null(svg_fonts)) {
-          svglite::svglite(
-            file = output_paths$svg,
+    tryCatch(
+      {
+        if (fmt == "pdf") {
+          pdf(
+            file = output_paths$pdf,
             width = width,
             height = height,
             bg = bg_setting,
-            system_fonts = svg_fonts,
             ...
           )
-        } else {
-          svglite::svglite(
-            file = output_paths$svg,
-            width = width,
-            height = height,
-            bg = bg_setting,
+        } else if (fmt == "svg") {
+          # Check if svg_fonts should be passed
+          if (!is.null(svg_fonts)) {
+            svglite::svglite(
+              file = output_paths$svg,
+              width = width,
+              height = height,
+              bg = bg_setting,
+              system_fonts = svg_fonts,
+              ...
+            )
+          } else {
+            svglite::svglite(
+              file = output_paths$svg,
+              width = width,
+              height = height,
+              bg = bg_setting,
+              ...
+            )
+          }
+        } else if (fmt == "png") {
+          # For units = "in", scale resolution not dimensions
+          # This ensures png_scale=2 produces 2x resolution, not 4x (scale²)
+          res_out <- png_res * png_scale
+
+          ragg::agg_png(
+            filename = output_paths$png,
+            width = width, # Keep in inches (not scaled)
+            height = height, # Keep in inches (not scaled)
+            units = "in",
+            res = res_out, # Scale via DPI only
+            background = bg_setting,
             ...
           )
         }
-      } else if (fmt == "png") {
-        # For units = "in", scale resolution not dimensions
-        # This ensures png_scale=2 produces 2x resolution, not 4x (scale²)
-        res_out <- png_res * png_scale
-        
-        ragg::agg_png(
-          filename = output_paths$png,
-          width = width,         # Keep in inches (not scaled)
-          height = height,       # Keep in inches (not scaled)
-          units = "in",
-          res = res_out,         # Scale via DPI only
-          background = bg_setting,
-          ...
-        )
+
+        # Execute the plot code
+        if (is.function(plot_expr)) {
+          plot_expr()
+        } else {
+          eval(plot_expr)
+        }
+
+        # Close the device
+        dev.off()
+      },
+      error = function(e) {
+        # Ensure device is closed even on error
+        if (dev.cur() > 1) {
+          dev.off()
+        }
+        stop(sprintf("Error exporting to %s: %s", fmt, e$message))
       }
-      
-      # Execute the plot code
-      if (is.function(plot_expr)) {
-        plot_expr()
-      } else {
-        eval(plot_expr)
-      }
-      
-      # Close the device
-      dev.off()
-      
-    }, error = function(e) {
-      # Ensure device is closed even on error
-      if (dev.cur() > 1) dev.off()
-      stop(sprintf("Error exporting to %s: %s", fmt, e$message))
-    })
+    )
   }
-  
+
   if (verbose) {
-    message(sprintf("\nSuccessfully exported to %d format(s):", length(formats)))
+    message(sprintf(
+      "\nSuccessfully exported to %d format(s):",
+      length(formats)
+    ))
     for (fmt in formats) {
       message(sprintf("  - %s", output_paths[[fmt]]))
     }
   }
-  
+
   # Return paths invisibly
   invisible(output_paths)
 }
@@ -283,24 +288,27 @@ export_ggplot_multi_format <- function(
   verbose = TRUE,
   ...
 ) {
-  
   # Validate that ggplot2 is available
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
-    stop("Package 'ggplot2' is required. Install with: install.packages('ggplot2')")
+    stop(
+      "Package 'ggplot2' is required. Install with: install.packages('ggplot2')"
+    )
   }
-  
+
   # Validate that plot_obj is a ggplot object
   if (!inherits(plot_obj, "ggplot")) {
-    stop("plot_obj must be a ggplot object. Use export_plot_multi_format() for base R plots.")
+    stop(
+      "plot_obj must be a ggplot object. Use export_plot_multi_format() for base R plots."
+    )
   }
-  
+
   # Validate required packages for requested formats
   validate_export_packages(formats)
-  
+
   # Validate formats
   valid_formats <- c("pdf", "svg", "png")
   formats <- match.arg(formats, valid_formats, several.ok = TRUE)
-  
+
   # Parse filename and build output paths
   file_info <- parse_filename_template(base_filename)
   output_paths <- build_output_paths(
@@ -309,57 +317,65 @@ export_ggplot_multi_format <- function(
     formats = formats,
     png_suffix = png_suffix
   )
-  
+
   # Export to each format
   for (fmt in formats) {
     if (verbose) {
-      message(sprintf("Exporting ggplot to %s: %s", toupper(fmt), output_paths[[fmt]]))
+      message(sprintf(
+        "Exporting ggplot to %s: %s",
+        toupper(fmt),
+        output_paths[[fmt]]
+      ))
     }
-    
-    tryCatch({
-      
-      if (fmt == "pdf") {
-        ggplot2::ggsave(
-          filename = output_paths$pdf,
-          plot = plot_obj,
-          width = width,
-          height = height,
-          device = "pdf",
-          ...
-        )
-      } else if (fmt == "svg") {
-        ggplot2::ggsave(
-          filename = output_paths$svg,
-          plot = plot_obj,
-          width = width,
-          height = height,
-          device = svglite::svglite,
-          bg = "transparent",
-          ...
-        )
-      } else if (fmt == "png") {
-        # For PNG: use scaled dimensions and high DPI
-        ggplot2::ggsave(
-          filename = output_paths$png,
-          plot = plot_obj,
-          width = width,
-          height = height,
-          units = "in",
-          dpi = dpi * png_scale,
-          device = ragg::agg_png,
-          ...
-        )
+
+    tryCatch(
+      {
+        if (fmt == "pdf") {
+          ggplot2::ggsave(
+            filename = output_paths$pdf,
+            plot = plot_obj,
+            width = width,
+            height = height,
+            device = "pdf",
+            ...
+          )
+        } else if (fmt == "svg") {
+          ggplot2::ggsave(
+            filename = output_paths$svg,
+            plot = plot_obj,
+            width = width,
+            height = height,
+            device = svglite::svglite,
+            bg = "transparent",
+            ...
+          )
+        } else if (fmt == "png") {
+          # For PNG: use scaled dimensions and high DPI
+          ggplot2::ggsave(
+            filename = output_paths$png,
+            plot = plot_obj,
+            width = width,
+            height = height,
+            units = "in",
+            dpi = dpi * png_scale,
+            device = ragg::agg_png,
+            ...
+          )
+        }
+      },
+      error = function(e) {
+        stop(sprintf("Error exporting ggplot to %s: %s", fmt, e$message))
       }
-      
-    }, error = function(e) {
-      stop(sprintf("Error exporting ggplot to %s: %s", fmt, e$message))
-    })
+    )
   }
-  
+
   if (verbose) {
-    message(sprintf("Successfully exported ggplot to %d format(s)", length(formats)))
+    message(sprintf(
+      "Successfully exported ggplot to %d format(s)",
+      length(formats)
+    ))
   }
-  
+
   # Return paths invisibly
   invisible(output_paths)
 }
@@ -373,15 +389,15 @@ export_ggplot_multi_format <- function(
 #' @keywords internal
 validate_export_packages <- function(formats) {
   missing_pkgs <- character(0)
-  
+
   if ("svg" %in% formats && !requireNamespace("svglite", quietly = TRUE)) {
     missing_pkgs <- c(missing_pkgs, "svglite")
   }
-  
+
   if ("png" %in% formats && !requireNamespace("ragg", quietly = TRUE)) {
     missing_pkgs <- c(missing_pkgs, "ragg")
   }
-  
+
   if (length(missing_pkgs) > 0) {
     stop(
       sprintf(
@@ -391,7 +407,7 @@ validate_export_packages <- function(formats) {
       )
     )
   }
-  
+
   invisible(TRUE)
 }
 
@@ -406,7 +422,7 @@ validate_export_packages <- function(formats) {
 parse_filename_template <- function(filename) {
   # Normalize path
   filename <- path.expand(filename)
-  
+
   # Check if it contains directory separators
   if (grepl("/", filename)) {
     dir_part <- dirname(filename)
@@ -415,10 +431,10 @@ parse_filename_template <- function(filename) {
     dir_part <- ""
     base_part <- filename
   }
-  
+
   # Remove any existing extension from basename
   base_part <- sub("\\.[a-zA-Z]+$", "", base_part)
-  
+
   list(dir = dir_part, base = base_part)
 }
 
@@ -435,7 +451,7 @@ parse_filename_template <- function(filename) {
 #' @keywords internal
 build_output_paths <- function(dir, base, formats, png_suffix = "@2x") {
   paths <- list()
-  
+
   # Helper to construct full path
   make_path <- function(filename) {
     if (dir == "") {
@@ -444,23 +460,22 @@ build_output_paths <- function(dir, base, formats, png_suffix = "@2x") {
       file.path(dir, filename)
     }
   }
-  
+
   # Build paths for each format
   if ("pdf" %in% formats) {
     paths$pdf <- make_path(paste0(base, ".pdf"))
   }
-  
+
   if ("svg" %in% formats) {
     paths$svg <- make_path(paste0(base, ".svg"))
   }
-  
+
   if ("png" %in% formats) {
     paths$png <- make_path(paste0(base, png_suffix, ".png"))
   }
-  
+
   paths
 }
-
 
 # ==============================================================================
 # Usage Examples
@@ -530,7 +545,7 @@ build_output_paths <- function(dir, base, formats, png_suffix = "@2x") {
 #   set.seed(42)
 #   x <- rnorm(100)
 #   y <- 2*x + rnorm(100, sd = 0.5)
-#   
+#
 #   plot(x, y, pch = 19, col = rgb(0, 0, 1, 0.5),
 #        main = "Scatter Plot with Regression",
 #        xlab = "Predictor", ylab = "Response")
@@ -549,4 +564,3 @@ build_output_paths <- function(dir, base, formats, png_suffix = "@2x") {
 # )
 #
 # ==============================================================================
-

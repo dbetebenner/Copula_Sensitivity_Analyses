@@ -1,0 +1,205 @@
+/* ====================================================================
+   tokens.css — three-tier design tokens for LIwLD Interactive.
+
+   Tier 1 — Primitive: raw values (greys, hues, sizes, durations).
+   Tier 2 — Semantic: role-based references to Tier 1.
+   Tier 3 — Ethical: cleared for contrast / motion / equity constraints.
+
+   All viz colors and motion durations come from Tier 3.  No component
+   should reach past Tier 3 to a Tier 1 primitive — that would bypass
+   the ethical CI gates we install in Phase 5.
+   ==================================================================== */
+
+:root {
+  /* ---------- Tier 1 — Primitive ---------- */
+
+  /* Neutrals (slate family) */
+  --p-slate-50:  #f8fafc;
+  --p-slate-100: #f1f5f9;
+  --p-slate-200: #e2e8f0;
+  --p-slate-300: #cbd5e1;
+  --p-slate-400: #94a3b8;
+  --p-slate-500: #64748b;
+  --p-slate-600: #475569;
+  --p-slate-700: #334155;
+  --p-slate-800: #1e293b;
+  --p-slate-900: #0f172a;
+
+  /* Subgroup teal (Zissou-anchor adjacent) */
+  --p-teal-300: #5eead4;
+  --p-teal-500: #14b8a6;
+  --p-teal-600: #0d9488;
+  --p-teal-700: #0f766e;
+  --p-teal-800: #115e59;
+
+  /* Handle amber (chromatically isolated against viridis-r) */
+  --p-amber-400: #fbbf24;
+  --p-amber-500: #f59e0b;
+  --p-amber-600: #d97706;
+
+  /* Wasserstein landscape — viridis reversed, 5 stops (interpolate elsewhere) */
+  --p-w1-near-0: #fde725;  /* furthest from minimum (worst W₁) */
+  --p-w1-near-1: #7ad151;
+  --p-w1-near-2: #22a884;
+  --p-w1-near-3: #2a788e;
+  --p-w1-near-4: #414487;
+  --p-w1-near-5: #440154;  /* the minimum (best W₁) */
+
+  /* Type scale */
+  --p-text-xs:   11px;
+  --p-text-sm:   13px;
+  --p-text-base: 14px;
+  --p-text-md:   16px;
+  --p-text-lg:   18px;
+  --p-text-xl:   22px;
+
+  /* Spacing scale (4-step) */
+  --p-space-1: 4px;
+  --p-space-2: 8px;
+  --p-space-3: 12px;
+  --p-space-4: 16px;
+  --p-space-5: 24px;
+  --p-space-6: 32px;
+  --p-space-7: 48px;
+
+  /* Motion */
+  --p-dur-instant: 0ms;
+  --p-dur-snap:    180ms;
+  --p-dur-morph:   480ms;
+  --p-dur-think:   240ms;
+
+  --p-ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --p-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Radii / strokes */
+  --p-radius-sm: 4px;
+  --p-radius-md: 8px;
+  --p-stroke-thin:  1px;
+  --p-stroke-base:  1.5px;
+  --p-stroke-bold:  2.5px;
+
+  /* ---------- Tier 2 — Semantic ---------- */
+
+  /* Surfaces */
+  --s-canvas:           var(--p-slate-50);
+  --s-panel:            #ffffff;
+  --s-panel-border:     var(--p-slate-200);
+  --s-panel-divider:    var(--p-slate-100);
+
+  /* Text */
+  --s-text-primary:    var(--p-slate-900);
+  --s-text-secondary:  var(--p-slate-600);
+  --s-text-tertiary:   var(--p-slate-400);
+  --s-text-inverse:    var(--p-slate-50);
+
+  /* Roles in the visualization */
+  --s-population-stroke: var(--p-slate-400);
+  --s-population-fill:   var(--p-slate-200);
+  --s-subgroup-observed: var(--p-teal-600);
+  --s-subgroup-induced:  var(--p-teal-500);
+  --s-subgroup-fill:     var(--p-teal-300);
+
+  /* Handle */
+  --s-handle-fill:    var(--p-amber-500);
+  --s-handle-stroke:  var(--p-slate-900);
+  --s-handle-shadow:  rgba(15, 23, 42, 0.30);
+
+  /* Wasserstein landscape (5 stops; sequential, viridis-reversed) */
+  --s-w1-stop-0: var(--p-w1-near-0);
+  --s-w1-stop-1: var(--p-w1-near-1);
+  --s-w1-stop-2: var(--p-w1-near-2);
+  --s-w1-stop-3: var(--p-w1-near-3);
+  --s-w1-stop-4: var(--p-w1-near-4);
+  --s-w1-stop-5: var(--p-w1-near-5);
+
+  /* Reference markers (argmin target, U(0,1) baseline) */
+  --s-marker-argmin:  var(--p-teal-700);
+  --s-marker-uniform: var(--p-slate-500);
+
+  /* W₁ shaded band (CDF-mode only) */
+  --s-w1-band-fill: rgba(20, 184, 166, 0.18);
+
+  /* ---------- Tier 3 — Ethical ---------- */
+  /*
+     These are the ONLY tokens components should reference.  Each has been
+     reviewed for AA contrast against the panel surface and for motion
+     dignity.  When promoted to dataimago-design, the ethical CI suite
+     enforces these as hard gates.
+  */
+
+  --e-bg:                 var(--s-canvas);
+  --e-bg-panel:           var(--s-panel);
+  --e-border-panel:       var(--s-panel-border);
+  --e-divider:            var(--s-panel-divider);
+
+  --e-text:               var(--s-text-primary);
+  --e-text-soft:          var(--s-text-secondary);
+  --e-text-muted:         var(--s-text-tertiary);
+
+  --e-population-stroke:  var(--s-population-stroke);
+  --e-population-fill:    var(--s-population-fill);
+  --e-subgroup-observed:  var(--s-subgroup-observed);
+  --e-subgroup-induced:   var(--s-subgroup-induced);
+  --e-subgroup-fill:      var(--s-subgroup-fill);
+
+  --e-handle:             var(--s-handle-fill);
+  --e-handle-stroke:      var(--s-handle-stroke);
+  --e-handle-shadow:      var(--s-handle-shadow);
+
+  --e-marker-argmin:      var(--s-marker-argmin);
+  --e-marker-uniform:     var(--s-marker-uniform);
+
+  --e-w1-band:            var(--s-w1-band-fill);
+
+  --e-dur-handle-drag:    var(--p-dur-instant);  /* never animate the drag */
+  --e-dur-snap:           var(--p-dur-snap);
+  --e-dur-morph:          var(--p-dur-morph);
+  --e-dur-think:          var(--p-dur-think);
+  --e-ease:               var(--p-ease-out);
+
+  /* Type */
+  --e-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --e-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --e-text-body: var(--p-text-sm);
+  --e-text-label: var(--p-text-xs);
+  --e-text-title: var(--p-text-md);
+  --e-text-display: var(--p-text-xl);
+
+  /* Layout */
+  --e-radius:    var(--p-radius-md);
+  --e-stroke:    var(--p-stroke-base);
+  --e-stroke-bold: var(--p-stroke-bold);
+}
+
+/* ----- prefers-reduced-motion: collapse all morph durations ----- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --e-dur-snap:  60ms;
+    --e-dur-morph: 60ms;
+    --e-dur-think: 60ms;
+    --e-ease:      linear;
+  }
+}
+
+/* ============================================================================
+   Embedded-page skin
+   ============================================================================
+   Activated by main.tsx whenever the app is loaded inside an iframe (or
+   ?embed=1 / ?embedded=1).  Panel surfaces become translucent so the host
+   page's background reads through and the cross blends with surrounding
+   slide content instead of presenting as a separate window.
+
+   Specificity: html[data-embedded="1"] is (0,1,1) vs :root's (0,0,1), so
+   these values win over the defaults above.  Parent pages overriding via
+   element.style.setProperty(...) on documentElement still win (inline
+   styles are higher cascade).
+   ============================================================================ */
+html[data-embedded="1"] {
+  /* Panel surface — ~30% white over whatever the host canvas is. */
+  --e-bg-panel:        rgba(255, 255, 255, 0.30);
+  /* Border picks up a hint of slate so panels remain visually defined
+     without a hard black/white boundary. */
+  --e-border-panel:    rgba(15, 23, 42, 0.15);
+  --e-divider:         rgba(15, 23, 42, 0.08);
+}

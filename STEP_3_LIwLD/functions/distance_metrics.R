@@ -16,7 +16,6 @@
 ###
 ############################################################################
 
-
 #' Wasserstein-1 Distance Between Two CDFs
 #'
 #' The L1 distance between CDFs, also known as the Earth Mover's Distance
@@ -34,7 +33,6 @@
 #'
 #' @export
 wasserstein1 <- function(F_pred, F_obs, grid) {
-
   n <- length(grid)
   if (length(F_pred) != n || length(F_obs) != n) {
     stop("F_pred, F_obs, and grid must have the same length")
@@ -66,7 +64,6 @@ wasserstein1 <- function(F_pred, F_obs, grid) {
 #'
 #' @export
 cramer_von_mises <- function(F_pred, F_obs, grid) {
-
   n <- length(grid)
   if (length(F_pred) != n || length(F_obs) != n) {
     stop("F_pred, F_obs, and grid must have the same length")
@@ -103,7 +100,6 @@ cramer_von_mises <- function(F_pred, F_obs, grid) {
 #'
 #' @export
 ks_distance <- function(F_pred, F_obs, grid) {
-
   n <- length(grid)
   if (length(F_pred) != n || length(F_obs) != n) {
     stop("F_pred, F_obs, and grid must have the same length")
@@ -111,7 +107,6 @@ ks_distance <- function(F_pred, F_obs, grid) {
 
   abs_diff <- abs(F_pred - F_obs)
   idx_max <- which.max(abs_diff)
-
 
   list(
     distance = abs_diff[idx_max],
@@ -138,7 +133,6 @@ ks_distance <- function(F_pred, F_obs, grid) {
 #'
 #' @export
 tail_weighted_cvm <- function(F_pred, F_obs, grid) {
-
   n <- length(grid)
   if (length(F_pred) != n || length(F_obs) != n) {
     stop("F_pred, F_obs, and grid must have the same length")
@@ -173,14 +167,13 @@ tail_weighted_cvm <- function(F_pred, F_obs, grid) {
 #'
 #' @export
 compute_all_distances <- function(F_pred, F_obs, grid) {
-
   ks <- ks_distance(F_pred, F_obs, grid)
 
   list(
-    wasserstein1     = wasserstein1(F_pred, F_obs, grid),
+    wasserstein1 = wasserstein1(F_pred, F_obs, grid),
     cramer_von_mises = cramer_von_mises(F_pred, F_obs, grid),
-    ks_distance      = ks$distance,
-    ks_location      = ks$location,
+    ks_distance = ks$distance,
+    ks_location = ks$location,
     tail_weighted_cvm = tail_weighted_cvm(F_pred, F_obs, grid)
   )
 }

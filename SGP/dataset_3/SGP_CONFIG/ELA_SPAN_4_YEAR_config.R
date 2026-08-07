@@ -7,11 +7,12 @@
 ############################################################################
 
 ELA_2017.config <- list(
-    ELA_2017 = list(
-        sgp.content.areas=rep("ELA", 2),
-        sgp.panel.years=c("2013", "2017"),
-        sgp.grade.sequences=list(
-            c("3", "7"), c("4", "8")
-        )
+  ELA_2017 = list(
+    sgp.content.areas = rep("ELA", 2),
+    sgp.panel.years = c("2013", "2017"),
+    sgp.grade.sequences = list(
+      c("3", "7"),
+      c("4", "8")
     )
+  )
 )

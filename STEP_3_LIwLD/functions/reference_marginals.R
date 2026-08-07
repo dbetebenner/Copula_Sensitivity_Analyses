@@ -61,9 +61,12 @@ require(data.table)
 #' }
 #'
 #' @export
-create_reference_ecdf <- function(scores, weights = NULL, n_grid = 1000,
-                                   tail_buffer = 1e-6) {
-
+create_reference_ecdf <- function(
+  scores,
+  weights = NULL,
+  n_grid = 1000,
+  tail_buffer = 1e-6
+) {
   # Input validation
   if (!is.numeric(scores) || length(scores) < 10) {
     stop("scores must be a numeric vector with at least 10 observations")
@@ -71,14 +74,20 @@ create_reference_ecdf <- function(scores, weights = NULL, n_grid = 1000,
 
   scores <- scores[!is.na(scores)]
   n_obs <- length(scores)
-  if (n_obs < 10) stop("Fewer than 10 non-NA scores in reference")
+  if (n_obs < 10) {
+    stop("Fewer than 10 non-NA scores in reference")
+  }
 
   weighted <- !is.null(weights)
   if (weighted) {
     weights <- weights[!is.na(scores)]
-    if (length(weights) != n_obs) stop("weights must match non-NA scores length")
-    if (any(weights < 0)) stop("weights must be non-negative")
-    weights <- weights / sum(weights)  # Normalise
+    if (length(weights) != n_obs) {
+      stop("weights must match non-NA scores length")
+    }
+    if (any(weights < 0)) {
+      stop("weights must be non-negative")
+    }
+    weights <- weights / sum(weights) # Normalise
   } else {
     weights <- rep(1 / n_obs, n_obs)
   }
@@ -109,8 +118,13 @@ create_reference_ecdf <- function(scores, weights = NULL, n_grid = 1000,
   # Create fine grid for interpolation
   score_range <- range(score_unique)
   score_grid <- seq(score_range[1], score_range[2], length.out = n_grid)
-  cdf_grid <- approx(score_unique, cdf_unique, xout = score_grid,
-                      method = "linear", rule = 2)$y
+  cdf_grid <- approx(
+    score_unique,
+    cdf_unique,
+    xout = score_grid,
+    method = "linear",
+    rule = 2
+  )$y
   cdf_grid <- pmax(tail_buffer, pmin(1 - tail_buffer, cdf_grid))
 
   # Ensure monotonicity
@@ -131,14 +145,14 @@ create_reference_ecdf <- function(scores, weights = NULL, n_grid = 1000,
   quantile_fn <- approxfun(cdf_strict, score_grid, method = "linear", rule = 2)
 
   result <- list(
-    cdf_fn       = cdf_fn,
-    quantile_fn  = quantile_fn,
-    score_grid   = score_grid,
-    cdf_grid     = cdf_grid,
-    n_obs        = n_obs,
-    score_range  = score_range,
-    weighted     = weighted,
-    tail_buffer  = tail_buffer
+    cdf_fn = cdf_fn,
+    quantile_fn = quantile_fn,
+    score_grid = score_grid,
+    cdf_grid = cdf_grid,
+    n_obs = n_obs,
+    score_range = score_range,
+    weighted = weighted,
+    tail_buffer = tail_buffer
   )
   class(result) <- "reference_ecdf"
   return(result)
@@ -205,16 +219,19 @@ reference_quantile <- function(p, ref) {
 #'   }
 #'
 #' @export
-apply_reference_marginals <- function(prior_scores, current_scores,
-                                       ref_prior, ref_current) {
-
+apply_reference_marginals <- function(
+  prior_scores,
+  current_scores,
+  ref_prior,
+  ref_current
+) {
   u <- reference_cdf(prior_scores, ref_prior)
   v <- reference_cdf(current_scores, ref_current)
 
   list(
-    u         = u,
-    v         = v,
-    n_prior   = length(u),
+    u = u,
+    v = v,
+    n_prior = length(u),
     n_current = length(v)
   )
 }
@@ -233,19 +250,18 @@ apply_reference_marginals <- function(prior_scores, current_scores,
 #'
 #' @export
 build_condition_reference <- function(state_data, condition_meta) {
-
   # Extract prior scores: all students in the state at grade_prior / year_prior
   prior_mask <- state_data$GRADE == condition_meta$grade_prior &
-                state_data$YEAR == condition_meta$year_prior &
-                state_data$CONTENT_AREA == condition_meta$content_area &
-                !is.na(state_data$SCALE_SCORE)
+    state_data$YEAR == condition_meta$year_prior &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
   prior_scores <- state_data$SCALE_SCORE[prior_mask]
 
   # Extract current scores: all students at grade_current / year_current
   current_mask <- state_data$GRADE == condition_meta$grade_current &
-                  state_data$YEAR == condition_meta$year_current &
-                  state_data$CONTENT_AREA == condition_meta$content_area &
-                  !is.na(state_data$SCALE_SCORE)
+    state_data$YEAR == condition_meta$year_current &
+    state_data$CONTENT_AREA == condition_meta$content_area &
+    !is.na(state_data$SCALE_SCORE)
   current_scores <- state_data$SCALE_SCORE[current_mask]
 
   if (length(prior_scores) < 50) {
@@ -256,10 +272,10 @@ build_condition_reference <- function(state_data, condition_meta) {
   }
 
   list(
-    ref_prior   = create_reference_ecdf(prior_scores),
+    ref_prior = create_reference_ecdf(prior_scores),
     ref_current = create_reference_ecdf(current_scores),
-    n_prior     = length(prior_scores),
-    n_current   = length(current_scores)
+    n_prior = length(prior_scores),
+    n_current = length(current_scores)
   )
 }
 
@@ -279,8 +295,7 @@ build_condition_reference <- function(state_data, condition_meta) {
 #'
 #' @export
 build_pairs_reference <- function(pairs) {
-
-  prior_scores   <- pairs$SCALE_SCORE_PRIOR[!is.na(pairs$SCALE_SCORE_PRIOR)]
+  prior_scores <- pairs$SCALE_SCORE_PRIOR[!is.na(pairs$SCALE_SCORE_PRIOR)]
   current_scores <- pairs$SCALE_SCORE_CURRENT[!is.na(pairs$SCALE_SCORE_CURRENT)]
 
   if (length(prior_scores) < 50) {
@@ -291,10 +306,10 @@ build_pairs_reference <- function(pairs) {
   }
 
   list(
-    ref_prior   = create_reference_ecdf(prior_scores),
+    ref_prior = create_reference_ecdf(prior_scores),
     ref_current = create_reference_ecdf(current_scores),
-    n_prior     = length(prior_scores),
-    n_current   = length(current_scores)
+    n_prior = length(prior_scores),
+    n_current = length(current_scores)
   )
 }
 

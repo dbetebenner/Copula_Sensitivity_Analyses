@@ -21,7 +21,6 @@
 ###
 ############################################################################
 
-
 # ==========================================================================
 # 1. Beta Family
 # ==========================================================================
@@ -55,31 +54,36 @@
 #'
 #' @export
 regime_beta <- function(mean_val, kappa) {
-
-  if (mean_val <= 0 || mean_val >= 1) stop("mean_val must be in (0,1)")
-  if (kappa <= 0) stop("kappa must be > 0")
+  if (mean_val <= 0 || mean_val >= 1) {
+    stop("mean_val must be in (0,1)")
+  }
+  if (kappa <= 0) {
+    stop("kappa must be > 0")
+  }
 
   alpha <- mean_val * kappa
-  beta  <- (1 - mean_val) * kappa
+  beta <- (1 - mean_val) * kappa
 
-  med  <- qbeta(0.5, shape1 = alpha, shape2 = beta)
-  q25  <- qbeta(0.25, shape1 = alpha, shape2 = beta)
-  q75  <- qbeta(0.75, shape1 = alpha, shape2 = beta)
+  med <- qbeta(0.5, shape1 = alpha, shape2 = beta)
+  q25 <- qbeta(0.25, shape1 = alpha, shape2 = beta)
+  q75 <- qbeta(0.75, shape1 = alpha, shape2 = beta)
   sd_p <- sqrt(alpha * beta / ((alpha + beta)^2 * (alpha + beta + 1)))
 
   result <- list(
-    cdf      = function(p) pbeta(p, shape1 = alpha, shape2 = beta),
+    cdf = function(p) pbeta(p, shape1 = alpha, shape2 = beta),
     quantile = function(q) qbeta(q, shape1 = alpha, shape2 = beta),
-    density  = function(p) dbeta(p, shape1 = alpha, shape2 = beta),
-    mean     = mean_val,
-    median   = med,
-    sd       = sd_p,
-    iqr      = q75 - q25,
-    entropy  = lbeta(alpha, beta) - (alpha - 1) * digamma(alpha) -
-               (beta - 1) * digamma(beta) + (alpha + beta - 2) * digamma(alpha + beta),
+    density = function(p) dbeta(p, shape1 = alpha, shape2 = beta),
+    mean = mean_val,
+    median = med,
+    sd = sd_p,
+    iqr = q75 - q25,
+    entropy = lbeta(alpha, beta) -
+      (alpha - 1) * digamma(alpha) -
+      (beta - 1) * digamma(beta) +
+      (alpha + beta - 2) * digamma(alpha + beta),
     concentration = kappa,
-    params   = list(alpha = alpha, beta = beta, mean = mean_val, kappa = kappa),
-    family   = "beta"
+    params = list(alpha = alpha, beta = beta, mean = mean_val, kappa = kappa),
+    family = "beta"
   )
   class(result) <- "growth_regime"
   return(result)
@@ -108,8 +112,9 @@ regime_beta <- function(mean_val, kappa) {
 #'
 #' @export
 regime_truncexp <- function(mean_val, tol = 1e-8) {
-
-  if (mean_val <= 0 || mean_val >= 1) stop("mean_val must be in (0,1)")
+  if (mean_val <= 0 || mean_val >= 1) {
+    stop("mean_val must be in (0,1)")
+  }
 
   # Solve for lambda such that E[P] = mean_val under f(p) propto exp(lambda*p)
   # E[P] = 1/lambda - 1/(exp(lambda)-1)  when lambda != 0
@@ -121,18 +126,19 @@ regime_truncexp <- function(mean_val, tol = 1e-8) {
   } else {
     # Numerical solve
     mean_fn <- function(lam) {
-      if (abs(lam) < 1e-10) return(0.5)
+      if (abs(lam) < 1e-10) {
+        return(0.5)
+      }
       1 / lam - 1 / (exp(lam) - 1)
     }
     obj <- function(lam) (mean_fn(lam) - mean_val)^2
-    opt <- optim(par = 0, fn = obj, method = "Brent",
-                 lower = -50, upper = 50)
+    opt <- optim(par = 0, fn = obj, method = "Brent", lower = -50, upper = 50)
     lambda <- opt$par
   }
 
   # Normalising constant: integral of exp(lambda*p) from 0 to 1
   if (abs(lambda) < 1e-10) {
-    log_norm <- 0  # integral = 1
+    log_norm <- 0 # integral = 1
     norm_const <- 1
   } else {
     norm_const <- (exp(lambda) - 1) / lambda
@@ -142,7 +148,9 @@ regime_truncexp <- function(mean_val, tol = 1e-8) {
   # CDF: integral from 0 to p of exp(lambda*t)/norm
   cdf_fn <- function(p) {
     p <- pmax(0, pmin(1, p))
-    if (abs(lambda) < 1e-10) return(p)
+    if (abs(lambda) < 1e-10) {
+      return(p)
+    }
     (exp(lambda * p) - 1) / (exp(lambda) - 1)
   }
 
@@ -155,20 +163,24 @@ regime_truncexp <- function(mean_val, tol = 1e-8) {
   # Quantile (inverse CDF)
   quantile_fn <- function(q) {
     q <- pmax(1e-10, pmin(1 - 1e-10, q))
-    if (abs(lambda) < 1e-10) return(q)
+    if (abs(lambda) < 1e-10) {
+      return(q)
+    }
     log(1 + q * (exp(lambda) - 1)) / lambda
   }
 
-  med  <- quantile_fn(0.5)
-  q25  <- quantile_fn(0.25)
-  q75  <- quantile_fn(0.75)
+  med <- quantile_fn(0.5)
+  q25 <- quantile_fn(0.25)
+  q75 <- quantile_fn(0.75)
 
   # Variance of truncated exponential on [0,1]
   if (abs(lambda) < 1e-10) {
     var_p <- 1 / 12
   } else {
-    e_p2 <- 2 / lambda^2 - (2 * exp(lambda)) / (lambda * (exp(lambda) - 1)) +
-             exp(lambda) / (exp(lambda) - 1)
+    e_p2 <- 2 /
+      lambda^2 -
+      (2 * exp(lambda)) / (lambda * (exp(lambda) - 1)) +
+      exp(lambda) / (exp(lambda) - 1)
     var_p <- max(0, e_p2 - mean_val^2)
   }
 
@@ -176,17 +188,17 @@ regime_truncexp <- function(mean_val, tol = 1e-8) {
   ent <- log(norm_const) - lambda * mean_val
 
   result <- list(
-    cdf      = Vectorize(cdf_fn),
+    cdf = Vectorize(cdf_fn),
     quantile = Vectorize(quantile_fn),
-    density  = Vectorize(density_fn),
-    mean     = mean_val,
-    median   = med,
-    sd       = sqrt(var_p),
-    iqr      = q75 - q25,
-    entropy  = ent,
+    density = Vectorize(density_fn),
+    mean = mean_val,
+    median = med,
+    sd = sqrt(var_p),
+    iqr = q75 - q25,
+    entropy = ent,
     concentration = 1 / max(var_p, 1e-10),
-    params   = list(lambda = lambda, mean = mean_val),
-    family   = "truncexp"
+    params = list(lambda = lambda, mean = mean_val),
+    family = "truncexp"
   )
   class(result) <- "growth_regime"
   return(result)
@@ -209,10 +221,15 @@ regime_truncexp <- function(mean_val, tol = 1e-8) {
 #'
 #' @export
 regime_truncunif <- function(lower = 0, upper = 1) {
-
-  if (lower < 0 || lower >= 1) stop("lower must be in [0,1)")
-  if (upper <= 0 || upper > 1) stop("upper must be in (0,1]")
-  if (upper <= lower) stop("upper must be > lower")
+  if (lower < 0 || lower >= 1) {
+    stop("lower must be in [0,1)")
+  }
+  if (upper <= 0 || upper > 1) {
+    stop("upper must be in (0,1]")
+  }
+  if (upper <= lower) {
+    stop("upper must be > lower")
+  }
 
   width <- upper - lower
   mean_val <- (lower + upper) / 2
@@ -232,22 +249,22 @@ regime_truncunif <- function(lower = 0, upper = 1) {
   }
 
   sd_p <- width / sqrt(12)
-  q25  <- lower + 0.25 * width
-  q75  <- lower + 0.75 * width
-  ent  <- log(width)
+  q25 <- lower + 0.25 * width
+  q75 <- lower + 0.75 * width
+  ent <- log(width)
 
   result <- list(
-    cdf      = Vectorize(cdf_fn),
+    cdf = Vectorize(cdf_fn),
     quantile = Vectorize(quantile_fn),
-    density  = Vectorize(density_fn),
-    mean     = mean_val,
-    median   = mean_val,
-    sd       = sd_p,
-    iqr      = q75 - q25,
-    entropy  = ent,
+    density = Vectorize(density_fn),
+    mean = mean_val,
+    median = mean_val,
+    sd = sd_p,
+    iqr = q75 - q25,
+    entropy = ent,
     concentration = 1 / max(sd_p^2, 1e-10),
-    params   = list(lower = lower, upper = upper),
-    family   = "truncunif"
+    params = list(lower = lower, upper = upper),
+    family = "truncunif"
   )
   class(result) <- "growth_regime"
   return(result)
@@ -275,20 +292,26 @@ regime_truncunif <- function(lower = 0, upper = 1) {
 #'
 #' @export
 create_regime <- function(family, theta) {
-
   family <- tolower(family)
 
-  switch(family,
+  switch(
+    family,
     beta = {
-      if (length(theta) != 2) stop("Beta regime requires theta = c(mean, kappa)")
+      if (length(theta) != 2) {
+        stop("Beta regime requires theta = c(mean, kappa)")
+      }
       regime_beta(theta[1], theta[2])
     },
     truncexp = {
-      if (length(theta) != 1) stop("Truncexp regime requires theta = c(mean)")
+      if (length(theta) != 1) {
+        stop("Truncexp regime requires theta = c(mean)")
+      }
       regime_truncexp(theta[1])
     },
     truncunif = {
-      if (length(theta) != 2) stop("Truncunif regime requires theta = c(lower, upper)")
+      if (length(theta) != 2) {
+        stop("Truncunif regime requires theta = c(lower, upper)")
+      }
       regime_truncunif(theta[1], theta[2])
     },
     stop("Unknown regime family: ", family)
@@ -309,10 +332,20 @@ print.growth_regime <- function(x, ...) {
   cat("  IQR:           ", sprintf("%.4f", x$iqr), "\n")
   cat("  Entropy:       ", sprintf("%.4f", x$entropy), "\n")
   cat("  Concentration: ", sprintf("%.2f", x$concentration), "\n")
-  cat("  Params: ", paste(names(x$params), "=",
-      sprintf("%.4f", unlist(x$params)), collapse = ", "), "\n")
+  cat(
+    "  Params: ",
+    paste(
+      names(x$params),
+      "=",
+      sprintf("%.4f", unlist(x$params)),
+      collapse = ", "
+    ),
+    "\n"
+  )
 }
 
 
 cat("STEP 3 regime_families.R loaded.\n")
-cat("  Functions: regime_beta, regime_truncexp, regime_truncunif, create_regime\n")
+cat(
+  "  Functions: regime_beta, regime_truncexp, regime_truncunif, create_regime\n"
+)

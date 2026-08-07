@@ -6,9 +6,11 @@
 
 require(jsonlite)
 
-validate_step3_output_contract <- function(results_dir = "results",
-                                           strict = FALSE,
-                                           verbose = TRUE) {
+validate_step3_output_contract <- function(
+  results_dir = "results",
+  strict = FALSE,
+  verbose = TRUE
+) {
   required_files <- c(
     "phase_a_summary.csv",
     "phase_a_precision_anchor.csv",
@@ -45,8 +47,12 @@ validate_step3_output_contract <- function(results_dir = "results",
     "visualizations/panel_j_sensitivity_summary.png"
   )
 
-  missing_required <- required_files[!file.exists(file.path(results_dir, required_files))]
-  missing_optional <- optional_files[!file.exists(file.path(results_dir, optional_files))]
+  missing_required <- required_files[
+    !file.exists(file.path(results_dir, required_files))
+  ]
+  missing_optional <- optional_files[
+    !file.exists(file.path(results_dir, optional_files))
+  ]
 
   checks <- list(
     missing_required = missing_required,
@@ -64,13 +70,22 @@ validate_step3_output_contract <- function(results_dir = "results",
   if (file.exists(manifest_path)) {
     man <- fromJSON(manifest_path, simplifyVector = TRUE)
     checks$manifest_n_subgroups <- man$metadata$n_subgroups
-    checks$assumption_diagnostics_present <- !is.null(man$assumption_diagnostics)
-    checks$weight_resample_scheme <- tryCatch(man$metadata$config$uncertainty$resample_scheme, error = function(e) NA_character_)
-    if (is.null(checks$weight_resample_scheme) || length(checks$weight_resample_scheme) == 0) {
+    checks$assumption_diagnostics_present <- !is.null(
+      man$assumption_diagnostics
+    )
+    checks$weight_resample_scheme <- tryCatch(
+      man$metadata$config$uncertainty$resample_scheme,
+      error = function(e) NA_character_
+    )
+    if (
+      is.null(checks$weight_resample_scheme) ||
+        length(checks$weight_resample_scheme) == 0
+    ) {
       checks$weight_resample_scheme <- NA_character_
     }
     checks$weight_usage_check <- if (!is.na(checks$weight_resample_scheme)) {
-      checks$weight_resample_scheme %in% c("srs_bootstrap", "weighted_bootstrap", "replicate_weights")
+      checks$weight_resample_scheme %in%
+        c("srs_bootstrap", "weighted_bootstrap", "replicate_weights")
     } else {
       NA
     }
@@ -80,9 +95,20 @@ validate_step3_output_contract <- function(results_dir = "results",
   if (file.exists(bucket_path)) {
     b <- data.table::fread(bucket_path)
     if (nrow(b) > 0) {
-      k3 <- rowSums(b[, c("k3_Low", "k3_Typical", "k3_High"), with = FALSE], na.rm = TRUE)
-      k5 <- rowSums(b[, c("k5_Very_Low", "k5_Low", "k5_Typical", "k5_High", "k5_Very_High"), with = FALSE], na.rm = TRUE)
-      checks$bucket_probabilities_sum_ok <- all(abs(k3 - 1) < 0.01 & abs(k5 - 1) < 0.01)
+      k3 <- rowSums(
+        b[, c("k3_Low", "k3_Typical", "k3_High"), with = FALSE],
+        na.rm = TRUE
+      )
+      k5 <- rowSums(
+        b[,
+          c("k5_Very_Low", "k5_Low", "k5_Typical", "k5_High", "k5_Very_High"),
+          with = FALSE
+        ],
+        na.rm = TRUE
+      )
+      checks$bucket_probabilities_sum_ok <- all(
+        abs(k3 - 1) < 0.01 & abs(k5 - 1) < 0.01
+      )
     }
   }
 
@@ -90,11 +116,25 @@ validate_step3_output_contract <- function(results_dir = "results",
   if (file.exists(precision_path)) {
     p <- data.table::fread(precision_path)
     required_cols <- c(
-      "pool_id", "pool_type", "span", "content", "n_bucket", "N_eff_bucket",
-      "median_bias", "median_mae", "median_rmse", "median_ci_width_90", "median_ci_width_95",
-      "mean_bias", "mean_mae", "mean_rmse", "mean_ci_width_90", "mean_ci_width_95"
+      "pool_id",
+      "pool_type",
+      "span",
+      "content",
+      "n_bucket",
+      "N_eff_bucket",
+      "median_bias",
+      "median_mae",
+      "median_rmse",
+      "median_ci_width_90",
+      "median_ci_width_95",
+      "mean_bias",
+      "mean_mae",
+      "mean_rmse",
+      "mean_ci_width_90",
+      "mean_ci_width_95"
     )
-    checks$phase_b_precision_schema_ok <- all(required_cols %in% names(p)) && nrow(p) > 0
+    checks$phase_b_precision_schema_ok <- all(required_cols %in% names(p)) &&
+      nrow(p) > 0
   }
 
   checks$passed <- length(missing_required) == 0 &&
@@ -111,8 +151,16 @@ validate_step3_output_contract <- function(results_dir = "results",
     cat("  Optional missing:", length(checks$missing_optional), "\n")
     cat("  Manifest n_subgroups:", checks$manifest_n_subgroups, "\n")
     cat("  Bucket sums OK:", checks$bucket_probabilities_sum_ok, "\n")
-    cat("  Phase B precision schema OK:", checks$phase_b_precision_schema_ok, "\n")
-    cat("  Assumption diagnostics in manifest:", checks$assumption_diagnostics_present, "\n")
+    cat(
+      "  Phase B precision schema OK:",
+      checks$phase_b_precision_schema_ok,
+      "\n"
+    )
+    cat(
+      "  Assumption diagnostics in manifest:",
+      checks$assumption_diagnostics_present,
+      "\n"
+    )
     cat("  Resample scheme:", checks$weight_resample_scheme, "\n")
     cat("  Weight-usage check:", checks$weight_usage_check, "\n")
     cat("  Passed:", checks$passed, "\n")

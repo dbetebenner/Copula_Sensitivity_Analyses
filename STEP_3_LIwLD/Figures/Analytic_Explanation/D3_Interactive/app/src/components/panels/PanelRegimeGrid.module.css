@@ -1,0 +1,92 @@
+/* Panel #3 — W₁ landscape over the (m, κ) regime grid. */
+
+.host {
+  width: 100%;
+  height: 100%;
+}
+.host svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.axis,
+.axisTick {
+  stroke: var(--e-border-panel);
+  stroke-width: 1px;
+}
+.axisLabel {
+  fill: var(--e-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.axisName {
+  fill: var(--e-text-soft);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* ---- Markers ---- */
+
+.markerUniform {
+  fill: none;
+  stroke: var(--e-marker-uniform);
+  stroke-width: 1.5px;
+  stroke-dasharray: 2 2;
+}
+.markerLabelLight {
+  fill: var(--e-text-soft);
+  font-size: 10px;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+}
+
+/* Math-style typography for the Ĝ_S estimator label. */
+.markerLabelMath {
+  font-style: italic;
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--e-text);
+}
+
+/*
+ * argmin REFERENCE marker — static, slate crosshair (smaller, no fill, no
+ * halo).  This is *not* the live handle; it stays put as a "you reached
+ * the optimum" target for the user to drag toward.
+ */
+.markerArgminRef {
+  fill: none;
+  stroke: var(--e-marker-argmin);
+  stroke-width: 1.5px;
+}
+.markerArgminCross {
+  stroke: var(--e-marker-argmin);
+  stroke-width: 1px;
+}
+
+/* ---- Drag overlay: invisible target that captures pointer events. ---- */
+.dragOverlay {
+  fill: transparent;
+  cursor: grab;
+  touch-action: none; /* prevent browser pan/zoom on touch */
+}
+.dragOverlay:active {
+  cursor: grabbing;
+}
+
+/* ---- Live handle: amber pickup the user drags. ---- */
+.handle {
+  pointer-events: none; /* events go to the overlay above */
+}
+.handleHalo {
+  fill: var(--e-handle);
+  opacity: 0.22;
+}
+.handleDot {
+  fill: var(--e-handle);
+  stroke: var(--e-handle-stroke);
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 1px 2px var(--e-handle-shadow));
+}

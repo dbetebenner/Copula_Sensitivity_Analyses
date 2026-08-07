@@ -63,14 +63,17 @@ if (!dir.exists(test_dir)) {
 
 # Check directory is writable
 test_file <- file.path(test_dir, ".write_test")
-write_ok <- tryCatch({
-  writeLines("test", test_file)
-  file.remove(test_file)
-  TRUE
-}, error = function(e) {
-  cat("  ✗ Directory is NOT writable:", e$message, "\n")
-  FALSE
-})
+write_ok <- tryCatch(
+  {
+    writeLines("test", test_file)
+    file.remove(test_file)
+    TRUE
+  },
+  error = function(e) {
+    cat("  ✗ Directory is NOT writable:", e$message, "\n")
+    FALSE
+  }
+)
 
 if (write_ok) {
   cat("  ✓ Directory is writable\n")
@@ -82,22 +85,25 @@ cat("Calling export_analysis_manifest()...\n")
 cat("--------------------------------------------------------------------\n")
 cat("\n")
 
-result <- tryCatch({
-  export_analysis_manifest(
-    results_dt = mock_results,
-    output_dir = test_dir,
-    manifest_filename = "debug_manifest.json"
-  )
-}, error = function(e) {
-  cat("\n")
-  cat("!!! ERROR OCCURRED !!!\n")
-  cat("Message:", e$message, "\n")
-  cat("\nCall stack:\n")
-  cat(deparse(e$call), "\n")
-  cat("\nTraceback:\n")
-  traceback()
-  NULL
-})
+result <- tryCatch(
+  {
+    export_analysis_manifest(
+      results_dt = mock_results,
+      output_dir = test_dir,
+      manifest_filename = "debug_manifest.json"
+    )
+  },
+  error = function(e) {
+    cat("\n")
+    cat("!!! ERROR OCCURRED !!!\n")
+    cat("Message:", e$message, "\n")
+    cat("\nCall stack:\n")
+    cat(deparse(e$call), "\n")
+    cat("\nTraceback:\n")
+    traceback()
+    NULL
+  }
+)
 
 cat("\n")
 cat("--------------------------------------------------------------------\n")
@@ -109,20 +115,28 @@ if (!is.null(result)) {
   cat("✓ Function returned successfully!\n\n")
   cat("Result structure:\n")
   cat("  - metadata:", !is.null(result$metadata), "\n")
-  cat("  - parameter_recommendations:", !is.null(result$parameter_recommendations), "\n")
-  cat("  - family_selection_summary:", !is.null(result$family_selection_summary), "\n")
+  cat(
+    "  - parameter_recommendations:",
+    !is.null(result$parameter_recommendations),
+    "\n"
+  )
+  cat(
+    "  - family_selection_summary:",
+    !is.null(result$family_selection_summary),
+    "\n"
+  )
   cat("  - conditions_index:", !is.null(result$conditions_index), "\n")
   cat("  - usage_guide:", !is.null(result$usage_guide), "\n")
-  
+
   # Check if file exists
   json_file <- file.path(test_dir, "debug_manifest.json")
   cat("\nChecking for output file...\n")
-  
+
   if (file.exists(json_file)) {
     file_size <- file.info(json_file)$size
     cat("  ✓ JSON file created:", json_file, "\n")
     cat("  ✓ File size:", file_size, "bytes\n")
-    
+
     # Preview content
     cat("\nJSON content preview (first 500 chars):\n")
     content <- readLines(json_file, warn = FALSE)
@@ -132,24 +146,27 @@ if (!is.null(result)) {
     cat("  ✗ JSON file NOT created!\n")
     cat("  Expected path:", json_file, "\n")
   }
-  
+
   # Also test markdown export
   cat("\n")
   cat("--------------------------------------------------------------------\n")
   cat("Testing export_manifest_markdown()...\n")
   cat("--------------------------------------------------------------------\n")
-  
-  md_result <- tryCatch({
-    export_manifest_markdown(
-      manifest_file = json_file,
-      output_file = file.path(test_dir, "debug_manifest.md")
-    )
-    TRUE
-  }, error = function(e) {
-    cat("  ✗ Markdown export failed:", e$message, "\n")
-    FALSE
-  })
-  
+
+  md_result <- tryCatch(
+    {
+      export_manifest_markdown(
+        manifest_file = json_file,
+        output_file = file.path(test_dir, "debug_manifest.md")
+      )
+      TRUE
+    },
+    error = function(e) {
+      cat("  ✗ Markdown export failed:", e$message, "\n")
+      FALSE
+    }
+  )
+
   if (md_result) {
     md_file <- file.path(test_dir, "debug_manifest.md")
     if (file.exists(md_file)) {
@@ -157,18 +174,26 @@ if (!is.null(result)) {
       cat("  ✓ File size:", file.info(md_file)$size, "bytes\n")
     }
   }
-  
 } else {
   cat("✗ Function returned NULL (error occurred above)\n")
   cat("\nPossible causes:\n")
   cat("  1. Missing required columns in mock_results\n")
   cat("  2. Error in data processing within the function\n")
   cat("  3. JSON serialization issue\n")
-  
+
   cat("\nRequired columns check:\n")
-  required_cols <- c("condition_id", "family", "dataset_id", "year_span", 
-                     "content_area", "delta_aic_vs_best", "tau", "n_pairs",
-                     "grade_prior", "grade_current")
+  required_cols <- c(
+    "condition_id",
+    "family",
+    "dataset_id",
+    "year_span",
+    "content_area",
+    "delta_aic_vs_best",
+    "tau",
+    "n_pairs",
+    "grade_prior",
+    "grade_current"
+  )
   for (col in required_cols) {
     has_col <- col %in% names(mock_results)
     cat(sprintf("  %s %s\n", ifelse(has_col, "✓", "✗"), col))
@@ -192,4 +217,3 @@ if (length(files) > 0) {
   cat("  (empty directory)\n")
 }
 cat("\n")
-

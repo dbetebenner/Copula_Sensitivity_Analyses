@@ -6,11 +6,12 @@
 ############################################################################
 
 MATHEMATICS_2017.config <- list(
-    MATHEMATICS_2017 = list(
-        sgp.content.areas=rep("MATHEMATICS", 2),
-        sgp.panel.years=c("2013", "2017"),
-        sgp.grade.sequences=list(
-            c("3", "7"), c("4", "8")
-        )
+  MATHEMATICS_2017 = list(
+    sgp.content.areas = rep("MATHEMATICS", 2),
+    sgp.panel.years = c("2013", "2017"),
+    sgp.grade.sequences = list(
+      c("3", "7"),
+      c("4", "8")
     )
+  )
 )

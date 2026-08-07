@@ -25,7 +25,10 @@ by_year_span <- fread(file.path(RESULTS_DIR, "sgpc_by_year_span.csv"))
 by_content_area <- fread(file.path(RESULTS_DIR, "sgpc_by_content_area.csv"))
 by_stratum <- fread(file.path(RESULTS_DIR, "sgpc_by_stratum.csv"))
 
-manifest <- jsonlite::fromJSON(file.path(RESULTS_DIR, "sgpc_sensitivity_manifest.json"))
+manifest <- jsonlite::fromJSON(file.path(
+  RESULTS_DIR,
+  "sgpc_sensitivity_manifest.json"
+))
 
 ############################################################################
 ### GENERATE REPORT
@@ -35,7 +38,10 @@ report_lines <- c(
   "# STEP 2: SGPc Sensitivity Analysis Report",
   "",
   paste("**Generated:**", Sys.time()),
-  paste("**Observations Analyzed:**", format(manifest$metadata$n_observations, big.mark = ",")),
+  paste(
+    "**Observations Analyzed:**",
+    format(manifest$metadata$n_observations, big.mark = ",")
+  ),
   paste("**Conditions:**", manifest$metadata$n_conditions),
   paste("**Datasets:**", manifest$metadata$n_datasets),
   "",
@@ -71,7 +77,10 @@ emp_best <- key_comparisons[comparison == "Empirical vs Best-fit"]
 report_lines <- c(
   report_lines,
   sprintf("- **Correlation:** r = %.3f", emp_best$correlation),
-  sprintf("- **Mean Absolute Difference:** %.1f percentile points", emp_best$mad),
+  sprintf(
+    "- **Mean Absolute Difference:** %.1f percentile points",
+    emp_best$mad
+  ),
   sprintf("- **RMSD:** %.1f percentile points", emp_best$rmsd),
   sprintf("- **Sample Size:** n = %s", format(emp_best$n_obs, big.mark = ",")),
   "",
@@ -92,12 +101,15 @@ report_lines <- c(
   ""
 )
 
-# Extract statistics  
+# Extract statistics
 emp_avg <- key_comparisons[comparison == "Empirical vs Canonical"]
 report_lines <- c(
   report_lines,
   sprintf("- **Correlation:** r = %.3f", emp_avg$correlation),
-  sprintf("- **Mean Absolute Difference:** %.1f percentile points", emp_avg$mad),
+  sprintf(
+    "- **Mean Absolute Difference:** %.1f percentile points",
+    emp_avg$mad
+  ),
   sprintf("- **RMSD:** %.1f percentile points", emp_avg$rmsd),
   "",
   "**Interpretation:**",
@@ -175,10 +187,21 @@ for (i in 1:nrow(by_year_span)) {
   report_lines <- c(
     report_lines,
     sprintf("**%d-year span:**", row$year_span),
-    sprintf("  - Empirical vs Best-Fit: MAD = %.1f, r = %.3f", row$mad_emp_best, row$cor_emp_best),
-    sprintf("  - Empirical vs Canonical: MAD = %.1f, r = %.3f", row$mad_emp_avg, row$cor_emp_avg),
-    sprintf("  - n = %s observations across %d conditions", 
-            format(row$n_obs, big.mark = ","), row$n_conditions),
+    sprintf(
+      "  - Empirical vs Best-Fit: MAD = %.1f, r = %.3f",
+      row$mad_emp_best,
+      row$cor_emp_best
+    ),
+    sprintf(
+      "  - Empirical vs Canonical: MAD = %.1f, r = %.3f",
+      row$mad_emp_avg,
+      row$cor_emp_avg
+    ),
+    sprintf(
+      "  - n = %s observations across %d conditions",
+      format(row$n_obs, big.mark = ","),
+      row$n_conditions
+    ),
     ""
   )
 }
@@ -195,10 +218,21 @@ for (i in 1:nrow(by_content_area)) {
   report_lines <- c(
     report_lines,
     sprintf("**%s:**", row$content_area),
-    sprintf("  - Empirical vs Best-Fit: MAD = %.1f, r = %.3f", row$mad_emp_best, row$cor_emp_best),
-    sprintf("  - Empirical vs Canonical: MAD = %.1f, r = %.3f", row$mad_emp_avg, row$cor_emp_avg),
-    sprintf("  - n = %s observations across %d conditions", 
-            format(row$n_obs, big.mark = ","), row$n_conditions),
+    sprintf(
+      "  - Empirical vs Best-Fit: MAD = %.1f, r = %.3f",
+      row$mad_emp_best,
+      row$cor_emp_best
+    ),
+    sprintf(
+      "  - Empirical vs Canonical: MAD = %.1f, r = %.3f",
+      row$mad_emp_avg,
+      row$cor_emp_avg
+    ),
+    sprintf(
+      "  - n = %s observations across %d conditions",
+      format(row$n_obs, big.mark = ","),
+      row$n_conditions
+    ),
     ""
   )
 }

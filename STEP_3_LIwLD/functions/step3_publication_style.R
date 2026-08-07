@@ -26,39 +26,39 @@ ZISSOU1_RAMP <- colorRampPalette(ZISSOU1_BASE)
 ############################################################################
 
 STEP3_COLORS <- list(
-  observed     = "grey30",
-  predicted    = ZISSOU1_BASE[1],   # teal   (#3B9AB2)
-  inferred     = ZISSOU1_BASE[1],   # teal
-  actual       = ZISSOU1_BASE[4],   # amber  (#E1AF00)
-  comonot      = ZISSOU1_BASE[2],   # steel-blue (#78B7C5) — co-monotonic reference curve
-  residual_pos = ZISSOU1_BASE[5],   # red    (#F21A00)
-  residual_neg = ZISSOU1_BASE[1],   # teal
-  bootstrap    = ZISSOU1_BASE[1],   # teal
-  true_value   = ZISSOU1_BASE[4],   # amber
-  point_est    = ZISSOU1_BASE[1],   # teal
-  ci_line      = "grey50",
-  reference    = "grey50",
-  loess_trend  = ZISSOU1_BASE[5],   # red
-  truth        = "grey40",           # ground truth density
-  alternative  = "#E69F00"           # amber/orange — alternative copula in comparison panels
+  observed = "grey30",
+  predicted = ZISSOU1_BASE[1], # teal   (#3B9AB2)
+  inferred = ZISSOU1_BASE[1], # teal
+  actual = ZISSOU1_BASE[4], # amber  (#E1AF00)
+  comonot = ZISSOU1_BASE[2], # steel-blue (#78B7C5) — co-monotonic reference curve
+  residual_pos = ZISSOU1_BASE[5], # red    (#F21A00)
+  residual_neg = ZISSOU1_BASE[1], # teal
+  bootstrap = ZISSOU1_BASE[1], # teal
+  true_value = ZISSOU1_BASE[4], # amber
+  point_est = ZISSOU1_BASE[1], # teal
+  ci_line = "grey50",
+  reference = "grey50",
+  loess_trend = ZISSOU1_BASE[5], # red
+  truth = "grey40", # ground truth density
+  alternative = "#E69F00" # amber/orange — alternative copula in comparison panels
 )
 
 REGIME_FAMILY_COLORS <- c(
-  beta      = ZISSOU1_BASE[1],   # teal
-  truncexp  = ZISSOU1_BASE[4],   # amber
-  truncunif = ZISSOU1_BASE[3]    # gold (#EBCC2A)
+  beta = ZISSOU1_BASE[1], # teal
+  truncexp = ZISSOU1_BASE[4], # amber
+  truncunif = ZISSOU1_BASE[3] # gold (#EBCC2A)
 )
 
 REGIME_FAMILY_LINETYPES <- c(
-  beta      = "solid",
-  truncexp  = "dashed",
+  beta = "solid",
+  truncexp = "dashed",
   truncunif = "dotdash"
 )
 
 UNCERTAINTY_COLORS <- c(
-  "Sampling"  = ZISSOU1_BASE[4],   # amber
-  "Copula"    = ZISSOU1_BASE[1],   # teal
-  "Family"    = ZISSOU1_BASE[3]    # gold
+  "Sampling" = ZISSOU1_BASE[4], # amber
+  "Copula" = ZISSOU1_BASE[1], # teal
+  "Family" = ZISSOU1_BASE[3] # gold
 )
 
 ############################################################################
@@ -68,18 +68,21 @@ UNCERTAINTY_COLORS <- c(
 theme_publication <- function(base_size = 10) {
   theme_minimal(base_size = base_size) +
     theme(
-      plot.title       = element_text(face = "bold", size = base_size + 4, hjust = 0),
-      plot.subtitle    = element_text(size = base_size + 1, color = "gray30"),
-      axis.title       = element_text(face = "bold", size = base_size + 1),
-      axis.text        = element_text(size = base_size),
-      legend.title     = element_text(face = "bold", size = base_size),
-      legend.text      = element_text(size = base_size - 1),
-      legend.position  = "right",
-      legend.background = element_rect(fill = alpha("white", 0.85),
-                                        color = "gray60", linewidth = 0.5),
+      plot.title = element_text(face = "bold", size = base_size + 4, hjust = 0),
+      plot.subtitle = element_text(size = base_size + 1, color = "gray30"),
+      axis.title = element_text(face = "bold", size = base_size + 1),
+      axis.text = element_text(size = base_size),
+      legend.title = element_text(face = "bold", size = base_size),
+      legend.text = element_text(size = base_size - 1),
+      legend.position = "right",
+      legend.background = element_rect(
+        fill = alpha("white", 0.85),
+        color = "gray60",
+        linewidth = 0.5
+      ),
       panel.grid.minor = element_blank(),
-      panel.border     = element_rect(fill = NA, color = "gray80"),
-      strip.text       = element_text(face = "bold", size = base_size),
+      panel.border = element_rect(fill = NA, color = "gray80"),
+      strip.text = element_text(face = "bold", size = base_size),
       strip.background = element_rect(fill = "gray95", color = "gray80")
     )
 }
@@ -88,20 +91,25 @@ theme_publication <- function(base_size = 10) {
 ### Standard panel dimensions (matching STEP 2)
 ############################################################################
 
-PLOT_WIDTH  <- 10
+PLOT_WIDTH <- 10
 PLOT_HEIGHT <- 7
-PLOT_DPI    <- 300
+PLOT_DPI <- 300
 
 ############################################################################
 ### Multi-format save (mirrors STEP 2's save_plot_multi)
 ############################################################################
 
-save_plot_multi <- function(plot, name, dir,
-                             width = PLOT_WIDTH,
-                             height = PLOT_HEIGHT,
-                             dpi = PLOT_DPI) {
-
-  if (!dir.exists(dir)) dir.create(dir, recursive = TRUE)
+save_plot_multi <- function(
+  plot,
+  name,
+  dir,
+  width = PLOT_WIDTH,
+  height = PLOT_HEIGHT,
+  dpi = PLOT_DPI
+) {
+  if (!dir.exists(dir)) {
+    dir.create(dir, recursive = TRUE)
+  }
 
   for (fmt in c("pdf", "svg", "png")) {
     filepath <- file.path(dir, paste0(name, ".", fmt))
@@ -110,11 +118,11 @@ save_plot_multi <- function(plot, name, dir,
 
     ggsave(
       filename = filepath,
-      plot     = plot,
-      width    = width,
-      height   = height,
-      dpi      = dpi,
-      device   = device
+      plot = plot,
+      width = width,
+      height = height,
+      dpi = dpi,
+      device = device
     )
     cat(sprintf("  Saved: %s\n", filepath))
   }
@@ -125,13 +133,23 @@ save_plot_multi <- function(plot, name, dir,
 ############################################################################
 
 geom_ref_hline <- function(yintercept, ...) {
-  geom_hline(yintercept = yintercept, linetype = "dashed",
-             color = "gray50", linewidth = 0.5, ...)
+  geom_hline(
+    yintercept = yintercept,
+    linetype = "dashed",
+    color = "gray50",
+    linewidth = 0.5,
+    ...
+  )
 }
 
 geom_ref_vline <- function(xintercept, ...) {
-  geom_vline(xintercept = xintercept, linetype = "dashed",
-             color = "gray50", linewidth = 0.5, ...)
+  geom_vline(
+    xintercept = xintercept,
+    linetype = "dashed",
+    color = "gray50",
+    linewidth = 0.5,
+    ...
+  )
 }
 
 
@@ -142,14 +160,18 @@ geom_ref_vline <- function(xintercept, ...) {
 CAPTION_BOOTSTRAP <- paste0(
   "Uncertainty: bootstrap with replacement from observed N ",
   "(state census / superpopulation framing). ",
-  "Not representative of NAEP/TIMSS repeated-sampling uncertainty.")
+  "Not representative of NAEP/TIMSS repeated-sampling uncertainty."
+)
 
 CAPTION_SUBSAMPLE <- paste0(
   "Uncertainty: subsample without replacement from condition pool ",
   "(NAEP/TIMSS population-sampling framing). ",
-  "Bootstrap anchor shown at observed N for comparison.")
+  "Bootstrap anchor shown at observed N for comparison."
+)
 
 
 cat("STEP 3 step3_publication_style.R loaded.\n")
-cat("  theme_publication(), save_plot_multi(), STEP3_COLORS, REGIME_FAMILY_COLORS\n")
+cat(
+  "  theme_publication(), save_plot_multi(), STEP3_COLORS, REGIME_FAMILY_COLORS\n"
+)
 cat("  CAPTION_BOOTSTRAP, CAPTION_SUBSAMPLE\n")

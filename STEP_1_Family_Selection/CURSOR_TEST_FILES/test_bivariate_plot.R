@@ -22,16 +22,24 @@ cat("====================================================================\n")
 cat("\n")
 
 # Determine project root and set up path prefix
-if (file.exists("functions/copula_contour_plots.R") && file.exists("dataset_configs.R")) {
+if (
+  file.exists("functions/copula_contour_plots.R") &&
+    file.exists("dataset_configs.R")
+) {
   PROJECT_ROOT <- getwd()
   cat("Working directory:", PROJECT_ROOT, "\n")
   func_prefix <- ""
-} else if (file.exists("../functions/copula_contour_plots.R") && file.exists("../dataset_configs.R")) {
+} else if (
+  file.exists("../functions/copula_contour_plots.R") &&
+    file.exists("../dataset_configs.R")
+) {
   PROJECT_ROOT <- normalizePath("..")
   cat("Detected project root:", PROJECT_ROOT, "\n")
   func_prefix <- "../"
 } else {
-  stop("Cannot locate project root. Please run from project root or STEP_1_Family_Selection directory.")
+  stop(
+    "Cannot locate project root. Please run from project root or STEP_1_Family_Selection directory."
+  )
 }
 
 # Source required functions
@@ -40,7 +48,9 @@ source(paste0(func_prefix, "functions/copula_contour_plots.R"))
 source(paste0(func_prefix, "functions/export_plot_utils.R"))
 source(paste0(func_prefix, "dataset_configs.R"))
 local_config <- paste0(func_prefix, "dataset_configs_local.R")
-if (file.exists(local_config)) source(local_config)
+if (file.exists(local_config)) {
+  source(local_config)
+}
 
 ################################################################################
 ### CONFIGURATION
@@ -77,41 +87,53 @@ cat("  Description:", current_dataset$description, "\n\n")
 # Load data (following pattern from test_contour_plots.R)
 if (!exists("STATE_DATA_LONG")) {
   cat("Loading state data from file...\n")
-  
+
   # Check if SGP data file exists (preferred - contains traditional SGP columns)
   sgp_data_path <- paste0(func_prefix, current_dataset$local_path_sgp)
-  use_sgp_data <- !is.null(current_dataset$local_path_sgp) && file.exists(sgp_data_path)
-  
+  use_sgp_data <- !is.null(current_dataset$local_path_sgp) &&
+    file.exists(sgp_data_path)
+
   if (use_sgp_data) {
     cat("  Using SGP data file (includes SGP_ORDER_1 and SGP columns)\n")
     load(sgp_data_path)
-    
+
     if (exists(current_dataset$rdata_object_name_sgp)) {
       STATE_DATA_LONG <- get(current_dataset$rdata_object_name_sgp)
       cat("  Loaded:", current_dataset$rdata_object_name_sgp, "\n")
       cat("  Rows:", nrow(STATE_DATA_LONG), "\n\n")
     } else {
-      stop("Expected object '", current_dataset$rdata_object_name_sgp, "' not found in SGP .Rdata file")
+      stop(
+        "Expected object '",
+        current_dataset$rdata_object_name_sgp,
+        "' not found in SGP .Rdata file"
+      )
     }
   } else {
     # Fallback to base data file
     cat("  SGP data file not found, using base data file\n")
-    
+
     data_path <- paste0(func_prefix, current_dataset$local_path)
-    
+
     if (!file.exists(data_path)) {
-      stop("Data file not found at: ", data_path,
-           "\nPlease ensure data is available or update path in dataset_configs.R")
+      stop(
+        "Data file not found at: ",
+        data_path,
+        "\nPlease ensure data is available or update path in dataset_configs.R"
+      )
     }
-    
+
     load(data_path)
-    
+
     if (exists(current_dataset$rdata_object_name)) {
       STATE_DATA_LONG <- get(current_dataset$rdata_object_name)
       cat("  Loaded:", current_dataset$rdata_object_name, "\n")
       cat("  Rows:", nrow(STATE_DATA_LONG), "\n\n")
     } else {
-      stop("Expected object '", current_dataset$rdata_object_name, "' not found in .Rdata file")
+      stop(
+        "Expected object '",
+        current_dataset$rdata_object_name,
+        "' not found in .Rdata file"
+      )
     }
   }
 }
@@ -134,32 +156,47 @@ if (length(years) >= 2) {
 
 # Select content area and grades
 content_area <- "MATHEMATICS"
-grades <- sort(as.numeric(unique(STATE_DATA_LONG[CONTENT_AREA == content_area]$GRADE)))
-grade_prior_num <- grades[3]  # Pick middle-ish grade
+grades <- sort(as.numeric(unique(
+  STATE_DATA_LONG[CONTENT_AREA == content_area]$GRADE
+)))
+grade_prior_num <- grades[3] # Pick middle-ish grade
 grade_current_num <- grade_prior_num + 1
 
 # Convert to character for data.table filtering (GRADE is stored as character)
 grade_prior <- as.character(grade_prior_num)
 grade_current <- as.character(grade_current_num)
 
-cat(sprintf("Test condition: %s->%s, Grade %s->%s, %s\n",
-            year_prior, year_current, grade_prior, grade_current, content_area))
+cat(sprintf(
+  "Test condition: %s->%s, Grade %s->%s, %s\n",
+  year_prior,
+  year_current,
+  grade_prior,
+  grade_current,
+  content_area
+))
 
 # Extract scores
-test_data <- STATE_DATA_LONG[CONTENT_AREA == content_area & 
-                             YEAR == year_current & 
-                             GRADE == grade_current,
-                             .(ID, SCALE_SCORE_CURRENT = SCALE_SCORE)]
+test_data <- STATE_DATA_LONG[
+  CONTENT_AREA == content_area &
+    YEAR == year_current &
+    GRADE == grade_current,
+  .(ID, SCALE_SCORE_CURRENT = SCALE_SCORE)
+]
 
-prior_data <- STATE_DATA_LONG[CONTENT_AREA == content_area & 
-                              YEAR == year_prior & 
-                              GRADE == grade_prior,
-                              .(ID, SCALE_SCORE_PRIOR = SCALE_SCORE)]
+prior_data <- STATE_DATA_LONG[
+  CONTENT_AREA == content_area &
+    YEAR == year_prior &
+    GRADE == grade_prior,
+  .(ID, SCALE_SCORE_PRIOR = SCALE_SCORE)
+]
 
 merged_data <- merge(test_data, prior_data, by = "ID")
 merged_data <- na.omit(merged_data)
 
-cat(sprintf("Sample size: %s students\n", format(nrow(merged_data), big.mark = ",")))
+cat(sprintf(
+  "Sample size: %s students\n",
+  format(nrow(merged_data), big.mark = ",")
+))
 
 ################################################################################
 ### CREATE BIVARIATE DENSITY PLOT
@@ -168,10 +205,14 @@ cat(sprintf("Sample size: %s students\n", format(nrow(merged_data), big.mark = "
 cat("\nCreating bivariate density plot...\n")
 
 # Create subtitle showing grade/content/year progression (consistent with other plots)
-plot_subtitle <- sprintf("Grade %s -> %s, %s, %s -> %s",
-                         grade_prior, grade_current,
-                         content_area,
-                         year_prior, year_current)
+plot_subtitle <- sprintf(
+  "Grade %s -> %s, %s, %s -> %s",
+  grade_prior,
+  grade_current,
+  content_area,
+  year_prior,
+  year_current
+)
 
 # Create the plot with new styling
 p <- plot_bivariate_density(
@@ -247,6 +288,8 @@ print(p)
 
 cat("\n")
 cat("To iterate on styling:\n")
-cat("  1. Edit functions/copula_contour_plots.R (plot_bivariate_density function)\n")
+cat(
+  "  1. Edit functions/copula_contour_plots.R (plot_bivariate_density function)\n"
+)
 cat("  2. Re-run: source(\"STEP_1_Family_Selection/test_bivariate_plot.R\")\n")
 cat("\n")

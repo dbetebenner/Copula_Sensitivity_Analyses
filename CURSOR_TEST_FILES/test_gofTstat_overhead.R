@@ -14,7 +14,7 @@ cat("====================================================================\n\n")
 
 # Create test data
 set.seed(314159)
-n <- 28567  # Realistic sample size
+n <- 28567 # Realistic sample size
 rho <- 0.75
 df <- 47
 
@@ -37,7 +37,7 @@ start1 <- Sys.time()
 result1 <- copula::gofCopula(
   copula = t_cop,
   x = pseudo_obs,
-  N = 1,  # Just get statistic
+  N = 1, # Just get statistic
   method = "Sn",
   estim.method = "mpl",
   simulation = "pb",
@@ -78,12 +78,15 @@ cat("Method 3: gofTstat() directly on pseudo-obs [TEST]\n")
 cat("  Approach: Skip Rosenblatt transform\n")
 
 start3 <- Sys.time()
-stat3 <- tryCatch({
-  gofTstat(pseudo_obs, method = "Sn", copula = t_cop)
-}, error = function(e) {
-  cat("  ERROR:", e$message, "\n")
-  NA
-})
+stat3 <- tryCatch(
+  {
+    gofTstat(pseudo_obs, method = "Sn", copula = t_cop)
+  },
+  error = function(e) {
+    cat("  ERROR:", e$message, "\n")
+    NA
+  }
+)
 end3 <- Sys.time()
 time3 <- as.numeric(difftime(end3, start3, units = "secs"))
 
@@ -105,7 +108,11 @@ cat("====================================================================\n\n")
 cat("Statistics match:\n")
 cat("  Method 1 (gofCopula):", sprintf("%.10f", result1$statistic), "\n")
 cat("  Method 2 (manual):   ", sprintf("%.10f", stat2), "\n")
-cat("  Difference:          ", sprintf("%.2e", abs(result1$statistic - stat2)), "\n\n")
+cat(
+  "  Difference:          ",
+  sprintf("%.2e", abs(result1$statistic - stat2)),
+  "\n\n"
+)
 
 if (abs(result1$statistic - stat2) < 1e-10) {
   cat("  ✓ Statistics IDENTICAL (difference < 1e-10)\n\n")
@@ -119,12 +126,23 @@ cat("  Method 2:", sprintf("%6.4f", time2), "sec\n")
 cat("  Ratio:   ", sprintf("%6.2f", time2 / time1), "x\n\n")
 
 if (time2 < time1) {
-  cat("  ✓ Manual approach FASTER by", sprintf("%.1f%%", (1 - time2/time1)*100), "\n")
+  cat(
+    "  ✓ Manual approach FASTER by",
+    sprintf("%.1f%%", (1 - time2 / time1) * 100),
+    "\n"
+  )
   speedup_potential <- time1 / time2
-  cat("  → With parallelization, expect", sprintf("%.1fx", speedup_potential), 
-      "base speedup + core multiplier\n\n")
+  cat(
+    "  → With parallelization, expect",
+    sprintf("%.1fx", speedup_potential),
+    "base speedup + core multiplier\n\n"
+  )
 } else {
-  cat("  ✗ Manual approach SLOWER by", sprintf("%.1f%%", (time2/time1 - 1)*100), "\n")
+  cat(
+    "  ✗ Manual approach SLOWER by",
+    sprintf("%.1f%%", (time2 / time1 - 1) * 100),
+    "\n"
+  )
   cat("  → May NOT be worth parallelizing if overhead dominates\n\n")
 }
 
@@ -145,15 +163,27 @@ end_s <- Sys.time()
 time_statistic <- as.numeric(difftime(end_s, start_s, units = "secs"))
 
 cat("Time breakdown (Method 2):\n")
-cat("  Rosenblatt transform:", sprintf("%6.4f", time_rosenblatt), "sec",
-    sprintf("(%3.0f%%)", 100 * time_rosenblatt / time2), "\n")
-cat("  gofTstat():          ", sprintf("%6.4f", time_statistic), "sec",
-    sprintf("(%3.0f%%)", 100 * time_statistic / time2), "\n")
+cat(
+  "  Rosenblatt transform:",
+  sprintf("%6.4f", time_rosenblatt),
+  "sec",
+  sprintf("(%3.0f%%)", 100 * time_rosenblatt / time2),
+  "\n"
+)
+cat(
+  "  gofTstat():          ",
+  sprintf("%6.4f", time_statistic),
+  "sec",
+  sprintf("(%3.0f%%)", 100 * time_statistic / time2),
+  "\n"
+)
 cat("  Total:               ", sprintf("%6.4f", time2), "sec\n\n")
 
 if (time_rosenblatt > time_statistic * 2) {
   cat("  ⚠️  Rosenblatt transform is the bottleneck!\n")
-  cat("  → Parallelizing may not help much if transform isn't parallelizable\n\n")
+  cat(
+    "  → Parallelizing may not help much if transform isn't parallelizable\n\n"
+  )
 }
 
 cat("====================================================================\n")
@@ -166,7 +196,11 @@ if (abs(result1$statistic - stat2) < 1e-10 && time2 < time1 * 0.9) {
   cat("  - Mathematically equivalent (statistics match)\n")
   cat("  - Faster than gofCopula() (potential for speedup)\n")
   cat("  - Worth parallelizing\n\n")
-  cat("Expected speedup with 10 cores:", sprintf("%.1fx", 10 * time1 / time2), "\n")
+  cat(
+    "Expected speedup with 10 cores:",
+    sprintf("%.1fx", 10 * time1 / time2),
+    "\n"
+  )
 } else if (abs(result1$statistic - stat2) >= 1e-10) {
   cat("✗✗✗ DO NOT PROCEED ✗✗✗\n\n")
   cat("Statistics don't match - manual approach is incorrect!\n")
@@ -182,4 +216,3 @@ if (abs(result1$statistic - stat2) < 1e-10 && time2 < time1 * 0.9) {
 }
 
 cat("====================================================================\n")
-

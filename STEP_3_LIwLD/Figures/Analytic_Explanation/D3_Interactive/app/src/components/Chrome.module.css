@@ -1,0 +1,157 @@
+/* Chrome — title bar above the cross. */
+
+.chrome {
+  flex: 0 0 auto;
+  padding: var(--p-space-4) var(--p-space-5) var(--p-space-2);
+  border-bottom: 1px solid var(--e-divider);
+  background: var(--e-bg);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--p-space-3);
+}
+
+.row + .row {
+  margin-top: var(--p-space-2);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--e-text-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--e-text);
+}
+
+.titleAccent {
+  color: var(--e-subgroup-observed);
+}
+
+/* ---- Scenario chip ---- */
+
+.chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--p-space-2);
+  padding: var(--p-space-1) var(--p-space-2);
+  border: 1px solid var(--e-border-panel);
+  border-radius: var(--p-radius-sm);
+  font-size: var(--p-text-xs);
+  background: var(--e-bg-panel);
+}
+
+.chipLabel {
+  font-weight: 600;
+  color: var(--e-text);
+}
+
+.chipDivider {
+  color: var(--e-text-muted);
+}
+
+.chipCohort {
+  color: var(--e-text-soft);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.chipBadge {
+  margin-left: var(--p-space-1);
+  padding: 1px 6px;
+  background: var(--p-slate-100);
+  color: var(--e-text-soft);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.badgePublic {
+  background: rgba(20, 184, 166, 0.12);
+  color: var(--p-teal-700);
+}
+
+/* ---- Controls cluster ---- */
+
+.controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--p-space-2);
+}
+
+/* ---- Segmented PDF / CDF control ---- */
+
+.segment {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--e-border-panel);
+  border-radius: var(--p-radius-sm);
+  overflow: hidden;
+  background: var(--e-bg-panel);
+}
+
+.segmentBtn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 4px 12px;
+  font-size: var(--p-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--e-text-soft);
+  cursor: pointer;
+  transition: background 120ms var(--e-ease), color 120ms var(--e-ease);
+}
+.segmentBtn:not(:last-child) {
+  border-right: 1px solid var(--e-border-panel);
+}
+.segmentBtn:hover {
+  color: var(--e-text);
+}
+.segmentActive {
+  background: var(--e-subgroup-observed);
+  color: var(--e-text-inverse);
+}
+.segmentActive:hover {
+  color: var(--e-text-inverse);
+}
+
+/* ---- Toggle pill (Population, Show math) ---- */
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--e-border-panel);
+  border-radius: var(--p-radius-sm);
+  padding: 4px 10px;
+  font-size: var(--p-text-xs);
+  color: var(--e-text-soft);
+  cursor: pointer;
+  transition: color 120ms var(--e-ease), border-color 120ms var(--e-ease),
+    background 120ms var(--e-ease);
+}
+.toggle:hover {
+  color: var(--e-text);
+  border-color: var(--e-text-muted);
+}
+
+.toggleDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--p-slate-300);
+  transition: background 120ms var(--e-ease);
+}
+.toggleOn {
+  border-color: var(--e-population-stroke);
+  color: var(--e-text);
+}
+.toggleOn .toggleDot {
+  background: var(--e-population-stroke);
+}

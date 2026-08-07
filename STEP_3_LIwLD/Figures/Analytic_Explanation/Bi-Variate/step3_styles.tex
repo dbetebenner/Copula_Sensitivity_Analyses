@@ -1,0 +1,30 @@
+%%%%
+%%%% step3_styles.tex - Shared PSTricks/LaTeX definitions for Bi-Variate infographic
+%%%%
+%%%% Imports the canonical styles from Margins/ and adds Bi-Variate-specific
+%%%% colors and macros.
+%%%%
+
+%%% Import canonical styles from Margins
+\input{../Margins/step3_styles}
+
+%%% Bi-Variate-specific colors
+%%% Scatter dot color — a warm grey-blue that reads as "joint data"
+\definecolor{scatterDotColor}{HTML}{8A9048}
+
+%%% Density fill — translucent versions of the population reference
+\definecolor{densityFillX}{HTML}{8A9048}    % f_X fill (lighter teal-grey)
+\definecolor{densityFillY}{HTML}{8A9048}    % f_Y fill (matching)
+\definecolor{densityLineX}{HTML}{7A8038}    % f_X stroke
+\definecolor{densityLineY}{HTML}{7A8038}    % f_Y stroke
+
+%%% Panel label accent — used for h(X,Y), f_X, f_Y labels
+\definecolor{notationColor}{HTML}{5A6018}   % Dark teal for math notation
+
+%%% Question-mark color — visual "what's missing?" emphasis
+\definecolor{questionColor}{HTML}{5A6018}   % Zissou amber — attention/question
+
+%%% Bi-Variate notation macros
+\providecommand{\fX}{f_X}
+\providecommand{\fY}{f_Y}
+\providecommand{\hXY}{h(x,y)}

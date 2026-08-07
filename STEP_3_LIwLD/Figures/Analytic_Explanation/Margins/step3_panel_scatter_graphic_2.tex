@@ -172,7 +172,7 @@
     \psset{xunit=4.5in,yunit=0.3in}%
     \begin{pspicture}(0,0)(1,1)
       %% Background rectangle — U(0,1) reference fills the full strip
-      \psframe[fillstyle=solid,fillcolor=fillGrey,linecolor=borderGrey,linewidth=0.2pt](0,0)(1,1)
+      \psframe[fillstyle=solid,fillcolor=populationRefFill,linecolor=populationRef,opacity=0.5,linewidth=0.2pt](0,0)(1,1)
       \rput(0.5,0.5){\textsf{\normalsize\textcolor{white}{$U(0,1)$}}}
       \psline[linecolor=pitTraceColor,linewidth=0.4pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1]%
         (\exampleU,1.6)(\exampleU,0)
@@ -202,7 +202,7 @@
       %% Flip the entire plot vertically (y -> 1-y)
       \rput(0,1){\psscalebox{1 -1}{%
         %% Population reference (grey fill)
-        \pscustom[fillstyle=solid,fillcolor=fillGrey,linecolor=populationRef,linewidth=0.4pt,linecap=1]{%
+        \pscustom[fillstyle=solid,fillcolor=populationRefFill,linecolor=populationRef,opacity=0.5,linewidth=0.4pt,linecap=1]{%
           \psline(0,0)
           \listplot[plotstyle=line]{\dataPdfBotPop}
           \psline(1,0)
@@ -285,7 +285,7 @@
     \psset{xunit=0.3in,yunit=4.5in}%
     \begin{pspicture}(0,0)(1,1)
       %% Background rectangle — U(0,1) reference fills the full strip
-      \psframe[fillstyle=solid,fillcolor=fillGrey,linecolor=borderGrey,linewidth=0.2pt](0,0)(1,1)
+      \psframe[fillstyle=solid,fillcolor=populationRefFill,linecolor=populationRef,opacity=0.5,linewidth=0.2pt](0,0)(1,1)
       \rput{-90}(0.5,0.5){\textsf{\normalsize\textcolor{white}{$U(0,1)$}}}
       \psline[linecolor=pitTraceColor,linewidth=0.4pt,linestyle=dashed,dash=2pt 1.5pt,linecap=1]%
         (0,\exampleV)(1.6,\exampleV)
@@ -315,7 +315,7 @@
       %% Flip the entire plot horizontally (x -> 1-x)
       \rput(1,0){\psscalebox{-1 1}{%
         %% Population reference (grey fill)
-        \pscustom[fillstyle=solid,fillcolor=fillGrey,linecolor=populationRef,linewidth=0.4pt,linecap=1]{%
+        \pscustom[fillstyle=solid,fillcolor=populationRefFill,linecolor=populationRef,opacity=0.5,linewidth=0.4pt,linecap=1]{%
           \psline(0,0)
           \listplot[plotstyle=line]{\dataPdfLeftPop}
           \psline(0,1)
@@ -396,9 +396,11 @@
       \psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=white,opacity=0.2,framesep=3pt,linewidth=0.5pt]{%
         \begin{tabular}{@{}r@{\hspace{3pt}}l@{}}
           {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%
+            \psline[linecolor=populationRef,linewidth=0.5pt,linecap=1](0,0)(0.2,0)%
             \psdot[dotsize=2.0pt,linecolor=populationRef,dotstyle=*](0.1,0)}}} &
           \textsf{\footnotesize Population $P$} \\[2pt]
           {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%
+            \psline[linecolor=subgroupColor,linewidth=0.8pt,linecap=1](0,0)(0.2,0)%
             \psdot[dotsize=2.5pt,linecolor=subgroupColor,dotstyle=*](0.1,0)}}} &
           \textsf{\footnotesize Subgroup $M$} \\[2pt]
           {\psset{unit=1cm}\makebox[0.25cm][l]{\raisebox{2pt}{%

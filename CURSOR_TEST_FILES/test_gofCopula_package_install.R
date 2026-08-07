@@ -14,13 +14,16 @@ if (!require("devtools", quietly = TRUE)) {
 
 # Install gofCopula package
 cat("Installing gofCopula package from GitHub...\n")
-tryCatch({
-  devtools::install_github("SimonTrimborn/gofCopula", quiet = FALSE)
-  cat("\n✓ gofCopula package installed successfully!\n\n")
-}, error = function(e) {
-  cat("\n✗ Installation failed:", e$message, "\n")
-  stop("Cannot proceed without gofCopula package")
-})
+tryCatch(
+  {
+    devtools::install_github("SimonTrimborn/gofCopula", quiet = FALSE)
+    cat("\n✓ gofCopula package installed successfully!\n\n")
+  },
+  error = function(e) {
+    cat("\n✗ Installation failed:", e$message, "\n")
+    stop("Cannot proceed without gofCopula package")
+  }
+)
 
 cat("====================================================================\n")
 cat("STEP 2: Verify package loads correctly\n")
@@ -70,43 +73,45 @@ results <- data.frame(
 
 for (our_name in names(families_map)) {
   pkg_name <- families_map[[our_name]]
-  
+
   cat("Testing:", our_name, "(gofCopula name:", pkg_name, ")\n")
-  
-  result <- tryCatch({
-    # Use gofCopula package's gofKendallCvM function
-    gof_result <- gofCopula::gofKendallCvM(
-      copula = pkg_name,
-      x = test_data,
-      M = 10,  # Small M for speed
-      param.est = TRUE,
-      margins = "ranks"
-    )
-    
-    cat("  ✓ SUCCESS\n")
-    cat("    Statistic:", gof_result$statistic, "\n")
-    cat("    P-value:", gof_result$p.value, "\n\n")
-    
-    data.frame(
-      Our_Name = our_name,
-      Package_Name = pkg_name,
-      Status = "SUCCESS",
-      P_Value = gof_result$p.value,
-      Error = NA_character_
-    )
-    
-  }, error = function(e) {
-    cat("  ✗ FAILED:", e$message, "\n\n")
-    
-    data.frame(
-      Our_Name = our_name,
-      Package_Name = pkg_name,
-      Status = "FAILED",
-      P_Value = NA_real_,
-      Error = e$message
-    )
-  })
-  
+
+  result <- tryCatch(
+    {
+      # Use gofCopula package's gofKendallCvM function
+      gof_result <- gofCopula::gofKendallCvM(
+        copula = pkg_name,
+        x = test_data,
+        M = 10, # Small M for speed
+        param.est = TRUE,
+        margins = "ranks"
+      )
+
+      cat("  ✓ SUCCESS\n")
+      cat("    Statistic:", gof_result$statistic, "\n")
+      cat("    P-value:", gof_result$p.value, "\n\n")
+
+      data.frame(
+        Our_Name = our_name,
+        Package_Name = pkg_name,
+        Status = "SUCCESS",
+        P_Value = gof_result$p.value,
+        Error = NA_character_
+      )
+    },
+    error = function(e) {
+      cat("  ✗ FAILED:", e$message, "\n\n")
+
+      data.frame(
+        Our_Name = our_name,
+        Package_Name = pkg_name,
+        Status = "FAILED",
+        P_Value = NA_real_,
+        Error = e$message
+      )
+    }
+  )
+
   results <- rbind(results, result)
 }
 
@@ -116,39 +121,41 @@ cat("====================================================================\n\n")
 
 cat("Testing: comonotonic\n")
 
-comon_result <- tryCatch({
-  # Try with gofCopula package
-  gof_result <- gofCopula::gofKendallCvM(
-    copula = "comonotonic",
-    x = test_data,
-    M = 10,
-    param.est = TRUE,
-    margins = "ranks"
-  )
-  
-  cat("  ✓ SUCCESS with gofCopula package!\n")
-  cat("    P-value:", gof_result$p.value, "\n\n")
-  
-  data.frame(
-    Our_Name = "comonotonic",
-    Package_Name = "comonotonic",
-    Status = "SUCCESS",
-    P_Value = gof_result$p.value,
-    Error = NA_character_
-  )
-  
-}, error = function(e) {
-  cat("  ✗ FAILED:", e$message, "\n")
-  cat("  → Will need custom implementation\n\n")
-  
-  data.frame(
-    Our_Name = "comonotonic",
-    Package_Name = "comonotonic",
-    Status = "NEEDS_CUSTOM",
-    P_Value = NA_real_,
-    Error = e$message
-  )
-})
+comon_result <- tryCatch(
+  {
+    # Try with gofCopula package
+    gof_result <- gofCopula::gofKendallCvM(
+      copula = "comonotonic",
+      x = test_data,
+      M = 10,
+      param.est = TRUE,
+      margins = "ranks"
+    )
+
+    cat("  ✓ SUCCESS with gofCopula package!\n")
+    cat("    P-value:", gof_result$p.value, "\n\n")
+
+    data.frame(
+      Our_Name = "comonotonic",
+      Package_Name = "comonotonic",
+      Status = "SUCCESS",
+      P_Value = gof_result$p.value,
+      Error = NA_character_
+    )
+  },
+  error = function(e) {
+    cat("  ✗ FAILED:", e$message, "\n")
+    cat("  → Will need custom implementation\n\n")
+
+    data.frame(
+      Our_Name = "comonotonic",
+      Package_Name = "comonotonic",
+      Status = "NEEDS_CUSTOM",
+      P_Value = NA_real_,
+      Error = e$message
+    )
+  }
+)
 
 results <- rbind(results, comon_result)
 
@@ -172,7 +179,9 @@ cat("====================================================================\n")
 cat("STEP 6: Compare gofCopula vs copula package\n")
 cat("====================================================================\n\n")
 
-cat("Testing same data with both packages to verify different implementations:\n\n")
+cat(
+  "Testing same data with both packages to verify different implementations:\n\n"
+)
 
 # Test Gaussian with both packages
 cat("Gaussian copula:\n")
@@ -201,11 +210,12 @@ gof2 <- copula::gofCopula(
 )
 cat("  copula package p-value:", gof2$p.value, "\n")
 
-cat("\nNote: P-values will differ due to different tests and random bootstrap\n")
+cat(
+  "\nNote: P-values will differ due to different tests and random bootstrap\n"
+)
 cat("      gofCopula uses Kendall's CvM test\n")
 cat("      copula uses standard CvM test\n")
 
 cat("\n====================================================================\n")
 cat("TEST COMPLETE - Ready to implement in production code\n")
 cat("====================================================================\n\n")
-

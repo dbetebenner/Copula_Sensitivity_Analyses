@@ -35,46 +35,70 @@ require(jsonlite)
 #' @return Invisible list with paths to JSON and MD files.
 #'
 #' @export
-export_step3_manifest <- function(results,
-                                   output_dir = "results",
-                                   prefix = "step3",
-                                   verbose = TRUE) {
-
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+export_step3_manifest <- function(
+  results,
+  output_dir = "results",
+  prefix = "step3",
+  verbose = TRUE
+) {
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
 
   # Build manifest structure
   manifest <- list(
     metadata = list(
       generated_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
-      step         = "STEP_3_LIwLD",
-      description  = "Growth regime inference from cross-sectional data",
-      n_subgroups  = length(results$subgroup_estimates),
-      config       = results$config
+      step = "STEP_3_LIwLD",
+      description = "Growth regime inference from cross-sectional data",
+      n_subgroups = length(results$subgroup_estimates),
+      config = results$config
     )
   )
 
   # Subgroup summaries
-  subgroup_summaries <- lapply(names(results$subgroup_estimates), function(sg_id) {
-    est <- results$subgroup_estimates[[sg_id]]
-    if (is.null(est)) return(NULL)
+  subgroup_summaries <- lapply(
+    names(results$subgroup_estimates),
+    function(sg_id) {
+      est <- results$subgroup_estimates[[sg_id]]
+      if (is.null(est)) {
+        return(NULL)
+      }
 
-    list(
-      subgroup_id    = sg_id,
-      regime_family  = est$regime$family,
-      regime_param_hat = est$regime_param_hat,
-      m_hat          = est$m_hat,
-      kappa_hat      = est$kappa_hat,
-      median_sgpc    = round(est$regime$median * 100, 2),
-      mean_sgpc      = round(est$regime$mean * 100, 2),
-      dispersion_sd  = if (!is.null(est$regime$sd))  round(est$regime$sd * 100, 2) else NA,
-      dispersion_iqr = if (!is.null(est$regime$iqr)) round(est$regime$iqr * 100, 2) else NA,
-      entropy        = if (!is.null(est$regime$entropy)) round(est$regime$entropy, 4) else NA,
-      concentration  = if (!is.null(est$regime$concentration)) round(est$regime$concentration, 2) else NA,
-      distance_min   = round(est$distance_min, 6),
-      distances      = lapply(est$all_distances, function(x) round(x, 6)),
-      convergence    = est$convergence
-    )
-  })
+      list(
+        subgroup_id = sg_id,
+        regime_family = est$regime$family,
+        regime_param_hat = est$regime_param_hat,
+        m_hat = est$m_hat,
+        kappa_hat = est$kappa_hat,
+        median_sgpc = round(est$regime$median * 100, 2),
+        mean_sgpc = round(est$regime$mean * 100, 2),
+        dispersion_sd = if (!is.null(est$regime$sd)) {
+          round(est$regime$sd * 100, 2)
+        } else {
+          NA
+        },
+        dispersion_iqr = if (!is.null(est$regime$iqr)) {
+          round(est$regime$iqr * 100, 2)
+        } else {
+          NA
+        },
+        entropy = if (!is.null(est$regime$entropy)) {
+          round(est$regime$entropy, 4)
+        } else {
+          NA
+        },
+        concentration = if (!is.null(est$regime$concentration)) {
+          round(est$regime$concentration, 2)
+        } else {
+          NA
+        },
+        distance_min = round(est$distance_min, 6),
+        distances = lapply(est$all_distances, function(x) round(x, 6)),
+        convergence = est$convergence
+      )
+    }
+  )
   subgroup_summaries <- Filter(Negate(is.null), subgroup_summaries)
   manifest$subgroup_estimates <- subgroup_summaries
 
@@ -83,10 +107,10 @@ export_step3_manifest <- function(results,
     boot <- results$bootstrap_results
     manifest$uncertainty <- list(
       sampling = list(
-        n_boot          = boot$n_boot,
-        n_converged     = boot$n_converged,
-        ci_median_sgpc  = as.numeric(boot$ci_median_sgpc),
-        se_median_sgpc  = round(boot$se_median_sgpc, 2)
+        n_boot = boot$n_boot,
+        n_converged = boot$n_converged,
+        ci_median_sgpc = as.numeric(boot$ci_median_sgpc),
+        se_median_sgpc = round(boot$se_median_sgpc, 2)
       )
     )
   }
@@ -95,9 +119,12 @@ export_step3_manifest <- function(results,
   if (!is.null(results$copula_uncertainty_results)) {
     cop_unc <- results$copula_uncertainty_results
     manifest$uncertainty$copula <- list(
-      var_copula      = round(cop_unc$var_copula, 4),
-      n_draws         = length(cop_unc$median_sgpc_draws),
-      median_sgpc_range = round(range(cop_unc$median_sgpc_draws, na.rm = TRUE), 2)
+      var_copula = round(cop_unc$var_copula, 4),
+      n_draws = length(cop_unc$median_sgpc_draws),
+      median_sgpc_range = round(
+        range(cop_unc$median_sgpc_draws, na.rm = TRUE),
+        2
+      )
     )
   }
 
@@ -189,7 +216,8 @@ export_step3_manifest <- function(results,
   # Phase B precision operating table (if available)
   if (!is.null(manifest$phase_b_systematic)) {
     pb <- manifest$phase_b_systematic
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       "---",
       "",
       "## Phase B: Systematic Validation Summary",
@@ -197,26 +225,37 @@ export_step3_manifest <- function(results,
     )
     if (!is.null(pb$overview)) {
       ov <- pb$overview
-      sampling_modes_str <- if (!is.null(ov$sampling_modes))
-        paste(ov$sampling_modes, collapse = ", ") else "paired"
-      md_lines <- c(md_lines,
+      sampling_modes_str <- if (!is.null(ov$sampling_modes)) {
+        paste(ov$sampling_modes, collapse = ", ")
+      } else {
+        "paired"
+      }
+      md_lines <- c(
+        md_lines,
         paste0("- **Conditions tested:** ", ov$n_conditions),
         paste0("- **Subgroup-condition pairs:** ", ov$n_subgroup_conditions),
         paste0("- **Year spans:** ", paste(ov$year_spans, collapse = ", ")),
-        paste0("- **Content areas:** ", paste(ov$content_areas, collapse = ", ")),
+        paste0(
+          "- **Content areas:** ",
+          paste(ov$content_areas, collapse = ", ")
+        ),
         paste0("- **N buckets:** ", paste(ov$n_buckets, collapse = ", ")),
         paste0("- **Pool types:** ", paste(ov$pool_types, collapse = ", ")),
         paste0("- **Sampling modes:** ", sampling_modes_str),
         paste0("- **Outer replicates per cell:** ", ov$outer_reps),
-        paste0("- **Overall convergence rate:** ",
-               round(ov$overall_convergence_rate * 100, 1), "%"),
+        paste0(
+          "- **Overall convergence rate:** ",
+          round(ov$overall_convergence_rate * 100, 1),
+          "%"
+        ),
         ""
       )
     }
     # Precision operating table by (year_span x n_bucket)
     if (!is.null(pb$precision_by_n_span)) {
       tbl <- pb$precision_by_n_span
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Precision Operating Table (Median SGPc, averaged across conditions)",
         "",
         "Columns: 95% CI width | MAE | Convergence rate  —  by N bucket and year span",
@@ -229,18 +268,26 @@ export_step3_manifest <- function(results,
       for (sp in spans) {
         cells <- sapply(buckets_ordered, function(nb) {
           row <- Filter(function(r) r$year_span == sp && r$n_bucket == nb, tbl)
-          if (length(row) == 0L) return("—")
+          if (length(row) == 0L) {
+            return("—")
+          }
           r <- row[[1]]
-          paste0(round(r$median_ci_width_95, 1), " / ",
-                 round(r$median_mae, 1), " / ",
-                 round(r$convergence_rate * 100, 0), "%")
+          paste0(
+            round(r$median_ci_width_95, 1),
+            " / ",
+            round(r$median_mae, 1),
+            " / ",
+            round(r$convergence_rate * 100, 0),
+            "%"
+          )
         })
-        md_lines <- c(md_lines,
-          paste0("| ", sp, "-yr span | ",
-                 paste(cells, collapse = " | "), " |")
+        md_lines <- c(
+          md_lines,
+          paste0("| ", sp, "-yr span | ", paste(cells, collapse = " | "), " |")
         )
       }
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "",
         "_Format: 95% CI width (SGP units) / MAE (SGP units) / convergence rate_",
         "",
@@ -252,12 +299,19 @@ export_step3_manifest <- function(results,
     }
     # Year-span finding
     if (!is.null(pb$year_span_finding)) {
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Year Span Finding",
         "",
-        paste0("- **Mean |median error| by span** — ",
-               paste(names(pb$year_span_finding), ":", round(unlist(pb$year_span_finding), 2),
-                     collapse = "; ")),
+        paste0(
+          "- **Mean |median error| by span** — ",
+          paste(
+            names(pb$year_span_finding),
+            ":",
+            round(unlist(pb$year_span_finding), 2),
+            collapse = "; "
+          )
+        ),
         ""
       )
     }
@@ -265,7 +319,8 @@ export_step3_manifest <- function(results,
     # Linkage premium (sampling-mode decomposition)
     if (!is.null(pb$linkage_premium)) {
       lp <- pb$linkage_premium
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Linkage Premium: Paired vs Independent Cohort Sampling",
         "",
         "Phase B decomposes Error 1 (sampling uncertainty) into two sub-components",
@@ -275,25 +330,43 @@ export_step3_manifest <- function(results,
         "- **Independent** — separate random draws for prior and current, mirroring the TIMSS/NAEP",
         "  cross-sectional design where Grade 4 and Grade 8 are different students tested in the same year",
         "",
-        paste0("The **linkage premium** is the multiplicative factor by which uncertainty increases ",
-               "when moving from paired to independent sampling. Mean CI ratio: **",
-               lp$mean_ci_ratio, "x**; Mean MAE ratio: **", lp$mean_mae_ratio, "x**."),
+        paste0(
+          "The **linkage premium** is the multiplicative factor by which uncertainty increases ",
+          "when moving from paired to independent sampling. Mean CI ratio: **",
+          lp$mean_ci_ratio,
+          "x**; Mean MAE ratio: **",
+          lp$mean_mae_ratio,
+          "x**."
+        ),
         "",
         "| N Bucket | CI (Paired) | CI (Independent) | CI Ratio | MAE (Paired) | MAE (Independent) | MAE Ratio |",
         "|----------|-------------|------------------|----------|--------------|-------------------|-----------|"
       )
       for (row in lp$premium_by_n_bucket) {
-        md_lines <- c(md_lines,
-          paste0("| ", formatC(row$n_bucket, format = "d", big.mark = ","),
-                 " | ", round(row$ci_width_95_paired, 1),
-                 " | ", round(row$ci_width_95_independent, 1),
-                 " | ", row$ci_ratio, "x",
-                 " | ", round(row$mae_paired, 1),
-                 " | ", round(row$mae_independent, 1),
-                 " | ", row$mae_ratio, "x |")
+        md_lines <- c(
+          md_lines,
+          paste0(
+            "| ",
+            formatC(row$n_bucket, format = "d", big.mark = ","),
+            " | ",
+            round(row$ci_width_95_paired, 1),
+            " | ",
+            round(row$ci_width_95_independent, 1),
+            " | ",
+            row$ci_ratio,
+            "x",
+            " | ",
+            round(row$mae_paired, 1),
+            " | ",
+            round(row$mae_independent, 1),
+            " | ",
+            row$mae_ratio,
+            "x |"
+          )
         )
       }
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "",
         "_CI = 95% confidence interval width (SGP units); MAE = mean absolute error (SGP units)._",
         "_Ratio > 1 indicates the precision cost of not having longitudinal pairing._",
@@ -307,28 +380,43 @@ export_step3_manifest <- function(results,
 
       # Precision by (year_span x n_bucket x sampling_mode) table if available
       if (!is.null(lp$precision_by_n_span_mode)) {
-        md_lines <- c(md_lines,
+        md_lines <- c(
+          md_lines,
           "#### Full Precision Table by Year Span, N, and Sampling Mode",
           "",
           "| Sampling Mode | Year Span | N | 95% CI Width | MAE | Convergence |",
           "|---------------|-----------|-------|--------------|------|-------------|"
         )
         for (row in lp$precision_by_n_span_mode) {
-          md_lines <- c(md_lines,
-            paste0("| ", row$sampling_mode,
-                   " | ", row$year_span,
-                   " | ", formatC(row$n_bucket, format = "d", big.mark = ","),
-                   " | ", round(row$median_ci_width_95, 1),
-                   " | ", round(row$median_mae, 1),
-                   " | ", round(row$convergence_rate * 100, 0), "% |")
+          md_lines <- c(
+            md_lines,
+            paste0(
+              "| ",
+              row$sampling_mode,
+              " | ",
+              row$year_span,
+              " | ",
+              formatC(row$n_bucket, format = "d", big.mark = ","),
+              " | ",
+              round(row$median_ci_width_95, 1),
+              " | ",
+              round(row$median_mae, 1),
+              " | ",
+              round(row$convergence_rate * 100, 0),
+              "% |"
+            )
           )
         }
         md_lines <- c(md_lines, "")
       }
 
       # Linkage fraction curve table (when partial fractions available)
-      if (!is.null(lp$linkage_fraction_curve) && length(lp$linkage_fraction_curve) > 0) {
-        md_lines <- c(md_lines,
+      if (
+        !is.null(lp$linkage_fraction_curve) &&
+          length(lp$linkage_fraction_curve) > 0
+      ) {
+        md_lines <- c(
+          md_lines,
           "#### Linkage Fraction Curve: CI Width by Overlap Strength",
           "",
           "The linkage_fraction parameter maps the continuous space between fully ",
@@ -339,16 +427,27 @@ export_step3_manifest <- function(results,
           "|------------------|-------|----------------------|---------------------|------|-------|"
         )
         for (row in lp$linkage_fraction_curve) {
-          md_lines <- c(md_lines,
-            paste0("| ", sprintf("%.0f%%", row$linkage_fraction * 100),
-                   " | ", formatC(row$n_bucket, format = "d", big.mark = ","),
-                   " | ", round(row$median_ci_width_95, 1),
-                   " | ", round(row$mean_ci_width_95, 1),
-                   " | ", round(row$median_mae, 1),
-                   " | ", row$n_pools, " |")
+          md_lines <- c(
+            md_lines,
+            paste0(
+              "| ",
+              sprintf("%.0f%%", row$linkage_fraction * 100),
+              " | ",
+              formatC(row$n_bucket, format = "d", big.mark = ","),
+              " | ",
+              round(row$median_ci_width_95, 1),
+              " | ",
+              round(row$mean_ci_width_95, 1),
+              " | ",
+              round(row$median_mae, 1),
+              " | ",
+              row$n_pools,
+              " |"
+            )
           )
         }
-        md_lines <- c(md_lines,
+        md_lines <- c(
+          md_lines,
           "",
           "_CI width decreases monotonically as linkage_fraction increases from 0 to 1,_",
           "_quantifying the precision gain from partial or full cohort overlap._",
@@ -359,7 +458,8 @@ export_step3_manifest <- function(results,
   }
 
   # Subgroup estimates (Phase A showcase + any Phase B summaries)
-  md_lines <- c(md_lines,
+  md_lines <- c(
+    md_lines,
     "---",
     "",
     "## Phase A: Subgroup Estimates (Deep-Dive Condition)",
@@ -367,13 +467,21 @@ export_step3_manifest <- function(results,
   )
 
   for (sg in subgroup_summaries) {
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       paste0("### ", sg$subgroup_id),
       paste0("- **Regime family:** ", sg$regime_family),
-      paste0("- **Parameters (m, κ):** ", paste(round(sg$regime_param_hat, 4), collapse = ", ")),
+      paste0(
+        "- **Parameters (m, κ):** ",
+        paste(round(sg$regime_param_hat, 4), collapse = ", ")
+      ),
       paste0("- **Inferred median SGPc:** ", sg$median_sgpc),
       paste0("- **Inferred mean SGPc:** ", sg$mean_sgpc),
-      if (!is.na(sg$dispersion_sd)) paste0("- **Dispersion (SD):** ", sg$dispersion_sd) else NULL,
+      if (!is.na(sg$dispersion_sd)) {
+        paste0("- **Dispersion (SD):** ", sg$dispersion_sd)
+      } else {
+        NULL
+      },
       paste0("- **Wasserstein-1:** ", sg$distances$wasserstein1),
       paste0("- **CvM:** ", sg$distances$cramer_von_mises),
       ""
@@ -382,7 +490,8 @@ export_step3_manifest <- function(results,
 
   # Uncertainty / error decomposition
   if (!is.null(results$bootstrap_results) || !is.null(manifest$error_sources)) {
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       "---",
       "",
       "## Uncertainty Quantification and Error Decomposition",
@@ -390,25 +499,44 @@ export_step3_manifest <- function(results,
     )
     if (!is.null(results$bootstrap_results)) {
       boot <- results$bootstrap_results
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Error 1 — Sampling Uncertainty (Phase A bootstrap at full N)",
-        paste0("- **Replicates:** ", boot$n_boot,
-               " (converged: ", boot$n_converged, ")"),
-        paste0("- **Median SGPc 95% CI:** [",
-               round(boot$ci_median_sgpc[1], 1), ", ",
-               round(boot$ci_median_sgpc[2], 1), "]"),
+        paste0(
+          "- **Replicates:** ",
+          boot$n_boot,
+          " (converged: ",
+          boot$n_converged,
+          ")"
+        ),
+        paste0(
+          "- **Median SGPc 95% CI:** [",
+          round(boot$ci_median_sgpc[1], 1),
+          ", ",
+          round(boot$ci_median_sgpc[2], 1),
+          "]"
+        ),
         paste0("- **SE (median SGPc):** ", round(boot$se_median_sgpc, 2)),
         ""
       )
     }
     if (!is.null(manifest$error_sources)) {
       es <- manifest$error_sources
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Error 2 — Inference Error (Phase A inferred vs. true at full N)",
         paste0("- **Inferred median SGPc:** ", es$inference$inferred_median),
         paste0("- **True median SGPc:** ", es$inference$true_median),
-        paste0("- **Median error (bias):** ", es$inference$median_error, " SGP units"),
-        paste0("- **Mean error (bias):** ", es$inference$mean_error, " SGP units"),
+        paste0(
+          "- **Median error (bias):** ",
+          es$inference$median_error,
+          " SGP units"
+        ),
+        paste0(
+          "- **Mean error (bias):** ",
+          es$inference$mean_error,
+          " SGP units"
+        ),
         "",
         "_Interpretation: Error 2 is the residual bias at full subgroup N, attributable_",
         "_to copula misspecification or regime family mismatch, not to small-sample noise._",
@@ -416,7 +544,8 @@ export_step3_manifest <- function(results,
       )
       if (!is.null(es$variance_decomposition)) {
         vd <- es$variance_decomposition
-        md_lines <- c(md_lines,
+        md_lines <- c(
+          md_lines,
           "### Variance Decomposition (Phase A bootstrap)",
           paste0("- **Var(sampling):** ", round(vd$var_sampling, 4)),
           paste0("- **Var(copula param):** ", round(vd$var_copula, 4)),
@@ -431,44 +560,83 @@ export_step3_manifest <- function(results,
   # Bucket classification
   if (!is.null(manifest$bucket_classification)) {
     bc <- manifest$bucket_classification
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       "---",
       "",
       "## Bucket Classification",
       "",
-      paste0("- **K=3 thresholds:** Low < ", bc$cutpoints_k3[1],
-             " | Typical ", bc$cutpoints_k3[1], "–", bc$cutpoints_k3[2],
-             " | High > ", bc$cutpoints_k3[2]),
-      paste0("- **K=5 thresholds:** Low < ", bc$cutpoints_k5[1],
-             " | Low-Typ ", bc$cutpoints_k5[1], "–", bc$cutpoints_k5[2],
-             " | Typical ", bc$cutpoints_k5[2], "–", bc$cutpoints_k5[3],
-             " | High-Typ ", bc$cutpoints_k5[3], "–", bc$cutpoints_k5[4],
-             " | High > ", bc$cutpoints_k5[4]),
-      paste0("- **Mean K=3 classification consistency:** ",
-             round(bc$mean_k3_consistency * 100, 1), "%"),
-      paste0("- **Mean K=5 classification consistency:** ",
-             round(bc$mean_k5_consistency * 100, 1), "%"),
+      paste0(
+        "- **K=3 thresholds:** Low < ",
+        bc$cutpoints_k3[1],
+        " | Typical ",
+        bc$cutpoints_k3[1],
+        "–",
+        bc$cutpoints_k3[2],
+        " | High > ",
+        bc$cutpoints_k3[2]
+      ),
+      paste0(
+        "- **K=5 thresholds:** Low < ",
+        bc$cutpoints_k5[1],
+        " | Low-Typ ",
+        bc$cutpoints_k5[1],
+        "–",
+        bc$cutpoints_k5[2],
+        " | Typical ",
+        bc$cutpoints_k5[2],
+        "–",
+        bc$cutpoints_k5[3],
+        " | High-Typ ",
+        bc$cutpoints_k5[3],
+        "–",
+        bc$cutpoints_k5[4],
+        " | High > ",
+        bc$cutpoints_k5[4]
+      ),
+      paste0(
+        "- **Mean K=3 classification consistency:** ",
+        round(bc$mean_k3_consistency * 100, 1),
+        "%"
+      ),
+      paste0(
+        "- **Mean K=5 classification consistency:** ",
+        round(bc$mean_k5_consistency * 100, 1),
+        "%"
+      ),
       ""
     )
     if (!is.null(bc$subgroups) && length(bc$subgroups) > 0) {
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "| Subgroup | K=3 Bucket | K=3 Consistency | K=5 Bucket | K=5 Consistency |",
         "|----------|------------|-----------------|------------|-----------------|"
       )
       for (sg in bc$subgroups) {
-        md_lines <- c(md_lines, paste0(
-          "| ", sg$subgroup_id,
-          " | ", sg$k3_assigned,
-          " | ", round(sg$k3_consistency * 100, 1), "%",
-          " | ", sg$k5_assigned,
-          " | ", round(sg$k5_consistency * 100, 1), "% |"
-        ))
+        md_lines <- c(
+          md_lines,
+          paste0(
+            "| ",
+            sg$subgroup_id,
+            " | ",
+            sg$k3_assigned,
+            " | ",
+            round(sg$k3_consistency * 100, 1),
+            "%",
+            " | ",
+            sg$k5_assigned,
+            " | ",
+            round(sg$k5_consistency * 100, 1),
+            "% |"
+          )
+        )
       }
       md_lines <- c(md_lines, "")
     }
   }
 
-  md_lines <- c(md_lines,
+  md_lines <- c(
+    md_lines,
     "---",
     "",
     "## Output Files",
@@ -562,26 +730,30 @@ export_step3_manifest <- function(results,
 #'
 #' @export
 export_run_metadata <- function(config, output_dir = "results", seed = NULL) {
-
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
 
   metadata <- list(
-    timestamp    = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
-    r_version    = paste(R.version$major, R.version$minor, sep = "."),
-    platform     = R.version$platform,
-    packages     = list(
-      copula     = as.character(packageVersion("copula")),
+    timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S"),
+    r_version = paste(R.version$major, R.version$minor, sep = "."),
+    platform = R.version$platform,
+    packages = list(
+      copula = as.character(packageVersion("copula")),
       data.table = as.character(packageVersion("data.table")),
-      jsonlite   = as.character(packageVersion("jsonlite"))
+      jsonlite = as.character(packageVersion("jsonlite"))
     ),
-    rng_seed     = seed,
-    config       = config
+    rng_seed = seed,
+    config = config
   )
 
   # Attempt git hash
-  git_hash <- tryCatch({
-    system("git rev-parse --short HEAD", intern = TRUE, ignore.stderr = TRUE)
-  }, error = function(e) "unknown")
+  git_hash <- tryCatch(
+    {
+      system("git rev-parse --short HEAD", intern = TRUE, ignore.stderr = TRUE)
+    },
+    error = function(e) "unknown"
+  )
   metadata$git_hash <- git_hash
 
   path <- file.path(output_dir, "run_metadata.json")
@@ -604,12 +776,15 @@ export_run_metadata <- function(config, output_dir = "results", seed = NULL) {
 #' @return Invisible list with paths to JSON and MD files.
 #'
 #' @export
-export_phase_a_manifest <- function(phase_a_results,
-                                    output_dir = "results",
-                                    prefix = "phase_a",
-                                    verbose = TRUE) {
-
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+export_phase_a_manifest <- function(
+  phase_a_results,
+  output_dir = "results",
+  prefix = "phase_a",
+  verbose = TRUE
+) {
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
 
   best_est <- phase_a_results$best_estimate
   true_sgpc <- phase_a_results$true_sgpc
@@ -661,14 +836,24 @@ export_phase_a_manifest <- function(phase_a_results,
       )
     ),
     assumption_diagnostics = list(
-      flag_independence_violation = isTRUE(phase_a_results$flag_independence_violation),
+      flag_independence_violation = isTRUE(
+        phase_a_results$flag_independence_violation
+      ),
       spearman_rho = if (!is.null(phase_a_results$independence_diagnostics)) {
-        as.numeric(phase_a_results$independence_diagnostics[phase_a_results$independence_diagnostics$metric == "spearman_rho", "value"][1])
+        as.numeric(phase_a_results$independence_diagnostics[
+          phase_a_results$independence_diagnostics$metric == "spearman_rho",
+          "value"
+        ][1])
       } else {
         NA_real_
       },
-      kruskal_p_value = if (!is.null(phase_a_results$independence_diagnostics)) {
-        as.numeric(phase_a_results$independence_diagnostics[phase_a_results$independence_diagnostics$metric == "kruskal_p_value", "value"][1])
+      kruskal_p_value = if (
+        !is.null(phase_a_results$independence_diagnostics)
+      ) {
+        as.numeric(phase_a_results$independence_diagnostics[
+          phase_a_results$independence_diagnostics$metric == "kruskal_p_value",
+          "value"
+        ][1])
       } else {
         NA_real_
       }
@@ -714,65 +899,122 @@ export_phase_a_manifest <- function(phase_a_results,
   if (!is.null(phase_a_results$churn_bookkeeping)) {
     cb <- phase_a_results$churn_bookkeeping$condition
     manifest$churn_diagnostics <- list(
-      n_prior_all     = cb$n_prior_all,
-      n_current_all   = cb$n_current_all,
-      n_stayers       = cb$n_stayers,
-      n_leavers       = cb$n_leavers,
-      n_entrants      = cb$n_entrants,
+      n_prior_all = cb$n_prior_all,
+      n_current_all = cb$n_current_all,
+      n_stayers = cb$n_stayers,
+      n_leavers = cb$n_leavers,
+      n_entrants = cb$n_entrants,
       alpha_retention = cb$alpha,
-      beta_retention  = cb$beta,
+      beta_retention = cb$beta,
       churn_asymmetry = cb$churn_asymmetry,
-      churn_type      = cb$churn_type
+      churn_type = cb$churn_type
     )
   }
   if (!is.null(phase_a_results$marginal_comparison)) {
-    if (is.null(manifest$churn_diagnostics)) manifest$churn_diagnostics <- list()
+    if (is.null(manifest$churn_diagnostics)) {
+      manifest$churn_diagnostics <- list()
+    }
     mc <- phase_a_results$marginal_comparison
     manifest$churn_diagnostics$marginal_comparison <- list(
-      gamma_prior   = mc$gamma_prior,
+      gamma_prior = mc$gamma_prior,
       gamma_current = mc$gamma_current,
       compositionally_ignorable = mc$compositionally_ignorable,
       asymmetry_ratio = mc$asymmetry_ratio
     )
   }
   if (!is.null(phase_a_results$regime_contrast)) {
-    if (is.null(manifest$churn_diagnostics)) manifest$churn_diagnostics <- list()
+    if (is.null(manifest$churn_diagnostics)) {
+      manifest$churn_diagnostics <- list()
+    }
     rc <- phase_a_results$regime_contrast
     manifest$churn_diagnostics$regime_contrast <- list(
       delta_median = rc$delta_median,
-      delta_mean   = rc$delta_mean,
+      delta_mean = rc$delta_mean,
       median_sgpc_stayer = rc$median_sgpc_stayer,
-      median_sgpc_all    = rc$median_sgpc_all,
-      mean_sgpc_stayer   = rc$mean_sgpc_stayer,
-      mean_sgpc_all      = rc$mean_sgpc_all
+      median_sgpc_all = rc$median_sgpc_all,
+      mean_sgpc_stayer = rc$mean_sgpc_stayer,
+      mean_sgpc_all = rc$mean_sgpc_all
     )
   }
   if (!is.null(phase_a_results$theoretical_linkage_premium)) {
-    if (is.null(manifest$churn_diagnostics)) manifest$churn_diagnostics <- list()
+    if (is.null(manifest$churn_diagnostics)) {
+      manifest$churn_diagnostics <- list()
+    }
     tp <- phase_a_results$theoretical_linkage_premium
     manifest$churn_diagnostics$theoretical_premium <- list(
       alpha = tp$alpha,
-      rho   = tp$rho,
-      tau   = tp$tau,
+      rho = tp$rho,
+      tau = tp$tau,
       mean_scale = tp$mean_scale,
-      cdf_scale  = tp$cdf_scale
+      cdf_scale = tp$cdf_scale
     )
   }
 
   manifest$output_files <- list(
-      phase_a_rds = file.path(output_dir, "phase_a_deep_dive.rds"),
-      phase_a_analytic_payload = file.path(output_dir, "phase_a_analytic_payload.rds"),
-      phase_a_summary_csv = file.path(output_dir, "phase_a_summary.csv"),
-      phase_a_precision_anchor_csv = file.path(output_dir, "phase_a_precision_anchor.csv"),
-      independence_diagnostics_csv = file.path(output_dir, "exports", "phase_a", "step3_independence_diagnostics.csv"),
-      phasea_01_marginals = file.path(output_dir, "visualizations", "phase_a", "phasea_01_marginals_uv_density.pdf"),
-      phasea_02a_objective = file.path(output_dir, "visualizations", "phase_a", "phasea_02a_objective_surface.pdf"),
-      phasea_02b_cdf = file.path(output_dir, "visualizations", "phase_a", "phasea_02b_forward_cdf_check.pdf"),
-      phasea_02c_residual = file.path(output_dir, "visualizations", "phase_a", "phasea_02c_residual_diagnostics.pdf"),
-      phasea_03a_regime = file.path(output_dir, "visualizations", "phase_a", "phasea_03a_regime_density.pdf"),
-      phasea_03e_recovery = file.path(output_dir, "visualizations", "phase_a", "phasea_03e_recovery_summary.pdf"),
-      phasea_03f_linkage = file.path(output_dir, "visualizations", "phase_a", "phasea_03f_linkage_decomposition.pdf"),
-      phasea_04_independence = file.path(output_dir, "visualizations", "phase_a", "phasea_04_independence_diagnostic.pdf")
+    phase_a_rds = file.path(output_dir, "phase_a_deep_dive.rds"),
+    phase_a_analytic_payload = file.path(
+      output_dir,
+      "phase_a_analytic_payload.rds"
+    ),
+    phase_a_summary_csv = file.path(output_dir, "phase_a_summary.csv"),
+    phase_a_precision_anchor_csv = file.path(
+      output_dir,
+      "phase_a_precision_anchor.csv"
+    ),
+    independence_diagnostics_csv = file.path(
+      output_dir,
+      "exports",
+      "phase_a",
+      "step3_independence_diagnostics.csv"
+    ),
+    phasea_01_marginals = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_01_marginals_uv_density.pdf"
+    ),
+    phasea_02a_objective = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_02a_objective_surface.pdf"
+    ),
+    phasea_02b_cdf = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_02b_forward_cdf_check.pdf"
+    ),
+    phasea_02c_residual = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_02c_residual_diagnostics.pdf"
+    ),
+    phasea_03a_regime = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_03a_regime_density.pdf"
+    ),
+    phasea_03e_recovery = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_03e_recovery_summary.pdf"
+    ),
+    phasea_03f_linkage = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_03f_linkage_decomposition.pdf"
+    ),
+    phasea_04_independence = file.path(
+      output_dir,
+      "visualizations",
+      "phase_a",
+      "phasea_04_independence_diagnostic.pdf"
+    )
   )
   manifest$config <- phase_a_results$config
 
@@ -789,7 +1031,12 @@ export_phase_a_manifest <- function(phase_a_results,
     "",
     paste0("- **Dataset:** ", manifest$condition$dataset_id),
     paste0("- **Condition:** ", manifest$condition$condition_id),
-    paste0("- **Subgroup:** ", manifest$condition$subgroup_col, " = ", manifest$condition$subgroup_id),
+    paste0(
+      "- **Subgroup:** ",
+      manifest$condition$subgroup_col,
+      " = ",
+      manifest$condition$subgroup_id
+    ),
     paste0("- **Subgroup n:** ", manifest$condition$n_subgroup),
     paste0("- **Baseline copula:** ", manifest$condition$copula_used$family),
     "",
@@ -801,24 +1048,48 @@ export_phase_a_manifest <- function(phase_a_results,
     "## Estimation Summary",
     "",
     paste0("- **Best family:** ", manifest$estimation$best_family),
-    paste0("- **Parameters:** ", paste(round(manifest$estimation$best_params, 4), collapse = ", ")),
+    paste0(
+      "- **Parameters:** ",
+      paste(round(manifest$estimation$best_params, 4), collapse = ", ")
+    ),
     paste0("- **Distance metric:** ", manifest$estimation$distance_metric),
-    paste0("- **Distance minimum:** ", round(manifest$estimation$distance_min, 6)),
+    paste0(
+      "- **Distance minimum:** ",
+      round(manifest$estimation$distance_min, 6)
+    ),
     "",
     "## SGPc Summary",
     "",
     paste0("- **Inferred mean SGPc:** ", manifest$sgpc_summary$inferred$mean),
     paste0("- **True mean SGPc:** ", manifest$sgpc_summary$true$mean),
-    paste0("- **Mean difference:** ", manifest$sgpc_summary$differences$mean_diff),
-    paste0("- **Inferred median SGPc:** ", manifest$sgpc_summary$inferred$median),
+    paste0(
+      "- **Mean difference:** ",
+      manifest$sgpc_summary$differences$mean_diff
+    ),
+    paste0(
+      "- **Inferred median SGPc:** ",
+      manifest$sgpc_summary$inferred$median
+    ),
     paste0("- **True median SGPc:** ", manifest$sgpc_summary$true$median),
-    paste0("- **Median difference:** ", manifest$sgpc_summary$differences$median_diff),
+    paste0(
+      "- **Median difference:** ",
+      manifest$sgpc_summary$differences$median_diff
+    ),
     "",
     "## Assumption Diagnostics (P ⟂ U)",
     "",
-    paste0("- **Flag independence violation:** ", manifest$assumption_diagnostics$flag_independence_violation),
-    paste0("- **Spearman rho(U,SGPc_true):** ", round(manifest$assumption_diagnostics$spearman_rho, 4)),
-    paste0("- **Kruskal-Wallis p-value:** ", signif(manifest$assumption_diagnostics$kruskal_p_value, 4)),
+    paste0(
+      "- **Flag independence violation:** ",
+      manifest$assumption_diagnostics$flag_independence_violation
+    ),
+    paste0(
+      "- **Spearman rho(U,SGPc_true):** ",
+      round(manifest$assumption_diagnostics$spearman_rho, 4)
+    ),
+    paste0(
+      "- **Kruskal-Wallis p-value:** ",
+      signif(manifest$assumption_diagnostics$kruskal_p_value, 4)
+    ),
     "",
     "## Uncertainty (Bootstrap)",
     "",
@@ -827,35 +1098,65 @@ export_phase_a_manifest <- function(phase_a_results,
     "Resamples prior and current scores with **separate** index vectors,",
     "simulating the TIMSS/NAEP cross-sectional design.",
     "",
-    paste0("- **Replicates:** ", manifest$uncertainty$sampling$n_boot,
-           " (converged: ", manifest$uncertainty$sampling$n_converged, ")"),
-    paste0("- **Mean SGPc 95% CI:** [",
-           round(manifest$uncertainty$sampling$ci_mean_sgpc[1], 1), ", ",
-           round(manifest$uncertainty$sampling$ci_mean_sgpc[2], 1), "]"),
-    paste0("- **Median SGPc 95% CI:** [",
-           round(manifest$uncertainty$sampling$ci_median_sgpc[1], 1), ", ",
-           round(manifest$uncertainty$sampling$ci_median_sgpc[2], 1), "]"),
-    paste0("- **Median SGPc SE:** ", round(manifest$uncertainty$sampling$se_median_sgpc, 2)),
+    paste0(
+      "- **Replicates:** ",
+      manifest$uncertainty$sampling$n_boot,
+      " (converged: ",
+      manifest$uncertainty$sampling$n_converged,
+      ")"
+    ),
+    paste0(
+      "- **Mean SGPc 95% CI:** [",
+      round(manifest$uncertainty$sampling$ci_mean_sgpc[1], 1),
+      ", ",
+      round(manifest$uncertainty$sampling$ci_mean_sgpc[2], 1),
+      "]"
+    ),
+    paste0(
+      "- **Median SGPc 95% CI:** [",
+      round(manifest$uncertainty$sampling$ci_median_sgpc[1], 1),
+      ", ",
+      round(manifest$uncertainty$sampling$ci_median_sgpc[2], 1),
+      "]"
+    ),
+    paste0(
+      "- **Median SGPc SE:** ",
+      round(manifest$uncertainty$sampling$se_median_sgpc, 2)
+    ),
     ""
   )
 
   # Paired bootstrap section (if available)
   if (!is.null(manifest$uncertainty$sampling_paired)) {
     sp <- manifest$uncertainty$sampling_paired
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       "### Paired Bootstrap (Error 1a only)",
       "",
       "Resamples prior and current scores with a **shared** index vector,",
       "preserving the student-level U<->V linkage. Isolates subsampling variability.",
       "",
-      paste0("- **Replicates:** ", sp$n_boot,
-             " (converged: ", sp$n_converged, ")"),
-      paste0("- **Mean SGPc 95% CI:** [",
-             round(sp$ci_mean_sgpc[1], 1), ", ",
-             round(sp$ci_mean_sgpc[2], 1), "]"),
-      paste0("- **Median SGPc 95% CI:** [",
-             round(sp$ci_median_sgpc[1], 1), ", ",
-             round(sp$ci_median_sgpc[2], 1), "]"),
+      paste0(
+        "- **Replicates:** ",
+        sp$n_boot,
+        " (converged: ",
+        sp$n_converged,
+        ")"
+      ),
+      paste0(
+        "- **Mean SGPc 95% CI:** [",
+        round(sp$ci_mean_sgpc[1], 1),
+        ", ",
+        round(sp$ci_mean_sgpc[2], 1),
+        "]"
+      ),
+      paste0(
+        "- **Median SGPc 95% CI:** [",
+        round(sp$ci_median_sgpc[1], 1),
+        ", ",
+        round(sp$ci_median_sgpc[2], 1),
+        "]"
+      ),
       paste0("- **Median SGPc SE:** ", round(sp$se_median_sgpc, 2)),
       ""
     )
@@ -864,22 +1165,43 @@ export_phase_a_manifest <- function(phase_a_results,
   # Linkage premium section (if available)
   if (!is.null(manifest$linkage_premium)) {
     lp <- manifest$linkage_premium
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       "### Linkage Premium at Observed N",
       "",
-      paste0("The linkage premium quantifies the CI inflation from breaking the ",
-             "student-level pairing. At N=", format(lp$n_observed, big.mark = ","), ":"),
+      paste0(
+        "The linkage premium quantifies the CI inflation from breaking the ",
+        "student-level pairing. At N=",
+        format(lp$n_observed, big.mark = ","),
+        ":"
+      ),
       "",
       "| Measure | CI Width (Paired) | CI Width (Independent) | CI Ratio | SE Ratio |",
       "|---------|-------------------|------------------------|----------|----------|",
-      paste0("| Median SGPc | ", lp$median$ci_width_paired,
-             " | ", lp$median$ci_width_independent,
-             " | ", lp$median$ci_ratio, "x",
-             " | ", lp$median$se_ratio, "x |"),
-      paste0("| Mean SGPc | ", lp$mean$ci_width_paired,
-             " | ", lp$mean$ci_width_independent,
-             " | ", lp$mean$ci_ratio, "x",
-             " | ", lp$mean$se_ratio, "x |"),
+      paste0(
+        "| Median SGPc | ",
+        lp$median$ci_width_paired,
+        " | ",
+        lp$median$ci_width_independent,
+        " | ",
+        lp$median$ci_ratio,
+        "x",
+        " | ",
+        lp$median$se_ratio,
+        "x |"
+      ),
+      paste0(
+        "| Mean SGPc | ",
+        lp$mean$ci_width_paired,
+        " | ",
+        lp$mean$ci_width_independent,
+        " | ",
+        lp$mean$ci_ratio,
+        "x",
+        " | ",
+        lp$mean$se_ratio,
+        "x |"
+      ),
       "",
       "_Ratio > 1 indicates the precision cost of not having longitudinal pairing._",
       "_This single-N anchor complements Phase B's Panel D2, which maps the premium across N values._",
@@ -890,7 +1212,8 @@ export_phase_a_manifest <- function(phase_a_results,
   # Churn diagnostics markdown section
   if (!is.null(manifest$churn_diagnostics)) {
     cd <- manifest$churn_diagnostics
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       "## Churn Diagnostics (S/L/E Decomposition)",
       "",
       "Student churn creates partial linkage: some students are stayers (S, observed at both waves),",
@@ -898,11 +1221,31 @@ export_phase_a_manifest <- function(phase_a_results,
       "",
       "| Quantity | Value |",
       "|----------|-------|",
-      paste0("| Prior wave (all students) | ", format(cd$n_prior_all, big.mark = ","), " |"),
-      paste0("| Current wave (all students) | ", format(cd$n_current_all, big.mark = ","), " |"),
-      paste0("| Stayers (matched pairs) | ", format(cd$n_stayers, big.mark = ","), " |"),
-      paste0("| Leavers (prior only) | ", format(cd$n_leavers, big.mark = ","), " |"),
-      paste0("| Entrants (current only) | ", format(cd$n_entrants, big.mark = ","), " |"),
+      paste0(
+        "| Prior wave (all students) | ",
+        format(cd$n_prior_all, big.mark = ","),
+        " |"
+      ),
+      paste0(
+        "| Current wave (all students) | ",
+        format(cd$n_current_all, big.mark = ","),
+        " |"
+      ),
+      paste0(
+        "| Stayers (matched pairs) | ",
+        format(cd$n_stayers, big.mark = ","),
+        " |"
+      ),
+      paste0(
+        "| Leavers (prior only) | ",
+        format(cd$n_leavers, big.mark = ","),
+        " |"
+      ),
+      paste0(
+        "| Entrants (current only) | ",
+        format(cd$n_entrants, big.mark = ","),
+        " |"
+      ),
       paste0("| Alpha (prior retention) | ", cd$alpha_retention, " |"),
       paste0("| Beta (current retention) | ", cd$beta_retention, " |"),
       paste0("| Churn type | ", cd$churn_type, " |"),
@@ -910,30 +1253,52 @@ export_phase_a_manifest <- function(phase_a_results,
     )
     if (!is.null(cd$marginal_comparison)) {
       mcc <- cd$marginal_comparison
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Compositional Ignorability Test",
         "",
         "Wasserstein-1 distances between all-student and stayer-only marginals:",
         "",
         paste0("- **Gamma_U (prior):** ", mcc$gamma_prior),
         paste0("- **Gamma_V (current):** ", mcc$gamma_current),
-        paste0("- **Compositionally ignorable:** ", mcc$compositionally_ignorable),
-        if (is.finite(mcc$asymmetry_ratio %||% NA_real_))
-          paste0("- **Asymmetry ratio (Gamma_V / Gamma_U):** ", mcc$asymmetry_ratio,
-                 if (mcc$asymmetry_ratio > 2) " _(possible observability churn)_" else "")
-        else NULL,
+        paste0(
+          "- **Compositionally ignorable:** ",
+          mcc$compositionally_ignorable
+        ),
+        if (is.finite(mcc$asymmetry_ratio %||% NA_real_)) {
+          paste0(
+            "- **Asymmetry ratio (Gamma_V / Gamma_U):** ",
+            mcc$asymmetry_ratio,
+            if (mcc$asymmetry_ratio > 2) {
+              " _(possible observability churn)_"
+            } else {
+              ""
+            }
+          )
+        } else {
+          NULL
+        },
         ""
       )
     }
     if (!is.null(cd$regime_contrast)) {
       rcc <- cd$regime_contrast
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Regime Contrast (Stayer vs All-Student)",
         "",
-        paste0("- **Stayer regime:** median = ", rcc$median_sgpc_stayer,
-               ", mean = ", rcc$mean_sgpc_stayer),
-        paste0("- **All-student regime:** median = ", rcc$median_sgpc_all,
-               ", mean = ", rcc$mean_sgpc_all),
+        paste0(
+          "- **Stayer regime:** median = ",
+          rcc$median_sgpc_stayer,
+          ", mean = ",
+          rcc$mean_sgpc_stayer
+        ),
+        paste0(
+          "- **All-student regime:** median = ",
+          rcc$median_sgpc_all,
+          ", mean = ",
+          rcc$mean_sgpc_all
+        ),
         paste0("- **Delta median:** ", rcc$delta_median, " SGPc"),
         paste0("- **Delta mean:** ", rcc$delta_mean, " SGPc"),
         ""
@@ -941,10 +1306,19 @@ export_phase_a_manifest <- function(phase_a_results,
     }
     if (!is.null(cd$theoretical_premium)) {
       tpc <- cd$theoretical_premium
-      md_lines <- c(md_lines,
+      md_lines <- c(
+        md_lines,
         "### Theoretical Partial-Linkage Premium",
         "",
-        paste0("At alpha = ", tpc$alpha, ", rho = ", tpc$rho, " (tau = ", tpc$tau, "):"),
+        paste0(
+          "At alpha = ",
+          tpc$alpha,
+          ", rho = ",
+          tpc$rho,
+          " (tau = ",
+          tpc$tau,
+          "):"
+        ),
         "",
         paste0("- **Mean-scale SE multiplier:** ", tpc$mean_scale),
         paste0("- **CDF-scale SE multiplier:** ", tpc$cdf_scale),
@@ -953,7 +1327,8 @@ export_phase_a_manifest <- function(phase_a_results,
     }
   }
 
-  md_lines <- c(md_lines,
+  md_lines <- c(
+    md_lines,
     "## Family Comparison",
     "",
     "| Family | Distance | Mean SGPc | Median SGPc | Params |",
@@ -961,16 +1336,26 @@ export_phase_a_manifest <- function(phase_a_results,
   )
 
   for (i in seq_len(nrow(fam_comp))) {
-    md_lines <- c(md_lines, paste0(
-      "| ", fam_comp$family[i],
-      " | ", round(fam_comp$distance[i], 6),
-      " | ", round(fam_comp$mean_sgpc[i], 2),
-      " | ", round(fam_comp$median_sgpc[i], 2),
-      " | ", fam_comp$params[i], " |"
-    ))
+    md_lines <- c(
+      md_lines,
+      paste0(
+        "| ",
+        fam_comp$family[i],
+        " | ",
+        round(fam_comp$distance[i], 6),
+        " | ",
+        round(fam_comp$mean_sgpc[i], 2),
+        " | ",
+        round(fam_comp$median_sgpc[i], 2),
+        " | ",
+        fam_comp$params[i],
+        " |"
+      )
+    )
   }
 
-  md_lines <- c(md_lines,
+  md_lines <- c(
+    md_lines,
     "",
     "## Output Files",
     "",
@@ -1000,4 +1385,6 @@ export_phase_a_manifest <- function(phase_a_results,
 
 
 cat("STEP 3 manifest_export.R loaded.\n")
-cat("  Functions: export_step3_manifest, export_phase_a_manifest, export_run_metadata\n")
+cat(
+  "  Functions: export_step3_manifest, export_phase_a_manifest, export_run_metadata\n"
+)

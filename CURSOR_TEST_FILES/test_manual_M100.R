@@ -5,9 +5,11 @@
 
 # Verify copula package is available (standard CRAN package)
 if (!requireNamespace("copula", quietly = TRUE)) {
-  stop("\n\nERROR: copula package not installed!\n",
-       "Please install from CRAN:\n",
-       "  install.packages('copula')\n\n")
+  stop(
+    "\n\nERROR: copula package not installed!\n",
+    "Please install from CRAN:\n",
+    "  install.packages('copula')\n\n"
+  )
 }
 
 cat("====================================================================\n")
@@ -27,7 +29,7 @@ require(copula)
 require(gofCopula)
 
 # Configuration
-M_BOOTSTRAP <- 100  # Realistic production value
+M_BOOTSTRAP <- 100 # Realistic production value
 COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank")
 
 cat("\n====================================================================\n")
@@ -86,25 +88,37 @@ elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
 cat("\n====================================================================\n")
 cat("RESULTS: M=", M_BOOTSTRAP, "\n")
 cat("====================================================================\n")
-cat("Total time:", round(elapsed, 1), "seconds (", 
-    round(elapsed/60, 2), "minutes)\n\n")
+cat(
+  "Total time:",
+  round(elapsed, 1),
+  "seconds (",
+  round(elapsed / 60, 2),
+  "minutes)\n\n"
+)
 
 # Display results table
 cat("Family-by-family results:\n")
 cat("--------------------------------------------------------------------\n")
-cat(sprintf("%-15s | %-30s | %-10s | %-6s\n", 
-            "Family", "GoF Method", "p-value", "Pass?"))
+cat(sprintf(
+  "%-15s | %-30s | %-10s | %-6s\n",
+  "Family",
+  "GoF Method",
+  "p-value",
+  "Pass?"
+))
 cat("--------------------------------------------------------------------\n")
 
 for (fam in names(fit_results$results)) {
   result <- fit_results$results[[fam]]
   pass_str <- ifelse(result$gof_pvalue > 0.05, "PASS", "FAIL")
-  
-  cat(sprintf("%-15s | %-30s | %10.4f | %-6s\n",
-              fam,
-              substr(result$gof_method, 1, 30),
-              result$gof_pvalue,
-              pass_str))
+
+  cat(sprintf(
+    "%-15s | %-30s | %10.4f | %-6s\n",
+    fam,
+    substr(result$gof_method, 1, 30),
+    result$gof_pvalue,
+    pass_str
+  ))
 }
 
 cat("\n====================================================================\n")
@@ -112,8 +126,13 @@ cat("TIMING ANALYSIS\n")
 cat("====================================================================\n\n")
 
 time_per_family <- elapsed / length(COPULA_FAMILIES)
-cat("Time per family:", round(time_per_family, 1), "seconds (",
-    round(time_per_family/60, 2), "minutes)\n\n")
+cat(
+  "Time per family:",
+  round(time_per_family, 1),
+  "seconds (",
+  round(time_per_family / 60, 2),
+  "minutes)\n\n"
+)
 
 # Estimate for full analysis
 cat("PROJECTED TIMES FOR FULL ANALYSIS:\n\n")
@@ -126,20 +145,32 @@ cat("  M=1000: ", round(elapsed * 28 * 10 / 3600, 1), "hours\n\n")
 # All datasets: 129 conditions
 cat("All datasets (129 conditions):\n")
 cat("  M=100:  ", round(elapsed * 129 / 3600, 1), "hours\n")
-cat("  M=1000: ", round(elapsed * 129 * 10 / 3600, 1), "hours (", 
-    round(elapsed * 129 * 10 / (3600 * 24), 1), "days)\n\n")
+cat(
+  "  M=1000: ",
+  round(elapsed * 129 * 10 / 3600, 1),
+  "hours (",
+  round(elapsed * 129 * 10 / (3600 * 24), 1),
+  "days)\n\n"
+)
 
 cat("====================================================================\n")
 cat("RECOMMENDATIONS\n")
 cat("====================================================================\n\n")
 
-if (elapsed < 2400) {  # Less than 40 minutes
+if (elapsed < 2400) {
+  # Less than 40 minutes
   cat("✓ Performance is good!\n\n")
   cat("Recommendations:\n")
-  cat("  1. M=100 is feasible for full analysis (~", 
-      round(elapsed * 129 / 3600, 1), "hours)\n")
-  cat("  2. M=1000 should run on EC2 overnight (~", 
-      round(elapsed * 129 * 10 / 3600, 1), "hours)\n")
+  cat(
+    "  1. M=100 is feasible for full analysis (~",
+    round(elapsed * 129 / 3600, 1),
+    "hours)\n"
+  )
+  cat(
+    "  2. M=1000 should run on EC2 overnight (~",
+    round(elapsed * 129 * 10 / 3600, 1),
+    "hours)\n"
+  )
   cat("  3. Consider starting with M=100 to verify all conditions\n")
   cat("  4. Then scale up to M=1000 for final publication results\n\n")
 } else {
@@ -154,18 +185,31 @@ cat("====================================================================\n")
 cat("VERIFICATION CHECKLIST\n")
 cat("====================================================================\n\n")
 
-all_have_pvals <- all(!is.na(sapply(fit_results$results, function(x) x$gof_pvalue)))
-all_use_gofCopula <- all(grepl("gofKendallCvM", 
-                               sapply(fit_results$results, function(x) x$gof_method)))
+all_have_pvals <- all(
+  !is.na(sapply(fit_results$results, function(x) x$gof_pvalue))
+)
+all_use_gofCopula <- all(grepl(
+  "gofKendallCvM",
+  sapply(fit_results$results, function(x) x$gof_method)
+))
 
-cat("1. All families have p-values:", all_have_pvals, 
-    ifelse(all_have_pvals, "✓", "✗"), "\n")
-cat("2. All using gofKendallCvM:", all_use_gofCopula,
-    ifelse(all_use_gofCopula, "✓", "✗"), "\n")
+cat(
+  "1. All families have p-values:",
+  all_have_pvals,
+  ifelse(all_have_pvals, "✓", "✗"),
+  "\n"
+)
+cat(
+  "2. All using gofKendallCvM:",
+  all_use_gofCopula,
+  ifelse(all_use_gofCopula, "✓", "✗"),
+  "\n"
+)
 
 # Check specific families
 t_result <- fit_results$results$t
-t_ok <- !is.na(t_result$gof_pvalue) && grepl("gofKendallCvM", t_result$gof_method)
+t_ok <- !is.na(t_result$gof_pvalue) &&
+  grepl("gofKendallCvM", t_result$gof_method)
 cat("3. T-copula working:", t_ok, ifelse(t_ok, "✓", "✗"), "\n")
 
 if (all_have_pvals && all_use_gofCopula && t_ok) {
@@ -177,4 +221,3 @@ if (all_have_pvals && all_use_gofCopula && t_ok) {
 }
 
 cat("Test completed:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n\n")
-

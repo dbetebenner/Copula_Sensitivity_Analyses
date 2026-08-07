@@ -22,27 +22,30 @@ families <- c("normal", "clayton", "gumbel", "frank")
 
 for (fam in families) {
   cat("Testing:", fam, "... ")
-  
+
   start_time <- Sys.time()
-  
-  result <- try({
-    gof <- gofKendallCvM(
-      copula = fam,
-      x = test_data,
-      M = 10,
-      param.est = TRUE,
-      margins = "ranks"
-    )
-    
-    end_time <- Sys.time()
-    elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
-    
-    cat("✓ WORKS\n")
-    cat("  Statistic:", round(gof$statistic, 6), "\n")
-    cat("  P-value:", round(gof$p.value, 4), "\n")
-    cat("  Time:", round(elapsed, 1), "seconds\n\n")
-  }, silent = TRUE)
-  
+
+  result <- try(
+    {
+      gof <- gofKendallCvM(
+        copula = fam,
+        x = test_data,
+        M = 10,
+        param.est = TRUE,
+        margins = "ranks"
+      )
+
+      end_time <- Sys.time()
+      elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+      cat("✓ WORKS\n")
+      cat("  Statistic:", round(gof$statistic, 6), "\n")
+      cat("  P-value:", round(gof$p.value, 4), "\n")
+      cat("  Time:", round(elapsed, 1), "seconds\n\n")
+    },
+    silent = TRUE
+  )
+
   if (inherits(result, "try-error")) {
     cat("✗ FAILED\n")
     cat("  Error:", attr(result, "condition")$message, "\n\n")
@@ -52,4 +55,3 @@ for (fam in families) {
 cat("====================================================================\n")
 cat("If all tests passed, the gofCopula package integration should work!\n")
 cat("====================================================================\n\n")
-

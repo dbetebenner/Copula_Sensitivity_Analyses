@@ -53,88 +53,118 @@ CONFIG <- list(
 
 # All transformation methods to test
 TRANSFORMATION_METHODS <- list(
-  
   # GROUP A: EMPIRICAL BASELINE (GOLD STANDARD)
-  list(name = "empirical_n_plus_1", 
-       label = "Empirical Ranks (n+1)", 
-       type = "empirical",
-       params = list(denominator = "n_plus_1")),
-  
-  list(name = "empirical_n", 
-       label = "Empirical Ranks (n)", 
-       type = "empirical",
-       params = list(denominator = "n")),
-  
-  list(name = "mid_ranks", 
-       label = "Mid-Ranks", 
-       type = "midrank",
-       params = list()),
-  
+  list(
+    name = "empirical_n_plus_1",
+    label = "Empirical Ranks (n+1)",
+    type = "empirical",
+    params = list(denominator = "n_plus_1")
+  ),
+
+  list(
+    name = "empirical_n",
+    label = "Empirical Ranks (n)",
+    type = "empirical",
+    params = list(denominator = "n")
+  ),
+
+  list(
+    name = "mid_ranks",
+    label = "Mid-Ranks",
+    type = "midrank",
+    params = list()
+  ),
+
   # GROUP B: I-SPLINE VARIATIONS (FIND BREAKING POINT)
-  list(name = "ispline_4knots", 
-       label = "I-spline (4 knots) [KNOWN BAD]", 
-       type = "ispline",
-       params = list(knot_percentiles = c(0.20, 0.40, 0.60, 0.80))),
-  
-  list(name = "ispline_9knots", 
-       label = "I-spline (9 knots) [Current Default]", 
-       type = "ispline",
-       params = list(knot_percentiles = seq(0.1, 0.9, 0.1))),
-  
-  list(name = "ispline_19knots", 
-       label = "I-spline (19 knots)", 
-       type = "ispline",
-       params = list(knot_percentiles = seq(0.05, 0.95, 0.05))),
-  
-  list(name = "ispline_49knots", 
-       label = "I-spline (49 knots)", 
-       type = "ispline",
-       params = list(knot_percentiles = seq(0.02, 0.98, 0.02))),
-  
-  list(name = "ispline_tail_aware_4core", 
-       label = "I-spline (Tail-Aware, 4 core + 6 tail)", 
-       type = "ispline_tail",
-       params = list(knot_percentiles = c(0.20, 0.40, 0.60, 0.80), 
-                    tail_aware = TRUE)),
-  
-  list(name = "ispline_tail_aware_9core", 
-       label = "I-spline (Tail-Aware, 9 core + 6 tail)", 
-       type = "ispline_tail",
-       params = list(knot_percentiles = seq(0.1, 0.9, 0.1), 
-                    tail_aware = TRUE)),
-  
+  list(
+    name = "ispline_4knots",
+    label = "I-spline (4 knots) [KNOWN BAD]",
+    type = "ispline",
+    params = list(knot_percentiles = c(0.20, 0.40, 0.60, 0.80))
+  ),
+
+  list(
+    name = "ispline_9knots",
+    label = "I-spline (9 knots) [Current Default]",
+    type = "ispline",
+    params = list(knot_percentiles = seq(0.1, 0.9, 0.1))
+  ),
+
+  list(
+    name = "ispline_19knots",
+    label = "I-spline (19 knots)",
+    type = "ispline",
+    params = list(knot_percentiles = seq(0.05, 0.95, 0.05))
+  ),
+
+  list(
+    name = "ispline_49knots",
+    label = "I-spline (49 knots)",
+    type = "ispline",
+    params = list(knot_percentiles = seq(0.02, 0.98, 0.02))
+  ),
+
+  list(
+    name = "ispline_tail_aware_4core",
+    label = "I-spline (Tail-Aware, 4 core + 6 tail)",
+    type = "ispline_tail",
+    params = list(
+      knot_percentiles = c(0.20, 0.40, 0.60, 0.80),
+      tail_aware = TRUE
+    )
+  ),
+
+  list(
+    name = "ispline_tail_aware_9core",
+    label = "I-spline (Tail-Aware, 9 core + 6 tail)",
+    type = "ispline_tail",
+    params = list(knot_percentiles = seq(0.1, 0.9, 0.1), tail_aware = TRUE)
+  ),
+
   # GROUP C: ALTERNATIVE SPLINE METHODS
-  list(name = "qspline", 
-       label = "Q-spline (Quantile Function)", 
-       type = "qspline",
-       params = list(knot_probs = seq(0.1, 0.9, 0.1))),
-  
-  list(name = "hyman", 
-       label = "Hyman Monotone Cubic", 
-       type = "hyman",
-       params = list()),
-  
-  list(name = "bernstein",
-       label = "Bernstein CDF (Empirical-Beta)",
-       type = "bernstein",
-       params = list(degree = NULL, tune_by_cv = TRUE)),
-  
+  list(
+    name = "qspline",
+    label = "Q-spline (Quantile Function)",
+    type = "qspline",
+    params = list(knot_probs = seq(0.1, 0.9, 0.1))
+  ),
+
+  list(
+    name = "hyman",
+    label = "Hyman Monotone Cubic",
+    type = "hyman",
+    params = list()
+  ),
+
+  list(
+    name = "bernstein",
+    label = "Bernstein CDF (Empirical-Beta)",
+    type = "bernstein",
+    params = list(degree = NULL, tune_by_cv = TRUE)
+  ),
+
   # GROUP D: NON-PARAMETRIC METHODS
-  list(name = "kernel_gaussian", 
-       label = "Kernel (Gaussian, rule-of-thumb)", 
-       type = "kernel",
-       params = list(kernel = "gaussian", bandwidth = "nrd0")),
-  
+  list(
+    name = "kernel_gaussian",
+    label = "Kernel (Gaussian, rule-of-thumb)",
+    type = "kernel",
+    params = list(kernel = "gaussian", bandwidth = "nrd0")
+  ),
+
   # GROUP E: PARAMETRIC BENCHMARKS (EXPECTED TO FAIL)
-  list(name = "normal", 
-       label = "Normal CDF [Benchmark]", 
-       type = "parametric",
-       params = list(distribution = "normal")),
-  
-  list(name = "logistic", 
-       label = "Logistic CDF [Benchmark]", 
-       type = "parametric",
-       params = list(distribution = "logistic"))
+  list(
+    name = "normal",
+    label = "Normal CDF [Benchmark]",
+    type = "parametric",
+    params = list(distribution = "normal")
+  ),
+
+  list(
+    name = "logistic",
+    label = "Logistic CDF [Benchmark]",
+    type = "parametric",
+    params = list(distribution = "logistic")
+  )
 )
 
 COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank")
@@ -161,8 +191,17 @@ pairs_full <- create_longitudinal_pairs(
 )
 
 n_pairs <- nrow(pairs_full)
-cat("Configuration:", CONFIG$content, "Grade", CONFIG$grade_prior, 
-    "->", CONFIG$grade_current, "Cohort", CONFIG$year_prior, "\n")
+cat(
+  "Configuration:",
+  CONFIG$content,
+  "Grade",
+  CONFIG$grade_prior,
+  "->",
+  CONFIG$grade_current,
+  "Cohort",
+  CONFIG$year_prior,
+  "\n"
+)
 cat("Longitudinal pairs:", n_pairs, "\n\n")
 
 cat("====================================================================\n")
@@ -179,10 +218,16 @@ empirical_dependence <- compute_dependence_diagnostics(U_empirical, V_empirical)
 empirical_tail <- compute_tail_diagnostics(U_empirical, V_empirical)
 
 cat("Empirical Baseline Diagnostics:\n")
-cat(sprintf("  K-S test U: stat=%.4f, p=%.4f\n", 
-            empirical_uniformity$ks_U_stat, empirical_uniformity$ks_U_pval))
-cat(sprintf("  K-S test V: stat=%.4f, p=%.4f\n", 
-            empirical_uniformity$ks_V_stat, empirical_uniformity$ks_V_pval))
+cat(sprintf(
+  "  K-S test U: stat=%.4f, p=%.4f\n",
+  empirical_uniformity$ks_U_stat,
+  empirical_uniformity$ks_U_pval
+))
+cat(sprintf(
+  "  K-S test V: stat=%.4f, p=%.4f\n",
+  empirical_uniformity$ks_V_stat,
+  empirical_uniformity$ks_V_pval
+))
 cat(sprintf("  Kendall tau: %.4f\n", empirical_dependence$kendall_tau))
 cat(sprintf("  Lower tail (10%%): %.4f\n", empirical_tail$lower_10))
 cat(sprintf("  Upper tail (90%%): %.4f\n\n", empirical_tail$upper_90))
@@ -201,7 +246,11 @@ empirical_copula_fits <- fit_copula_from_pairs(
 
 empirical_best_family <- empirical_copula_fits$best_family
 cat("Best copula family (empirical):", empirical_best_family, "\n")
-cat("  AIC =", empirical_copula_fits$results[[empirical_best_family]]$aic, "\n\n")
+cat(
+  "  AIC =",
+  empirical_copula_fits$results[[empirical_best_family]]$aic,
+  "\n\n"
+)
 
 # Store empirical baseline results
 empirical_baseline <- list(
@@ -225,261 +274,290 @@ all_results <- list()
 failed_methods <- character()
 
 for (i in seq_along(TRANSFORMATION_METHODS)) {
-  
   method <- TRANSFORMATION_METHODS[[i]]
-  
+
   cat("--------------------------------------------------------------------\n")
-  cat("Method", i, "of", length(TRANSFORMATION_METHODS), ":", method$label, "\n")
-  cat("--------------------------------------------------------------------\n\n")
-  
+  cat(
+    "Method",
+    i,
+    "of",
+    length(TRANSFORMATION_METHODS),
+    ":",
+    method$label,
+    "\n"
+  )
+  cat(
+    "--------------------------------------------------------------------\n\n"
+  )
+
   # Try to fit transformation
-  transformation_result <- tryCatch({
-    
-    if (method$type == "empirical") {
-      # Empirical ranks
-      if (method$params$denominator == "n_plus_1") {
-        U <- rank(pairs_full$SCALE_SCORE_PRIOR) / (n_pairs + 1)
-        V <- rank(pairs_full$SCALE_SCORE_CURRENT) / (n_pairs + 1)
+  transformation_result <- tryCatch(
+    {
+      if (method$type == "empirical") {
+        # Empirical ranks
+        if (method$params$denominator == "n_plus_1") {
+          U <- rank(pairs_full$SCALE_SCORE_PRIOR) / (n_pairs + 1)
+          V <- rank(pairs_full$SCALE_SCORE_CURRENT) / (n_pairs + 1)
+        } else {
+          U <- rank(pairs_full$SCALE_SCORE_PRIOR) / n_pairs
+          V <- rank(pairs_full$SCALE_SCORE_CURRENT) / n_pairs
+        }
+        list(U = U, V = V, framework = list(method = method$type))
+      } else if (method$type == "midrank") {
+        # Mid-ranks
+        U <- (rank(pairs_full$SCALE_SCORE_PRIOR) - 0.5) / n_pairs
+        V <- (rank(pairs_full$SCALE_SCORE_CURRENT) - 0.5) / n_pairs
+        list(U = U, V = V, framework = list(method = method$type))
+      } else if (method$type == "ispline") {
+        # Standard I-spline
+        framework_prior <- create_ispline_framework(
+          pairs_full$SCALE_SCORE_PRIOR,
+          knot_percentiles = method$params$knot_percentiles
+        )
+        framework_current <- create_ispline_framework(
+          pairs_full$SCALE_SCORE_CURRENT,
+          knot_percentiles = method$params$knot_percentiles
+        )
+        U <- framework_prior$smooth_ecdf_full(pairs_full$SCALE_SCORE_PRIOR)
+        V <- framework_current$smooth_ecdf_full(pairs_full$SCALE_SCORE_CURRENT)
+        U <- pmax(1e-6, pmin(1 - 1e-6, U))
+        V <- pmax(1e-6, pmin(1 - 1e-6, V))
+        list(U = U, V = V, framework = framework_prior)
+      } else if (method$type == "ispline_tail") {
+        # Tail-aware I-spline
+        framework_prior <- create_ispline_framework_enhanced(
+          pairs_full$SCALE_SCORE_PRIOR,
+          knot_percentiles = method$params$knot_percentiles,
+          tail_aware = method$params$tail_aware
+        )
+        framework_current <- create_ispline_framework_enhanced(
+          pairs_full$SCALE_SCORE_CURRENT,
+          knot_percentiles = method$params$knot_percentiles,
+          tail_aware = method$params$tail_aware
+        )
+        U <- framework_prior$smooth_ecdf_full(pairs_full$SCALE_SCORE_PRIOR)
+        V <- framework_current$smooth_ecdf_full(pairs_full$SCALE_SCORE_CURRENT)
+        U <- pmax(1e-6, pmin(1 - 1e-6, U))
+        V <- pmax(1e-6, pmin(1 - 1e-6, V))
+        list(U = U, V = V, framework = framework_prior)
+      } else if (method$type == "qspline") {
+        # Q-spline (quantile function)
+        qspline_prior <- fit_qspline(
+          pairs_full$SCALE_SCORE_PRIOR,
+          knot_probs = method$params$knot_probs
+        )
+        qspline_current <- fit_qspline(
+          pairs_full$SCALE_SCORE_CURRENT,
+          knot_probs = method$params$knot_probs
+        )
+        U <- qspline_prior$cdf_function(pairs_full$SCALE_SCORE_PRIOR)
+        V <- qspline_current$cdf_function(pairs_full$SCALE_SCORE_CURRENT)
+        U <- pmax(1e-6, pmin(1 - 1e-6, U))
+        V <- pmax(1e-6, pmin(1 - 1e-6, V))
+        list(U = U, V = V, framework = qspline_prior)
+      } else if (method$type == "hyman") {
+        # Hyman monotone spline
+        ecdf_prior <- ecdf(pairs_full$SCALE_SCORE_PRIOR)
+        ecdf_current <- ecdf(pairs_full$SCALE_SCORE_CURRENT)
+        x_prior <- sort(unique(pairs_full$SCALE_SCORE_PRIOR))
+        x_current <- sort(unique(pairs_full$SCALE_SCORE_CURRENT))
+        y_prior <- ecdf_prior(x_prior)
+        y_current <- ecdf_current(x_current)
+
+        spline_prior <- splinefun(x_prior, y_prior, method = "hyman")
+        spline_current <- splinefun(x_current, y_current, method = "hyman")
+
+        U <- spline_prior(pairs_full$SCALE_SCORE_PRIOR)
+        V <- spline_current(pairs_full$SCALE_SCORE_CURRENT)
+        U <- pmax(1e-6, pmin(1 - 1e-6, U))
+        V <- pmax(1e-6, pmin(1 - 1e-6, V))
+        list(U = U, V = V, framework = list(method = "hyman"))
+      } else if (method$type == "bernstein") {
+        # Bernstein CDF smoother
+        bernstein_prior <- fit_bernstein_cdf(
+          pairs_full$SCALE_SCORE_PRIOR,
+          degree = method$params$degree,
+          tune_by_cv = method$params$tune_by_cv
+        )
+        bernstein_current <- fit_bernstein_cdf(
+          pairs_full$SCALE_SCORE_CURRENT,
+          degree = method$params$degree,
+          tune_by_cv = method$params$tune_by_cv
+        )
+
+        U <- bernstein_prior$F(pairs_full$SCALE_SCORE_PRIOR)
+        V <- bernstein_current$F(pairs_full$SCALE_SCORE_CURRENT)
+        U <- pmax(1e-6, pmin(1 - 1e-6, U))
+        V <- pmax(1e-6, pmin(1 - 1e-6, V))
+        list(U = U, V = V, framework = bernstein_prior)
+      } else if (method$type == "kernel") {
+        # Kernel smoothing (simple implementation)
+        kernel_cdf <- function(x, data, bw) {
+          sapply(x, function(xi) mean(pnorm((xi - data) / bw)))
+        }
+
+        # Rule-of-thumb bandwidth
+        bw_prior <- bw.nrd0(pairs_full$SCALE_SCORE_PRIOR)
+        bw_current <- bw.nrd0(pairs_full$SCALE_SCORE_CURRENT)
+
+        U <- kernel_cdf(
+          pairs_full$SCALE_SCORE_PRIOR,
+          pairs_full$SCALE_SCORE_PRIOR,
+          bw_prior
+        )
+        V <- kernel_cdf(
+          pairs_full$SCALE_SCORE_CURRENT,
+          pairs_full$SCALE_SCORE_CURRENT,
+          bw_current
+        )
+        U <- pmax(1e-6, pmin(1 - 1e-6, U))
+        V <- pmax(1e-6, pmin(1 - 1e-6, V))
+        list(U = U, V = V, framework = list(method = "kernel"))
+      } else if (method$type == "parametric") {
+        # Parametric CDF
+        if (method$params$distribution == "normal") {
+          mu_prior <- mean(pairs_full$SCALE_SCORE_PRIOR)
+          sigma_prior <- sd(pairs_full$SCALE_SCORE_PRIOR)
+          mu_current <- mean(pairs_full$SCALE_SCORE_CURRENT)
+          sigma_current <- sd(pairs_full$SCALE_SCORE_CURRENT)
+
+          U <- pnorm(pairs_full$SCALE_SCORE_PRIOR, mu_prior, sigma_prior)
+          V <- pnorm(pairs_full$SCALE_SCORE_CURRENT, mu_current, sigma_current)
+        } else if (method$params$distribution == "logistic") {
+          mu_prior <- mean(pairs_full$SCALE_SCORE_PRIOR)
+          s_prior <- sd(pairs_full$SCALE_SCORE_PRIOR) * sqrt(3) / pi
+          mu_current <- mean(pairs_full$SCALE_SCORE_CURRENT)
+          s_current <- sd(pairs_full$SCALE_SCORE_CURRENT) * sqrt(3) / pi
+
+          U <- plogis(pairs_full$SCALE_SCORE_PRIOR, mu_prior, s_prior)
+          V <- plogis(pairs_full$SCALE_SCORE_CURRENT, mu_current, s_current)
+        }
+        U <- pmax(1e-6, pmin(1 - 1e-6, U))
+        V <- pmax(1e-6, pmin(1 - 1e-6, V))
+        list(U = U, V = V, framework = list(method = method$type))
       } else {
-        U <- rank(pairs_full$SCALE_SCORE_PRIOR) / n_pairs
-        V <- rank(pairs_full$SCALE_SCORE_CURRENT) / n_pairs
+        stop("Unknown transformation type:", method$type)
       }
-      list(U = U, V = V, framework = list(method = method$type))
-      
-    } else if (method$type == "midrank") {
-      # Mid-ranks
-      U <- (rank(pairs_full$SCALE_SCORE_PRIOR) - 0.5) / n_pairs
-      V <- (rank(pairs_full$SCALE_SCORE_CURRENT) - 0.5) / n_pairs
-      list(U = U, V = V, framework = list(method = method$type))
-      
-    } else if (method$type == "ispline") {
-      # Standard I-spline
-      framework_prior <- create_ispline_framework(
-        pairs_full$SCALE_SCORE_PRIOR,
-        knot_percentiles = method$params$knot_percentiles
-      )
-      framework_current <- create_ispline_framework(
-        pairs_full$SCALE_SCORE_CURRENT,
-        knot_percentiles = method$params$knot_percentiles
-      )
-      U <- framework_prior$smooth_ecdf_full(pairs_full$SCALE_SCORE_PRIOR)
-      V <- framework_current$smooth_ecdf_full(pairs_full$SCALE_SCORE_CURRENT)
-      U <- pmax(1e-6, pmin(1 - 1e-6, U))
-      V <- pmax(1e-6, pmin(1 - 1e-6, V))
-      list(U = U, V = V, framework = framework_prior)
-      
-    } else if (method$type == "ispline_tail") {
-      # Tail-aware I-spline
-      framework_prior <- create_ispline_framework_enhanced(
-        pairs_full$SCALE_SCORE_PRIOR,
-        knot_percentiles = method$params$knot_percentiles,
-        tail_aware = method$params$tail_aware
-      )
-      framework_current <- create_ispline_framework_enhanced(
-        pairs_full$SCALE_SCORE_CURRENT,
-        knot_percentiles = method$params$knot_percentiles,
-        tail_aware = method$params$tail_aware
-      )
-      U <- framework_prior$smooth_ecdf_full(pairs_full$SCALE_SCORE_PRIOR)
-      V <- framework_current$smooth_ecdf_full(pairs_full$SCALE_SCORE_CURRENT)
-      U <- pmax(1e-6, pmin(1 - 1e-6, U))
-      V <- pmax(1e-6, pmin(1 - 1e-6, V))
-      list(U = U, V = V, framework = framework_prior)
-      
-    } else if (method$type == "qspline") {
-      # Q-spline (quantile function)
-      qspline_prior <- fit_qspline(
-        pairs_full$SCALE_SCORE_PRIOR,
-        knot_probs = method$params$knot_probs
-      )
-      qspline_current <- fit_qspline(
-        pairs_full$SCALE_SCORE_CURRENT,
-        knot_probs = method$params$knot_probs
-      )
-      U <- qspline_prior$cdf_function(pairs_full$SCALE_SCORE_PRIOR)
-      V <- qspline_current$cdf_function(pairs_full$SCALE_SCORE_CURRENT)
-      U <- pmax(1e-6, pmin(1 - 1e-6, U))
-      V <- pmax(1e-6, pmin(1 - 1e-6, V))
-      list(U = U, V = V, framework = qspline_prior)
-      
-    } else if (method$type == "hyman") {
-      # Hyman monotone spline
-      ecdf_prior <- ecdf(pairs_full$SCALE_SCORE_PRIOR)
-      ecdf_current <- ecdf(pairs_full$SCALE_SCORE_CURRENT)
-      x_prior <- sort(unique(pairs_full$SCALE_SCORE_PRIOR))
-      x_current <- sort(unique(pairs_full$SCALE_SCORE_CURRENT))
-      y_prior <- ecdf_prior(x_prior)
-      y_current <- ecdf_current(x_current)
-      
-      spline_prior <- splinefun(x_prior, y_prior, method = "hyman")
-      spline_current <- splinefun(x_current, y_current, method = "hyman")
-      
-      U <- spline_prior(pairs_full$SCALE_SCORE_PRIOR)
-      V <- spline_current(pairs_full$SCALE_SCORE_CURRENT)
-      U <- pmax(1e-6, pmin(1 - 1e-6, U))
-      V <- pmax(1e-6, pmin(1 - 1e-6, V))
-      list(U = U, V = V, framework = list(method = "hyman"))
-      
-    } else if (method$type == "bernstein") {
-      # Bernstein CDF smoother
-      bernstein_prior <- fit_bernstein_cdf(
-        pairs_full$SCALE_SCORE_PRIOR,
-        degree = method$params$degree,
-        tune_by_cv = method$params$tune_by_cv
-      )
-      bernstein_current <- fit_bernstein_cdf(
-        pairs_full$SCALE_SCORE_CURRENT,
-        degree = method$params$degree,
-        tune_by_cv = method$params$tune_by_cv
-      )
-      
-      U <- bernstein_prior$F(pairs_full$SCALE_SCORE_PRIOR)
-      V <- bernstein_current$F(pairs_full$SCALE_SCORE_CURRENT)
-      U <- pmax(1e-6, pmin(1 - 1e-6, U))
-      V <- pmax(1e-6, pmin(1 - 1e-6, V))
-      list(U = U, V = V, framework = bernstein_prior)
-      
-    } else if (method$type == "kernel") {
-      # Kernel smoothing (simple implementation)
-      kernel_cdf <- function(x, data, bw) {
-        sapply(x, function(xi) mean(pnorm((xi - data) / bw)))
-      }
-      
-      # Rule-of-thumb bandwidth
-      bw_prior <- bw.nrd0(pairs_full$SCALE_SCORE_PRIOR)
-      bw_current <- bw.nrd0(pairs_full$SCALE_SCORE_CURRENT)
-      
-      U <- kernel_cdf(pairs_full$SCALE_SCORE_PRIOR, 
-                     pairs_full$SCALE_SCORE_PRIOR, bw_prior)
-      V <- kernel_cdf(pairs_full$SCALE_SCORE_CURRENT, 
-                     pairs_full$SCALE_SCORE_CURRENT, bw_current)
-      U <- pmax(1e-6, pmin(1 - 1e-6, U))
-      V <- pmax(1e-6, pmin(1 - 1e-6, V))
-      list(U = U, V = V, framework = list(method = "kernel"))
-      
-    } else if (method$type == "parametric") {
-      # Parametric CDF
-      if (method$params$distribution == "normal") {
-        mu_prior <- mean(pairs_full$SCALE_SCORE_PRIOR)
-        sigma_prior <- sd(pairs_full$SCALE_SCORE_PRIOR)
-        mu_current <- mean(pairs_full$SCALE_SCORE_CURRENT)
-        sigma_current <- sd(pairs_full$SCALE_SCORE_CURRENT)
-        
-        U <- pnorm(pairs_full$SCALE_SCORE_PRIOR, mu_prior, sigma_prior)
-        V <- pnorm(pairs_full$SCALE_SCORE_CURRENT, mu_current, sigma_current)
-      } else if (method$params$distribution == "logistic") {
-        mu_prior <- mean(pairs_full$SCALE_SCORE_PRIOR)
-        s_prior <- sd(pairs_full$SCALE_SCORE_PRIOR) * sqrt(3) / pi
-        mu_current <- mean(pairs_full$SCALE_SCORE_CURRENT)
-        s_current <- sd(pairs_full$SCALE_SCORE_CURRENT) * sqrt(3) / pi
-        
-        U <- plogis(pairs_full$SCALE_SCORE_PRIOR, mu_prior, s_prior)
-        V <- plogis(pairs_full$SCALE_SCORE_CURRENT, mu_current, s_current)
-      }
-      U <- pmax(1e-6, pmin(1 - 1e-6, U))
-      V <- pmax(1e-6, pmin(1 - 1e-6, V))
-      list(U = U, V = V, framework = list(method = method$type))
-      
-    } else {
-      stop("Unknown transformation type:", method$type)
+    },
+    error = function(e) {
+      cat("ERROR:", e$message, "\n\n")
+      return(NULL)
     }
-    
-  }, error = function(e) {
-    cat("ERROR:", e$message, "\n\n")
-    return(NULL)
-  })
-  
+  )
+
   # Check if transformation succeeded
   if (is.null(transformation_result)) {
     failed_methods <- c(failed_methods, method$name)
     next
   }
-  
+
   U <- transformation_result$U
   V <- transformation_result$V
   framework <- transformation_result$framework
-  
+
   # Compute diagnostics
   cat("Computing diagnostics...\n")
-  
+
   uniformity <- compute_uniformity_diagnostics(U, V)
-  dependence <- compute_dependence_diagnostics(U, V, empirical_baseline$dependence)
+  dependence <- compute_dependence_diagnostics(
+    U,
+    V,
+    empirical_baseline$dependence
+  )
   tail <- compute_tail_diagnostics(U, V, empirical_baseline$tail)
-  
+
   # NEW: Enhanced copula-aware diagnostics
   cat("Computing enhanced diagnostics...\n")
   tail_calibration <- tail_calibration_check(
     U_empirical = empirical_U,
     U_smoothed = U
   )
-  
+
   # Bootstrap parameter stability (reduced reps for speed)
   param_stability <- bootstrap_parameter_stability(
     U_prior = U,
     U_current = V,
     copula_family = "t",
-    n_bootstrap = 100,  # Reduced from 200 for speed
+    n_bootstrap = 100, # Reduced from 200 for speed
     parallel = FALSE
   )
-  
+
   # Fit copulas
   cat("Fitting copulas...\n")
   pseudo_obs <- cbind(U, V)
-  
+
   copula_results <- list()
   for (fam in COPULA_FAMILIES) {
-    fit_result <- tryCatch({
-      if (fam == "gaussian") {
-        cop <- normalCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        list(family = fam, aic = -2*fit@loglik + 2, 
-             bic = -2*fit@loglik + log(n_pairs),
-             loglik = fit@loglik)
-      } else if (fam == "t") {
-        cop <- tCopula(dim = 2, dispstr = "un")
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        list(family = fam, aic = -2*fit@loglik + 4, 
-             bic = -2*fit@loglik + 2*log(n_pairs),
-             loglik = fit@loglik)
-      } else if (fam == "clayton") {
-        cop <- claytonCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        list(family = fam, aic = -2*fit@loglik + 2, 
-             bic = -2*fit@loglik + log(n_pairs),
-             loglik = fit@loglik)
-      } else if (fam == "gumbel") {
-        cop <- gumbelCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        list(family = fam, aic = -2*fit@loglik + 2, 
-             bic = -2*fit@loglik + log(n_pairs),
-             loglik = fit@loglik)
-      } else if (fam == "frank") {
-        cop <- frankCopula(dim = 2)
-        fit <- fitCopula(cop, pseudo_obs, method = "ml")
-        list(family = fam, aic = -2*fit@loglik + 2, 
-             bic = -2*fit@loglik + log(n_pairs),
-             loglik = fit@loglik)
+    fit_result <- tryCatch(
+      {
+        if (fam == "gaussian") {
+          cop <- normalCopula(dim = 2)
+          fit <- fitCopula(cop, pseudo_obs, method = "ml")
+          list(
+            family = fam,
+            aic = -2 * fit@loglik + 2,
+            bic = -2 * fit@loglik + log(n_pairs),
+            loglik = fit@loglik
+          )
+        } else if (fam == "t") {
+          cop <- tCopula(dim = 2, dispstr = "un")
+          fit <- fitCopula(cop, pseudo_obs, method = "ml")
+          list(
+            family = fam,
+            aic = -2 * fit@loglik + 4,
+            bic = -2 * fit@loglik + 2 * log(n_pairs),
+            loglik = fit@loglik
+          )
+        } else if (fam == "clayton") {
+          cop <- claytonCopula(dim = 2)
+          fit <- fitCopula(cop, pseudo_obs, method = "ml")
+          list(
+            family = fam,
+            aic = -2 * fit@loglik + 2,
+            bic = -2 * fit@loglik + log(n_pairs),
+            loglik = fit@loglik
+          )
+        } else if (fam == "gumbel") {
+          cop <- gumbelCopula(dim = 2)
+          fit <- fitCopula(cop, pseudo_obs, method = "ml")
+          list(
+            family = fam,
+            aic = -2 * fit@loglik + 2,
+            bic = -2 * fit@loglik + log(n_pairs),
+            loglik = fit@loglik
+          )
+        } else if (fam == "frank") {
+          cop <- frankCopula(dim = 2)
+          fit <- fitCopula(cop, pseudo_obs, method = "ml")
+          list(
+            family = fam,
+            aic = -2 * fit@loglik + 2,
+            bic = -2 * fit@loglik + log(n_pairs),
+            loglik = fit@loglik
+          )
+        }
+      },
+      error = function(e) {
+        NULL
       }
-    }, error = function(e) {
-      NULL
-    })
-    
+    )
+
     if (!is.null(fit_result)) {
       copula_results[[fam]] <- fit_result
     }
   }
-  
+
   # Find best copula
   aics <- sapply(copula_results, function(x) x$aic)
   best_fam <- names(which.min(aics))
-  
+
   copula_summary <- list(
     best_family = best_fam,
     results = copula_results,
-    aic_delta_from_empirical = aics[best_fam] - 
+    aic_delta_from_empirical = aics[best_fam] -
       empirical_copula_fits$results[[empirical_best_family]]$aic
   )
-  
+
   # Classify method
   classification <- classify_transformation_method(
     uniformity = uniformity,
@@ -488,37 +566,64 @@ for (i in seq_along(TRANSFORMATION_METHODS)) {
     copula_results = copula_summary,
     empirical_best_family = empirical_best_family
   )
-  
+
   # Store results
   all_results[[method$name]] <- list(
     method = method,
     uniformity = uniformity,
     dependence = dependence,
     tail = tail,
-    tail_calibration = tail_calibration,  # NEW
-    param_stability = param_stability,     # NEW
+    tail_calibration = tail_calibration, # NEW
+    param_stability = param_stability, # NEW
     copula_results = copula_summary,
     classification = classification,
     U = U,
     V = V
   )
-  
+
   # Print summary
   cat("\nRESULTS SUMMARY:\n")
   cat("  Classification:", classification$classification, "\n")
   cat("  Suitable for Phase 2:", classification$use_in_phase2, "\n")
-  cat("  K-S p-value (combined):", sprintf("%.4f", uniformity$combined_ks_pval), "\n")
-  cat("  Best copula:", copula_summary$best_family, 
-      ifelse(copula_summary$best_family == empirical_best_family, 
-             "(CORRECT)", "(WRONG)"), "\n")
+  cat(
+    "  K-S p-value (combined):",
+    sprintf("%.4f", uniformity$combined_ks_pval),
+    "\n"
+  )
+  cat(
+    "  Best copula:",
+    copula_summary$best_family,
+    ifelse(
+      copula_summary$best_family == empirical_best_family,
+      "(CORRECT)",
+      "(WRONG)"
+    ),
+    "\n"
+  )
   cat("  Tau bias:", sprintf("%.4f", dependence$tau_bias), "\n")
-  cat("  Tail distortion (lower):", sprintf("%.4f", tail$tail_distortion_lower), "\n")
-  cat("  Tail distortion (upper):", sprintf("%.4f", tail$tail_distortion_upper), "\n")
-  cat("  Tail calibration error:", sprintf("%.4f", tail_calibration$tail_error_total), 
-      sprintf("(%s)", tail_calibration$grade), "\n")
+  cat(
+    "  Tail distortion (lower):",
+    sprintf("%.4f", tail$tail_distortion_lower),
+    "\n"
+  )
+  cat(
+    "  Tail distortion (upper):",
+    sprintf("%.4f", tail$tail_distortion_upper),
+    "\n"
+  )
+  cat(
+    "  Tail calibration error:",
+    sprintf("%.4f", tail_calibration$tail_error_total),
+    sprintf("(%s)", tail_calibration$grade),
+    "\n"
+  )
   if (param_stability$success) {
-    cat("  Parameter stability (τ CV):", sprintf("%.2f%%", param_stability$tau_cv),
-        sprintf("(%s)", param_stability$grade), "\n")
+    cat(
+      "  Parameter stability (τ CV):",
+      sprintf("%.2f%%", param_stability$tau_cv),
+      sprintf("(%s)", param_stability$grade),
+      "\n"
+    )
   } else {
     cat("  Parameter stability: FAILED\n")
   }
@@ -540,32 +645,40 @@ summary_table <- rbindlist(lapply(names(all_results), function(method_name) {
     method = method_name,
     label = res$method$label,
     type = res$method$type,
-    
+
     # Classification
     classification = res$classification$classification,
     use_in_phase2 = res$classification$use_in_phase2,
-    
+
     # Uniformity
     ks_pvalue = res$uniformity$combined_ks_pval,
     cvm_U = res$uniformity$cvm_U,
     cvm_V = res$uniformity$cvm_V,
-    
+
     # Dependence
     tau = res$dependence$kendall_tau,
     tau_bias = res$dependence$tau_bias,
-    
+
     # Tail
     lower_10 = res$tail$lower_10,
     upper_90 = res$tail$upper_90,
     tail_dist_lower = res$tail$tail_distortion_lower,
     tail_dist_upper = res$tail$tail_distortion_upper,
-    
+
     # NEW: Enhanced diagnostics
     tail_calib_error = res$tail_calibration$tail_error_total,
     tail_calib_grade = res$tail_calibration$grade,
-    param_stability_cv = if(res$param_stability$success) res$param_stability$tau_cv else NA,
-    param_stability_grade = if(res$param_stability$success) res$param_stability$grade else "FAIL",
-    
+    param_stability_cv = if (res$param_stability$success) {
+      res$param_stability$tau_cv
+    } else {
+      NA
+    },
+    param_stability_grade = if (res$param_stability$success) {
+      res$param_stability$grade
+    } else {
+      "FAIL"
+    },
+
     # Copula
     best_copula = res$copula_results$best_family,
     copula_correct = (res$copula_results$best_family == empirical_best_family),
@@ -574,16 +687,24 @@ summary_table <- rbindlist(lapply(names(all_results), function(method_name) {
 }))
 
 # Sort by classification quality
-summary_table[, class_order := factor(classification, 
-                                      levels = c("EXCELLENT", "ACCEPTABLE", 
-                                                "MARGINAL", "UNACCEPTABLE"))]
+summary_table[,
+  class_order := factor(
+    classification,
+    levels = c("EXCELLENT", "ACCEPTABLE", "MARGINAL", "UNACCEPTABLE")
+  )
+]
 setorder(summary_table, class_order, -ks_pvalue)
 summary_table[, class_order := NULL]
 
 # Save results
-fwrite(summary_table, "STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv")
+fwrite(
+  summary_table,
+  "STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv"
+)
 
-cat("Summary table saved to: STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv\n\n")
+cat(
+  "Summary table saved to: STEP_3_Application_Implementation/results/exp5_transformation_validation_summary.csv\n\n"
+)
 
 # Print summary
 cat("METHOD CLASSIFICATION SUMMARY:\n")
@@ -605,7 +726,11 @@ cat("PHASE 2 RECOMMENDATIONS:\n")
 cat("====================================================================\n\n")
 
 phase2_methods <- summary_table[use_in_phase2 == TRUE, label]
-cat("The following", length(phase2_methods), "methods are SUITABLE for Phase 2:\n\n")
+cat(
+  "The following",
+  length(phase2_methods),
+  "methods are SUITABLE for Phase 2:\n\n"
+)
 for (m in phase2_methods) {
   cat("  -", m, "\n")
 }
@@ -620,10 +745,19 @@ cat("EXPERIMENT 5 COMPLETE\n")
 cat("====================================================================\n\n")
 
 # Save full results
-dir.create("STEP_3_Application_Implementation/results", showWarnings = FALSE, recursive = TRUE)
-save(all_results, summary_table, empirical_baseline, 
-     file = "STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData")
+dir.create(
+  "STEP_3_Application_Implementation/results",
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+save(
+  all_results,
+  summary_table,
+  empirical_baseline,
+  file = "STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData"
+)
 
-cat("Full results saved to: STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData\n")
+cat(
+  "Full results saved to: STEP_3_Application_Implementation/results/exp5_transformation_validation_full.RData\n"
+)
 cat("\nNext: Review results and generate publication-quality figures.\n\n")
-

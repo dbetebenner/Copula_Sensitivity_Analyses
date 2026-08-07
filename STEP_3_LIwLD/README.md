@@ -47,12 +47,12 @@ Work throughout on the pseudo-observation (reference-percentile) scale:
 | C_0 | Baseline copula from STEP 1 |
 | F_0(v\|u) = ∂C_0(u,v)/∂u | Conditional CDF (transition kernel) |
 | Q_0(p\|u) = F_0^{-1}(p\|u) | Conditional quantile kernel |
-| P_S ~ H_S | Latent conditional percentile drawn from subgroup growth regime |
+| P_S ~ G_S | Latent conditional percentile drawn from subgroup growth regime |
 | SGPc(u, v) = 100·F_0(v\|u) | Student Growth Percentile (copula scale) |
 
 **Note on reference marginals:** The reference ECDFs must satisfy two constraints:
 (1) they must **not** be subgroup-specific, since that would force U and V toward Uniform(0,1)
-and erase the distributional shift signal that STEP 3 needs to recover H_S; and
+and erase the distributional shift signal that STEP 3 needs to recover G_S; and
 (2) they must be built from the **condition-level matched pairs** (via `build_pairs_reference()`),
 not the full cross-sectional population, to ensure consistency with the copula training population
 from Step 1. See "Methodological Note: Reference Marginals" below.
@@ -62,19 +62,19 @@ from Step 1. See "Methodological Note: Reference Marginals" below.
 **SGPcFlow** defines a stochastic map from prior to current percentile:
 
 ```
-sgpcFlow_S:   U  →  V = Q_0(P_S | U),   P_S ~ H_S
+sgpcFlow_S:   U  →  V = Q_0(P_S | U),   P_S ~ G_S
 ```
 
 where Q_0 is induced by the baseline copula C_0 via F_0(v|u) = ∂C_0(u,v)/∂u.
 
 Generative view — to simulate the current-grade percentile distribution of subgroup S:
 1. Draw U from the observed Grade 4 subgroup distribution.
-2. Draw a latent conditional percentile P_S from H_S (the growth regime).
+2. Draw a latent conditional percentile P_S from G_S (the growth regime).
 3. Map to current percentile: V = Q_0(P_S | U).
 
 This **separates** the inference problem into two components:
 - **Dependence template** (baseline copula kernel, established in STEP 1): F_0(v|u)
-- **Flow occupancy rule** (the object STEP 3 estimates): H_S
+- **Flow occupancy rule** (the object STEP 3 estimates): G_S
 
 ### Deterministic Boundary Cases and TAMP
 
@@ -90,10 +90,10 @@ The interior of copula space (e.g., a t-copula from STEP 1) gives genuinely stoc
 with non-degenerate spread around the conditional median.
 
 **Critical subtlety:** "Everyone has SGPc = 50" means V = Q_0(0.5 | U) — each student lies on
-the conditional median curve. This is *deterministic* (point-mass H_S at p = 0.5), but is
+the conditional median curve. This is *deterministic* (point-mass G_S at p = 0.5), but is
 generally **not** equal to V = U. It is the comonotonic (TAMP) special case only when the
 baseline kernel itself is the identity. Under a t-copula kernel, the conditional median curve
-diverges from the diagonal, so a regime with point-mass H_S = δ(0.5) differs materially from TAMP.
+diverges from the diagonal, so a regime with point-mass G_S = δ(0.5) differs materially from TAMP.
 
 ### The Key Analytic Identity
 
@@ -101,15 +101,15 @@ The primary identifying assumption is **P_S ⊥ U** within subgroup (latent cond
 independent of prior rank). Under this assumption:
 
 ```
-F_H(v)  =  E[ H_S( F_0(v | U) ) ]
-         ≈  (1/n) * Σ_i  H_S( F_0(v | u_i) )
+F_G(v)  =  E[ G_S( F_0(v | U) ) ]
+         ≈  (1/n) * Σ_i  G_S( F_0(v | u_i) )
 ```
 
 This is **exact** (no Monte Carlo) and evaluates in milliseconds. It is the computational core
 of all STEP 3 estimation.
 
 **Why P_S ⊥ U is the right assumption:** It is the minimal structure that lets you identify a
-low-dimensional summary H_S from two unlinked marginal samples. It does *not* by itself identify
+low-dimensional summary G_S from two unlinked marginal samples. It does *not* by itself identify
 differential opportunity effects (e.g., low-percentile students systematically receiving lower P).
 Stratified-by-U sensitivity analysis (Phase B3) probes how much the estimates change if this
 assumption is relaxed.
@@ -117,7 +117,7 @@ assumption is relaxed.
 ### What STEP 3 Estimates (and What It Does Not)
 
 **Estimates:**
-- H_S: the subgroup-level distribution over latent conditional percentiles
+- G_S: the subgroup-level distribution over latent conditional percentiles
 - Derived summaries: median SGPc, mean SGPc, dispersion (SD, IQR), entropy/concentration
 - Bucket membership probabilities: K=3 (Low/Typical/High) and K=5
 
@@ -301,7 +301,7 @@ STEP_3_LIwLD/
         phasea_01_marginals_uv_density.* # Marginal U,V density
         phasea_02a_objective_surface.*   # Objective landscape over (m, log10(kappa))
         phasea_02b_forward_cdf_check.*   # Observed vs predicted CDF (+ baselines)
-        phasea_02c_residual_diagnostics.*# Residual diagnostics (F_H - F_obs)
+        phasea_02c_residual_diagnostics.*# Residual diagnostics (F_G - F_obs)
         phasea_03a_regime_density.*      # Inferred regime density vs true SGPc
         phasea_03b_bootstrap_median.*    # Bootstrap distribution of median SGPc
         phasea_03c_bootstrap_mean.*      # Bootstrap distribution of mean SGPc
@@ -418,9 +418,9 @@ Phase A supports three modes, controlled via the `validation` section of `config
 4. **Build reference marginals** using `build_pairs_reference(pairs)` — ECDFs from the
    condition-level matched pairs, keeping marginals consistent with the Step 1 copula
 5. **Build transition kernel** F_0(v|u) = ∂C_0(u,v)/∂u from the STEP 1 baseline copula
-6. **Estimate growth regime** H_S via minimum Wasserstein-1 distance:
-   H_hat_S = argmin_{H ∈ H_Beta} W_1( F_obs_V, F_H )
-   where F_H(v) = (1/n) * Σ_i H(F_0(v|u_i))
+6. **Estimate growth regime** G_S via minimum Wasserstein-1 distance:
+   G_hat_S = argmin_{G ∈ 𝒢_Beta} W_1( F_obs_V, F_G )
+   where F_G(v) = (1/n) * Σ_i G(F_0(v|u_i))
 7. **Compare inferred vs actual** — the key validation against longitudinal ground truth
 8. **Alternative copula estimation** (comparison mode only) — re-run the regime estimation
    under the per-condition best-fit copula from STEP 1, compute deltas (median SGPc, mean SGPc,
@@ -601,7 +601,7 @@ Generates the final publication figures and manifests from Phase A and B results
 |-------|-------------|--------|
 | A | Observed vs predicted CDF (+ TAMP and uniform baselines) | Phase A |
 | B1 | Objective landscape over `(m, log10(kappa))` | Phase A |
-| B2 | Residual diagnostics (`F_H − F_obs`) in v-space | Phase A |
+| B2 | Residual diagnostics (`F_G − F_obs`) in v-space | Phase A |
 | C | Inferred regime density vs actual SGPc distribution | Phase A |
 | D | Recovery precision by N bucket (95% CI width + MAE curves) | Phase B |
 | E | Recovery accuracy by year span (|inferred − true median SGPc|) | Phase B |
@@ -847,8 +847,8 @@ STEP 3 panels follow the same visual conventions as STEP 2, enforced via
 | **Copula** C_0 | Dependence structure on uniform marginals; from STEP 1 |
 | **Baseline kernel** F_0(v\|u) | Conditional CDF ∂C_0(u,v)/∂u; the dependence template |
 | **Quantile kernel** Q_0(p\|u) | Inverse conditional map F_0^{-1}(p\|u) |
-| **Growth regime** H_S | Subgroup distribution over latent conditional percentiles P ∈ [0,1] |
-| **SGPcFlow** | Generated map V = Q_0(P_S\|U), P_S ~ H_S |
+| **Growth regime** G_S | Subgroup distribution over latent conditional percentiles P ∈ [0,1] |
+| **SGPcFlow** | Generated map V = Q_0(P_S\|U), P_S ~ G_S |
 | **SGPc** | Student Growth Percentile = 100·F_0(v\|u); conditional rank within the reference population |
 | **TAMP** | Traditional NAEP/TIMSS assumption: comonotonic dependence, V = U (rank preservation) |
 | **P_S ⊥ U** | Primary identifying assumption: latent conditional percentile independent of prior rank within subgroup |
@@ -897,7 +897,7 @@ assignments. `<-` creates local bindings that evaporate; `<<-` walks up to daemo
   in that condition. Check Step 1 `analysis_manifest.md` for the condition's best-fit family and
   ΔAIC against the t-copula.
 - Subgroup too small (n < 50): sampling noise dominates
-- P_S ⊥ U assumption violated: H_S actually depends on U; check independence diagnostic output
+- P_S ⊥ U assumption violated: G_S actually depends on U; check independence diagnostic output
 - Reference marginal mismatch: if `build_condition_reference()` (state-level) was used instead
   of `build_pairs_reference()` (paired), selection-bias contamination inflates the error
 
@@ -974,7 +974,7 @@ support.
 | `functions/reference_marginals.R` | `build_pairs_reference()` (paired ECDFs, production default), `build_condition_reference()` (state-level, diagnostic), `create_reference_ecdf()` |
 | `functions/copula_kernel_cache.R` | Precompute F_0(v\|u) on (u,v) grid |
 | `functions/regime_families.R` | Beta, trunc-exp, trunc-uniform (sd, IQR, entropy) |
-| `functions/predict_v_cdf.R` | Analytic predicted CDF via F_H identity |
+| `functions/predict_v_cdf.R` | Analytic predicted CDF via F_G identity |
 | `functions/distance_metrics.R` | W1, CvM, KS |
 | `functions/optimize_regime.R` | Grid search + optim() (single pool) |
 | `functions/optimize_regime_stratified.R` | Stratified regime estimation (per U-bin) for independence sensitivity |

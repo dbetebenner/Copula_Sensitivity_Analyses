@@ -12,7 +12,6 @@
 ###
 ############################################################################
 
-
 #' Classify a Growth Regime into Buckets
 #'
 #' Given a regime's median SGPc (or bootstrap draws thereof), compute the
@@ -35,7 +34,6 @@
 #'
 #' @export
 classify_bucket <- function(median_sgpc_draws, k = 3, cutpoints = NULL) {
-
   if (is.null(cutpoints)) {
     cutpoints <- if (k == 3) {
       c(45, 55)
@@ -59,17 +57,22 @@ classify_bucket <- function(median_sgpc_draws, k = 3, cutpoints = NULL) {
     probs <- rep(NA_real_, length(bucket_names))
     names(probs) <- bucket_names
     return(list(
-      bucket_probs              = probs,
-      assigned_bucket           = NA_character_,
+      bucket_probs = probs,
+      assigned_bucket = NA_character_,
       classification_consistency = NA_real_,
-      k                         = k,
-      cutpoints                 = cutpoints
+      k = k,
+      cutpoints = cutpoints
     ))
   }
 
-  bucket_assignment <- cut(draws, breaks = breaks, labels = bucket_names,
-                           include.lowest = TRUE)
-  probs <- table(factor(bucket_assignment, levels = bucket_names)) / length(draws)
+  bucket_assignment <- cut(
+    draws,
+    breaks = breaks,
+    labels = bucket_names,
+    include.lowest = TRUE
+  )
+  probs <- table(factor(bucket_assignment, levels = bucket_names)) /
+    length(draws)
   probs <- as.numeric(probs)
   names(probs) <- bucket_names
 
@@ -77,11 +80,11 @@ classify_bucket <- function(median_sgpc_draws, k = 3, cutpoints = NULL) {
   consistency <- max(probs)
 
   list(
-    bucket_probs              = probs,
-    assigned_bucket           = assigned,
+    bucket_probs = probs,
+    assigned_bucket = assigned,
     classification_consistency = consistency,
-    k                         = k,
-    cutpoints                 = cutpoints
+    k = k,
+    cutpoints = cutpoints
   )
 }
 
@@ -98,9 +101,11 @@ classify_bucket <- function(median_sgpc_draws, k = 3, cutpoints = NULL) {
 #' @return A named list with $k3 and $k5, each from classify_bucket().
 #'
 #' @export
-classify_subgroup_buckets <- function(median_sgpc_draws,
-                                       cutpoints_k3 = c(45, 55),
-                                       cutpoints_k5 = c(40, 45, 55, 60)) {
+classify_subgroup_buckets <- function(
+  median_sgpc_draws,
+  cutpoints_k3 = c(45, 55),
+  cutpoints_k5 = c(40, 45, 55, 60)
+) {
   list(
     k3 = classify_bucket(median_sgpc_draws, k = 3, cutpoints = cutpoints_k3),
     k5 = classify_bucket(median_sgpc_draws, k = 5, cutpoints = cutpoints_k5)
@@ -124,14 +129,17 @@ classify_subgroup_buckets <- function(median_sgpc_draws,
 #'   k5_assigned, k5_consistency.
 #'
 #' @export
-build_bucket_table <- function(subgroup_results,
-                                cutpoints_k3 = c(45, 55),
-                                cutpoints_k5 = c(40, 45, 55, 60)) {
-
+build_bucket_table <- function(
+  subgroup_results,
+  cutpoints_k3 = c(45, 55),
+  cutpoints_k5 = c(40, 45, 55, 60)
+) {
   rows <- lapply(names(subgroup_results), function(sg_id) {
     sg <- subgroup_results[[sg_id]]
 
-    draws <- if (!is.null(sg$bootstrap) && !is.null(sg$bootstrap$median_sgpc_draws)) {
+    draws <- if (
+      !is.null(sg$bootstrap) && !is.null(sg$bootstrap$median_sgpc_draws)
+    ) {
       sg$bootstrap$median_sgpc_draws
     } else if (!is.null(sg$best_estimate)) {
       rep(sg$best_estimate$regime$median * 100, 1)
@@ -143,24 +151,26 @@ build_bucket_table <- function(subgroup_results,
 
     med_sgpc <- if (!is.null(sg$best_estimate)) {
       round(sg$best_estimate$regime$median * 100, 2)
-    } else NA_real_
+    } else {
+      NA_real_
+    }
 
     data.frame(
-      subgroup_id       = sg_id,
-      median_sgpc       = med_sgpc,
-      k3_Low            = round(bc$k3$bucket_probs["Low"], 4),
-      k3_Typical        = round(bc$k3$bucket_probs["Typical"], 4),
-      k3_High           = round(bc$k3$bucket_probs["High"], 4),
-      k3_assigned       = bc$k3$assigned_bucket,
-      k3_consistency    = round(bc$k3$classification_consistency, 4),
-      k5_Very_Low       = round(bc$k5$bucket_probs["Very Low"], 4),
-      k5_Low            = round(bc$k5$bucket_probs["Low"], 4),
-      k5_Typical        = round(bc$k5$bucket_probs["Typical"], 4),
-      k5_High           = round(bc$k5$bucket_probs["High"], 4),
-      k5_Very_High      = round(bc$k5$bucket_probs["Very High"], 4),
-      k5_assigned       = bc$k5$assigned_bucket,
-      k5_consistency    = round(bc$k5$classification_consistency, 4),
-      stringsAsFactors  = FALSE
+      subgroup_id = sg_id,
+      median_sgpc = med_sgpc,
+      k3_Low = round(bc$k3$bucket_probs["Low"], 4),
+      k3_Typical = round(bc$k3$bucket_probs["Typical"], 4),
+      k3_High = round(bc$k3$bucket_probs["High"], 4),
+      k3_assigned = bc$k3$assigned_bucket,
+      k3_consistency = round(bc$k3$classification_consistency, 4),
+      k5_Very_Low = round(bc$k5$bucket_probs["Very Low"], 4),
+      k5_Low = round(bc$k5$bucket_probs["Low"], 4),
+      k5_Typical = round(bc$k5$bucket_probs["Typical"], 4),
+      k5_High = round(bc$k5$bucket_probs["High"], 4),
+      k5_Very_High = round(bc$k5$bucket_probs["Very High"], 4),
+      k5_assigned = bc$k5$assigned_bucket,
+      k5_consistency = round(bc$k5$classification_consistency, 4),
+      stringsAsFactors = FALSE
     )
   })
 
@@ -169,4 +179,6 @@ build_bucket_table <- function(subgroup_results,
 
 
 cat("STEP 3 bucket_classification.R loaded.\n")
-cat("  Functions: classify_bucket, classify_subgroup_buckets, build_bucket_table\n")
+cat(
+  "  Functions: classify_bucket, classify_subgroup_buckets, build_bucket_table\n"
+)

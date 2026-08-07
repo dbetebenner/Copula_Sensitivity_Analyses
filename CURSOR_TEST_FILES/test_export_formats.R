@@ -5,20 +5,29 @@
 ################################################################################
 
 # Setup
-setwd("/Users/conet/Research/Graphics_Visualizations/Copula_Sensitivity_Analyses")
+setwd(
+  "/Users/conet/Research/Graphics_Visualizations/Copula_Sensitivity_Analyses"
+)
 
 # Source the export utility
 cat("Testing multi-format export utility...\n\n")
 
 # Check if required packages are installed
 required_packages <- c("ggplot2", "svglite", "ragg")
-missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
+missing_packages <- required_packages[
+  !sapply(required_packages, requireNamespace, quietly = TRUE)
+]
 
 if (length(missing_packages) > 0) {
   cat("WARNING: Some packages are missing:\n")
   cat("  -", paste(missing_packages, collapse = ", "), "\n")
   cat("\nInstall with:\n")
-  cat("  install.packages(c('", paste(missing_packages, collapse = "', '"), "'))\n\n", sep = "")
+  cat(
+    "  install.packages(c('",
+    paste(missing_packages, collapse = "', '"),
+    "'))\n\n",
+    sep = ""
+  )
   cat("Continuing with available formats...\n\n")
 }
 
@@ -56,19 +65,29 @@ cat("  Creating simple scatter plot...\n")
 simple_plot <- function() {
   set.seed(42)
   x <- rnorm(100)
-  y <- 2*x + rnorm(100, sd = 0.5)
-  
-  plot(x, y, pch = 19, col = rgb(0, 0, 1, 0.5),
-       main = "Test Scatter Plot (Base R)",
-       xlab = "X Variable", ylab = "Y Variable")
+  y <- 2 * x + rnorm(100, sd = 0.5)
+
+  plot(
+    x,
+    y,
+    pch = 19,
+    col = rgb(0, 0, 1, 0.5),
+    main = "Test Scatter Plot (Base R)",
+    xlab = "X Variable",
+    ylab = "Y Variable"
+  )
   abline(lm(y ~ x), col = "red", lwd = 2)
   grid(col = "grey90")
 }
 
 # Determine available formats
 available_formats <- c("pdf")
-if ("svglite" %in% installed.packages()[,1]) available_formats <- c(available_formats, "svg")
-if ("ragg" %in% installed.packages()[,1]) available_formats <- c(available_formats, "png")
+if ("svglite" %in% installed.packages()[, 1]) {
+  available_formats <- c(available_formats, "svg")
+}
+if ("ragg" %in% installed.packages()[, 1]) {
+  available_formats <- c(available_formats, "png")
+}
 
 cat("  Exporting to:", paste(available_formats, collapse = ", "), "\n")
 
@@ -140,7 +159,11 @@ if ("svg" %in% available_formats) {
 }
 
 if ("png" %in% available_formats) {
-  expected_files <- c(expected_files, "test_base_r@2x.png", "test_ggplot2@2x.png")
+  expected_files <- c(
+    expected_files,
+    "test_base_r@2x.png",
+    "test_ggplot2@2x.png"
+  )
 }
 
 all_exist <- TRUE
@@ -179,11 +202,18 @@ if (all_exist) {
 
 cat("Available formats on this system:\n")
 cat("  PDF:", "pdf" %in% available_formats, "\n")
-cat("  SVG:", "svg" %in% available_formats, 
-    ifelse("svg" %in% available_formats, "", " (install 'svglite')"), "\n")
-cat("  PNG:", "png" %in% available_formats, 
-    ifelse("png" %in% available_formats, "", " (install 'ragg')"), "\n")
+cat(
+  "  SVG:",
+  "svg" %in% available_formats,
+  ifelse("svg" %in% available_formats, "", " (install 'svglite')"),
+  "\n"
+)
+cat(
+  "  PNG:",
+  "png" %in% available_formats,
+  ifelse("png" %in% available_formats, "", " (install 'ragg')"),
+  "\n"
+)
 
 cat("\n")
 cat("====================================================================\n")
-

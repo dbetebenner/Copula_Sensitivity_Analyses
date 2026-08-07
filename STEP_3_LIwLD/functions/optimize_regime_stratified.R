@@ -23,21 +23,31 @@
 #'
 #' @return List with stratified fit results and comparison metrics
 #' @export
-estimate_regime_stratified <- function(u_sample, v_sample, kernel_cache,
-                                       regime_family = "beta",
-                                       distance_fn = "wasserstein1",
-                                       v_grid = NULL,
-                                       u_weights = NULL,
-                                       v_weights = NULL,
-                                       n_bins = 5,
-                                       grid_resolution = 20,
-                                       verbose = FALSE) {
-  if (is.null(v_grid)) v_grid <- seq(0.005, 0.995, length.out = 201)
+estimate_regime_stratified <- function(
+  u_sample,
+  v_sample,
+  kernel_cache,
+  regime_family = "beta",
+  distance_fn = "wasserstein1",
+  v_grid = NULL,
+  u_weights = NULL,
+  v_weights = NULL,
+  n_bins = 5,
+  grid_resolution = 20,
+  verbose = FALSE
+) {
+  if (is.null(v_grid)) {
+    v_grid <- seq(0.005, 0.995, length.out = 201)
+  }
   n_bins <- max(2L, as.integer(n_bins))
 
   F_obs <- observed_marginal_cdf(v_grid, v_sample, v_weights)
 
-  q_breaks <- unique(as.numeric(quantile(u_sample, probs = seq(0, 1, length.out = n_bins + 1), na.rm = TRUE)))
+  q_breaks <- unique(as.numeric(quantile(
+    u_sample,
+    probs = seq(0, 1, length.out = n_bins + 1),
+    na.rm = TRUE
+  )))
   if (length(q_breaks) < 3) {
     stop("Not enough unique quantile breaks for stratified estimation")
   }
@@ -53,12 +63,18 @@ estimate_regime_stratified <- function(u_sample, v_sample, kernel_cache,
   for (k in seq_along(levels_bin)) {
     lv <- levels_bin[k]
     idx <- which(u_bin == lv)
-    if (length(idx) < 25) next
+    if (length(idx) < 25) {
+      next
+    }
     u_k <- u_sample[idx]
     # preserve cross-sectional assumption by sampling v independently
     v_k <- sample(v_sample, length(idx), replace = TRUE)
     uw_k <- if (!is.null(u_weights)) u_weights[idx] else NULL
-    vw_k <- if (!is.null(v_weights)) sample(v_weights, length(idx), replace = TRUE) else NULL
+    vw_k <- if (!is.null(v_weights)) {
+      sample(v_weights, length(idx), replace = TRUE)
+    } else {
+      NULL
+    }
 
     fit_k <- tryCatch(
       estimate_regime(
@@ -76,7 +92,9 @@ estimate_regime_stratified <- function(u_sample, v_sample, kernel_cache,
       ),
       error = function(e) NULL
     )
-    if (is.null(fit_k)) next
+    if (is.null(fit_k)) {
+      next
+    }
 
     F_k <- predict_marginal_cdf(
       v_grid = v_grid,
@@ -101,8 +119,12 @@ estimate_regime_stratified <- function(u_sample, v_sample, kernel_cache,
   F_pred <- colSums(F_pred_bins[valid, , drop = FALSE] * wv)
   all_dist <- compute_all_distances(F_pred, F_obs, v_grid)
 
-  mean_sgpc <- sum(sapply(valid, function(v) bin_results[[v]]$regime$mean * 100) * wv)
-  med_sgpc <- sum(sapply(valid, function(v) bin_results[[v]]$regime$median * 100) * wv)
+  mean_sgpc <- sum(
+    sapply(valid, function(v) bin_results[[v]]$regime$mean * 100) * wv
+  )
+  med_sgpc <- sum(
+    sapply(valid, function(v) bin_results[[v]]$regime$median * 100) * wv
+  )
 
   list(
     stratified = TRUE,

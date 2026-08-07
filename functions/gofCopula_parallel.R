@@ -22,4 +22,3 @@ source("/Users/conet/GitHub/DBetebenner/copula/main/R/gofCopula.R")
 cat("✓ Parallel gofCopula() loaded successfully\n")
 cat("  Usage: gofCopula(..., cores=46) for parallel bootstrap\n")
 cat("  Usage: gofCopula(..., cores=NULL) for sequential (default)\n\n")
-

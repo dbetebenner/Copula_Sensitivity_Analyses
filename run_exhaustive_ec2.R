@@ -14,7 +14,7 @@
 ################################################################################
 
 # Set working directory to project root
-setwd("/path/to/Copula_Sensitivity_Analyses")  # UPDATE THIS PATH ON EC2
+setwd("/path/to/Copula_Sensitivity_Analyses") # UPDATE THIS PATH ON EC2
 
 ################################################################################
 ### CONFIGURATION FOR FULL EXHAUSTIVE RUN
@@ -33,8 +33,8 @@ DATASETS_TO_RUN <- c("dataset_1", "dataset_2", "dataset_3", "dataset_4")
 STEPS_TO_RUN <- 1
 
 # Enable key features
-N_BOOTSTRAP_GOF <- 100        # Include GoF testing
-CALCULATE_SGPC <- TRUE        # Calculate copula-based SGPs
+N_BOOTSTRAP_GOF <- 100 # Include GoF testing
+CALCULATE_SGPC <- TRUE # Calculate copula-based SGPs
 GENERATE_CONTOUR_PLOTS <- TRUE # Generate visualizations
 
 # EC2 settings (auto-detected)
@@ -59,16 +59,20 @@ dir.create(log_dir, showWarnings = FALSE, recursive = TRUE)
 
 # Redirect output to log file
 log_file <- file.path(log_dir, "exhaustive_analysis.log")
-sink(log_file, split = TRUE)  # split = TRUE to see output in console too
+sink(log_file, split = TRUE) # split = TRUE to see output in console too
 
 ################################################################################
 ### SYSTEM INFORMATION
 ################################################################################
 
 cat("\n")
-cat("################################################################################\n")
+cat(
+  "################################################################################\n"
+)
 cat("### EXHAUSTIVE SAME-COHORT ANALYSIS - FULL RUN\n")
-cat("################################################################################\n")
+cat(
+  "################################################################################\n"
+)
 cat("\n")
 cat("Start time:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
 cat("\n")
@@ -120,9 +124,13 @@ duration <- difftime(end_time, start_time, units = "hours")
 ################################################################################
 
 cat("\n")
-cat("################################################################################\n")
+cat(
+  "################################################################################\n"
+)
 cat("### ANALYSIS COMPLETE\n")
-cat("################################################################################\n")
+cat(
+  "################################################################################\n"
+)
 cat("\n")
 cat("End time:", format(end_time, "%Y-%m-%d %H:%M:%S"), "\n")
 cat("Total duration:", round(duration, 2), "hours\n")
@@ -131,20 +139,27 @@ cat("\n")
 # Summary statistics
 cat("Results Summary:\n")
 for (dataset_id in DATASETS_TO_RUN) {
-  results_file <- file.path("STEP_1_Family_Selection/results", dataset_id, 
-                           "phase1_copula_family_comparison.csv")
-  
+  results_file <- file.path(
+    "STEP_1_Family_Selection/results",
+    dataset_id,
+    "phase1_copula_family_comparison.csv"
+  )
+
   if (file.exists(results_file)) {
     results <- fread(results_file)
     n_conditions <- uniqueN(results$condition_id)
     n_families <- uniqueN(results$family)
-    
+
     # Count t-copula wins by time span
-    winners <- results[, .(winner = best_aic[1]), by = .(condition_id, year_span)]
-    t_wins_by_span <- winners[, .(n_wins = sum(winner == "t"), 
-                                   total = .N), 
-                              by = year_span]
-    
+    winners <- results[,
+      .(winner = best_aic[1]),
+      by = .(condition_id, year_span)
+    ]
+    t_wins_by_span <- winners[,
+      .(n_wins = sum(winner == "t"), total = .N),
+      by = year_span
+    ]
+
     cat("\n", dataset_id, ":\n", sep = "")
     cat("  Conditions:", n_conditions, "\n")
     cat("  T-copula wins by time span:\n")
@@ -169,4 +184,3 @@ cat("\n")
 sink()
 
 cat("Analysis complete. Log saved to:", log_file, "\n")
-

@@ -34,9 +34,12 @@ if (pdflatex_path != "") {
 tinytex_available <- requireNamespace("tinytex", quietly = TRUE)
 cat("tinytex R package:", tinytex_available, "\n")
 if (tinytex_available) {
-  tinytex_installed <- tryCatch({
-    tinytex::is_tinytex()
-  }, error = function(e) FALSE)
+  tinytex_installed <- tryCatch(
+    {
+      tinytex::is_tinytex()
+    },
+    error = function(e) FALSE
+  )
   cat("  TinyTeX installed:", tinytex_installed, "\n")
 }
 
@@ -60,7 +63,9 @@ if (file.exists("functions/copula_contour_plots.R")) {
   PROJECT_ROOT <- normalizePath("..")
   func_prefix <- "../"
 } else {
-  stop("Cannot locate project root. Run from project root or CURSOR_TEST_FILES/")
+  stop(
+    "Cannot locate project root. Run from project root or CURSOR_TEST_FILES/"
+  )
 }
 
 cat("Project root:", PROJECT_ROOT, "\n")
@@ -108,9 +113,11 @@ for (dir in possible_dirs) {
 if (is.null(output_base)) {
   cat("WARNING: Could not find standard output directory structure.\n")
   cat("Checking if current directory is a condition output directory...\n")
-  
+
   # Check if we're already in a condition directory
-  if (file.exists("bivariate_density_original.pdf") || dir.exists("PARAMETRIC")) {
+  if (
+    file.exists("bivariate_density_original.pdf") || dir.exists("PARAMETRIC")
+  ) {
     output_dir <- normalizePath(".")
     cat("  Using current directory as output_dir:", output_dir, "\n")
   } else {
@@ -118,15 +125,28 @@ if (is.null(output_base)) {
   }
 } else {
   # Use first condition directory found
-  condition_dirs <- list.dirs(output_base, full.names = FALSE, recursive = FALSE)
-  condition_dirs <- condition_dirs[grepl("^\\d{4}_G\\d+_G\\d+_", condition_dirs)]
-  
-  cat("Found", length(condition_dirs), "condition directories in:", output_base, "\n")
+  condition_dirs <- list.dirs(
+    output_base,
+    full.names = FALSE,
+    recursive = FALSE
+  )
+  condition_dirs <- condition_dirs[grepl(
+    "^\\d{4}_G\\d+_G\\d+_",
+    condition_dirs
+  )]
+
+  cat(
+    "Found",
+    length(condition_dirs),
+    "condition directories in:",
+    output_base,
+    "\n"
+  )
   cat("Available conditions:\n")
   for (i in seq_along(condition_dirs)) {
     cat(sprintf("  [%d] %s\n", i, condition_dirs[i]))
   }
-  
+
   # Use first one for testing
   output_dir <- file.path(output_base, condition_dirs[1])
   cat("\nUsing for test:", output_dir, "\n")
@@ -149,21 +169,28 @@ parametric_dir <- file.path(output_dir, "PARAMETRIC")
 cat("PARAMETRIC/ directory:", dir.exists(parametric_dir), "\n")
 
 if (dir.exists(parametric_dir)) {
-  family_dirs <- list.dirs(parametric_dir, full.names = FALSE, recursive = FALSE)
+  family_dirs <- list.dirs(
+    parametric_dir,
+    full.names = FALSE,
+    recursive = FALSE
+  )
   cat("  Family subdirectories:", paste(family_dirs, collapse = ", "), "\n")
-  
+
   # Find best family by looking for summary JSON files
   best_family <- NULL
   for (fam in tolower(family_dirs)) {
-    json_file <- file.path(parametric_dir, toupper(fam), 
-                           sprintf("comparison_empirical_vs_%s_summary.json", fam))
+    json_file <- file.path(
+      parametric_dir,
+      toupper(fam),
+      sprintf("comparison_empirical_vs_%s_summary.json", fam)
+    )
     if (file.exists(json_file)) {
       best_family <- fam
       cat("\n  Found metadata JSON for family:", fam, "\n")
       break
     }
   }
-  
+
   if (is.null(best_family)) {
     # Fallback: use first non-empty family directory
     for (fam in tolower(family_dirs)) {
@@ -175,29 +202,50 @@ if (dir.exists(parametric_dir)) {
       }
     }
   }
-  
+
   if (!is.null(best_family)) {
     # Check required files for this family
     fam_upper <- toupper(best_family)
-    
-    uncertainty_pdf <- file.path(parametric_dir, fam_upper,
-                                 sprintf("%s_copula_with_uncertainty_CDF.pdf", best_family))
-    comparison_pdf <- file.path(parametric_dir, fam_upper,
-                                sprintf("comparison_empirical_vs_%s_full.pdf", best_family))
-    summary_json <- file.path(parametric_dir, fam_upper,
-                              sprintf("comparison_empirical_vs_%s_summary.json", best_family))
-    
+
+    uncertainty_pdf <- file.path(
+      parametric_dir,
+      fam_upper,
+      sprintf("%s_copula_with_uncertainty_CDF.pdf", best_family)
+    )
+    comparison_pdf <- file.path(
+      parametric_dir,
+      fam_upper,
+      sprintf("comparison_empirical_vs_%s_full.pdf", best_family)
+    )
+    summary_json <- file.path(
+      parametric_dir,
+      fam_upper,
+      sprintf("comparison_empirical_vs_%s_summary.json", best_family)
+    )
+
     cat("\n  Checking files for", best_family, "copula:\n")
-    cat("    uncertainty CDF:", file.exists(uncertainty_pdf), 
-        if (!file.exists(uncertainty_pdf)) " <- MISSING!" else "", "\n")
-    cat("    comparison full:", file.exists(comparison_pdf),
-        if (!file.exists(comparison_pdf)) " <- MISSING!" else "", "\n")
-    cat("    summary JSON:", file.exists(summary_json),
-        if (!file.exists(summary_json)) " <- MISSING!" else "", "\n")
+    cat(
+      "    uncertainty CDF:",
+      file.exists(uncertainty_pdf),
+      if (!file.exists(uncertainty_pdf)) " <- MISSING!" else "",
+      "\n"
+    )
+    cat(
+      "    comparison full:",
+      file.exists(comparison_pdf),
+      if (!file.exists(comparison_pdf)) " <- MISSING!" else "",
+      "\n"
+    )
+    cat(
+      "    summary JSON:",
+      file.exists(summary_json),
+      if (!file.exists(summary_json)) " <- MISSING!" else "",
+      "\n"
+    )
   }
 } else {
   cat("  ERROR: PARAMETRIC/ directory not found!\n")
-  best_family <- "gaussian"  # Default fallback
+  best_family <- "gaussian" # Default fallback
 }
 
 cat("\n")
@@ -236,7 +284,7 @@ condition_info <- list(
   grade_current = grade_current,
   content = content,
   year_span = 1,
-  n_pairs = 10000  # Placeholder
+  n_pairs = 10000 # Placeholder
 )
 
 cat("condition_info:\n")
@@ -267,28 +315,32 @@ cat("  best_family:", best_family, "\n")
 cat("  compile_pdf: FALSE\n")
 cat("  keep_tex: TRUE\n\n")
 
-result <- tryCatch({
-  generate_summary_grid_latex(
-    output_dir = output_dir,
-    condition_info = condition_info,
-    best_family = best_family,
-    copula_results = NULL,  # Will use JSON metadata
-    sgpc_stats = NULL,      # Will use JSON metadata
-    compile_pdf = FALSE,    # Don't compile, just generate .tex
-    keep_tex = TRUE
-  )
-}, error = function(e) {
-  cat("\n!!! ERROR in generate_summary_grid_latex() !!!\n")
-  cat("Error message:", conditionMessage(e), "\n")
-  cat("\nFull error:\n")
-  print(e)
-  cat("\nTraceback:\n")
-  traceback()
-  return(NULL)
-}, warning = function(w) {
-  cat("WARNING:", conditionMessage(w), "\n")
-  invokeRestart("muffleWarning")
-})
+result <- tryCatch(
+  {
+    generate_summary_grid_latex(
+      output_dir = output_dir,
+      condition_info = condition_info,
+      best_family = best_family,
+      copula_results = NULL, # Will use JSON metadata
+      sgpc_stats = NULL, # Will use JSON metadata
+      compile_pdf = FALSE, # Don't compile, just generate .tex
+      keep_tex = TRUE
+    )
+  },
+  error = function(e) {
+    cat("\n!!! ERROR in generate_summary_grid_latex() !!!\n")
+    cat("Error message:", conditionMessage(e), "\n")
+    cat("\nFull error:\n")
+    print(e)
+    cat("\nTraceback:\n")
+    traceback()
+    return(NULL)
+  },
+  warning = function(w) {
+    cat("WARNING:", conditionMessage(w), "\n")
+    invokeRestart("muffleWarning")
+  }
+)
 
 cat("\n")
 
@@ -303,18 +355,17 @@ if (file.exists(tex_file)) {
   cat("✓ summary_grid.tex was created successfully!\n")
   cat("  Path:", tex_file, "\n")
   cat("  Size:", file.info(tex_file)$size, "bytes\n")
-  
+
   # Show first 30 lines
   cat("\nFirst 30 lines of .tex file:\n")
   cat("----------------------------\n")
   tex_content <- readLines(tex_file, n = 30)
   cat(tex_content, sep = "\n")
   cat("\n... (truncated)\n")
-  
 } else {
   cat("✗ summary_grid.tex was NOT created!\n")
   cat("  Expected at:", tex_file, "\n")
-  
+
   # List what IS in the directory
   cat("\nFiles in output directory:\n")
   all_files <- list.files(output_dir, recursive = FALSE)
@@ -336,36 +387,46 @@ cat("=== STEP 8: Manual LaTeX Compilation Test ===\n\n")
 
 if (file.exists(tex_file)) {
   cat("Attempting manual compilation with pdflatex...\n")
-  
+
   # Save current directory
   old_wd <- getwd()
   setwd(output_dir)
-  
+
   # Try compilation with full error output
-  compile_result <- tryCatch({
-    # Run pdflatex with interaction mode that shows errors
-    result <- system2("pdflatex", 
-                      args = c("-interaction=nonstopmode", "-halt-on-error", "summary_grid.tex"),
-                      stdout = TRUE, stderr = TRUE)
-    
-    # Check for PDF
-    if (file.exists("summary_grid.pdf")) {
-      cat("\n✓ PDF compiled successfully!\n")
-      cat("  Size:", file.info("summary_grid.pdf")$size, "bytes\n")
-      "success"
-    } else {
-      cat("\n✗ PDF compilation failed. pdflatex output:\n")
-      cat("-------------------------------------------\n")
-      # Show last 50 lines of output (usually contains the error)
-      output_lines <- tail(result, 50)
-      cat(output_lines, sep = "\n")
-      "failed"
+  compile_result <- tryCatch(
+    {
+      # Run pdflatex with interaction mode that shows errors
+      result <- system2(
+        "pdflatex",
+        args = c(
+          "-interaction=nonstopmode",
+          "-halt-on-error",
+          "summary_grid.tex"
+        ),
+        stdout = TRUE,
+        stderr = TRUE
+      )
+
+      # Check for PDF
+      if (file.exists("summary_grid.pdf")) {
+        cat("\n✓ PDF compiled successfully!\n")
+        cat("  Size:", file.info("summary_grid.pdf")$size, "bytes\n")
+        "success"
+      } else {
+        cat("\n✗ PDF compilation failed. pdflatex output:\n")
+        cat("-------------------------------------------\n")
+        # Show last 50 lines of output (usually contains the error)
+        output_lines <- tail(result, 50)
+        cat(output_lines, sep = "\n")
+        "failed"
+      }
+    },
+    error = function(e) {
+      cat("ERROR running pdflatex:", conditionMessage(e), "\n")
+      "error"
     }
-  }, error = function(e) {
-    cat("ERROR running pdflatex:", conditionMessage(e), "\n")
-    "error"
-  })
-  
+  )
+
   # Check for .log file which has detailed errors
   if (file.exists("summary_grid.log")) {
     cat("\nLaTeX log file exists. Checking for errors...\n")
@@ -375,18 +436,21 @@ if (file.exists(tex_file)) {
       cat("Errors found in log:\n")
       cat(error_lines, sep = "\n")
     }
-    
+
     # Also check for missing packages
-    missing_pkg <- grep("LaTeX Error: File.*not found", log_content, value = TRUE)
+    missing_pkg <- grep(
+      "LaTeX Error: File.*not found",
+      log_content,
+      value = TRUE
+    )
     if (length(missing_pkg) > 0) {
       cat("\nMissing LaTeX packages:\n")
       cat(missing_pkg, sep = "\n")
     }
   }
-  
+
   # Restore directory
   setwd(old_wd)
-  
 } else {
   cat("Skipping compilation test - no .tex file to compile.\n")
 }
@@ -402,25 +466,61 @@ cat("DIAGNOSTIC SUMMARY\n")
 cat("============================================================\n\n")
 
 cat("Environment:\n")
-cat("  pdflatex:", if (pdflatex_path != "") "✓ Available" else "✗ NOT FOUND", "\n")
+cat(
+  "  pdflatex:",
+  if (pdflatex_path != "") "✓ Available" else "✗ NOT FOUND",
+  "\n"
+)
 cat("  tinytex:", if (tinytex_available) "✓ Available" else "✗ NOT FOUND", "\n")
-cat("  jsonlite:", if (jsonlite_available) "✓ Available" else "✗ NOT FOUND", "\n")
+cat(
+  "  jsonlite:",
+  if (jsonlite_available) "✓ Available" else "✗ NOT FOUND",
+  "\n"
+)
 
 cat("\nInput files:\n")
-cat("  bivariate_density_original.pdf:", 
-    if (file.exists(bivariate_pdf)) "✓" else "✗", "\n")
+cat(
+  "  bivariate_density_original.pdf:",
+  if (file.exists(bivariate_pdf)) "✓" else "✗",
+  "\n"
+)
 if (!is.null(best_family)) {
   fam_upper <- toupper(best_family)
-  cat("  ", best_family, "_copula_with_uncertainty_CDF.pdf: ",
-      if (file.exists(file.path(parametric_dir, fam_upper, 
-                                sprintf("%s_copula_with_uncertainty_CDF.pdf", best_family)))) 
-        "✓" else "✗", "\n", sep = "")
+  cat(
+    "  ",
+    best_family,
+    "_copula_with_uncertainty_CDF.pdf: ",
+    if (
+      file.exists(file.path(
+        parametric_dir,
+        fam_upper,
+        sprintf("%s_copula_with_uncertainty_CDF.pdf", best_family)
+      ))
+    ) {
+      "✓"
+    } else {
+      "✗"
+    },
+    "\n",
+    sep = ""
+  )
 }
 
 cat("\nOutput:\n")
-cat("  summary_grid.tex:", if (file.exists(tex_file)) "✓ Created" else "✗ NOT created", "\n")
-cat("  summary_grid.pdf:", 
-    if (file.exists(file.path(output_dir, "summary_grid.pdf"))) "✓ Compiled" else "✗ NOT compiled", "\n")
+cat(
+  "  summary_grid.tex:",
+  if (file.exists(tex_file)) "✓ Created" else "✗ NOT created",
+  "\n"
+)
+cat(
+  "  summary_grid.pdf:",
+  if (file.exists(file.path(output_dir, "summary_grid.pdf"))) {
+    "✓ Compiled"
+  } else {
+    "✗ NOT compiled"
+  },
+  "\n"
+)
 
 cat("\n")
 

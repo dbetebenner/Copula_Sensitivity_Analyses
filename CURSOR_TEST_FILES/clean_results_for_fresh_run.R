@@ -13,10 +13,10 @@ results_dir <- "STEP_1_Family_Selection/results"
 
 # Files to potentially remove (old single-dataset format)
 old_files <- c(
-  "phase1_copula_family_comparison.csv",  # Old single-dataset results
-  "phase1_decision.RData",                 # Old decision file
-  "phase1_selection_table.csv",            # Old selection table
-  "phase1_summary.txt"                     # Old summary
+  "phase1_copula_family_comparison.csv", # Old single-dataset results
+  "phase1_decision.RData", # Old decision file
+  "phase1_selection_table.csv", # Old selection table
+  "phase1_summary.txt" # Old summary
 )
 
 files_removed <- 0
@@ -56,4 +56,3 @@ cat("  STEP_1_Family_Selection/results/dataset_1/\n")
 cat("  STEP_1_Family_Selection/results/dataset_2/\n")
 cat("  STEP_1_Family_Selection/results/dataset_3/\n")
 cat("  STEP_1_Family_Selection/results/dataset_all/  (combined)\n\n")
-

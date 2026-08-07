@@ -26,46 +26,80 @@ STEP1_MANIFEST <- "STEP_1_Family_Selection/results/dataset_all/analysis_manifest
 # ---------------------------------------------------------------------------
 # Infer which sub-steps completed from existing files
 # ---------------------------------------------------------------------------
-key_comparisons_file   <- file.path(RESULTS_DIR, "sgpc_key_comparisons.csv")
-sensitivity_summary_file <- file.path(RESULTS_DIR, "sgpc_sensitivity_summary.csv")
-by_stratum_file        <- file.path(RESULTS_DIR, "sgpc_by_stratum.csv")
-by_year_span_file      <- file.path(RESULTS_DIR, "sgpc_by_year_span.csv")
-by_content_area_file   <- file.path(RESULTS_DIR, "sgpc_by_content_area.csv")
-canonical_stratum_file <- file.path(RESULTS_DIR, "canonical_validation_by_stratum.csv")
-canonical_family_file  <- file.path(RESULTS_DIR, "canonical_family_distribution_by_stratum.csv")
+key_comparisons_file <- file.path(RESULTS_DIR, "sgpc_key_comparisons.csv")
+sensitivity_summary_file <- file.path(
+  RESULTS_DIR,
+  "sgpc_sensitivity_summary.csv"
+)
+by_stratum_file <- file.path(RESULTS_DIR, "sgpc_by_stratum.csv")
+by_year_span_file <- file.path(RESULTS_DIR, "sgpc_by_year_span.csv")
+by_content_area_file <- file.path(RESULTS_DIR, "sgpc_by_content_area.csv")
+canonical_stratum_file <- file.path(
+  RESULTS_DIR,
+  "canonical_validation_by_stratum.csv"
+)
+canonical_family_file <- file.path(
+  RESULTS_DIR,
+  "canonical_family_distribution_by_stratum.csv"
+)
 
-step_2_1_done   <- length(list.files(RESULTS_DIR, pattern = "^sgpc_all_variants_dataset_.*\\.rds$")) > 0
-step_2_1b_done  <- file.exists(canonical_stratum_file)
-step_2_2_done   <- file.exists(key_comparisons_file)
+step_2_1_done <- length(list.files(
+  RESULTS_DIR,
+  pattern = "^sgpc_all_variants_dataset_.*\\.rds$"
+)) >
+  0
+step_2_1b_done <- file.exists(canonical_stratum_file)
+step_2_2_done <- file.exists(key_comparisons_file)
 
 substeps_completed <- character(0)
-if (step_2_1_done)  substeps_completed <- c(substeps_completed, "2.1")
-if (step_2_1b_done) substeps_completed <- c(substeps_completed, "2.1b")
-if (step_2_2_done) substeps_completed <- c(substeps_completed, "2.2")
-if (file.exists(file.path(RESULTS_DIR, "visualizations", "scatter_emp_vs_best.pdf"))) {
+if (step_2_1_done) {
+  substeps_completed <- c(substeps_completed, "2.1")
+}
+if (step_2_1b_done) {
+  substeps_completed <- c(substeps_completed, "2.1b")
+}
+if (step_2_2_done) {
+  substeps_completed <- c(substeps_completed, "2.2")
+}
+if (
+  file.exists(file.path(
+    RESULTS_DIR,
+    "visualizations",
+    "scatter_emp_vs_best.pdf"
+  ))
+) {
   substeps_completed <- c(substeps_completed, "2.3")
 }
 if (file.exists(file.path(RESULTS_DIR, "SGPC_SENSITIVITY_REPORT.md"))) {
   substeps_completed <- c(substeps_completed, "2.4")
 }
-if (file.exists(file.path(RESULTS_DIR, "visualizations", "sgpc_summary_grid.pdf"))) {
+if (
+  file.exists(file.path(RESULTS_DIR, "visualizations", "sgpc_summary_grid.pdf"))
+) {
   substeps_completed <- c(substeps_completed, "2.5")
 }
 
-rds_files <- list.files(RESULTS_DIR, pattern = "^sgpc_all_variants_dataset_.*\\.rds$")
+rds_files <- list.files(
+  RESULTS_DIR,
+  pattern = "^sgpc_all_variants_dataset_.*\\.rds$"
+)
 datasets_processed <- gsub("^sgpc_all_variants_|\\.rds$", "", rds_files)
 
 # ---------------------------------------------------------------------------
 # STEP_1 manifest (provenance)
 # ---------------------------------------------------------------------------
 step1_manifest_version <- NA_character_
-step1_generated_at     <- NA_character_
+step1_generated_at <- NA_character_
 if (file.exists(STEP1_MANIFEST)) {
-  tryCatch({
-    step1 <- fromJSON(STEP1_MANIFEST)
-    step1_manifest_version <- step1$metadata$manifest_version %||% NA_character_
-    step1_generated_at     <- step1$metadata$generated_at %||% NA_character_
-  }, error = function(e) NULL)
+  tryCatch(
+    {
+      step1 <- fromJSON(STEP1_MANIFEST)
+      step1_manifest_version <- step1$metadata$manifest_version %||%
+        NA_character_
+      step1_generated_at <- step1$metadata$generated_at %||% NA_character_
+    },
+    error = function(e) NULL
+  )
 }
 
 # ---------------------------------------------------------------------------
@@ -86,36 +120,48 @@ if (file.exists(key_comparisons_file)) {
   sensitivity_summary$key_comparisons <- key_comparisons_list
   sensitivity_summary$note <- NULL
 
-  emp_best    <- key_stats[comparison == "Empirical vs Best-fit", ]
-  emp_canon   <- key_stats[comparison == "Empirical vs Canonical", ]
-  emp_gauss   <- key_stats[comparison == "Empirical vs Gaussian", ]
-  emp_como    <- key_stats[comparison == "Empirical vs Comonotonic", ]
+  emp_best <- key_stats[comparison == "Empirical vs Best-fit", ]
+  emp_canon <- key_stats[comparison == "Empirical vs Canonical", ]
+  emp_gauss <- key_stats[comparison == "Empirical vs Gaussian", ]
+  emp_como <- key_stats[comparison == "Empirical vs Comonotonic", ]
 
   sensitivity_summary$key_findings <- character(0)
   if (nrow(emp_best) > 0) {
     sensitivity_summary$key_findings <- c(
       sensitivity_summary$key_findings,
-      sprintf("Empirical vs best-fit parametric: r=%.3f, MAD=%.1f percentile points",
-              emp_best$correlation[1], emp_best$mad[1])
+      sprintf(
+        "Empirical vs best-fit parametric: r=%.3f, MAD=%.1f percentile points",
+        emp_best$correlation[1],
+        emp_best$mad[1]
+      )
     )
   }
   if (nrow(emp_canon) > 0) {
     sensitivity_summary$key_findings <- c(
       sensitivity_summary$key_findings,
-      sprintf("Empirical vs canonical averaged: r=%.3f, MAD=%.1f percentile points",
-              emp_canon$correlation[1], emp_canon$mad[1])
+      sprintf(
+        "Empirical vs canonical averaged: r=%.3f, MAD=%.1f percentile points",
+        emp_canon$correlation[1],
+        emp_canon$mad[1]
+      )
     )
   }
   if (nrow(emp_gauss) > 0) {
     sensitivity_summary$key_findings <- c(
       sensitivity_summary$key_findings,
-      sprintf("Impact of mis-specification (Gaussian): MAD=%.1f percentile points", emp_gauss$mad[1])
+      sprintf(
+        "Impact of mis-specification (Gaussian): MAD=%.1f percentile points",
+        emp_gauss$mad[1]
+      )
     )
   }
   if (nrow(emp_como) > 0) {
     sensitivity_summary$key_findings <- c(
       sensitivity_summary$key_findings,
-      sprintf("TAMP comonotonic assumption: MAD=%.1f percentile points", emp_como$mad[1])
+      sprintf(
+        "TAMP comonotonic assumption: MAD=%.1f percentile points",
+        emp_como$mad[1]
+      )
     )
   }
 }
@@ -132,23 +178,37 @@ canonical_validation <- list(
 
 if (file.exists(canonical_stratum_file)) {
   canon_dt <- fread(canonical_stratum_file)
-  canonical_validation$per_stratum <- lapply(seq_len(nrow(canon_dt)), function(i) {
-    as.list(canon_dt[i, ])
-  })
+  canonical_validation$per_stratum <- lapply(
+    seq_len(nrow(canon_dt)),
+    function(i) {
+      as.list(canon_dt[i, ])
+    }
+  )
   canonical_validation$note <- NULL
 
   # Global verdict: same criteria as canonical_validation.R
   # (ratio < 1.5 and mean correlation > 0.99)
   global_mad_canon <- mean(canon_dt$mad_canonical_mean, na.rm = TRUE)
-  global_mad_best  <- mean(canon_dt$mad_best_mean, na.rm = TRUE)
-  global_cor       <- mean(canon_dt$cor_canonical_mean, na.rm = TRUE)
-  ratio            <- if (global_mad_best > 0) global_mad_canon / global_mad_best else NA_real_
-  is_validated     <- !is.na(ratio) && ratio < 1.5 && !is.na(global_cor) && global_cor > 0.99
-  canonical_validation$global_verdict <- if (is_validated) "VALIDATED" else "REVIEW NEEDED"
+  global_mad_best <- mean(canon_dt$mad_best_mean, na.rm = TRUE)
+  global_cor <- mean(canon_dt$cor_canonical_mean, na.rm = TRUE)
+  ratio <- if (global_mad_best > 0) {
+    global_mad_canon / global_mad_best
+  } else {
+    NA_real_
+  }
+  is_validated <- !is.na(ratio) &&
+    ratio < 1.5 &&
+    !is.na(global_cor) &&
+    global_cor > 0.99
+  canonical_validation$global_verdict <- if (is_validated) {
+    "VALIDATED"
+  } else {
+    "REVIEW NEEDED"
+  }
   canonical_validation$global_mad_canonical <- round(global_mad_canon, 2)
-  canonical_validation$global_mad_best     <- round(global_mad_best, 2)
-  canonical_validation$global_correlation  <- round(global_cor, 4)
-  canonical_validation$canonical_ratio     <- round(ratio, 3)
+  canonical_validation$global_mad_best <- round(global_mad_best, 2)
+  canonical_validation$global_correlation <- round(global_cor, 4)
+  canonical_validation$canonical_ratio <- round(ratio, 3)
 }
 
 if (file.exists(canonical_family_file)) {
@@ -171,47 +231,60 @@ variant_rankings <- list(
 
 if (file.exists(by_stratum_file)) {
   by_stratum_dt <- fread(by_stratum_file)
-  variant_rankings$by_stratum <- lapply(seq_len(nrow(by_stratum_dt)), function(i) {
-    as.list(by_stratum_dt[i, ])
-  })
+  variant_rankings$by_stratum <- lapply(
+    seq_len(nrow(by_stratum_dt)),
+    function(i) {
+      as.list(by_stratum_dt[i, ])
+    }
+  )
   variant_rankings$note <- NULL
 }
 if (file.exists(by_year_span_file)) {
   by_ys <- fread(by_year_span_file)
-  variant_rankings$by_year_span <- lapply(seq_len(nrow(by_ys)), function(i) as.list(by_ys[i, ]))
+  variant_rankings$by_year_span <- lapply(seq_len(nrow(by_ys)), function(i) {
+    as.list(by_ys[i, ])
+  })
 }
 if (file.exists(by_content_area_file)) {
   by_ca <- fread(by_content_area_file)
-  variant_rankings$by_content_area <- lapply(seq_len(nrow(by_ca)), function(i) as.list(by_ca[i, ]))
+  variant_rankings$by_content_area <- lapply(seq_len(nrow(by_ca)), function(i) {
+    as.list(by_ca[i, ])
+  })
 }
 
 # ---------------------------------------------------------------------------
 # Metadata: n_observations, n_conditions, year_spans, content_areas
 # ---------------------------------------------------------------------------
 n_observations <- NA_integer_
-n_conditions  <- NA_integer_
-year_spans    <- list()
+n_conditions <- NA_integer_
+year_spans <- list()
 content_areas <- list()
 
 if (length(rds_files) > 0) {
-  tryCatch({
-    first_rds <- readRDS(file.path(RESULTS_DIR, rds_files[1]))
-    n_observations <- nrow(first_rds)
-    n_conditions   <- uniqueN(first_rds$condition_id)
-    year_spans     <- as.list(sort(unique(first_rds$year_span)))
-    content_areas  <- as.list(sort(unique(first_rds$content_area)))
-    for (f in rds_files[-1]) {
-      d <- readRDS(file.path(RESULTS_DIR, f))
-      n_observations <- n_observations + nrow(d)
-      n_conditions   <- n_conditions + uniqueN(d$condition_id)
-    }
-  }, error = function(e) NULL)
+  tryCatch(
+    {
+      first_rds <- readRDS(file.path(RESULTS_DIR, rds_files[1]))
+      n_observations <- nrow(first_rds)
+      n_conditions <- uniqueN(first_rds$condition_id)
+      year_spans <- as.list(sort(unique(first_rds$year_span)))
+      content_areas <- as.list(sort(unique(first_rds$content_area)))
+      for (f in rds_files[-1]) {
+        d <- readRDS(file.path(RESULTS_DIR, f))
+        n_observations <- n_observations + nrow(d)
+        n_conditions <- n_conditions + uniqueN(d$condition_id)
+      }
+    },
+    error = function(e) NULL
+  )
 }
 if (is.na(n_observations) && file.exists(key_comparisons_file)) {
-  tryCatch({
-    k <- fread(key_comparisons_file)
-    if (nrow(k) > 0 && "n_obs" %in% names(k)) n_observations <- k$n_obs[1]
-  }, error = function(e) NULL)
+  tryCatch(
+    {
+      k <- fread(key_comparisons_file)
+      if (nrow(k) > 0 && "n_obs" %in% names(k)) n_observations <- k$n_obs[1]
+    },
+    error = function(e) NULL
+  )
 }
 
 metadata <- list(
@@ -240,27 +313,70 @@ recommendations_for_downstream <- list(
 # Files produced (fixed list with descriptions)
 # ---------------------------------------------------------------------------
 files_produced <- list(
-  list(file = "sgpc_all_variants_dataset_*.rds", description = "Per-dataset SGPc variant results (Step 2.1)"),
-  list(file = "canonical_family_distribution_by_stratum.csv", description = "Per-stratum AIC-best family distribution (Step 2.1b)"),
-  list(file = "canonical_validation_by_stratum.csv", description = "Per-stratum canonical MAD/correlation (Step 2.1b)"),
-  list(file = "canonical_validation_by_condition.csv", description = "Per-condition canonical validation detail (Step 2.1b)"),
-  list(file = "canonical_validation_report.md", description = "Canonical validation narrative report (Step 2.1b)"),
-  list(file = "sgpc_key_comparisons.csv", description = "Key variant comparisons (Step 2.2)"),
-  list(file = "sgpc_sensitivity_summary.csv", description = "Summary statistics (Step 2.2)"),
-  list(file = "sgpc_by_stratum.csv", description = "Per-stratum MAD/correlation (Step 2.2)"),
+  list(
+    file = "sgpc_all_variants_dataset_*.rds",
+    description = "Per-dataset SGPc variant results (Step 2.1)"
+  ),
+  list(
+    file = "canonical_family_distribution_by_stratum.csv",
+    description = "Per-stratum AIC-best family distribution (Step 2.1b)"
+  ),
+  list(
+    file = "canonical_validation_by_stratum.csv",
+    description = "Per-stratum canonical MAD/correlation (Step 2.1b)"
+  ),
+  list(
+    file = "canonical_validation_by_condition.csv",
+    description = "Per-condition canonical validation detail (Step 2.1b)"
+  ),
+  list(
+    file = "canonical_validation_report.md",
+    description = "Canonical validation narrative report (Step 2.1b)"
+  ),
+  list(
+    file = "sgpc_key_comparisons.csv",
+    description = "Key variant comparisons (Step 2.2)"
+  ),
+  list(
+    file = "sgpc_sensitivity_summary.csv",
+    description = "Summary statistics (Step 2.2)"
+  ),
+  list(
+    file = "sgpc_by_stratum.csv",
+    description = "Per-stratum MAD/correlation (Step 2.2)"
+  ),
   list(file = "sgpc_by_year_span.csv", description = "By year-span (Step 2.2)"),
-  list(file = "sgpc_by_content_area.csv", description = "By content area (Step 2.2)"),
-  list(file = "sgpc_correlation_matrix.csv", description = "Variant correlation matrix (Step 2.2)"),
-  list(file = "sgpc_pairwise_differences.csv", description = "Pairwise MAD/RMSD (Step 2.2)"),
-  list(file = "sgpc_sensitivity_manifest.json", description = "This consolidated manifest (Step 2.6)"),
-  list(file = "SGPC_SENSITIVITY_REPORT.md", description = "Narrative report (Step 2.4)"),
-  list(file = "visualizations/*.{pdf,svg,png}", description = "Plots (Steps 2.3, 2.5)")
+  list(
+    file = "sgpc_by_content_area.csv",
+    description = "By content area (Step 2.2)"
+  ),
+  list(
+    file = "sgpc_correlation_matrix.csv",
+    description = "Variant correlation matrix (Step 2.2)"
+  ),
+  list(
+    file = "sgpc_pairwise_differences.csv",
+    description = "Pairwise MAD/RMSD (Step 2.2)"
+  ),
+  list(
+    file = "sgpc_sensitivity_manifest.json",
+    description = "This consolidated manifest (Step 2.6)"
+  ),
+  list(
+    file = "SGPC_SENSITIVITY_REPORT.md",
+    description = "Narrative report (Step 2.4)"
+  ),
+  list(
+    file = "visualizations/*.{pdf,svg,png}",
+    description = "Plots (Steps 2.3, 2.5)"
+  )
 )
 
 # Optionally mark which exist
 existing <- list.files(RESULTS_DIR, recursive = TRUE)
 vis_dir <- file.path(RESULTS_DIR, "visualizations")
-has_vis <- dir.exists(vis_dir) && length(list.files(vis_dir, pattern = "[.](pdf|svg|png)$")) > 0
+has_vis <- dir.exists(vis_dir) &&
+  length(list.files(vis_dir, pattern = "[.](pdf|svg|png)$")) > 0
 for (i in seq_along(files_produced)) {
   fp <- files_produced[[i]]
   f <- fp$file

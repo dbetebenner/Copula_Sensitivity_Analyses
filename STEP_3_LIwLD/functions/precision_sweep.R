@@ -50,51 +50,59 @@ require(data.table)
 #'     \item \code{n_pool}: integer, total pool size
 #'   }
 #' @export
-run_precision_sweep <- function(pairs,
-                                refs,
-                                kernel_cache,
-                                true_sgpc_full,
-                                n_buckets   = c(1000L, 2500L, 5000L),
-                                outer_reps  = 200L,
-                                linkage_fractions = c(0.0, 1.0),
-                                regime_family = "beta",
-                                distance_fn   = "wasserstein1",
-                                grid_resolution = 10L,
-                                seed = NULL,
-                                use_mirai = FALSE,
-                                verbose = TRUE) {
-
+run_precision_sweep <- function(
+  pairs,
+  refs,
+  kernel_cache,
+  true_sgpc_full,
+  n_buckets = c(1000L, 2500L, 5000L),
+  outer_reps = 200L,
+  linkage_fractions = c(0.0, 1.0),
+  regime_family = "beta",
+  distance_fn = "wasserstein1",
+  grid_resolution = 10L,
+  seed = NULL,
+  use_mirai = FALSE,
+  verbose = TRUE
+) {
   n_pool <- nrow(pairs)
-  ss_prior   <- pairs$SCALE_SCORE_PRIOR
+  ss_prior <- pairs$SCALE_SCORE_PRIOR
   ss_current <- pairs$SCALE_SCORE_CURRENT
 
   pool_truth_median <- median(true_sgpc_full, na.rm = TRUE)
-  pool_truth_mean   <- mean(true_sgpc_full,   na.rm = TRUE)
+  pool_truth_mean <- mean(true_sgpc_full, na.rm = TRUE)
 
   eligibility_buffer <- 0.10
   eligible_buckets <- n_buckets[n_pool >= n_buckets * (1 + eligibility_buffer)]
   if (length(eligible_buckets) == 0) {
-    if (verbose) cat("  WARNING: Pool N =", n_pool,
-                     "is too small for any requested N bucket. Skipping sweep.\n")
+    if (verbose) {
+      cat(
+        "  WARNING: Pool N =",
+        n_pool,
+        "is too small for any requested N bucket. Skipping sweep.\n"
+      )
+    }
     return(list(
       replicates = data.table(),
-      summary    = data.table(),
-      n_pool     = n_pool
+      summary = data.table(),
+      n_pool = n_pool
     ))
   }
 
   if (verbose) {
-    cat(sprintf("  Precision sweep: pool N = %s | buckets = %s | fractions = %s | reps = %d\n",
-                format(n_pool, big.mark = ","),
-                paste(eligible_buckets, collapse = ", "),
-                paste(linkage_fractions, collapse = ", "),
-                outer_reps))
+    cat(sprintf(
+      "  Precision sweep: pool N = %s | buckets = %s | fractions = %s | reps = %d\n",
+      format(n_pool, big.mark = ","),
+      paste(eligible_buckets, collapse = ", "),
+      paste(linkage_fractions, collapse = ", "),
+      outer_reps
+    ))
   }
 
   task_grid <- CJ(
-    n_bucket         = eligible_buckets,
+    n_bucket = eligible_buckets,
     linkage_fraction = linkage_fractions,
-    replicate        = seq_len(outer_reps)
+    replicate = seq_len(outer_reps)
   )
 
   seed_base <- if (!is.null(seed)) as.integer(seed) else 42L
@@ -109,152 +117,229 @@ run_precision_sweep <- function(pairs,
   mirai_ok <- FALSE
   n_daemons <- 0L
   if (isTRUE(use_mirai) && nrow(task_grid) > 1L) {
-    mirai_ok <- tryCatch({
-      requireNamespace("mirai", quietly = TRUE) && {
-        n_conn <- mirai::status()[["connections"]]
-        is.numeric(n_conn) && length(n_conn) == 1L && n_conn > 0L
-      }
-    }, error = function(e) FALSE)
+    mirai_ok <- tryCatch(
+      {
+        requireNamespace("mirai", quietly = TRUE) &&
+          {
+            n_conn <- mirai::status()[["connections"]]
+            is.numeric(n_conn) && length(n_conn) == 1L && n_conn > 0L
+          }
+      },
+      error = function(e) FALSE
+    )
     if (mirai_ok) {
-      n_daemons <- tryCatch(as.integer(mirai::status()[["connections"]]),
-                            error = function(e) 0L)
+      n_daemons <- tryCatch(
+        as.integer(mirai::status()[["connections"]]),
+        error = function(e) 0L
+      )
     } else if (verbose) {
-      diag <- tryCatch({
-        s <- mirai::status()
-        paste0("connections=", deparse(s$connections),
-               " daemons=", deparse(s$daemons))
-      }, error = function(e) paste0("status() error: ", e$message))
-      cat("  mirai sweep requested but no daemons detected; falling back to sequential.\n")
+      diag <- tryCatch(
+        {
+          s <- mirai::status()
+          paste0(
+            "connections=",
+            deparse(s$connections),
+            " daemons=",
+            deparse(s$daemons)
+          )
+        },
+        error = function(e) paste0("status() error: ", e$message)
+      )
+      cat(
+        "  mirai sweep requested but no daemons detected; falling back to sequential.\n"
+      )
       cat("  Diagnostic: ", diag, "\n")
     }
   }
 
   n_tasks <- nrow(task_grid)
-  if (verbose) cat("  Running", n_tasks, "replicate estimations")
+  if (verbose) {
+    cat("  Running", n_tasks, "replicate estimations")
+  }
 
   results_list <- vector("list", n_tasks)
 
   if (mirai_ok) {
-    if (verbose) cat(" via mirai (", n_daemons, " daemons)...\n", sep = "")
+    if (verbose) {
+      cat(" via mirai (", n_daemons, " daemons)...\n", sep = "")
+    }
 
-    push_ok <- tryCatch({
-      p <- mirai::everywhere({
-        .SWEEP_SS_PRIOR      <<- ssp_push
-        .SWEEP_SS_CURRENT    <<- ssc_push
-        .SWEEP_REFS          <<- refs_push
-        .SWEEP_KERNEL_CACHE  <<- kc_push
-        .SWEEP_TRUE_SGPC     <<- ts_push
-        .SWEEP_POOL_MED      <<- pm_push
-        .SWEEP_POOL_MN       <<- pmn_push
-        .SWEEP_N_POOL        <<- np_push
-        .SWEEP_REGIME_FAMILY <<- rf_push
-        .SWEEP_DISTANCE_FN   <<- df_push
-        .SWEEP_GRID_RES      <<- gr_push
-        TRUE
+    push_ok <- tryCatch(
+      {
+        p <- mirai::everywhere(
+          {
+            .SWEEP_SS_PRIOR <<- ssp_push
+            .SWEEP_SS_CURRENT <<- ssc_push
+            .SWEEP_REFS <<- refs_push
+            .SWEEP_KERNEL_CACHE <<- kc_push
+            .SWEEP_TRUE_SGPC <<- ts_push
+            .SWEEP_POOL_MED <<- pm_push
+            .SWEEP_POOL_MN <<- pmn_push
+            .SWEEP_N_POOL <<- np_push
+            .SWEEP_REGIME_FAMILY <<- rf_push
+            .SWEEP_DISTANCE_FN <<- df_push
+            .SWEEP_GRID_RES <<- gr_push
+            TRUE
+          },
+          ssp_push = ss_prior,
+          ssc_push = ss_current,
+          refs_push = refs,
+          kc_push = kernel_cache,
+          ts_push = true_sgpc_full,
+          pm_push = pool_truth_median,
+          pmn_push = pool_truth_mean,
+          np_push = n_pool,
+          rf_push = regime_family,
+          df_push = distance_fn,
+          gr_push = grid_resolution
+        )
+        pv <- p[]
+        all(vapply(pv, isTRUE, logical(1)))
       },
-      ssp_push  = ss_prior,
-      ssc_push  = ss_current,
-      refs_push = refs,
-      kc_push   = kernel_cache,
-      ts_push   = true_sgpc_full,
-      pm_push   = pool_truth_median,
-      pmn_push  = pool_truth_mean,
-      np_push   = n_pool,
-      rf_push   = regime_family,
-      df_push   = distance_fn,
-      gr_push   = grid_resolution)
-      pv <- p[]
-      all(vapply(pv, isTRUE, logical(1)))
-    }, error = function(e) {
-      if (verbose) cat("  WARNING: mirai data push failed: ", e$message, "\n")
-      FALSE
-    })
+      error = function(e) {
+        if (verbose) {
+          cat("  WARNING: mirai data push failed: ", e$message, "\n")
+        }
+        FALSE
+      }
+    )
 
     if (isTRUE(push_ok)) {
       tasks <- lapply(seq_len(n_tasks), function(i) {
-        list(n_bucket = task_grid$n_bucket[i],
-             linkage_fraction = task_grid$linkage_fraction[i],
-             replicate = task_grid$replicate[i],
-             task_seed = task_seeds[i])
+        list(
+          n_bucket = task_grid$n_bucket[i],
+          linkage_fraction = task_grid$linkage_fraction[i],
+          replicate = task_grid$replicate[i],
+          task_seed = task_seeds[i]
+        )
       })
 
       sweep_lambda <- function(task) {
         set.seed(task$task_seed)
-        n_bkt      <- as.integer(task$n_bucket)
-        lf         <- task$linkage_fraction
-        n_linked   <- as.integer(floor(lf * n_bkt))
+        n_bkt <- as.integer(task$n_bucket)
+        lf <- task$linkage_fraction
+        n_linked <- as.integer(floor(lf * n_bkt))
         n_unlinked <- n_bkt - n_linked
-        pool_idx   <- seq_len(.SWEEP_N_POOL)
+        pool_idx <- seq_len(.SWEEP_N_POOL)
 
         if (n_linked == n_bkt) {
-          rep_idx  <- sample(pool_idx, size = n_bkt, replace = FALSE)
+          rep_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
           true_rep <- .SWEEP_TRUE_SGPC[rep_idx]
-          u_rep    <- reference_cdf(.SWEEP_SS_PRIOR[rep_idx],   .SWEEP_REFS$ref_prior)
-          v_rep    <- reference_cdf(.SWEEP_SS_CURRENT[rep_idx], .SWEEP_REFS$ref_current)
+          u_rep <- reference_cdf(
+            .SWEEP_SS_PRIOR[rep_idx],
+            .SWEEP_REFS$ref_prior
+          )
+          v_rep <- reference_cdf(
+            .SWEEP_SS_CURRENT[rep_idx],
+            .SWEEP_REFS$ref_current
+          )
           true_med <- median(true_rep, na.rm = TRUE)
-          true_mn  <- mean(true_rep,   na.rm = TRUE)
+          true_mn <- mean(true_rep, na.rm = TRUE)
         } else if (n_linked == 0L) {
           u_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
           v_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
-          u_rep <- reference_cdf(.SWEEP_SS_PRIOR[u_idx],   .SWEEP_REFS$ref_prior)
-          v_rep <- reference_cdf(.SWEEP_SS_CURRENT[v_idx], .SWEEP_REFS$ref_current)
+          u_rep <- reference_cdf(.SWEEP_SS_PRIOR[u_idx], .SWEEP_REFS$ref_prior)
+          v_rep <- reference_cdf(
+            .SWEEP_SS_CURRENT[v_idx],
+            .SWEEP_REFS$ref_current
+          )
           true_med <- .SWEEP_POOL_MED
-          true_mn  <- .SWEEP_POOL_MN
+          true_mn <- .SWEEP_POOL_MN
         } else {
           linked_idx <- sample(pool_idx, size = n_linked, replace = FALSE)
-          u_linked   <- reference_cdf(.SWEEP_SS_PRIOR[linked_idx],   .SWEEP_REFS$ref_prior)
-          v_linked   <- reference_cdf(.SWEEP_SS_CURRENT[linked_idx], .SWEEP_REFS$ref_current)
-          u_unl_idx  <- sample(pool_idx, size = n_unlinked, replace = FALSE)
-          v_unl_idx  <- sample(pool_idx, size = n_unlinked, replace = FALSE)
-          u_rep <- c(u_linked, reference_cdf(.SWEEP_SS_PRIOR[u_unl_idx],   .SWEEP_REFS$ref_prior))
-          v_rep <- c(v_linked, reference_cdf(.SWEEP_SS_CURRENT[v_unl_idx], .SWEEP_REFS$ref_current))
+          u_linked <- reference_cdf(
+            .SWEEP_SS_PRIOR[linked_idx],
+            .SWEEP_REFS$ref_prior
+          )
+          v_linked <- reference_cdf(
+            .SWEEP_SS_CURRENT[linked_idx],
+            .SWEEP_REFS$ref_current
+          )
+          u_unl_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
+          v_unl_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
+          u_rep <- c(
+            u_linked,
+            reference_cdf(.SWEEP_SS_PRIOR[u_unl_idx], .SWEEP_REFS$ref_prior)
+          )
+          v_rep <- c(
+            v_linked,
+            reference_cdf(.SWEEP_SS_CURRENT[v_unl_idx], .SWEEP_REFS$ref_current)
+          )
           true_med <- .SWEEP_POOL_MED
-          true_mn  <- .SWEEP_POOL_MN
+          true_mn <- .SWEEP_POOL_MN
         }
 
         est <- tryCatch(
-          estimate_regime(u_rep, v_rep, .SWEEP_KERNEL_CACHE,
-                          regime_family   = .SWEEP_REGIME_FAMILY,
-                          distance_fn     = .SWEEP_DISTANCE_FN,
-                          grid_resolution = .SWEEP_GRID_RES,
-                          verbose         = FALSE),
-          error = function(e) NULL)
+          estimate_regime(
+            u_rep,
+            v_rep,
+            .SWEEP_KERNEL_CACHE,
+            regime_family = .SWEEP_REGIME_FAMILY,
+            distance_fn = .SWEEP_DISTANCE_FN,
+            grid_resolution = .SWEEP_GRID_RES,
+            verbose = FALSE
+          ),
+          error = function(e) NULL
+        )
 
         if (is.null(est)) {
-          list(inferred_median = NA_real_, inferred_mean = NA_real_,
-               true_median = true_med, true_mean = true_mn,
-               converged = FALSE, m_hat = NA_real_, kappa_hat = NA_real_)
+          list(
+            inferred_median = NA_real_,
+            inferred_mean = NA_real_,
+            true_median = true_med,
+            true_mean = true_mn,
+            converged = FALSE,
+            m_hat = NA_real_,
+            kappa_hat = NA_real_
+          )
         } else {
-          list(inferred_median = as.numeric(est$regime$median) * 100,
-               inferred_mean   = as.numeric(est$regime$mean)   * 100,
-               true_median = true_med, true_mean = true_mn,
-               converged = TRUE,
-               m_hat     = round(est$m_hat, 4),
-               kappa_hat = round(est$kappa_hat, 4))
+          list(
+            inferred_median = as.numeric(est$regime$median) * 100,
+            inferred_mean = as.numeric(est$regime$mean) * 100,
+            true_median = true_med,
+            true_mean = true_mn,
+            converged = TRUE,
+            m_hat = round(est$m_hat, 4),
+            kappa_hat = round(est$kappa_hat, 4)
+          )
         }
       }
       environment(sweep_lambda) <- globalenv()
 
       mirai_res <- mirai::mirai_map(.x = tasks, .f = sweep_lambda)
-      raw_list  <- mirai_res[]
+      raw_list <- mirai_res[]
 
-      n_errs <- sum(vapply(raw_list, function(x)
-        inherits(x, "miraiError") || inherits(x, "errorValue"), logical(1)))
+      n_errs <- sum(vapply(
+        raw_list,
+        function(x) {
+          inherits(x, "miraiError") || inherits(x, "errorValue")
+        },
+        logical(1)
+      ))
       if (n_errs > 0 && verbose) {
         cat("  WARNING:", n_errs, "mirai replicate(s) returned errors\n")
       }
       for (i in seq_along(raw_list)) {
         out <- raw_list[[i]]
         if (inherits(out, "miraiError") || inherits(out, "errorValue")) {
-          out <- list(inferred_median = NA_real_, inferred_mean = NA_real_,
-                      true_median = NA_real_, true_mean = NA_real_,
-                      converged = FALSE, m_hat = NA_real_, kappa_hat = NA_real_)
+          out <- list(
+            inferred_median = NA_real_,
+            inferred_mean = NA_real_,
+            true_median = NA_real_,
+            true_mean = NA_real_,
+            converged = FALSE,
+            m_hat = NA_real_,
+            kappa_hat = NA_real_
+          )
         }
         results_list[[i]] <- c(
-          list(n_bucket = task_grid$n_bucket[i],
-               linkage_fraction = task_grid$linkage_fraction[i],
-               replicate = task_grid$replicate[i]),
-          out)
+          list(
+            n_bucket = task_grid$n_bucket[i],
+            linkage_fraction = task_grid$linkage_fraction[i],
+            replicate = task_grid$replicate[i]
+          ),
+          out
+        )
       }
     } else {
       mirai_ok <- FALSE
@@ -262,106 +347,158 @@ run_precision_sweep <- function(pairs,
   }
 
   if (!mirai_ok) {
-    if (verbose) cat(" sequentially...\n")
+    if (verbose) {
+      cat(" sequentially...\n")
+    }
 
     .run_one <- function(n_bucket, linkage_fraction, replicate, task_seed) {
       set.seed(task_seed)
-      n_bkt      <- as.integer(n_bucket)
-      n_linked   <- as.integer(floor(linkage_fraction * n_bkt))
+      n_bkt <- as.integer(n_bucket)
+      n_linked <- as.integer(floor(linkage_fraction * n_bkt))
       n_unlinked <- n_bkt - n_linked
-      pool_idx   <- seq_len(n_pool)
+      pool_idx <- seq_len(n_pool)
 
       if (n_linked == n_bkt) {
         rep_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
         true_rep <- true_sgpc_full[rep_idx]
-        u_rep <- reference_cdf(ss_prior[rep_idx],   refs$ref_prior)
+        u_rep <- reference_cdf(ss_prior[rep_idx], refs$ref_prior)
         v_rep <- reference_cdf(ss_current[rep_idx], refs$ref_current)
         true_med <- median(true_rep, na.rm = TRUE)
-        true_mn  <- mean(true_rep,   na.rm = TRUE)
+        true_mn <- mean(true_rep, na.rm = TRUE)
       } else if (n_linked == 0L) {
         u_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
         v_idx <- sample(pool_idx, size = n_bkt, replace = FALSE)
-        u_rep <- reference_cdf(ss_prior[u_idx],   refs$ref_prior)
+        u_rep <- reference_cdf(ss_prior[u_idx], refs$ref_prior)
         v_rep <- reference_cdf(ss_current[v_idx], refs$ref_current)
         true_med <- pool_truth_median
-        true_mn  <- pool_truth_mean
+        true_mn <- pool_truth_mean
       } else {
         linked_idx <- sample(pool_idx, size = n_linked, replace = FALSE)
-        u_linked <- reference_cdf(ss_prior[linked_idx],   refs$ref_prior)
+        u_linked <- reference_cdf(ss_prior[linked_idx], refs$ref_prior)
         v_linked <- reference_cdf(ss_current[linked_idx], refs$ref_current)
         u_unl_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
         v_unl_idx <- sample(pool_idx, size = n_unlinked, replace = FALSE)
-        u_rep <- c(u_linked, reference_cdf(ss_prior[u_unl_idx],   refs$ref_prior))
-        v_rep <- c(v_linked, reference_cdf(ss_current[v_unl_idx], refs$ref_current))
+        u_rep <- c(u_linked, reference_cdf(ss_prior[u_unl_idx], refs$ref_prior))
+        v_rep <- c(
+          v_linked,
+          reference_cdf(ss_current[v_unl_idx], refs$ref_current)
+        )
         true_med <- pool_truth_median
-        true_mn  <- pool_truth_mean
+        true_mn <- pool_truth_mean
       }
 
       est <- tryCatch(
-        estimate_regime(u_sample = u_rep, v_sample = v_rep,
-                        kernel_cache = kernel_cache,
-                        regime_family = regime_family,
-                        distance_fn   = distance_fn,
-                        grid_resolution = grid_resolution,
-                        verbose = FALSE),
-        error = function(e) NULL)
+        estimate_regime(
+          u_sample = u_rep,
+          v_sample = v_rep,
+          kernel_cache = kernel_cache,
+          regime_family = regime_family,
+          distance_fn = distance_fn,
+          grid_resolution = grid_resolution,
+          verbose = FALSE
+        ),
+        error = function(e) NULL
+      )
 
       if (is.null(est)) {
-        list(inferred_median = NA_real_, inferred_mean = NA_real_,
-             true_median = true_med, true_mean = true_mn,
-             converged = FALSE, m_hat = NA_real_, kappa_hat = NA_real_)
+        list(
+          inferred_median = NA_real_,
+          inferred_mean = NA_real_,
+          true_median = true_med,
+          true_mean = true_mn,
+          converged = FALSE,
+          m_hat = NA_real_,
+          kappa_hat = NA_real_
+        )
       } else {
-        list(inferred_median = as.numeric(est$regime$median) * 100,
-             inferred_mean   = as.numeric(est$regime$mean)   * 100,
-             true_median = true_med, true_mean = true_mn,
-             converged = TRUE,
-             m_hat     = round(est$m_hat, 4),
-             kappa_hat = round(est$kappa_hat, 4))
+        list(
+          inferred_median = as.numeric(est$regime$median) * 100,
+          inferred_mean = as.numeric(est$regime$mean) * 100,
+          true_median = true_med,
+          true_mean = true_mn,
+          converged = TRUE,
+          m_hat = round(est$m_hat, 4),
+          kappa_hat = round(est$kappa_hat, 4)
+        )
       }
     }
 
     progress_interval <- max(1L, min(100L, n_tasks %/% 20L))
     for (i in seq_len(n_tasks)) {
       r <- task_grid[i]
-      out <- .run_one(r$n_bucket, r$linkage_fraction, r$replicate, task_seeds[i])
+      out <- .run_one(
+        r$n_bucket,
+        r$linkage_fraction,
+        r$replicate,
+        task_seeds[i]
+      )
       results_list[[i]] <- c(
-        list(n_bucket = r$n_bucket, linkage_fraction = r$linkage_fraction,
-             replicate = r$replicate),
-        out)
+        list(
+          n_bucket = r$n_bucket,
+          linkage_fraction = r$linkage_fraction,
+          replicate = r$replicate
+        ),
+        out
+      )
       if (verbose && (i %% progress_interval == 0 || i == n_tasks)) {
-        cat(sprintf("    %d / %d replicates complete  (N=%s, lf=%.1f)\n",
-                    i, n_tasks,
-                    format(r$n_bucket, big.mark = ","),
-                    r$linkage_fraction))
+        cat(sprintf(
+          "    %d / %d replicates complete  (N=%s, lf=%.1f)\n",
+          i,
+          n_tasks,
+          format(r$n_bucket, big.mark = ","),
+          r$linkage_fraction
+        ))
       }
     }
   }
 
   replicates <- rbindlist(lapply(results_list, as.data.table), fill = TRUE)
   replicates[, `:=`(
-    median_error     = inferred_median - true_median,
-    mean_error       = inferred_mean   - true_mean,
+    median_error = inferred_median - true_median,
+    mean_error = inferred_mean - true_mean,
     abs_median_error = abs(inferred_median - true_median),
-    abs_mean_error   = abs(inferred_mean   - true_mean),
-    sampling_mode    = fifelse(linkage_fraction == 1.0, "paired",
-                        fifelse(linkage_fraction == 0.0, "independent",
-                                sprintf("partial_%.2f", linkage_fraction)))
+    abs_mean_error = abs(inferred_mean - true_mean),
+    sampling_mode = fifelse(
+      linkage_fraction == 1.0,
+      "paired",
+      fifelse(
+        linkage_fraction == 0.0,
+        "independent",
+        sprintf("partial_%.2f", linkage_fraction)
+      )
+    )
   )]
 
-  summary_dt <- replicates[, .(
-    n_reps             = .N,
-    n_converged        = sum(converged, na.rm = TRUE),
-    median_bias        = round(mean(median_error[converged == TRUE], na.rm = TRUE), 4),
-    median_mae         = round(mean(abs_median_error[converged == TRUE], na.rm = TRUE), 4),
-    median_ci_width_95 = round(
-      quantile(inferred_median[converged == TRUE], 0.975, na.rm = TRUE) -
-        quantile(inferred_median[converged == TRUE], 0.025, na.rm = TRUE), 4),
-    mean_bias          = round(mean(mean_error[converged == TRUE], na.rm = TRUE), 4),
-    mean_mae           = round(mean(abs_mean_error[converged == TRUE], na.rm = TRUE), 4),
-    mean_ci_width_95   = round(
-      quantile(inferred_mean[converged == TRUE], 0.975, na.rm = TRUE) -
-        quantile(inferred_mean[converged == TRUE], 0.025, na.rm = TRUE), 4)
-  ), by = .(n_bucket, linkage_fraction, sampling_mode)]
+  summary_dt <- replicates[,
+    .(
+      n_reps = .N,
+      n_converged = sum(converged, na.rm = TRUE),
+      median_bias = round(
+        mean(median_error[converged == TRUE], na.rm = TRUE),
+        4
+      ),
+      median_mae = round(
+        mean(abs_median_error[converged == TRUE], na.rm = TRUE),
+        4
+      ),
+      median_ci_width_95 = round(
+        quantile(inferred_median[converged == TRUE], 0.975, na.rm = TRUE) -
+          quantile(inferred_median[converged == TRUE], 0.025, na.rm = TRUE),
+        4
+      ),
+      mean_bias = round(mean(mean_error[converged == TRUE], na.rm = TRUE), 4),
+      mean_mae = round(
+        mean(abs_mean_error[converged == TRUE], na.rm = TRUE),
+        4
+      ),
+      mean_ci_width_95 = round(
+        quantile(inferred_mean[converged == TRUE], 0.975, na.rm = TRUE) -
+          quantile(inferred_mean[converged == TRUE], 0.025, na.rm = TRUE),
+        4
+      )
+    ),
+    by = .(n_bucket, linkage_fraction, sampling_mode)
+  ]
 
   if (verbose) {
     cat("  Sweep complete. Summary:\n")
@@ -370,8 +507,8 @@ run_precision_sweep <- function(pairs,
 
   list(
     replicates = replicates,
-    summary    = summary_dt,
-    n_pool     = n_pool
+    summary = summary_dt,
+    n_pool = n_pool
   )
 }
 
@@ -389,13 +526,14 @@ run_precision_sweep <- function(pairs,
 #' @param filename        Character. Base filename (no extension).
 #' @return Invisible ggplot object.
 #' @export
-plot_precision_sweep <- function(sweep_summary,
-                                 bootstrap_anchor = NULL,
-                                 title = "Precision Sweep: CI Width vs N (Subsampling)",
-                                 sampling_context = NULL,
-                                 output_dir = "results/visualizations",
-                                 filename = "phasea_08_precision_sweep") {
-
+plot_precision_sweep <- function(
+  sweep_summary,
+  bootstrap_anchor = NULL,
+  title = "Precision Sweep: CI Width vs N (Subsampling)",
+  sampling_context = NULL,
+  output_dir = "results/visualizations",
+  filename = "phasea_08_precision_sweep"
+) {
   require(ggplot2)
 
   if (nrow(sweep_summary) == 0) {
@@ -403,27 +541,47 @@ plot_precision_sweep <- function(sweep_summary,
     return(invisible(NULL))
   }
 
-  sweep_summary[, mode_label := fifelse(
-    linkage_fraction == 1.0, "Paired (subsampling)",
-    fifelse(linkage_fraction == 0.0, "Independent (subsampling)",
-            sprintf("Partial %.0f%% (subsampling)", linkage_fraction * 100))
-  )]
+  sweep_summary[,
+    mode_label := fifelse(
+      linkage_fraction == 1.0,
+      "Paired (subsampling)",
+      fifelse(
+        linkage_fraction == 0.0,
+        "Independent (subsampling)",
+        sprintf("Partial %.0f%% (subsampling)", linkage_fraction * 100)
+      )
+    )
+  ]
 
-  p_mean <- ggplot(sweep_summary, aes(x = n_bucket, y = mean_ci_width_95,
-                                       color = mode_label, shape = mode_label)) +
+  p_mean <- ggplot(
+    sweep_summary,
+    aes(
+      x = n_bucket,
+      y = mean_ci_width_95,
+      color = mode_label,
+      shape = mode_label
+    )
+  ) +
     geom_line(linewidth = 0.9) +
     geom_point(size = 2.5)
 
-  p_median <- ggplot(sweep_summary, aes(x = n_bucket, y = median_ci_width_95,
-                                         color = mode_label, shape = mode_label)) +
+  p_median <- ggplot(
+    sweep_summary,
+    aes(
+      x = n_bucket,
+      y = median_ci_width_95,
+      color = mode_label,
+      shape = mode_label
+    )
+  ) +
     geom_line(linewidth = 0.9) +
     geom_point(size = 2.5)
 
   mode_colors <- c(
-    "Paired (subsampling)"      = STEP3_COLORS$predicted,
+    "Paired (subsampling)" = STEP3_COLORS$predicted,
     "Independent (subsampling)" = STEP3_COLORS$true_value,
-    "Paired (bootstrap)"        = STEP3_COLORS$predicted,
-    "Independent (bootstrap)"   = STEP3_COLORS$true_value
+    "Paired (bootstrap)" = STEP3_COLORS$predicted,
+    "Independent (bootstrap)" = STEP3_COLORS$true_value
   )
 
   if (!is.null(bootstrap_anchor) && nrow(bootstrap_anchor) > 0) {
@@ -435,20 +593,40 @@ plot_precision_sweep <- function(sweep_summary,
         if (nrow(row) == 1) {
           lbl <- paste0(tools::toTitleCase(pair_mode), " (bootstrap)")
           ci_w <- row$ci95_width
-          anchor_df <- data.frame(x = n_obs, y = ci_w, mode_label = lbl,
-                                  stringsAsFactors = FALSE)
-          hline_layer <- geom_hline(yintercept = ci_w, linetype = "dotted",
-                                    linewidth = 0.5, color = mode_colors[[lbl]])
-          point_layer <- geom_point(data = anchor_df,
-                                    aes(x = x, y = y),
-                                    color = mode_colors[[lbl]],
-                                    shape = 4, size = 3.5, stroke = 1.2,
-                                    inherit.aes = FALSE)
-          label_layer <- annotate("text",
-                                  x = n_obs, y = ci_w,
-                                  label = sprintf("  Bootstrap @ N=%s", format(n_obs, big.mark = ",")),
-                                  hjust = 0, vjust = -0.5, size = 2.8,
-                                  color = mode_colors[[lbl]])
+          anchor_df <- data.frame(
+            x = n_obs,
+            y = ci_w,
+            mode_label = lbl,
+            stringsAsFactors = FALSE
+          )
+          hline_layer <- geom_hline(
+            yintercept = ci_w,
+            linetype = "dotted",
+            linewidth = 0.5,
+            color = mode_colors[[lbl]]
+          )
+          point_layer <- geom_point(
+            data = anchor_df,
+            aes(x = x, y = y),
+            color = mode_colors[[lbl]],
+            shape = 4,
+            size = 3.5,
+            stroke = 1.2,
+            inherit.aes = FALSE
+          )
+          label_layer <- annotate(
+            "text",
+            x = n_obs,
+            y = ci_w,
+            label = sprintf(
+              "  Bootstrap @ N=%s",
+              format(n_obs, big.mark = ",")
+            ),
+            hjust = 0,
+            vjust = -0.5,
+            size = 2.8,
+            color = mode_colors[[lbl]]
+          )
           if (target_plot == "mean") {
             p_mean <- p_mean + hline_layer + point_layer + label_layer
           } else {
@@ -461,47 +639,73 @@ plot_precision_sweep <- function(sweep_summary,
 
   shared_scales <- list(
     scale_color_manual(values = mode_colors, name = "Sampling Mode"),
-    scale_shape_manual(values = c(
-      "Paired (subsampling)" = 16,
-      "Independent (subsampling)" = 17,
-      "Paired (bootstrap)" = 4,
-      "Independent (bootstrap)" = 4
-    ), name = "Sampling Mode"),
-    scale_x_continuous(labels = scales::comma, breaks = sort(unique(sweep_summary$n_bucket))),
+    scale_shape_manual(
+      values = c(
+        "Paired (subsampling)" = 16,
+        "Independent (subsampling)" = 17,
+        "Paired (bootstrap)" = 4,
+        "Independent (bootstrap)" = 4
+      ),
+      name = "Sampling Mode"
+    ),
+    scale_x_continuous(
+      labels = scales::comma,
+      breaks = sort(unique(sweep_summary$n_bucket))
+    ),
     theme_publication(base_size = 9),
     theme(legend.position = "bottom", legend.title = element_blank())
   )
 
-  p_mean <- p_mean + shared_scales +
-    labs(title = "Mean SGPc",
-         x = "Sample Size (N)",
-         y = "95% CI Width \u2014 Mean SGPc")
+  p_mean <- p_mean +
+    shared_scales +
+    labs(
+      title = "Mean SGPc",
+      x = "Sample Size (N)",
+      y = "95% CI Width \u2014 Mean SGPc"
+    )
 
-  p_median <- p_median + shared_scales +
-    labs(title = "Median SGPc",
-         x = "Sample Size (N)",
-         y = "95% CI Width \u2014 Median SGPc")
+  p_median <- p_median +
+    shared_scales +
+    labs(
+      title = "Median SGPc",
+      x = "Sample Size (N)",
+      y = "95% CI Width \u2014 Median SGPc"
+    )
 
   combined <- p_median | p_mean
   caption_theme <- if (!is.null(sampling_context)) {
-    theme(plot.caption = element_text(size = 7, color = "grey50",
-                                      hjust = 0, margin = margin(t = 6)))
+    theme(
+      plot.caption = element_text(
+        size = 7,
+        color = "grey50",
+        hjust = 0,
+        margin = margin(t = 6)
+      )
+    )
   } else {
     theme()
   }
-  combined <- combined + plot_annotation(
-    title = title,
-    subtitle = paste0(
-      "N-operating curve: how 95% CI width changes with sample size ",
-      "under without-replacement subsampling from condition pool"),
-    caption = sampling_context,
-    theme = theme(
-      plot.title = element_text(face = "bold", size = 14, hjust = 0),
-      plot.subtitle = element_text(size = 10, hjust = 0, color = "grey40")
-    ) + caption_theme
-  )
+  combined <- combined +
+    plot_annotation(
+      title = title,
+      subtitle = paste0(
+        "N-operating curve: how 95% CI width changes with sample size ",
+        "under without-replacement subsampling from condition pool"
+      ),
+      caption = sampling_context,
+      theme = theme(
+        plot.title = element_text(face = "bold", size = 14, hjust = 0),
+        plot.subtitle = element_text(size = 10, hjust = 0, color = "grey40")
+      ) +
+        caption_theme
+    )
 
-  save_plot_multi(combined, filename, output_dir,
-                  width = PLOT_WIDTH * 1.6, height = PLOT_HEIGHT + 0.5)
+  save_plot_multi(
+    combined,
+    filename,
+    output_dir,
+    width = PLOT_WIDTH * 1.6,
+    height = PLOT_HEIGHT + 0.5
+  )
   invisible(combined)
 }

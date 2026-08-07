@@ -5,6 +5,7 @@
 ### Pipeline:
 ###   1. Export panel-ready data files to data/
 ###   2. Compile PSTricks graphic panel via latex -> dvips -E -> gs -> PDF
+###      + SVG via dvisvgm (from DVI, matching copula_R_script.R approach)
 ###   3. Compile text panel and header band via xelatex -> PDF
 ###   4. Compile main assembler via xelatex
 ###   5. Export PNG/SVG, clean intermediates
@@ -18,17 +19,24 @@
 # 0. Resolve paths
 # ---------------------------------------------------------------------------
 
-margins_dir <- tryCatch({
-  normalizePath(dirname(sys.frame(1)$ofile), winslash = "/", mustWork = TRUE)
-}, error = function(e) {
-  normalizePath(getwd(), winslash = "/", mustWork = TRUE)
-})
+margins_dir <- tryCatch(
+  {
+    normalizePath(dirname(sys.frame(1)$ofile), winslash = "/", mustWork = TRUE)
+  },
+  error = function(e) {
+    normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+  }
+)
 
-data_dir   <- file.path(margins_dir, "data")
+data_dir <- file.path(margins_dir, "data")
 output_dir <- file.path(margins_dir, "outputs")
 
-if (!dir.exists(data_dir))   dir.create(data_dir, recursive = TRUE)
-if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
 
 # ---------------------------------------------------------------------------
 # Build configuration — infographic registry
@@ -36,13 +44,17 @@ if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 # Each entry: assembler stem, human-readable release name, semver version.
 # To add a new variant, append a list() entry here.
 infographics <- list(
-  list(assembler    = "step3_infographic_main_1",
-       release_stem = "Margins_Marginal_Transformation",
-       version      = "0.3.0"),
+  list(
+    assembler = "step3_infographic_main_1",
+    release_stem = "Margins_Marginal_Transformation",
+    version = "0.3.0"
+  ),
 
-  list(assembler    = "step3_infographic_main_2",
-       release_stem = "Margins_Copula_Dependence",
-       version      = "0.1.0")
+  list(
+    assembler = "step3_infographic_main_2",
+    release_stem = "Margins_Copula_Dependence",
+    version = "0.1.0"
+  )
 )
 
 infographic_variants <- vapply(infographics, `[[`, "", "assembler")
@@ -53,8 +65,10 @@ cat("  Data dir     :", data_dir, "\n")
 cat("  Output dir   :", output_dir, "\n\n")
 
 if (Sys.which("xelatex") == "") {
-  stop("XeLaTeX is required but not found on PATH. ",
-       "Install TeX Live XeLaTeX and retry.")
+  stop(
+    "XeLaTeX is required but not found on PATH. ",
+    "Install TeX Live XeLaTeX and retry."
+  )
 }
 
 
@@ -68,8 +82,13 @@ if (!file.exists(pairs_csv)) {
   source(file.path(margins_dir, "step3_extract_pairs.R"))
   cat("\n")
 } else {
-  cat("--- Step 0: Using existing", basename(pairs_csv),
-      "(", format(file.size(pairs_csv), big.mark = ","), "bytes )\n")
+  cat(
+    "--- Step 0: Using existing",
+    basename(pairs_csv),
+    "(",
+    format(file.size(pairs_csv), big.mark = ","),
+    "bytes )\n"
+  )
 }
 
 
@@ -120,29 +139,43 @@ custom_bounding_boxes <- list(
 )
 
 apply_custom_bounding_box <- function(ps_file, bbox) {
-  if (is.null(bbox)) return(TRUE)
-  if (length(bbox) != 4 || any(!is.finite(bbox))) return(FALSE)
+  if (is.null(bbox)) {
+    return(TRUE)
+  }
+  if (length(bbox) != 4 || any(!is.finite(bbox))) {
+    return(FALSE)
+  }
 
   bbox <- as.integer(round(bbox))
-  if (bbox[1] >= bbox[3] || bbox[2] >= bbox[4]) return(FALSE)
+  if (bbox[1] >= bbox[3] || bbox[2] >= bbox[4]) {
+    return(FALSE)
+  }
 
   ps_lines <- readLines(ps_file, warn = FALSE, encoding = "UTF-8")
   bb_idx <- grep("^%%BoundingBox:", ps_lines)
   hr_idx <- grep("^%%HiResBoundingBox:", ps_lines)
 
-  if (length(bb_idx) == 0 && length(hr_idx) == 0) return(FALSE)
+  if (length(bb_idx) == 0 && length(hr_idx) == 0) {
+    return(FALSE)
+  }
 
   if (length(bb_idx) > 0) {
     ps_lines[bb_idx] <- sprintf(
       "%%%%BoundingBox: %d %d %d %d",
-      bbox[1], bbox[2], bbox[3], bbox[4]
+      bbox[1],
+      bbox[2],
+      bbox[3],
+      bbox[4]
     )
   }
 
   if (length(hr_idx) > 0) {
     ps_lines[hr_idx] <- sprintf(
       "%%%%HiResBoundingBox: %.6f %.6f %.6f %.6f",
-      bbox[1], bbox[2], bbox[3], bbox[4]
+      bbox[1],
+      bbox[2],
+      bbox[3],
+      bbox[4]
     )
   }
 
@@ -156,49 +189,134 @@ compile_pstricks <- function(name) {
   old_wd <- setwd(margins_dir)
   on.exit(setwd(old_wd), add = TRUE)
 
-  rc <- system2("latex", c("-interaction=nonstopmode", name),
-                stdout = FALSE, stderr = FALSE)
-  if (rc != 0) { cat(" FAIL (latex)\n"); return(FALSE) }
+  rc <- system2(
+    "latex",
+    c("-interaction=nonstopmode", name),
+    stdout = FALSE,
+    stderr = FALSE
+  )
+  if (rc != 0) {
+    cat(" FAIL (latex)\n")
+    return(FALSE)
+  }
 
-  ps_file  <- paste0(name, ".ps")
+  ps_file <- paste0(name, ".ps")
   pdf_file <- paste0(name, ".pdf")
 
   entry <- custom_bounding_boxes[[name]]
-  full_page <- !is.null(entry) && length(entry) == 2   # c(w_in, h_in)
-  tight_crop <- !is.null(entry) && length(entry) == 4  # c(llx, lly, urx, ury)
+  full_page <- !is.null(entry) && length(entry) == 2 # c(w_in, h_in)
+  tight_crop <- !is.null(entry) && length(entry) == 4 # c(llx, lly, urx, ury)
 
   ## --- dvips ----------------------------------------------------------------
   if (full_page) {
     ## Strategy A: panel fills its TeX geometry page — use explicit paper size
-    dvips_args <- c("-T", paste0(entry[1], "in,", entry[2], "in"),
-                    "-o", ps_file, paste0(name, ".dvi"))
+    dvips_args <- c(
+      "-T",
+      paste0(entry[1], "in,", entry[2], "in"),
+      "-o",
+      ps_file,
+      paste0(name, ".dvi")
+    )
     cat(sprintf(" [page %.1fx%.1fin]", entry[1], entry[2]))
   } else {
     ## Strategy B / fallback: tight-crop EPS
     dvips_args <- c("-E", paste0(name, ".dvi"), "-o", ps_file)
   }
   system2("dvips", dvips_args, stdout = FALSE, stderr = FALSE)
-  if (!file.exists(ps_file)) { cat(" FAIL (dvips)\n"); return(FALSE) }
+  if (!file.exists(ps_file)) {
+    cat(" FAIL (dvips)\n")
+    return(FALSE)
+  }
 
   ## --- BoundingBox override (tight-crop only) --------------------------------
   if (tight_crop) {
     ## Report dvips auto-detected bbox
     ps_lines_diag <- readLines(ps_file, warn = FALSE, n = 30)
     auto_bb <- grep("^%%BoundingBox:", ps_lines_diag, value = TRUE)
-    if (length(auto_bb) > 0) cat(sprintf("\n    dvips-bbox: %s", sub("%%BoundingBox: ", "", auto_bb[1])))
+    if (length(auto_bb) > 0) {
+      cat(sprintf(
+        "\n    dvips-bbox: %s",
+        sub("%%BoundingBox: ", "", auto_bb[1])
+      ))
+    }
 
     ## Measure ACTUAL content extent via gs -sDEVICE=bbox (gold standard)
-    gs_bbox <- system2("gs", c("-q", "-dBATCH", "-dNOPAUSE",
-                               "-dALLOWPSTRANSPARENCY",
-                               "-sDEVICE=bbox", ps_file),
-                       stdout = TRUE, stderr = TRUE)
+    gs_bbox <- system2(
+      "gs",
+      c(
+        "-q",
+        "-dBATCH",
+        "-dNOPAUSE",
+        "-dALLOWPSTRANSPARENCY",
+        "-sDEVICE=bbox",
+        ps_file
+      ),
+      stdout = TRUE,
+      stderr = TRUE
+    )
     measured <- grep("^%%BoundingBox:", gs_bbox, value = TRUE)
-    if (length(measured) > 0) cat(sprintf("\n    gs-content: %s", sub("%%BoundingBox: ", "", measured[1])))
+    if (length(measured) > 0) {
+      cat(sprintf(
+        "\n    gs-content: %s",
+        sub("%%BoundingBox: ", "", measured[1])
+      ))
+    }
 
     ## Apply override
     ok_bbox <- apply_custom_bounding_box(ps_file, entry)
-    if (!ok_bbox) { cat(" FAIL (BoundingBox)\n"); return(FALSE) }
-    cat(sprintf("\n    override:   %d %d %d %d", entry[1], entry[2], entry[3], entry[4]))
+    if (!ok_bbox) {
+      cat(" FAIL (BoundingBox)\n")
+      return(FALSE)
+    }
+    cat(sprintf(
+      "\n    override:   %d %d %d %d",
+      entry[1],
+      entry[2],
+      entry[3],
+      entry[4]
+    ))
+  }
+
+  ## --- dvisvgm -> SVG (from DVI, mirrors copula_R_script.R approach) -------
+  dvi_file <- paste0(name, ".dvi")
+  svg_file <- paste0(name, ".svg")
+  if (Sys.which("dvisvgm") != "") {
+    texmf_dist <- Sys.getenv("TEXMFDIST", unset = "")
+    if (!nzchar(texmf_dist)) {
+      kpse_out <- system2(
+        "kpsewhich",
+        "texmf.cnf",
+        stdout = TRUE,
+        stderr = FALSE
+      )
+      if (length(kpse_out) > 0 && nzchar(kpse_out[1])) {
+        texmf_dist <- normalizePath(
+          file.path(dirname(kpse_out[1]), ".."),
+          mustWork = FALSE
+        )
+      }
+    }
+    env_cmd <- ""
+    if (nzchar(texmf_dist)) {
+      env_cmd <- sprintf(
+        "export TEXMFCNF=%s/web2c && export TEXMFDIST=%s && ",
+        texmf_dist,
+        texmf_dist
+      )
+    }
+    svg_cmd <- sprintf(
+      "%sdvisvgm --font-format=woff2 --bbox=min -o %s %s",
+      env_cmd,
+      svg_file,
+      dvi_file
+    )
+    system(svg_cmd, ignore.stdout = TRUE, ignore.stderr = TRUE)
+    if (file.exists(svg_file)) {
+      file.copy(svg_file, file.path(output_dir, svg_file), overwrite = TRUE)
+      cat(sprintf("\n    SVG: %s", file.path(output_dir, svg_file)))
+    } else {
+      cat("\n    SVG: FAIL (dvisvgm produced no output)")
+    }
   }
 
   ## --- gs -> PDF ------------------------------------------------------------
@@ -206,22 +324,40 @@ compile_pstricks <- function(name) {
     ## Match the declared paper size exactly; no EPS crop
     w_pts <- as.integer(round(entry[1] * 72))
     h_pts <- as.integer(round(entry[2] * 72))
-    gs_args <- c("-q", "-dALLOWPSTRANSPARENCY", "-dBATCH", "-dNOPAUSE",
-                 "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
-                 "-dAutoRotatePages=/None",
-                 sprintf("-dDEVICEWIDTHPOINTS=%d",  w_pts),
-                 sprintf("-dDEVICEHEIGHTPOINTS=%d", h_pts),
-                 "-dFIXEDMEDIA",
-                 paste0("-sOutputFile=", pdf_file), ps_file)
+    gs_args <- c(
+      "-q",
+      "-dALLOWPSTRANSPARENCY",
+      "-dBATCH",
+      "-dNOPAUSE",
+      "-sDEVICE=pdfwrite",
+      "-dCompatibilityLevel=1.4",
+      "-dAutoRotatePages=/None",
+      sprintf("-dDEVICEWIDTHPOINTS=%d", w_pts),
+      sprintf("-dDEVICEHEIGHTPOINTS=%d", h_pts),
+      "-dFIXEDMEDIA",
+      paste0("-sOutputFile=", pdf_file),
+      ps_file
+    )
   } else {
     ## Crop to EPS BoundingBox (auto-detected or overridden above)
-    gs_args <- c("-q", "-dALLOWPSTRANSPARENCY", "-dBATCH", "-dNOPAUSE",
-                 "-dEPSCrop", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4",
-                 paste0("-sOutputFile=", pdf_file), ps_file)
+    gs_args <- c(
+      "-q",
+      "-dALLOWPSTRANSPARENCY",
+      "-dBATCH",
+      "-dNOPAUSE",
+      "-dEPSCrop",
+      "-sDEVICE=pdfwrite",
+      "-dCompatibilityLevel=1.4",
+      paste0("-sOutputFile=", pdf_file),
+      ps_file
+    )
   }
   system2("gs", gs_args, stdout = FALSE, stderr = FALSE)
 
-  if (!file.exists(pdf_file)) { cat(" FAIL (gs)\n"); return(FALSE) }
+  if (!file.exists(pdf_file)) {
+    cat(" FAIL (gs)\n")
+    return(FALSE)
+  }
 
   file.copy(pdf_file, file.path(output_dir, pdf_file), overwrite = TRUE)
   cat(sprintf(" OK (%s bytes)\n", format(file.size(pdf_file), big.mark = ",")))
@@ -239,11 +375,18 @@ compile_xelatex <- function(name) {
   old_wd <- setwd(margins_dir)
   on.exit(setwd(old_wd), add = TRUE)
 
-  system2("xelatex", c("-interaction=nonstopmode", name),
-          stdout = FALSE, stderr = FALSE)
+  system2(
+    "xelatex",
+    c("-interaction=nonstopmode", name),
+    stdout = FALSE,
+    stderr = FALSE
+  )
   pdf_file <- paste0(name, ".pdf")
 
-  if (!file.exists(pdf_file)) { cat(" FAIL\n"); return(FALSE) }
+  if (!file.exists(pdf_file)) {
+    cat(" FAIL\n")
+    return(FALSE)
+  }
 
   file.copy(pdf_file, file.path(output_dir, pdf_file), overwrite = TRUE)
   cat(sprintf(" OK (%s bytes)\n", format(file.size(pdf_file), big.mark = ",")))
@@ -268,10 +411,16 @@ text_panels <- c(
 )
 
 ok <- TRUE
-for (p in graphic_panels) ok <- compile_pstricks(p) && ok
-for (p in text_panels)    ok <- compile_xelatex(p)  && ok
+for (p in graphic_panels) {
+  ok <- compile_pstricks(p) && ok
+}
+for (p in text_panels) {
+  ok <- compile_xelatex(p) && ok
+}
 
-if (!ok) warning("One or more panels failed to compile.")
+if (!ok) {
+  warning("One or more panels failed to compile.")
+}
 
 
 # ---------------------------------------------------------------------------
@@ -284,32 +433,55 @@ compile_xelatex("step3_header_band_2")
 
 export_outputs <- function(stem, release_pdf = NULL) {
   final_pdf <- file.path(output_dir, paste0(stem, ".pdf"))
-  if (!file.exists(final_pdf)) return(invisible(NULL))
+  if (!file.exists(final_pdf)) {
+    return(invisible(NULL))
+  }
 
   if (!is.null(release_pdf)) {
     copied <- file.copy(final_pdf, release_pdf, overwrite = TRUE)
-    if (copied && file.exists(release_pdf)) cat("  Release PDF:", release_pdf, "\n")
+    if (copied && file.exists(release_pdf)) {
+      cat("  Release PDF:", release_pdf, "\n")
+    }
   }
 
   png_out <- file.path(output_dir, paste0(stem, ".png"))
-  system2("gs", c("-q", "-dBATCH", "-dNOPAUSE", "-sDEVICE=png16m",
-                  "-r300", paste0("-sOutputFile=", png_out), final_pdf),
-          stdout = FALSE, stderr = FALSE)
-  if (file.exists(png_out)) cat("  PNG:", png_out, "\n")
+  system2(
+    "gs",
+    c(
+      "-q",
+      "-dBATCH",
+      "-dNOPAUSE",
+      "-sDEVICE=png16m",
+      "-r300",
+      paste0("-sOutputFile=", png_out),
+      final_pdf
+    ),
+    stdout = FALSE,
+    stderr = FALSE
+  )
+  if (file.exists(png_out)) {
+    cat("  PNG:", png_out, "\n")
+  }
 
   svg_out <- file.path(output_dir, paste0(stem, ".svg"))
   if (Sys.which("pdf2svg") != "") {
     system2("pdf2svg", c(final_pdf, svg_out), stdout = FALSE, stderr = FALSE)
     if (file.exists(svg_out)) cat("  SVG:", svg_out, "\n")
   } else if (Sys.which("mutool") != "") {
-    system2("mutool", c("convert", "-o", svg_out, final_pdf),
-            stdout = FALSE, stderr = FALSE)
+    system2(
+      "mutool",
+      c("convert", "-o", svg_out, final_pdf),
+      stdout = FALSE,
+      stderr = FALSE
+    )
     if (file.exists(svg_out)) cat("  SVG:", svg_out, "\n")
   } else if (Sys.which("inkscape") != "") {
-    system2("inkscape", c("--export-type=svg",
-                          paste0("--export-filename=", svg_out),
-                          final_pdf),
-            stdout = FALSE, stderr = FALSE)
+    system2(
+      "inkscape",
+      c("--export-type=svg", paste0("--export-filename=", svg_out), final_pdf),
+      stdout = FALSE,
+      stderr = FALSE
+    )
     if (file.exists(svg_out)) cat("  SVG:", svg_out, "\n")
   } else {
     cat("  SVG: skipped (install pdf2svg, mutool, or inkscape)\n")
@@ -318,8 +490,10 @@ export_outputs <- function(stem, release_pdf = NULL) {
 
 for (ig in infographics) {
   compile_xelatex(ig$assembler)
-  release_pdf <- file.path(output_dir,
-    sprintf("%s_v%s.pdf", ig$release_stem, ig$version))
+  release_pdf <- file.path(
+    output_dir,
+    sprintf("%s_v%s.pdf", ig$release_stem, ig$version)
+  )
   export_outputs(ig$assembler, release_pdf = release_pdf)
 }
 
@@ -329,10 +503,23 @@ for (ig in infographics) {
 # ---------------------------------------------------------------------------
 
 cat("\n--- Cleanup ---\n")
-all_stems <- c(graphic_panels, text_panels,
-               "step3_header_band_1", "step3_header_band_2",
-               infographic_variants)
-cleanup_suffixes <- c(".aux", ".log", ".dvi", ".fls", ".fdb_latexmk", ".out", ".synctex.gz")
+all_stems <- c(
+  graphic_panels,
+  text_panels,
+  "step3_header_band_1",
+  "step3_header_band_2",
+  infographic_variants
+)
+cleanup_suffixes <- c(
+  ".aux",
+  ".log",
+  ".dvi",
+  ".fls",
+  ".fdb_latexmk",
+  ".out",
+  ".synctex.gz",
+  ".eps"
+)
 old_wd <- setwd(margins_dir)
 for (stem in all_stems) {
   for (ext in cleanup_suffixes) {
@@ -346,8 +533,18 @@ cat("\n=== Build complete ===\n")
 for (ig in infographics) {
   tag <- sub("step3_infographic_main_", "", ig$assembler)
   release_name <- sprintf("%s_v%s", ig$release_stem, ig$version)
-  cat(sprintf("  [_%s]  PDF: %s\n", tag, file.path(output_dir, paste0(ig$assembler, ".pdf"))))
-  cat(sprintf("         PNG: %s\n", file.path(output_dir, paste0(ig$assembler, ".png"))))
-  cat(sprintf("     Release: %s\n", file.path(output_dir, paste0(release_name, ".pdf"))))
+  cat(sprintf(
+    "  [_%s]  PDF: %s\n",
+    tag,
+    file.path(output_dir, paste0(ig$assembler, ".pdf"))
+  ))
+  cat(sprintf(
+    "         PNG: %s\n",
+    file.path(output_dir, paste0(ig$assembler, ".png"))
+  ))
+  cat(sprintf(
+    "     Release: %s\n",
+    file.path(output_dir, paste0(release_name, ".pdf"))
+  ))
 }
 cat("\n")

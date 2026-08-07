@@ -12,38 +12,36 @@
 ############################################################################
 
 STEP3_CONFIG <- list(
-
   # ===========================================================================
   # 1. Reference marginals
   # ===========================================================================
   reference = list(
     # "global" = pool all students; "within_year" = year-specific ECDF
-    type        = "within_year",
-    n_grid      = 1000,        # Grid points for interpolation
-    tail_buffer = 1e-6         # Buffer at CDF tails
-
+    type = "within_year",
+    n_grid = 1000, # Grid points for interpolation
+    tail_buffer = 1e-6 # Buffer at CDF tails
   ),
 
   # ===========================================================================
   # 2. Baseline copula / kernel
   # ===========================================================================
   copula = list(
-    family        = "t",                    # From STEP 1 selection
-    params_source = "STEP_1_manifest",      # Load from Phase 1 manifest
-    year_span     = NULL,                   # NULL = detect from condition
-    n_param_draws = 25,                     # For copula uncertainty
+    family = "t", # From STEP 1 selection
+    params_source = "STEP_1_manifest", # Load from Phase 1 manifest
+    year_span = NULL, # NULL = detect from condition
+    n_param_draws = 25, # For copula uncertainty
     # "comparison"      = run both canonical AND per-condition best-fit copula
     #                     side-by-side, reporting deltas (recommended default)
     # "canonical_only"  = always use canonical copula (honest NAEP/TIMSS setting)
     # "phase1_best_fit" = use per-condition best-fit copula (oracle benchmark)
-    mode          = "comparison"
+    mode = "comparison"
   ),
 
   kernel = list(
-    u_grid_size     = 201,     # Grid resolution for conditional CDF
-    v_grid_size     = 201,
+    u_grid_size = 201, # Grid resolution for conditional CDF
+    v_grid_size = 201,
     boundary_buffer = 0.005,
-    compute_quantile = TRUE     # Also precompute Q_0(p|u)
+    compute_quantile = TRUE # Also precompute Q_0(p|u)
   ),
 
   # ===========================================================================
@@ -51,12 +49,12 @@ STEP3_CONFIG <- list(
   # ===========================================================================
   regime = list(
     # Canonical production choice (fast, stable, interpretable)
-    families       = c("beta"),
+    families = c("beta"),
     # Optional sensitivity families (run manually when needed)
     sensitivity_families = c("truncexp", "truncunif"),
     primary_family = "beta",
     preferred_family = "beta",
-    tie_tolerance  = 1e-4,       # Prefer beta when distances are nearly tied
+    tie_tolerance = 1e-4, # Prefer beta when distances are nearly tied
 
     # Grid search resolution (per parameter dimension)
     # Used by Phase A deep-dive and Stage 1 full-pool estimates.
@@ -77,22 +75,22 @@ STEP3_CONFIG <- list(
   # 4. Distance metric
   # ===========================================================================
   distance = list(
-    primary   = "wasserstein1",    # Primary optimiser objective
-    secondary = "cvm",             # Reported alongside
+    primary = "wasserstein1", # Primary optimiser objective
+    secondary = "cvm", # Reported alongside
     # "both" = optimise under W1 and CvM in a single grid sweep (negligible
     # overhead — the expensive predict_marginal_cdf call is shared).
     # "wasserstein1" or "cvm" = single-metric only (original behaviour).
-    optimize  = "both",
-    v_grid_n  = 201                # Number of CDF evaluation points
+    optimize = "both",
+    v_grid_n = 201 # Number of CDF evaluation points
   ),
 
   # ===========================================================================
   # 5. Uncertainty quantification
   # ===========================================================================
   uncertainty = list(
-    n_bootstrap     = 200,       # Sampling uncertainty replicates
-    n_copula_draws  = 25,        # Copula parameter uncertainty draws
-    bootstrap_grid_resolution = 20,  # Faster grid for bootstrap replicates
+    n_bootstrap = 200, # Sampling uncertainty replicates
+    n_copula_draws = 25, # Copula parameter uncertainty draws
+    bootstrap_grid_resolution = 20, # Faster grid for bootstrap replicates
     resample_scheme = "srs_bootstrap" # srs_bootstrap|weighted_bootstrap|replicate_weights
   ),
 
@@ -118,31 +116,31 @@ STEP3_CONFIG <- list(
   # ===========================================================================
   validation = list(
     # Default single-target fields (used when targets and filter_expr are NULL)
-    dataset_id     = "dataset_1",
-    condition_id   = NULL,       # NULL = auto-select large condition
-    content_area   = "MATHEMATICS",  # Preferred content area for auto-selection
-    subgroup_col   = "DISTRICT_NUMBER",
-    subgroup_id    = NULL,       # NULL = auto-select by target_subgroup_n
+    dataset_id = "dataset_1",
+    condition_id = NULL, # NULL = auto-select large condition
+    content_area = "MATHEMATICS", # Preferred content area for auto-selection
+    subgroup_col = "DISTRICT_NUMBER",
+    subgroup_id = NULL, # NULL = auto-select by target_subgroup_n
     min_subgroup_n = 500,
     target_subgroup_n = 2500,
 
     # Multi-target: filter Phase B results (overrides single-target fields above)
-    filter_expr    = NULL,       # e.g. "abs(mean_diff) > 8"
-    content_areas  = NULL,       # e.g. c("MATHEMATICS") — pre-filter before filter_expr
-    max_targets    = 20L,
+    filter_expr = NULL, # e.g. "abs(mean_diff) > 8"
+    content_areas = NULL, # e.g. c("MATHEMATICS") — pre-filter before filter_expr
+    max_targets = 20L,
 
     # Multi-target: explicit target list (highest priority, overrides filter_expr)
-    targets        = NULL,       # data.frame(dataset_id, condition_id, subgroup_id)
+    targets = NULL, # data.frame(dataset_id, condition_id, subgroup_id)
 
     # mirai bootstrap parallelisation (daemons managed by run_step3.R)
-    use_mirai  = TRUE,
-    n_workers  = NULL,           # NULL = auto-detect from CPU count
+    use_mirai = TRUE,
+    n_workers = NULL, # NULL = auto-detect from CPU count
 
     # Precision sweep (A.9): Phase B-style subsampling from condition pool
     # Generates N-operating curves under the NAEP/TIMSS population-sampling frame.
-    precision_sweep   = FALSE,   # set TRUE to enable step A.9
-    sweep_n_buckets   = c(1000L, 2500L, 5000L),  # Phase A default; override for larger sweeps
-    sweep_reps        = 200L     # replicates per (N-bucket × linkage-fraction) cell
+    precision_sweep = FALSE, # set TRUE to enable step A.9
+    sweep_n_buckets = c(1000L, 2500L, 5000L), # Phase A default; override for larger sweeps
+    sweep_reps = 200L # replicates per (N-bucket × linkage-fraction) cell
   ),
 
   # ===========================================================================
@@ -159,9 +157,9 @@ STEP3_CONFIG <- list(
     #                            one moderate district; yields ~2 eligible
     #                            districts + 3 cluster pools per condition.
     # -----------------------------------------------------------------------
-    datasets    = c("dataset_1", "dataset_2", "dataset_3"),
-    n_conditions_per_dataset = 10,  # Limit for speed; use NULL for "all available"
-    n_subgroups_per_condition = 5,  # Top N largest subgroups (dataset_2 may yield fewer)
+    datasets = c("dataset_1", "dataset_2", "dataset_3"),
+    n_conditions_per_dataset = 10, # Limit for speed; use NULL for "all available"
+    n_subgroups_per_condition = 5, # Top N largest subgroups (dataset_2 may yield fewer)
     min_subgroup_n = 50,
     min_n = 1000,
     n_buckets = c(1000, 2500, 5000, 7500, 10000),
@@ -183,9 +181,9 @@ STEP3_CONFIG <- list(
     #   r8g.48xlarge (192 vCPU, 188 workers): 5 — 960 tasks, ~5 rounds, good utilisation
     # With batch=25 on r8g.48xlarge, only 192 tasks are dispatched to 188 workers:
     # the last 4 tasks (possibly N=10000 at ~7100s each) leave 184 workers idle.
-    rep_batch_size = 5L,        # SET TO 5 FOR r8g.48xlarge; SET TO 25 FOR r8g.4xlarge
-    year_spans  = c(1, 2, 4),       # Test these spans
-    content_areas = c("READING", "MATHEMATICS"),  # NAEP/TIMSS-relevant domains
+    rep_batch_size = 5L, # SET TO 5 FOR r8g.48xlarge; SET TO 25 FOR r8g.4xlarge
+    year_spans = c(1, 2, 4), # Test these spans
+    content_areas = c("READING", "MATHEMATICS"), # NAEP/TIMSS-relevant domains
 
     # Linkage fraction sweep -------------------------------------------------------
     # Controls the degree of student-level pairing between prior and current
@@ -222,9 +220,9 @@ STEP3_CONFIG <- list(
     # Phase B single deep-dive: focus Phase B on one condition/subgroup.
     # Set all three fields to activate; leave NULL for standard systematic run.
     single_target = list(
-      dataset_id   = NULL,       # e.g. "dataset_1"
-      condition_id = NULL,       # e.g. "2008_G5_G6_MATHEMATICS"
-      subgroup_id  = NULL        # e.g. "0020"
+      dataset_id = NULL, # e.g. "dataset_1"
+      condition_id = NULL, # e.g. "2008_G5_G6_MATHEMATICS"
+      subgroup_id = NULL # e.g. "0020"
     ),
 
     # Per-dataset condition filters ----------------------------------------
@@ -249,7 +247,6 @@ STEP3_CONFIG <- list(
     #     literacy group in all downstream figures and tables.
     #
     condition_filters = list(
-
       # dataset_2: years 2007-2014.  The first year where span=4 SGPs exist
       # is 2011 (prior=2007 -> current=2011).  Year_current=2011 norms are
       # immature (no prior span=4 baseline); 2012+ have at least one prior
@@ -265,8 +262,8 @@ STEP3_CONFIG <- list(
       #   - Literacy is coded "ELA" in dataset_3; alias to "READING" so that
       #     ELA and READING form one literacy group in analysis outputs.
       dataset_3 = list(
-        min_year             = 2016,
-        year_spans           = c(1L, 2L),
+        min_year = 2016,
+        year_spans = c(1L, 2L),
         content_area_aliases = list(ELA = "READING")
       )
     )
@@ -323,10 +320,10 @@ STEP3_CONFIG <- list(
   # 10. Output settings
   # ===========================================================================
   output = list(
-    export_formats     = c("pdf", "svg", "png"),
+    export_formats = c("pdf", "svg", "png"),
     make_publication_panels = TRUE,
-    make_manifests     = TRUE,
-    results_dir        = "STEP_3_LIwLD/results",
+    make_manifests = TRUE,
+    results_dir = "STEP_3_LIwLD/results",
     phase_a_legacy_alias_plots = TRUE
   ),
 

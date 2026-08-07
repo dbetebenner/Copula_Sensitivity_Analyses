@@ -1,6 +1,6 @@
 ############################################################################
 ### STATE CONFIGURATION TEMPLATE
-### 
+###
 ### Copy this file to state_config.R and modify for your state
 ### Then source it before running master_analysis.R
 ############################################################################
@@ -8,8 +8,8 @@
 # STATE CONFIGURATION - Modify these for your state
 STATE_NAME <- "YourState"
 STATE_ABBREV <- "XX"
-WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG"  # Keep this generic - name in workspace
-RDATA_OBJECT_NAME <- "YourState_SGP_LONG_Data"  # Name of data table object inside the .RData file
+WORKSPACE_OBJECT_NAME <- "STATE_DATA_LONG" # Keep this generic - name in workspace
+RDATA_OBJECT_NAME <- "YourState_SGP_LONG_Data" # Name of data table object inside the .RData file
 
 # Data paths (state-specific)
 EC2_DATA_PATH <- "/path/to/your/state/data.Rdata"

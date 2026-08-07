@@ -17,7 +17,9 @@ source("functions/copula_bootstrap.R")
 
 # Load dataset configurations
 source("dataset_configs.R")
-if (file.exists("dataset_configs_local.R")) source("dataset_configs_local.R")
+if (file.exists("dataset_configs_local.R")) {
+  source("dataset_configs_local.R")
+}
 
 # Load a dataset for testing (use dataset_1)
 cat("Loading test data (dataset_1)...\n")
@@ -40,12 +42,12 @@ cat("  Content: MATHEMATICS\n\n")
 # Note: The data structure has SCALE_SCORE (current) and SCALE_SCORE_PRIOR
 # We want grade 5 records (which have grade 4 prior scores)
 test_pairs <- STATE_DATA_LONG[
-  VALID_CASE == "VALID_CASE" & 
-  GRADE == 5 &  # Current grade
-  YEAR == "2011" &  # Current year
-  CONTENT_AREA == "MATHEMATICS" &
-  !is.na(SCALE_SCORE) &
-  !is.na(SCALE_SCORE_PRIOR),
+  VALID_CASE == "VALID_CASE" &
+    GRADE == 5 & # Current grade
+    YEAR == "2011" & # Current year
+    CONTENT_AREA == "MATHEMATICS" &
+    !is.na(SCALE_SCORE) &
+    !is.na(SCALE_SCORE_PRIOR),
   .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT = SCALE_SCORE)
 ]
 
@@ -60,7 +62,14 @@ cat("====================================================================\n")
 cat("FITTING ALL 6 COPULA FAMILIES\n")
 cat("====================================================================\n\n")
 
-copula_families <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
+copula_families <- c(
+  "gaussian",
+  "t",
+  "clayton",
+  "gumbel",
+  "frank",
+  "comonotonic"
+)
 
 fit_result <- fit_copula_from_pairs(
   scores_prior = test_pairs$SCALE_SCORE_PRIOR,
@@ -69,7 +78,7 @@ fit_result <- fit_copula_from_pairs(
   framework_current = NULL,
   copula_families = copula_families,
   return_best = FALSE,
-  use_empirical_ranks = TRUE  # Phase 1 approach
+  use_empirical_ranks = TRUE # Phase 1 approach
 )
 
 # Display results
@@ -88,13 +97,17 @@ results_dt <- data.table(
 
 for (fam in copula_families) {
   if (!is.null(fit_result$results[[fam]])) {
-    results_dt <- rbind(results_dt, data.table(
-      family = fam,
-      kendall_tau = fit_result$results[[fam]]$kendall_tau,
-      loglik = fit_result$results[[fam]]$loglik,
-      aic = fit_result$results[[fam]]$aic,
-      bic = fit_result$results[[fam]]$bic
-    ), fill = TRUE)  # Allow for different column counts (e.g., t-copula has 'df')
+    results_dt <- rbind(
+      results_dt,
+      data.table(
+        family = fam,
+        kendall_tau = fit_result$results[[fam]]$kendall_tau,
+        loglik = fit_result$results[[fam]]$loglik,
+        aic = fit_result$results[[fam]]$aic,
+        bic = fit_result$results[[fam]]$bic
+      ),
+      fill = TRUE
+    ) # Allow for different column counts (e.g., t-copula has 'df')
   }
 }
 
@@ -147,12 +160,19 @@ aic_diff <- aic_comonotonic - aic_best
 
 cat("✓ Check 4: How much worse is comonotonic?\n")
 cat("  ΔAIC (comonotonic - best):", round(aic_diff, 2), "\n")
-cat("  Interpretation: ΔAIC >", ifelse(aic_diff > 1000, "1000", "10"), 
-    "indicates comonotonic is vastly inferior\n")
+cat(
+  "  Interpretation: ΔAIC >",
+  ifelse(aic_diff > 1000, "1000", "10"),
+  "indicates comonotonic is vastly inferior\n"
+)
 if (aic_diff > 10) {
-  cat("  ✓ PASS - Comonotonic is substantially worse (validates research motivation)\n\n")
+  cat(
+    "  ✓ PASS - Comonotonic is substantially worse (validates research motivation)\n\n"
+  )
 } else {
-  cat("  ⚠ WARNING - Small AIC difference (may indicate very high dependence in data)\n\n")
+  cat(
+    "  ⚠ WARNING - Small AIC difference (may indicate very high dependence in data)\n\n"
+  )
 }
 
 # Additional diagnostic: Show mean deviation from perfect dependence
@@ -177,4 +197,3 @@ cat("  - Ready for inclusion in STEP 1 analysis ✓\n\n")
 
 cat("Next step: Run full STEP 1 with all datasets to see comonotonic\n")
 cat("           misfit across all conditions.\n\n")
-

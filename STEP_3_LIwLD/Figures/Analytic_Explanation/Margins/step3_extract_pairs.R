@@ -24,8 +24,13 @@ require(data.table)
 # Paths
 # ---------------------------------------------------------------------------
 
-script_file <- sub("^--file=", "", commandArgs(trailingOnly = FALSE)[
-  grep("^--file=", commandArgs(trailingOnly = FALSE))][1])
+script_file <- sub(
+  "^--file=",
+  "",
+  commandArgs(trailingOnly = FALSE)[
+    grep("^--file=", commandArgs(trailingOnly = FALSE))
+  ][1]
+)
 margins_dir <- if (!is.na(script_file) && nzchar(script_file)) {
   normalizePath(dirname(script_file), winslash = "/", mustWork = TRUE)
 } else {
@@ -35,13 +40,18 @@ margins_dir <- if (!is.na(script_file) && nzchar(script_file)) {
 # Path to longitudinal_pairs helper (copied into Margins/ or sourced from uploads)
 lp_file <- file.path(margins_dir, "longitudinal_pairs.R")
 if (!file.exists(lp_file)) {
-  stop("Cannot find longitudinal_pairs.R at:\n  ", lp_file,
-       "\n  Copy it to the Margins/ directory first.")
+  stop(
+    "Cannot find longitudinal_pairs.R at:\n  ",
+    lp_file,
+    "\n  Copy it to the Margins/ directory first."
+  )
 }
 source(lp_file)
 
 data_dir <- file.path(margins_dir, "data")
-if (!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
 
 
 # ---------------------------------------------------------------------------
@@ -56,12 +66,12 @@ rdata_path <- file.path(
 
 # Cohort specification
 config <- list(
-  dataset_id    = "dataset_1",
-  grade_prior   = 5,
+  dataset_id = "dataset_1",
+  grade_prior = 5,
   grade_current = 6,
-  year_prior    = "2008",         # year_current derived: 2008 + (6-5) = 2009
+  year_prior = "2008", # year_current derived: 2008 + (6-5) = 2009
   content_prior = "MATHEMATICS",
-  content_current = NULL,         # same as content_prior
+  content_current = NULL, # same as content_prior
   min_valid_score = 200
 )
 
@@ -69,8 +79,15 @@ config <- list(
 output_csv <- file.path(data_dir, "longitudinal_pairs.csv")
 
 cat("  .Rdata     :", rdata_path, "\n")
-cat("  Cohort     : Grade", config$grade_prior, "->", config$grade_current,
-    config$content_prior, config$year_prior, "\n")
+cat(
+  "  Cohort     : Grade",
+  config$grade_prior,
+  "->",
+  config$grade_current,
+  config$content_prior,
+  config$year_prior,
+  "\n"
+)
 cat("  Output CSV :", output_csv, "\n\n")
 
 
@@ -93,8 +110,10 @@ if (is.character(DATA$GRADE)) {
 }
 
 # Derive current year
-year_current <- as.character(as.numeric(config$year_prior) +
-                             (config$grade_current - config$grade_prior))
+year_current <- as.character(
+  as.numeric(config$year_prior) +
+    (config$grade_current - config$grade_prior)
+)
 
 
 # ---------------------------------------------------------------------------
@@ -103,26 +122,40 @@ year_current <- as.character(as.numeric(config$year_prior) +
 
 cat("\nExtracting cohorts...\n")
 
-prior_cohort <- DATA[GRADE == config$grade_prior &
-                     YEAR == config$year_prior &
-                     CONTENT_AREA == config$content_prior &
-                     !is.na(SCALE_SCORE) &
-                     SCALE_SCORE >= config$min_valid_score,
-                     .(ID, SCALE_SCORE_PRIOR = SCALE_SCORE,
-                       DISTRICT_NUMBER, SCHOOL_NUMBER)]
+prior_cohort <- DATA[
+  GRADE == config$grade_prior &
+    YEAR == config$year_prior &
+    CONTENT_AREA == config$content_prior &
+    !is.na(SCALE_SCORE) &
+    SCALE_SCORE >= config$min_valid_score,
+  .(ID, SCALE_SCORE_PRIOR = SCALE_SCORE, DISTRICT_NUMBER, SCHOOL_NUMBER)
+]
 
-current_cohort <- DATA[GRADE == config$grade_current &
-                       YEAR == year_current &
-                       CONTENT_AREA == config$content_prior &
-                       !is.na(SCALE_SCORE) &
-                       SCALE_SCORE >= config$min_valid_score,
-                       .(ID, SCALE_SCORE_CURRENT = SCALE_SCORE,
-                         DISTRICT_NUMBER, SCHOOL_NUMBER)]
+current_cohort <- DATA[
+  GRADE == config$grade_current &
+    YEAR == year_current &
+    CONTENT_AREA == config$content_prior &
+    !is.na(SCALE_SCORE) &
+    SCALE_SCORE >= config$min_valid_score,
+  .(ID, SCALE_SCORE_CURRENT = SCALE_SCORE, DISTRICT_NUMBER, SCHOOL_NUMBER)
+]
 
-cat("  Prior  (Grade", config$grade_prior, config$year_prior, "):",
-    format(nrow(prior_cohort), big.mark = ","), "students\n")
-cat("  Current (Grade", config$grade_current, year_current, "):",
-    format(nrow(current_cohort), big.mark = ","), "students\n")
+cat(
+  "  Prior  (Grade",
+  config$grade_prior,
+  config$year_prior,
+  "):",
+  format(nrow(prior_cohort), big.mark = ","),
+  "students\n"
+)
+cat(
+  "  Current (Grade",
+  config$grade_current,
+  year_current,
+  "):",
+  format(nrow(current_cohort), big.mark = ","),
+  "students\n"
+)
 
 # Free the big object
 rm(DATA, load_env)
@@ -136,8 +169,11 @@ gc(verbose = FALSE)
 cat("\nClassifying stayers / leavers / entrants...\n")
 
 # Stayers: present in both years (inner join)
-stayers <- merge(prior_cohort, current_cohort[, .(ID, SCALE_SCORE_CURRENT)],
-                 by = "ID")
+stayers <- merge(
+  prior_cohort,
+  current_cohort[, .(ID, SCALE_SCORE_CURRENT)],
+  by = "ID"
+)
 stayers[, TYPE := "stayer"]
 
 # Leavers: in prior only (no current match)
@@ -151,15 +187,21 @@ entrants <- current_cohort[ID %in% entrant_ids]
 entrants[, `:=`(SCALE_SCORE_PRIOR = NA_real_, TYPE = "entrant")]
 
 # Combine
-pairs_all <- rbindlist(list(stayers, leavers, entrants),
-                       use.names = TRUE, fill = TRUE)
+pairs_all <- rbindlist(
+  list(stayers, leavers, entrants),
+  use.names = TRUE,
+  fill = TRUE
+)
 
-cat("  Stayers  :", format(nrow(stayers),  big.mark = ","), "\n")
-cat("  Leavers  :", format(nrow(leavers),  big.mark = ","), "\n")
+cat("  Stayers  :", format(nrow(stayers), big.mark = ","), "\n")
+cat("  Leavers  :", format(nrow(leavers), big.mark = ","), "\n")
 cat("  Entrants :", format(nrow(entrants), big.mark = ","), "\n")
 cat("  Total    :", format(nrow(pairs_all), big.mark = ","), "\n")
 
-match_rate <- round(100 * nrow(stayers) / max(nrow(prior_cohort), nrow(current_cohort)), 1)
+match_rate <- round(
+  100 * nrow(stayers) / max(nrow(prior_cohort), nrow(current_cohort)),
+  1
+)
 cat("  Match rate:", match_rate, "%\n")
 
 
@@ -168,11 +210,11 @@ cat("  Match rate:", match_rate, "%\n")
 # ---------------------------------------------------------------------------
 
 pairs_all[, `:=`(
-  GRADE_PRIOR   = config$grade_prior,
+  GRADE_PRIOR = config$grade_prior,
   GRADE_CURRENT = config$grade_current,
-  YEAR_PRIOR    = config$year_prior,
-  YEAR_CURRENT  = year_current,
-  CONTENT_AREA  = config$content_prior
+  YEAR_PRIOR = config$year_prior,
+  YEAR_CURRENT = year_current,
+  CONTENT_AREA = config$content_prior
 )]
 
 

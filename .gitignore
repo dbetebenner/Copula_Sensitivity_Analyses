@@ -45,3 +45,6 @@ sync_to_paper.sh
 dataset_configs_local.R
 *_CONFIDENTIAL.R
 state_config.R
+
+# Repomix
+dataimago-repomix.xml

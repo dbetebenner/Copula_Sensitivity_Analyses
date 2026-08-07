@@ -50,7 +50,14 @@ cat("TESTING: Updated perform_gof_test() Function\n")
 cat("====================================================================\n\n")
 
 N_BOOTSTRAP_GOF <- 10
-COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
+COPULA_FAMILIES <- c(
+  "gaussian",
+  "t",
+  "clayton",
+  "gumbel",
+  "frank",
+  "comonotonic"
+)
 
 cat("Fitting all copula families with GoF testing...\n\n")
 
@@ -73,7 +80,13 @@ elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
 cat("\n====================================================================\n")
 cat("RESULTS\n")
 cat("====================================================================\n")
-cat("Total time:", round(elapsed, 1), "seconds (", round(elapsed/60, 2), "minutes)\n\n")
+cat(
+  "Total time:",
+  round(elapsed, 1),
+  "seconds (",
+  round(elapsed / 60, 2),
+  "minutes)\n\n"
+)
 
 # Extract and display results
 pvalues <- sapply(fit_results$results, function(x) x$gof_pvalue)
@@ -125,7 +138,11 @@ cat("Family-specific checks:\n\n")
 cat("1. Gaussian:\n")
 gaussian_result <- fit_results$results$gaussian
 cat("   Method:", gaussian_result$gof_method, "\n")
-cat("   Using gofCopula pkg?:", grepl("gofKendallCvM", gaussian_result$gof_method), "\n")
+cat(
+  "   Using gofCopula pkg?:",
+  grepl("gofKendallCvM", gaussian_result$gof_method),
+  "\n"
+)
 cat("   P-value:", sprintf("%.4f", gaussian_result$gof_pvalue), "\n\n")
 
 cat("2. T-copula:\n")
@@ -137,7 +154,11 @@ cat("   P-value:", sprintf("%.4f", t_result$gof_pvalue), "\n\n")
 cat("3. Comonotonic:\n")
 comon_result <- fit_results$results$comonotonic
 cat("   Method:", comon_result$gof_method, "\n")
-cat("   Using custom bootstrap?:", grepl("comonotonic", comon_result$gof_method), "\n")
+cat(
+  "   Using custom bootstrap?:",
+  grepl("comonotonic", comon_result$gof_method),
+  "\n"
+)
 cat("   P-value:", sprintf("%.4f", comon_result$gof_pvalue), "\n\n")
 
 cat("====================================================================\n")
@@ -160,4 +181,3 @@ if (n_using_package == 4 && n_unique_pvals >= 4) {
 }
 
 cat("\n")
-

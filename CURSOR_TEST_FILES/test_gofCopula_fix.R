@@ -22,20 +22,28 @@ cat("  R CMD INSTALL .\n\n")
 
 # Check gofCopula package version
 if (!requireNamespace("gofCopula", quietly = TRUE)) {
-  stop("\n\nERROR: gofCopula package not installed!\n",
-       "Please install from your local fork:\n",
-       "  devtools::install('~/GitHub/DBetebenner/gofCopula/main')\n\n")
+  stop(
+    "\n\nERROR: gofCopula package not installed!\n",
+    "Please install from your local fork:\n",
+    "  devtools::install('~/GitHub/DBetebenner/gofCopula/main')\n\n"
+  )
 }
 
 gofCopula_version <- packageVersion("gofCopula")
 required_version <- "0.4.4"
 
 if (gofCopula_version < required_version) {
-  stop("\n\nERROR: gofCopula version too old!\n",
-       "  Found: ", as.character(gofCopula_version), "\n",
-       "  Required: >= ", required_version, "\n",
-       "  This version has the t-copula parameter boundary bug.\n\n",
-       "Please rebuild the fixed package (see instructions above).\n\n")
+  stop(
+    "\n\nERROR: gofCopula version too old!\n",
+    "  Found: ",
+    as.character(gofCopula_version),
+    "\n",
+    "  Required: >= ",
+    required_version,
+    "\n",
+    "  This version has the t-copula parameter boundary bug.\n\n",
+    "Please rebuild the fixed package (see instructions above).\n\n"
+  )
 }
 
 cat("Package version check:\n")
@@ -56,33 +64,35 @@ cat("====================================================================\n\n")
 
 cat("This should now WORK (previously failed with 'length = 2' error)...\n\n")
 
-test1_result <- tryCatch({
-  result <- gofKendallCvM(
-    copula = "t",
-    x = IndexReturns2D,
-    M = 10,  # Small M for quick test
-    param.est = TRUE,
-    margins = "ranks",
-    seed.active = 1
-  )
-  
-  cat("✓ SUCCESS! gofKendallCvM completed without error\n\n")
-  
-  # Extract results
-  pvalue <- result$t$res.tests[1, "p.value"]
-  statistic <- result$t$res.tests[1, "test statistic"]
-  
-  cat("Results:\n")
-  cat("  Test statistic:", round(statistic, 6), "\n")
-  cat("  P-value:", round(pvalue, 4), "\n")
-  cat("  Pass (p > 0.05)?", ifelse(pvalue > 0.05, "YES", "NO"), "\n\n")
-  
-  list(success = TRUE, pvalue = pvalue, statistic = statistic, error = NULL)
-  
-}, error = function(e) {
-  cat("✗ FAILED with error:", e$message, "\n\n")
-  list(success = FALSE, pvalue = NA, statistic = NA, error = e$message)
-})
+test1_result <- tryCatch(
+  {
+    result <- gofKendallCvM(
+      copula = "t",
+      x = IndexReturns2D,
+      M = 10, # Small M for quick test
+      param.est = TRUE,
+      margins = "ranks",
+      seed.active = 1
+    )
+
+    cat("✓ SUCCESS! gofKendallCvM completed without error\n\n")
+
+    # Extract results
+    pvalue <- result$t$res.tests[1, "p.value"]
+    statistic <- result$t$res.tests[1, "test statistic"]
+
+    cat("Results:\n")
+    cat("  Test statistic:", round(statistic, 6), "\n")
+    cat("  P-value:", round(pvalue, 4), "\n")
+    cat("  Pass (p > 0.05)?", ifelse(pvalue > 0.05, "YES", "NO"), "\n\n")
+
+    list(success = TRUE, pvalue = pvalue, statistic = statistic, error = NULL)
+  },
+  error = function(e) {
+    cat("✗ FAILED with error:", e$message, "\n\n")
+    list(success = FALSE, pvalue = NA, statistic = NA, error = e$message)
+  }
+)
 
 # Test 2: gof() wrapper with t-copula
 cat("====================================================================\n")
@@ -91,25 +101,27 @@ cat("====================================================================\n\n")
 
 cat("The high-level gof() function should also work now...\n\n")
 
-test2_result <- tryCatch({
-  result <- gof(
-    x = IndexReturns2D,
-    M = 10,
-    copula = "t",
-    seed.active = 1
-  )
-  
-  cat("✓ SUCCESS! gof() completed without error\n\n")
-  
-  # The gof() function returns results in a different structure
-  cat("Results summary available\n\n")
-  
-  list(success = TRUE, error = NULL)
-  
-}, error = function(e) {
-  cat("✗ FAILED with error:", e$message, "\n\n")
-  list(success = FALSE, error = e$message)
-})
+test2_result <- tryCatch(
+  {
+    result <- gof(
+      x = IndexReturns2D,
+      M = 10,
+      copula = "t",
+      seed.active = 1
+    )
+
+    cat("✓ SUCCESS! gof() completed without error\n\n")
+
+    # The gof() function returns results in a different structure
+    cat("Results summary available\n\n")
+
+    list(success = TRUE, error = NULL)
+  },
+  error = function(e) {
+    cat("✗ FAILED with error:", e$message, "\n\n")
+    list(success = FALSE, error = e$message)
+  }
+)
 
 # Test 3: Compare all parametric families
 cat("====================================================================\n")
@@ -121,28 +133,30 @@ results_all <- list()
 
 for (fam in families) {
   cat("Testing", fam, "copula...\n")
-  
-  result <- tryCatch({
-    gof_result <- gofKendallCvM(
-      copula = fam,
-      x = IndexReturns2D,
-      M = 10,
-      param.est = TRUE,
-      margins = "ranks",
-      seed.active = 1
-    )
-    
-    pval <- gof_result[[fam]]$res.tests[1, "p.value"]
-    stat <- gof_result[[fam]]$res.tests[1, "test statistic"]
-    
-    cat("  ✓ Completed: p =", round(pval, 4), "\n")
-    list(success = TRUE, pvalue = pval, statistic = stat)
-    
-  }, error = function(e) {
-    cat("  ✗ Failed:", e$message, "\n")
-    list(success = FALSE, pvalue = NA, statistic = NA, error = e$message)
-  })
-  
+
+  result <- tryCatch(
+    {
+      gof_result <- gofKendallCvM(
+        copula = fam,
+        x = IndexReturns2D,
+        M = 10,
+        param.est = TRUE,
+        margins = "ranks",
+        seed.active = 1
+      )
+
+      pval <- gof_result[[fam]]$res.tests[1, "p.value"]
+      stat <- gof_result[[fam]]$res.tests[1, "test statistic"]
+
+      cat("  ✓ Completed: p =", round(pval, 4), "\n")
+      list(success = TRUE, pvalue = pval, statistic = stat)
+    },
+    error = function(e) {
+      cat("  ✗ Failed:", e$message, "\n")
+      list(success = FALSE, pvalue = NA, statistic = NA, error = e$message)
+    }
+  )
+
   results_all[[fam]] <- result
 }
 
@@ -180,4 +194,3 @@ if (all_success && test1_result$success && test2_result$success) {
   cat("Please review the errors above.\n")
   cat("The package may need to be rebuilt.\n\n")
 }
-

@@ -58,14 +58,17 @@ require(copula)
 #' }
 #'
 #' @export
-create_kernel_cache <- function(copula_obj,
-                                 u_grid_size = 201,
-                                 v_grid_size = 201,
-                                 boundary_buffer = 0.005,
-                                 compute_quantile = TRUE) {
-
+create_kernel_cache <- function(
+  copula_obj,
+  u_grid_size = 201,
+  v_grid_size = 201,
+  boundary_buffer = 0.005,
+  compute_quantile = TRUE
+) {
   if (!inherits(copula_obj, "copula")) {
-    stop("copula_obj must be a copula-class object (e.g., tCopula, normalCopula)")
+    stop(
+      "copula_obj must be a copula-class object (e.g., tCopula, normalCopula)"
+    )
   }
 
   # Build grids
@@ -76,15 +79,22 @@ create_kernel_cache <- function(copula_obj,
   # Expand to all (u, v) pairs
   uv_pairs <- as.matrix(expand.grid(u = u_grid, v = v_grid))
 
-  cond_cdf_vec <- tryCatch({
-    drop(copula::cCopula(uv_pairs, copula = copula_obj, indices = 2))
-  }, error = function(e) {
-    stop("cCopula failed: ", e$message)
-  })
+  cond_cdf_vec <- tryCatch(
+    {
+      drop(copula::cCopula(uv_pairs, copula = copula_obj, indices = 2))
+    },
+    error = function(e) {
+      stop("cCopula failed: ", e$message)
+    }
+  )
 
   # Reshape into matrix: [u_idx, v_idx]
-  conditional_cdf <- matrix(cond_cdf_vec, nrow = u_grid_size, ncol = v_grid_size,
-                             byrow = FALSE)
+  conditional_cdf <- matrix(
+    cond_cdf_vec,
+    nrow = u_grid_size,
+    ncol = v_grid_size,
+    byrow = FALSE
+  )
 
   # Clamp to [0, 1] (in-place to preserve matrix dimensions)
   conditional_cdf[conditional_cdf < 0] <- 0
@@ -100,24 +110,38 @@ create_kernel_cache <- function(copula_obj,
   p_grid <- NULL
 
   if (compute_quantile) {
-    p_grid <- seq(boundary_buffer, 1 - boundary_buffer, length.out = v_grid_size)
+    p_grid <- seq(
+      boundary_buffer,
+      1 - boundary_buffer,
+      length.out = v_grid_size
+    )
     quantile_grid <- matrix(NA_real_, nrow = u_grid_size, ncol = length(p_grid))
 
     for (i in seq_len(u_grid_size)) {
       cdf_row <- conditional_cdf[i, ]
       # Invert: for each p, find v such that F_0(v|u) = p
-      quantile_grid[i, ] <- approx(cdf_row, v_grid, xout = p_grid,
-                                    method = "linear", rule = 2)$y
+      quantile_grid[i, ] <- approx(
+        cdf_row,
+        v_grid,
+        xout = p_grid,
+        method = "linear",
+        rule = 2
+      )$y
     }
-    quantile_grid <- pmax(boundary_buffer, pmin(1 - boundary_buffer, quantile_grid))
+    quantile_grid <- pmax(
+      boundary_buffer,
+      pmin(1 - boundary_buffer, quantile_grid)
+    )
   }
 
   # Extract copula metadata
   copula_family <- class(copula_obj)[1]
   copula_params <- list()
   if (inherits(copula_obj, "tCopula")) {
-    copula_params <- list(rho = copula_obj@parameters[1],
-                          df  = copula_obj@parameters[2])
+    copula_params <- list(
+      rho = copula_obj@parameters[1],
+      df = copula_obj@parameters[2]
+    )
   } else if (inherits(copula_obj, "normalCopula")) {
     copula_params <- list(rho = copula_obj@parameters[1])
   } else {
@@ -125,17 +149,17 @@ create_kernel_cache <- function(copula_obj,
   }
 
   result <- list(
-    u_grid          = u_grid,
-    v_grid          = v_grid,
+    u_grid = u_grid,
+    v_grid = v_grid,
     conditional_cdf = conditional_cdf,
-    quantile_grid   = quantile_grid,
-    p_grid          = p_grid,
-    u_grid_size     = u_grid_size,
-    v_grid_size     = v_grid_size,
+    quantile_grid = quantile_grid,
+    p_grid = p_grid,
+    u_grid_size = u_grid_size,
+    v_grid_size = v_grid_size,
     boundary_buffer = boundary_buffer,
-    copula_family   = copula_family,
-    copula_params   = copula_params,
-    created_at      = Sys.time()
+    copula_family = copula_family,
+    copula_params = copula_params,
+    created_at = Sys.time()
   )
   class(result) <- "kernel_cache"
   return(result)
@@ -154,7 +178,6 @@ create_kernel_cache <- function(copula_obj,
 #'
 #' @export
 kernel_conditional_cdf <- function(v, u, cache) {
-
   if (!inherits(cache, "kernel_cache")) {
     stop("cache must be a kernel_cache object")
   }
@@ -182,10 +205,12 @@ kernel_conditional_cdf <- function(v, u, cache) {
   v_frac <- pmax(0, pmin(1, (v - v_grid[v_idx]) / dv))
 
   # Bilinear interpolation
-  result <- (1 - u_frac) * (1 - v_frac) * cond_mat[cbind(u_idx, v_idx)] +
-            u_frac * (1 - v_frac) * cond_mat[cbind(u_idx + 1L, v_idx)] +
-            (1 - u_frac) * v_frac * cond_mat[cbind(u_idx, v_idx + 1L)] +
-            u_frac * v_frac * cond_mat[cbind(u_idx + 1L, v_idx + 1L)]
+  result <- (1 - u_frac) *
+    (1 - v_frac) *
+    cond_mat[cbind(u_idx, v_idx)] +
+    u_frac * (1 - v_frac) * cond_mat[cbind(u_idx + 1L, v_idx)] +
+    (1 - u_frac) * v_frac * cond_mat[cbind(u_idx, v_idx + 1L)] +
+    u_frac * v_frac * cond_mat[cbind(u_idx + 1L, v_idx + 1L)]
 
   pmax(0, pmin(1, result))
 }
@@ -204,21 +229,22 @@ kernel_conditional_cdf <- function(v, u, cache) {
 #'
 #' @export
 kernel_conditional_quantile <- function(p, u, cache) {
-
   if (!inherits(cache, "kernel_cache")) {
     stop("cache must be a kernel_cache object")
   }
   if (is.null(cache$quantile_grid)) {
-    stop("Kernel cache was created without quantile grid. Use compute_quantile = TRUE.")
+    stop(
+      "Kernel cache was created without quantile grid. Use compute_quantile = TRUE."
+    )
   }
 
   u_grid <- cache$u_grid
   p_grid <- cache$p_grid
-  q_mat  <- cache$quantile_grid
-  gs_u   <- cache$u_grid_size
-  gs_p   <- length(p_grid)
-  du     <- u_grid[2] - u_grid[1]
-  dp     <- p_grid[2] - p_grid[1]
+  q_mat <- cache$quantile_grid
+  gs_u <- cache$u_grid_size
+  gs_p <- length(p_grid)
+  du <- u_grid[2] - u_grid[1]
+  dp <- p_grid[2] - p_grid[1]
 
   # Clamp inputs
   u <- pmax(u_grid[1], pmin(u_grid[gs_u], u))
@@ -231,10 +257,12 @@ kernel_conditional_quantile <- function(p, u, cache) {
   u_frac <- pmax(0, pmin(1, (u - u_grid[u_idx]) / du))
   p_frac <- pmax(0, pmin(1, (p - p_grid[p_idx]) / dp))
 
-  result <- (1 - u_frac) * (1 - p_frac) * q_mat[cbind(u_idx, p_idx)] +
-            u_frac * (1 - p_frac) * q_mat[cbind(u_idx + 1L, p_idx)] +
-            (1 - u_frac) * p_frac * q_mat[cbind(u_idx, p_idx + 1L)] +
-            u_frac * p_frac * q_mat[cbind(u_idx + 1L, p_idx + 1L)]
+  result <- (1 - u_frac) *
+    (1 - p_frac) *
+    q_mat[cbind(u_idx, p_idx)] +
+    u_frac * (1 - p_frac) * q_mat[cbind(u_idx + 1L, p_idx)] +
+    (1 - u_frac) * p_frac * q_mat[cbind(u_idx, p_idx + 1L)] +
+    u_frac * p_frac * q_mat[cbind(u_idx + 1L, p_idx + 1L)]
 
   pmax(cache$boundary_buffer, pmin(1 - cache$boundary_buffer, result))
 }

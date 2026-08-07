@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 ############################################################################
 # test_summary_grid_conversion.R
-# 
+#
 # Purpose: Debug why summary_grid SVG/PNG conversion isn't happening
 #          during parallel execution but works manually.
 #
@@ -73,7 +73,10 @@ cat("\n")
 cat("=== STEP 3: Find Test Condition Directory ===\n\n")
 
 # Look for dataset_4 results
-results_base <- file.path(PROJECT_ROOT, "STEP_1_Family_Selection/results/dataset_4/contour_plots")
+results_base <- file.path(
+  PROJECT_ROOT,
+  "STEP_1_Family_Selection/results/dataset_4/contour_plots"
+)
 
 if (!dir.exists(results_base)) {
   stop("Results directory not found: ", results_base)
@@ -109,7 +112,12 @@ existing_files <- list.files(test_dir, pattern = "summary_grid")
 cat("Existing summary_grid files:\n")
 for (f in existing_files) {
   info <- file.info(file.path(test_dir, f))
-  cat(sprintf("  %s (%s bytes, %s)\n", f, format(info$size, big.mark = ","), info$mtime))
+  cat(sprintf(
+    "  %s (%s bytes, %s)\n",
+    f,
+    format(info$size, big.mark = ","),
+    info$mtime
+  ))
 }
 
 cat("\n")
@@ -142,8 +150,16 @@ condition_info <- list(
 )
 
 cat("Condition info:\n")
-cat(sprintf("  Year: %d -> %d\n", condition_info$year_prior, condition_info$year_current))
-cat(sprintf("  Grade: %d -> %d\n", condition_info$grade_prior, condition_info$grade_current))
+cat(sprintf(
+  "  Year: %d -> %d\n",
+  condition_info$year_prior,
+  condition_info$year_current
+))
+cat(sprintf(
+  "  Grade: %d -> %d\n",
+  condition_info$grade_prior,
+  condition_info$grade_current
+))
 cat(sprintf("  Content: %s\n", condition_info$content_area))
 
 # Load copula results if available
@@ -154,10 +170,12 @@ best_family <- "gaussian"
 if (file.exists(copula_results_file)) {
   copula_results <- readRDS(copula_results_file)
   cat("\nCopula results loaded\n")
-  
+
   # Find best family by AIC
   if (!is.null(copula_results)) {
-    aics <- sapply(copula_results, function(x) if (!is.null(x$aic)) x$aic else Inf)
+    aics <- sapply(copula_results, function(x) {
+      if (!is.null(x$aic)) x$aic else Inf
+    })
     best_family <- names(which.min(aics))
     cat("Best family:", best_family, "\n")
   }
@@ -185,28 +203,33 @@ if (file.exists(png_file)) {
   file.remove(png_file)
 }
 
-cat("\nCalling generate_summary_grid_latex() with export_formats = c('pdf', 'svg', 'png')...\n\n")
+cat(
+  "\nCalling generate_summary_grid_latex() with export_formats = c('pdf', 'svg', 'png')...\n\n"
+)
 
 # Call the function with explicit formats
-tryCatch({
-  generate_summary_grid_latex(
-    output_dir = test_dir,
-    condition_info = condition_info,
-    best_family = best_family,
-    copula_results = copula_results,
-    sgpc_stats = NULL,
-    compile_pdf = TRUE,       # Will skip if PDF already exists
-    keep_tex = TRUE,          # Keep .tex for debugging
-    fbox_sep = 1,
-    export_formats = c("pdf", "svg", "png"),
-    export_dpi = 300
-  )
-}, error = function(e) {
-  cat("\n*** ERROR in generate_summary_grid_latex ***\n")
-  cat("Message:", e$message, "\n")
-  cat("\nTraceback:\n")
-  traceback()
-})
+tryCatch(
+  {
+    generate_summary_grid_latex(
+      output_dir = test_dir,
+      condition_info = condition_info,
+      best_family = best_family,
+      copula_results = copula_results,
+      sgpc_stats = NULL,
+      compile_pdf = TRUE, # Will skip if PDF already exists
+      keep_tex = TRUE, # Keep .tex for debugging
+      fbox_sep = 1,
+      export_formats = c("pdf", "svg", "png"),
+      export_dpi = 300
+    )
+  },
+  error = function(e) {
+    cat("\n*** ERROR in generate_summary_grid_latex ***\n")
+    cat("Message:", e$message, "\n")
+    cat("\nTraceback:\n")
+    traceback()
+  }
+)
 
 cat("\n")
 
@@ -220,7 +243,12 @@ final_files <- list.files(test_dir, pattern = "summary_grid")
 cat("Summary grid files after test:\n")
 for (f in final_files) {
   info <- file.info(file.path(test_dir, f))
-  cat(sprintf("  %s (%s bytes, %s)\n", f, format(info$size, big.mark = ","), info$mtime))
+  cat(sprintf(
+    "  %s (%s bytes, %s)\n",
+    f,
+    format(info$size, big.mark = ","),
+    info$mtime
+  ))
 }
 
 cat("\n")

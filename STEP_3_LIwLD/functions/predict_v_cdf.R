@@ -20,7 +20,6 @@
 ###
 ############################################################################
 
-
 #' Predict Marginal CDF of Current Scores Under a Growth Regime
 #'
 #' The core analytic computation. For each v on a grid, computes:
@@ -53,9 +52,13 @@
 #' 3. Take weighted average
 #'
 #' @export
-predict_marginal_cdf <- function(v_grid, u_sample, weights = NULL,
-                                  regime, kernel_cache) {
-
+predict_marginal_cdf <- function(
+  v_grid,
+  u_sample,
+  weights = NULL,
+  regime,
+  kernel_cache
+) {
   # Input validation
   if (!inherits(regime, "growth_regime")) {
     stop("regime must be a growth_regime object")
@@ -67,14 +70,20 @@ predict_marginal_cdf <- function(v_grid, u_sample, weights = NULL,
   n_u <- length(u_sample)
   n_v <- length(v_grid)
 
-  if (n_u == 0) stop("u_sample is empty")
-  if (n_v == 0) return(numeric(0))
+  if (n_u == 0) {
+    stop("u_sample is empty")
+  }
+  if (n_v == 0) {
+    return(numeric(0))
+  }
 
   # Default weights
   if (is.null(weights)) {
     weights <- rep(1, n_u)
   }
-  if (length(weights) != n_u) stop("weights must match u_sample length")
+  if (length(weights) != n_u) {
+    stop("weights must match u_sample length")
+  }
   w_sum <- sum(weights)
 
   # Preallocate result
@@ -85,7 +94,11 @@ predict_marginal_cdf <- function(v_grid, u_sample, weights = NULL,
     v_j <- rep(v_grid[j], n_u)
 
     # F_0(v | u_i) for all u_i
-    f0_vals <- kernel_conditional_cdf(v = v_j, u = u_sample, cache = kernel_cache)
+    f0_vals <- kernel_conditional_cdf(
+      v = v_j,
+      u = u_sample,
+      cache = kernel_cache
+    )
 
     # H(F_0(v | u_i))
     h_vals <- regime$cdf(f0_vals)
@@ -117,9 +130,10 @@ predict_marginal_cdf <- function(v_grid, u_sample, weights = NULL,
 #'
 #' @export
 observed_marginal_cdf <- function(v_grid, v_sample, weights = NULL) {
-
   n_v <- length(v_sample)
-  if (n_v == 0) stop("v_sample is empty")
+  if (n_v == 0) {
+    stop("v_sample is empty")
+  }
 
   if (is.null(weights)) {
     # Standard ECDF
@@ -134,8 +148,14 @@ observed_marginal_cdf <- function(v_grid, v_sample, weights = NULL) {
   w_cum <- cumsum(w_sorted) / sum(w_sorted)
 
   # Evaluate on grid via step function
-  result <- approx(v_sorted, w_cum, xout = v_grid,
-                    method = "constant", rule = 2, f = 0)$y
+  result <- approx(
+    v_sorted,
+    w_cum,
+    xout = v_grid,
+    method = "constant",
+    rule = 2,
+    f = 0
+  )$y
   return(result)
 }
 
@@ -155,7 +175,6 @@ observed_marginal_cdf <- function(v_grid, v_sample, weights = NULL) {
 #'
 #' @export
 predict_conditional_cdf <- function(v, u, regime, kernel_cache) {
-
   u_vec <- rep(u, length(v))
   f0_vals <- kernel_conditional_cdf(v = v, u = u_vec, cache = kernel_cache)
   regime$cdf(f0_vals)
@@ -173,17 +192,30 @@ predict_conditional_cdf <- function(v, u, regime, kernel_cache) {
 #'
 #' @return Numeric vector of predicted CDF values on v_grid.
 #' @export
-predict_marginal_cdf_stratified <- function(v_grid, u_sample, regime_list, u_bins,
-                                            kernel_cache, weights = NULL) {
-  if (is.null(weights)) weights <- rep(1, length(u_sample))
-  stopifnot(length(u_sample) == length(u_bins), length(weights) == length(u_sample))
+predict_marginal_cdf_stratified <- function(
+  v_grid,
+  u_sample,
+  regime_list,
+  u_bins,
+  kernel_cache,
+  weights = NULL
+) {
+  if (is.null(weights)) {
+    weights <- rep(1, length(u_sample))
+  }
+  stopifnot(
+    length(u_sample) == length(u_bins),
+    length(weights) == length(u_sample)
+  )
   lvls <- unique(as.character(u_bins))
   F_total <- rep(0, length(v_grid))
   w_total <- sum(weights)
 
   for (lv in lvls) {
     idx <- which(as.character(u_bins) == lv)
-    if (length(idx) == 0 || is.null(regime_list[[lv]])) next
+    if (length(idx) == 0 || is.null(regime_list[[lv]])) {
+      next
+    }
     w_bin <- sum(weights[idx])
     F_bin <- predict_marginal_cdf(
       v_grid = v_grid,

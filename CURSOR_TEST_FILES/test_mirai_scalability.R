@@ -50,7 +50,7 @@ if (max_workers >= 150) {
     max(6, floor(max_workers * 0.75)),
     max_workers
   )
-  test_configs <- unique(test_configs)  # Remove duplicates
+  test_configs <- unique(test_configs) # Remove duplicates
 } else {
   # Very small: Just test what's available
 
@@ -79,7 +79,7 @@ results <- data.frame(
 for (n_daemons in test_configs) {
   cat("--------------------------------------------------------------------\n")
   cat("Testing", n_daemons, "daemons...\n")
-  
+
   result <- list(
     n_daemons = n_daemons,
     success = FALSE,
@@ -88,84 +88,105 @@ for (n_daemons in test_configs) {
     time_to_run_tasks = NA,
     error_message = ""
   )
-  
-  tryCatch({
-    # Time daemon creation
-    start_create <- Sys.time()
-    
-    # Create daemons
-    daemons(n_daemons)
-    
-    end_create <- Sys.time()
-    result$time_to_create <- as.numeric(difftime(end_create, start_create, units = "secs"))
-    
-    # Check how many daemons were actually created
-    # status() returns a list - we need to get the count properly
-    daemon_status <- status()
-    # The number of daemons is the number requested (mirai creates them on demand)
-    result$actual_daemons <- n_daemons
-    
-    cat("  Daemons requested:", n_daemons, "\n")
-    cat("  Daemons created:", result$actual_daemons, "\n")
-    cat("  Creation time:", round(result$time_to_create, 2), "seconds\n")
-    
-    # Run a simple task on each daemon to verify they work
-    cat("  Running test tasks...\n")
-    start_tasks <- Sys.time()
-    
-    # Use mirai_map to run a simple computation on each daemon
-    n_tasks <- min(n_daemons, 100)
-    test_results <- mirai_map(
-      .x = 1:n_tasks,
-      .f = function(x) {
-        Sys.sleep(0.1)  # Small delay to simulate work
-        x^2  # Return simple result
+
+  tryCatch(
+    {
+      # Time daemon creation
+      start_create <- Sys.time()
+
+      # Create daemons
+      daemons(n_daemons)
+
+      end_create <- Sys.time()
+      result$time_to_create <- as.numeric(difftime(
+        end_create,
+        start_create,
+        units = "secs"
+      ))
+
+      # Check how many daemons were actually created
+      # status() returns a list - we need to get the count properly
+      daemon_status <- status()
+      # The number of daemons is the number requested (mirai creates them on demand)
+      result$actual_daemons <- n_daemons
+
+      cat("  Daemons requested:", n_daemons, "\n")
+      cat("  Daemons created:", result$actual_daemons, "\n")
+      cat("  Creation time:", round(result$time_to_create, 2), "seconds\n")
+
+      # Run a simple task on each daemon to verify they work
+      cat("  Running test tasks...\n")
+      start_tasks <- Sys.time()
+
+      # Use mirai_map to run a simple computation on each daemon
+      n_tasks <- min(n_daemons, 100)
+      test_results <- mirai_map(
+        .x = 1:n_tasks,
+        .f = function(x) {
+          Sys.sleep(0.1) # Small delay to simulate work
+          x^2 # Return simple result
+        }
+      )
+
+      # Collect results - wait for all to complete and get values
+      collected <- unlist(test_results[])
+
+      end_tasks <- Sys.time()
+      result$time_to_run_tasks <- as.numeric(difftime(
+        end_tasks,
+        start_tasks,
+        units = "secs"
+      ))
+
+      # Verify results - check we got the expected squared values
+      expected <- (1:n_tasks)^2
+      n_successful <- sum(!is.na(collected) & collected == expected)
+      cat("  Test tasks completed:", n_successful, "/", n_tasks, "\n")
+      cat("  Task time:", round(result$time_to_run_tasks, 2), "seconds\n")
+
+      # Calculate effective parallelism from timing
+      # With n daemons and 0.1s sleep each, parallel time should be ~0.1s * tasks/daemons
+      sequential_time <- n_tasks * 0.1
+      parallel_speedup <- sequential_time / result$time_to_run_tasks
+      cat("  Parallel speedup:", round(parallel_speedup, 1), "x\n")
+
+      result$success <- (n_successful == n_tasks)
+
+      if (result$success) {
+        cat("  Status: SUCCESS\n")
+      } else {
+        cat(
+          "  Status: PARTIAL (",
+          n_successful,
+          "/",
+          n_tasks,
+          " tasks succeeded)\n",
+          sep = ""
+        )
       }
-    )
-    
-    # Collect results - wait for all to complete and get values
-    collected <- unlist(test_results[])
-    
-    end_tasks <- Sys.time()
-    result$time_to_run_tasks <- as.numeric(difftime(end_tasks, start_tasks, units = "secs"))
-    
-    # Verify results - check we got the expected squared values
-    expected <- (1:n_tasks)^2
-    n_successful <- sum(!is.na(collected) & collected == expected)
-    cat("  Test tasks completed:", n_successful, "/", n_tasks, "\n")
-    cat("  Task time:", round(result$time_to_run_tasks, 2), "seconds\n")
-    
-    # Calculate effective parallelism from timing
-    # With n daemons and 0.1s sleep each, parallel time should be ~0.1s * tasks/daemons
-    sequential_time <- n_tasks * 0.1
-    parallel_speedup <- sequential_time / result$time_to_run_tasks
-    cat("  Parallel speedup:", round(parallel_speedup, 1), "x\n")
-    
-    result$success <- (n_successful == n_tasks)
-    
-    if (result$success) {
-      cat("  Status: SUCCESS\n")
-    } else {
-      cat("  Status: PARTIAL (", n_successful, "/", n_tasks, " tasks succeeded)\n", sep = "")
+    },
+    error = function(e) {
+      result$error_message <<- e$message
+      cat("  Status: FAILED\n")
+      cat("  Error:", e$message, "\n")
+    },
+    finally = {
+      # Always clean up daemons
+      tryCatch(
+        {
+          daemons(0)
+          cat("  Daemons cleaned up\n")
+        },
+        error = function(e) {
+          cat("  Warning: Failed to clean up daemons:", e$message, "\n")
+        }
+      )
     }
-    
-  }, error = function(e) {
-    result$error_message <<- e$message
-    cat("  Status: FAILED\n")
-    cat("  Error:", e$message, "\n")
-  }, finally = {
-    # Always clean up daemons
-    tryCatch({
-      daemons(0)
-      cat("  Daemons cleaned up\n")
-    }, error = function(e) {
-      cat("  Warning: Failed to clean up daemons:", e$message, "\n")
-    })
-  })
-  
+  )
+
   # Add to results
   results <- rbind(results, as.data.frame(result, stringsAsFactors = FALSE))
-  
+
   # Small pause between tests
   Sys.sleep(1)
 }
@@ -191,7 +212,11 @@ if (max_working >= 188) {
   cat("This bypasses R's 128 connection limit.\n")
   cat("Recommended: Proceed with mirai integration.\n")
 } else if (max_working > 96) {
-  cat("\nCONCLUSION: mirai scales beyond parallel's 96 limit (", max_working, " daemons)\n")
+  cat(
+    "\nCONCLUSION: mirai scales beyond parallel's 96 limit (",
+    max_working,
+    " daemons)\n"
+  )
   cat("This is an improvement over the current implementation.\n")
 } else if (max_working > 0) {
   cat("\nCONCLUSION: mirai works but may not provide scaling benefits.\n")
@@ -221,43 +246,67 @@ parallel_results <- data.frame(
 )
 
 # Use same test configs for fair comparison
-parallel_test_configs <- if (max_workers >= 96) c(96, 128, 150) else test_configs
-parallel_test_configs <- parallel_test_configs[parallel_test_configs <= max_workers]
+parallel_test_configs <- if (max_workers >= 96) {
+  c(96, 128, 150)
+} else {
+  test_configs
+}
+parallel_test_configs <- parallel_test_configs[
+  parallel_test_configs <= max_workers
+]
 
 for (n in parallel_test_configs) {
   cat("  parallel::makeForkCluster(", n, ")... ", sep = "")
-  
-  result <- tryCatch({
-    cl <- parallel::makeForkCluster(n)
-    actual <- length(cl)
-    parallel::stopCluster(cl)
-    list(success = TRUE, actual = actual, error = "")
-  }, error = function(e) {
-    list(success = FALSE, actual = 0, error = e$message)
-  })
-  
+
+  result <- tryCatch(
+    {
+      cl <- parallel::makeForkCluster(n)
+      actual <- length(cl)
+      parallel::stopCluster(cl)
+      list(success = TRUE, actual = actual, error = "")
+    },
+    error = function(e) {
+      list(success = FALSE, actual = 0, error = e$message)
+    }
+  )
+
   if (result$success) {
     cat("SUCCESS (", result$actual, " workers)\n", sep = "")
   } else {
     cat("FAILED: ", substr(result$error, 1, 50), "...\n", sep = "")
   }
-  
-  parallel_results <- rbind(parallel_results, data.frame(
-    type = "FORK",
-    n_workers = n,
-    success = result$success,
-    error = result$error,
-    stringsAsFactors = FALSE
-  ))
+
+  parallel_results <- rbind(
+    parallel_results,
+    data.frame(
+      type = "FORK",
+      n_workers = n,
+      success = result$success,
+      error = result$error,
+      stringsAsFactors = FALSE
+    )
+  )
 }
 
 cat("\n")
-cat("parallel package max workers: ", max(parallel_results$n_workers[parallel_results$success], 0), "\n")
+cat(
+  "parallel package max workers: ",
+  max(parallel_results$n_workers[parallel_results$success], 0),
+  "\n"
+)
 cat("mirai package max daemons: ", max_working, "\n")
 
-if (max_working > max(parallel_results$n_workers[parallel_results$success], 0)) {
-  improvement <- max_working / max(parallel_results$n_workers[parallel_results$success], 1)
-  cat("\nmirai provides ", round((improvement - 1) * 100), "% more parallelism!\n", sep = "")
+if (
+  max_working > max(parallel_results$n_workers[parallel_results$success], 0)
+) {
+  improvement <- max_working /
+    max(parallel_results$n_workers[parallel_results$success], 1)
+  cat(
+    "\nmirai provides ",
+    round((improvement - 1) * 100),
+    "% more parallelism!\n",
+    sep = ""
+  )
 }
 
 cat("\n====================================================================\n")

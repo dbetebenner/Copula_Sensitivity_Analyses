@@ -1,0 +1,91 @@
+%%%%
+%%%% Panel C graphic: Inferred growth regime density (G_S)
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=4.2in,paperheight=4.0in,margin=0in]{geometry}
+\usepackage[svgnames,dvips]{xcolor}
+\usepackage{pstricks,pst-plot,pst-node}
+\usepackage[OT1]{fontenc}
+\usepackage[onlymath]{sansmathfonts}
+\usepackage{type1cm}
+
+\input{step3_styles}
+\input{data/axis_limits}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+\psset{xunit=0.033in,yunit=0.65in}
+\begin{pspicture}(-7,-0.85)(108,\panelDymax)
+  %% Read density data
+  \readdata{\dataUnif}{data/panel_C_density_uniform.dat}
+  \readdata{\dataTrue}{data/panel_C_density_true.dat}
+  \readdata{\dataInf}{data/panel_C_density_inferred.dat}
+
+  %% Filled area under true and inferred density
+  \pscustom[fillstyle=solid,fillcolor=zissouAmber,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataTrue}%
+    \psline(100,0)%
+    \closepath}
+  \pscustom[fillstyle=solid,fillcolor=inferredV,opacity=0.18,linestyle=none]{%
+    \psline(0,0)%
+    \listplot[plotstyle=line]{\dataInf}%
+    \psline(100,0)%
+    \closepath}
+
+  %% Density curves
+  \listplot[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,plotstyle=line,linecap=1]{\dataUnif}
+  \listplot[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,plotstyle=line,linecap=1]{\dataInf}
+  \listplot[linecolor=zissouAmber,linewidth=1.2pt,linestyle=solid,plotstyle=line]{\dataTrue}
+
+  %% Reference lines
+  \psline[linecolor=panelGrey,linestyle=dotted,linewidth=0.8pt](50,0)(50,\panelDymax)
+  \psline[linecolor=zissouAmber,linestyle=dotted,linewidth=0.8pt]%
+         (\trueMeanVline,0)(\trueMeanVline,\panelDymax)
+  \psline[linecolor=inferredV,linestyle=dotted,linewidth=0.8pt]%
+         (\inferredMeanVline,0)(\inferredMeanVline,\panelDymax)
+
+  %% Axes
+  \psaxes[Dx=20,Dy=1,ticksize=-3pt 0,
+          subticks=0,labelsep=4pt,
+          labels=y, %keep only y-axis labels
+          axesstyle=frame,linecolor=borderGrey]{-}(0,0)(100,\panelDymax)
+
+  % Custom x labels (0..1 by 0.2)
+  \uput[d](0,0){\textsf{\small 0}}
+  \uput[d](20,0){\textsf{\small 0.2}}
+  \uput[d](40,0){\textsf{\small 0.4}}
+  \uput[d](60,0){\textsf{\small 0.6}}
+  \uput[d](80,0){\textsf{\small 0.8}}
+  \uput[d](100,0){\textsf{\small 1.0}}
+
+  %% Axis labels
+  \rput[t](50,-0.4){\textsf{\footnotesize Latent $\SGPc/100$}}
+  \rput[b]{90}(-7,2.0){\textsf{\small Density}}
+
+  %% Legend
+  \rput[tr](97,\panelDymax){%
+    \raisebox{-30pt}{\psscalebox{0.9 0.9}{\psframebox[linecolor=borderGrey,fillstyle=solid,fillcolor=fillGrey,opacity=0.85,framesep=3pt]{%
+      \begin{tabular}{@{}r@{\hspace{6pt}}l@{}}
+        \textsf{\scriptsize True} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=zissouAmber,linewidth=1.2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Uniform} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=panelGrey,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}\\[-1pt]
+        \textsf{\scriptsize Best-fit} &
+        {\psset{unit=1cm}\makebox[1.0cm][l]{\raisebox{2.5pt}{\psline[linecolor=inferredV,linewidth=0.8pt,linestyle=dashed,dash=2pt 2pt,linecap=1](0,0)(0.65,0)}}}
+      \end{tabular}%
+    }}}}
+
+  %% Recovery annotation
+  \rput[tl](62.2,\panelDymax){%
+    \raisebox{-67pt}{\textsf{\scriptsize\textcolor{zissouAmber}{%
+      True mean $\SGPc = \trueRegimeMean$}}}}
+  \rput[tl](55,\panelDymax){%
+    \raisebox{-75pt}{\textsf{\scriptsize\textcolor{inferredV}{%
+      Recovered mean $\SGPc = \inferredRegimeMean$}}}}
+
+\end{pspicture}
+
+\end{document}

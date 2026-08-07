@@ -1,0 +1,52 @@
+/* App-level shells.
+   Standalone: Chrome on top + cross fills the rest of the viewport.
+   Embed:      no chrome; fixed 1280×720 canvas anchored top-left.
+   Diagnostic: legacy card view (Phase 2a verifier). */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.crossFrame {
+  flex: 1 1 auto;
+  /*
+   * The cross expands to fill the viewport.  We cap the inner width so the
+   * cross stays visually balanced on ultra-wide displays.
+   */
+  display: flex;
+  justify-content: center;
+}
+
+.crossFrame > * {
+  width: 100%;
+  max-width: 1440px;
+  /* Reserve viewport height minus chrome (~ 130px when math is shown). */
+  height: calc(100vh - 140px);
+  min-height: 600px;
+}
+
+/* (No crossWrap layer: TourCaption is rendered inside Cross via the
+   `overlay` prop so the dimension chain crossFrame > Cross stays a single
+   hop and percentage heights resolve cleanly.) */
+
+.embedFrame {
+  width: 1280px;
+  height: 720px;
+  margin: 0 auto;
+}
+
+.diagnostic {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--p-space-6) var(--p-space-5);
+}
+
+@media (max-width: 767px) {
+  .crossFrame > * {
+    /* Linear stack: let the panels define their own height. */
+    height: auto;
+    max-width: none;
+  }
+}

@@ -27,24 +27,24 @@ get_phasea_figure_map <- function() {
     copula_comparison_panel = "phasea_05d_copula_comparison_panel",
     # 2×2 grid cells: metric × copula (individual PDFs for LaTeX composition)
     # Row 1: W1-optimised
-    grid_w1_canonical_cdf     = "phasea_06a_grid_w1_canonical_cdf",
-    grid_w1_canonical_regime  = "phasea_06b_grid_w1_canonical_regime",
-    grid_w1_bestfit_cdf       = "phasea_06c_grid_w1_bestfit_cdf",
-    grid_w1_bestfit_regime    = "phasea_06d_grid_w1_bestfit_regime",
+    grid_w1_canonical_cdf = "phasea_06a_grid_w1_canonical_cdf",
+    grid_w1_canonical_regime = "phasea_06b_grid_w1_canonical_regime",
+    grid_w1_bestfit_cdf = "phasea_06c_grid_w1_bestfit_cdf",
+    grid_w1_bestfit_regime = "phasea_06d_grid_w1_bestfit_regime",
     # Row 2: CvM-optimised
-    grid_cvm_canonical_cdf    = "phasea_06e_grid_cvm_canonical_cdf",
+    grid_cvm_canonical_cdf = "phasea_06e_grid_cvm_canonical_cdf",
     grid_cvm_canonical_regime = "phasea_06f_grid_cvm_canonical_regime",
-    grid_cvm_bestfit_cdf      = "phasea_06g_grid_cvm_bestfit_cdf",
-    grid_cvm_bestfit_regime   = "phasea_06h_grid_cvm_bestfit_regime",
+    grid_cvm_bestfit_cdf = "phasea_06g_grid_cvm_bestfit_cdf",
+    grid_cvm_bestfit_regime = "phasea_06h_grid_cvm_bestfit_regime",
     # Composed LaTeX summary grid
-    metric_copula_grid        = "phasea_06_metric_copula_grid",
+    metric_copula_grid = "phasea_06_metric_copula_grid",
     # Churn diagnostic figures
-    churn_decomposition       = "phasea_07a_churn_decomposition",
-    marginal_comparison       = "phasea_07b_marginal_comparison",
-    regime_contrast           = "phasea_07c_regime_contrast",
-    churn_summary_panel       = "phasea_07d_churn_summary_panel",
+    churn_decomposition = "phasea_07a_churn_decomposition",
+    marginal_comparison = "phasea_07b_marginal_comparison",
+    regime_contrast = "phasea_07c_regime_contrast",
+    churn_summary_panel = "phasea_07d_churn_summary_panel",
     # Precision sweep (A.9): N-operating curve from condition pool subsampling
-    precision_sweep           = "phasea_08_precision_sweep"
+    precision_sweep = "phasea_08_precision_sweep"
   )
 }
 
@@ -63,11 +63,17 @@ get_phasea_legacy_alias_map <- function() {
 }
 
 # Save compatibility copies using legacy names.
-write_phasea_legacy_aliases <- function(output_dir,
-                                        enable_alias = TRUE,
-                                        formats = c("pdf", "svg", "png")) {
-  if (!isTRUE(enable_alias)) return(invisible(NULL))
-  if (!dir.exists(output_dir)) return(invisible(NULL))
+write_phasea_legacy_aliases <- function(
+  output_dir,
+  enable_alias = TRUE,
+  formats = c("pdf", "svg", "png")
+) {
+  if (!isTRUE(enable_alias)) {
+    return(invisible(NULL))
+  }
+  if (!dir.exists(output_dir)) {
+    return(invisible(NULL))
+  }
 
   alias_map <- get_phasea_legacy_alias_map()
 

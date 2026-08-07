@@ -25,7 +25,6 @@
 ###
 ############################################################################
 
-
 #' Estimate the Growth Regime from Cross-Sectional Data
 #'
 #' Core estimation function. Given independent samples of prior and current
@@ -78,20 +77,25 @@
 #'   }
 #'
 #' @export
-estimate_regime <- function(u_sample, v_sample, kernel_cache,
-                             regime_family = "beta",
-                             distance_fn = "wasserstein1",
-                             v_grid = NULL,
-                             u_weights = NULL,
-                             v_weights = NULL,
-                             grid_resolution = 30,
-                             verbose = TRUE,
-                             stratify_by_u = FALSE,
-                             stratify_bins = 5) {
-
+estimate_regime <- function(
+  u_sample,
+  v_sample,
+  kernel_cache,
+  regime_family = "beta",
+  distance_fn = "wasserstein1",
+  v_grid = NULL,
+  u_weights = NULL,
+  v_weights = NULL,
+  grid_resolution = 30,
+  verbose = TRUE,
+  stratify_by_u = FALSE,
+  stratify_bins = 5
+) {
   if (isTRUE(stratify_by_u)) {
     if (!exists("estimate_regime_stratified", mode = "function")) {
-      stop("estimate_regime_stratified() is not available; source optimize_regime_stratified.R first")
+      stop(
+        "estimate_regime_stratified() is not available; source optimize_regime_stratified.R first"
+      )
     }
     return(estimate_regime_stratified(
       u_sample = u_sample,
@@ -123,12 +127,14 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
     distance_fns <- unique(distance_fn)
   }
   primary_metric <- distance_fns[1L]
-  multi_metric   <- length(distance_fns) > 1L
+  multi_metric <- length(distance_fns) > 1L
 
   # Validate
   valid_metrics <- c("wasserstein1", "cvm")
   bad <- setdiff(distance_fns, valid_metrics)
-  if (length(bad) > 0L) stop("Unknown distance function(s): ", paste(bad, collapse = ", "))
+  if (length(bad) > 0L) {
+    stop("Unknown distance function(s): ", paste(bad, collapse = ", "))
+  }
 
   # Compute observed CDF (once)
   F_obs <- observed_marginal_cdf(v_grid, v_sample, v_weights)
@@ -139,7 +145,9 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
       create_regime(regime_family, regime_params),
       error = function(e) NULL
     )
-    if (is.null(regime)) return(NULL)
+    if (is.null(regime)) {
+      return(NULL)
+    }
     predict_marginal_cdf(v_grid, u_sample, u_weights, regime, kernel_cache)
   }
 
@@ -148,10 +156,13 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
     force(metric)
     function(regime_params) {
       F_pred <- .predict(regime_params)
-      if (is.null(F_pred)) return(Inf)
-      switch(metric,
+      if (is.null(F_pred)) {
+        return(Inf)
+      }
+      switch(
+        metric,
         wasserstein1 = wasserstein1(F_pred, F_obs, v_grid),
-        cvm          = cramer_von_mises(F_pred, F_obs, v_grid)
+        cvm = cramer_von_mises(F_pred, F_obs, v_grid)
       )
     }
   }
@@ -162,33 +173,52 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
   # ------------------------------------------------------------------
 
   if (verbose) {
-    metric_label <- if (multi_metric) paste(distance_fns, collapse = " + ") else primary_metric
-    cat("  Stage 1: Coarse grid search (", regime_family, ", metric=",
-        metric_label, ")...\n", sep = "")
+    metric_label <- if (multi_metric) {
+      paste(distance_fns, collapse = " + ")
+    } else {
+      primary_metric
+    }
+    cat(
+      "  Stage 1: Coarse grid search (",
+      regime_family,
+      ", metric=",
+      metric_label,
+      ")...\n",
+      sep = ""
+    )
   }
 
   grid_df <- .build_grid(regime_family, grid_resolution)
   param_cols <- grep("^regime_param_", names(grid_df), value = TRUE)
 
   # Pre-allocate distance columns
-  for (m in distance_fns) grid_df[[m]] <- NA_real_
+  for (m in distance_fns) {
+    grid_df[[m]] <- NA_real_
+  }
 
-  if (verbose) cat("    Evaluating", nrow(grid_df), "grid points...")
+  if (verbose) {
+    cat("    Evaluating", nrow(grid_df), "grid points...")
+  }
   for (i in seq_len(nrow(grid_df))) {
     regime_params <- as.numeric(grid_df[i, param_cols])
     F_pred_i <- .predict(regime_params)
     if (is.null(F_pred_i)) {
-      for (m in distance_fns) grid_df[[m]][i] <- Inf
+      for (m in distance_fns) {
+        grid_df[[m]][i] <- Inf
+      }
     } else {
       for (m in distance_fns) {
-        grid_df[[m]][i] <- switch(m,
+        grid_df[[m]][i] <- switch(
+          m,
           wasserstein1 = wasserstein1(F_pred_i, F_obs, v_grid),
-          cvm          = cramer_von_mises(F_pred_i, F_obs, v_grid)
+          cvm = cramer_von_mises(F_pred_i, F_obs, v_grid)
         )
       }
     }
   }
-  if (verbose) cat(" done.\n")
+  if (verbose) {
+    cat(" done.\n")
+  }
 
   # Backwards compat: "distance" column = primary metric
   grid_df$distance <- grid_df[[primary_metric]]
@@ -204,69 +234,134 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
     params_init <- as.numeric(grid_df[best_idx, param_cols])
 
     if (verbose && verbose_label) {
-      cat("    [", metric, "] Best grid: params =",
-          paste(round(params_init, 4), collapse = ", "),
-          "  distance =", round(grid_df[[metric]][best_idx], 6), "\n")
+      cat(
+        "    [",
+        metric,
+        "] Best grid: params =",
+        paste(round(params_init, 4), collapse = ", "),
+        "  distance =",
+        round(grid_df[[metric]][best_idx], 6),
+        "\n"
+      )
     }
 
     obj_fn <- .make_objective(metric)
-    opt_result <- tryCatch({
-      optim(par = params_init, fn = obj_fn,
-            method = "L-BFGS-B",
-            lower = bounds$lower, upper = bounds$upper,
-            control = list(maxit = 500, factr = 1e7))
-    }, error = function(e) {
-      warning("optim failed (", metric, "): ", e$message, ". Using grid search result.")
-      list(par = params_init,
-           value = grid_df[[metric]][best_idx],
-           convergence = -1)
-    })
+    opt_result <- tryCatch(
+      {
+        optim(
+          par = params_init,
+          fn = obj_fn,
+          method = "L-BFGS-B",
+          lower = bounds$lower,
+          upper = bounds$upper,
+          control = list(maxit = 500, factr = 1e7)
+        )
+      },
+      error = function(e) {
+        warning(
+          "optim failed (",
+          metric,
+          "): ",
+          e$message,
+          ". Using grid search result."
+        )
+        list(
+          par = params_init,
+          value = grid_df[[metric]][best_idx],
+          convergence = -1
+        )
+      }
+    )
 
     regime_param_hat <- opt_result$par
     regime_hat <- create_regime(regime_family, regime_param_hat)
-    F_pred <- predict_marginal_cdf(v_grid, u_sample, u_weights, regime_hat, kernel_cache)
+    F_pred <- predict_marginal_cdf(
+      v_grid,
+      u_sample,
+      u_weights,
+      regime_hat,
+      kernel_cache
+    )
     all_dists <- compute_all_distances(F_pred, F_obs, v_grid)
 
-    m_hat <- if (tolower(regime_family) == "beta") regime_param_hat[1] else NA_real_
-    kappa_hat <- if (tolower(regime_family) == "beta" && length(regime_param_hat) > 1) regime_param_hat[2] else NA_real_
+    m_hat <- if (tolower(regime_family) == "beta") {
+      regime_param_hat[1]
+    } else {
+      NA_real_
+    }
+    kappa_hat <- if (
+      tolower(regime_family) == "beta" && length(regime_param_hat) > 1
+    ) {
+      regime_param_hat[2]
+    } else {
+      NA_real_
+    }
 
     if (verbose && verbose_label) {
-      cat("    [", metric, "] Optimum: params =",
-          paste(round(regime_param_hat, 4), collapse = ", "),
-          "  distance =", round(opt_result$value, 6), "\n")
-      cat("    [", metric, "] Regime mean SGPc:",
-          round(regime_hat$mean * 100, 1), "  median:",
-          round(regime_hat$median * 100, 1), "\n")
+      cat(
+        "    [",
+        metric,
+        "] Optimum: params =",
+        paste(round(regime_param_hat, 4), collapse = ", "),
+        "  distance =",
+        round(opt_result$value, 6),
+        "\n"
+      )
+      cat(
+        "    [",
+        metric,
+        "] Regime mean SGPc:",
+        round(regime_hat$mean * 100, 1),
+        "  median:",
+        round(regime_hat$median * 100, 1),
+        "\n"
+      )
     }
 
     list(
       regime_param_hat = regime_param_hat,
-      m_hat           = m_hat,
-      kappa_hat       = kappa_hat,
-      regime          = regime_hat,
-      distance_min    = opt_result$value,
+      m_hat = m_hat,
+      kappa_hat = kappa_hat,
+      regime = regime_hat,
+      distance_min = opt_result$value,
       distance_metric = metric,
-      convergence     = opt_result$convergence,
-      grid_search     = grid_df,
-      F_pred          = F_pred,
-      F_obs           = F_obs,
-      v_grid          = v_grid,
-      all_distances   = all_dists
+      convergence = opt_result$convergence,
+      grid_search = grid_df,
+      F_pred = F_pred,
+      F_obs = F_obs,
+      v_grid = v_grid,
+      all_distances = all_dists
     )
   }
 
-  if (verbose && multi_metric) cat("  Stage 2: Local refinement (L-BFGS-B) — per metric...\n")
-  if (verbose && !multi_metric) cat("  Stage 2: Local refinement (L-BFGS-B)...\n")
+  if (verbose && multi_metric) {
+    cat("  Stage 2: Local refinement (L-BFGS-B) — per metric...\n")
+  }
+  if (verbose && !multi_metric) {
+    cat("  Stage 2: Local refinement (L-BFGS-B)...\n")
+  }
 
   # Always refine the primary metric
   primary_result <- .refine(primary_metric, grid_df)
 
   if (verbose && !multi_metric) {
-    cat("    Optimum: params =",
-        paste(round(primary_result$regime_param_hat, 4), collapse = ", "),
-        "  distance =", round(primary_result$distance_min, 6), "\n")
-    cat("    Regime mean SGPc:", round(primary_result$regime$mean * 100, 1), "\n")
-    cat("    Regime median SGPc:", round(primary_result$regime$median * 100, 1), "\n")
+    cat(
+      "    Optimum: params =",
+      paste(round(primary_result$regime_param_hat, 4), collapse = ", "),
+      "  distance =",
+      round(primary_result$distance_min, 6),
+      "\n"
+    )
+    cat(
+      "    Regime mean SGPc:",
+      round(primary_result$regime$mean * 100, 1),
+      "\n"
+    )
+    cat(
+      "    Regime median SGPc:",
+      round(primary_result$regime$median * 100, 1),
+      "\n"
+    )
     cat("    Convergence:", primary_result$convergence, "\n")
   }
 
@@ -281,23 +376,53 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
     # Summary comparison
     if (verbose) {
       cat("\n    --- Metric comparison (", regime_family, ") ---\n")
-      cat("    Primary (", primary_metric, "): median=",
-          round(primary_result$regime$median * 100, 1),
-          "  mean=", round(primary_result$regime$mean * 100, 1),
-          "  W1=", round(primary_result$all_distances$wasserstein1, 6),
-          "  CvM=", round(primary_result$all_distances$cramer_von_mises, 6), "\n", sep = "")
+      cat(
+        "    Primary (",
+        primary_metric,
+        "): median=",
+        round(primary_result$regime$median * 100, 1),
+        "  mean=",
+        round(primary_result$regime$mean * 100, 1),
+        "  W1=",
+        round(primary_result$all_distances$wasserstein1, 6),
+        "  CvM=",
+        round(primary_result$all_distances$cramer_von_mises, 6),
+        "\n",
+        sep = ""
+      )
       for (m in names(alt_metrics)) {
         ar <- alt_metrics[[m]]
-        cat("    Alt (", m, "):     median=",
-            round(ar$regime$median * 100, 1),
-            "  mean=", round(ar$regime$mean * 100, 1),
-            "  W1=", round(ar$all_distances$wasserstein1, 6),
-            "  CvM=", round(ar$all_distances$cramer_von_mises, 6), "\n", sep = "")
+        cat(
+          "    Alt (",
+          m,
+          "):     median=",
+          round(ar$regime$median * 100, 1),
+          "  mean=",
+          round(ar$regime$mean * 100, 1),
+          "  W1=",
+          round(ar$all_distances$wasserstein1, 6),
+          "  CvM=",
+          round(ar$all_distances$cramer_von_mises, 6),
+          "\n",
+          sep = ""
+        )
       }
-      median_diff <- abs(primary_result$regime$median - alt_metrics[[distance_fns[2L]]]$regime$median) * 100
-      mean_diff <- abs(primary_result$regime$mean - alt_metrics[[distance_fns[2L]]]$regime$mean) * 100
-      cat("    Delta: |median|=", round(median_diff, 2),
-          "  |mean|=", round(mean_diff, 2), " SGP points\n")
+      median_diff <- abs(
+        primary_result$regime$median -
+          alt_metrics[[distance_fns[2L]]]$regime$median
+      ) *
+        100
+      mean_diff <- abs(
+        primary_result$regime$mean - alt_metrics[[distance_fns[2L]]]$regime$mean
+      ) *
+        100
+      cat(
+        "    Delta: |median|=",
+        round(median_diff, 2),
+        "  |mean|=",
+        round(mean_diff, 2),
+        " SGP points\n"
+      )
     }
   }
 
@@ -312,10 +437,10 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
 #' Build Parameter Grid for Coarse Search
 #' @keywords internal
 .build_grid <- function(family, resolution) {
-
-  switch(family,
+  switch(
+    family,
     beta = {
-      mean_seq  <- seq(0.25, 0.75, length.out = resolution)
+      mean_seq <- seq(0.25, 0.75, length.out = resolution)
       # Include kappa=1 so the U(0,1) baseline at kappa=2 is interior to Panel C.
       # This preserves a faithful visual comparison to the best-fit parameters without
       # over-expanding into extremely small-kappa regimes.
@@ -331,7 +456,10 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
     truncunif = {
       lower_seq <- seq(0.0, 0.45, length.out = resolution)
       upper_seq <- seq(0.55, 1.0, length.out = resolution)
-      grid <- expand.grid(regime_param_1 = lower_seq, regime_param_2 = upper_seq)
+      grid <- expand.grid(
+        regime_param_1 = lower_seq,
+        regime_param_2 = upper_seq
+      )
       # Remove invalid combinations (lower >= upper or unreasonably narrow)
       grid <- grid[grid$regime_param_2 > grid$regime_param_1 + 0.10, ]
     },
@@ -344,7 +472,8 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
 #' Get Parameter Bounds for optim()
 #' @keywords internal
 .get_bounds <- function(family) {
-  switch(family,
+  switch(
+    family,
     beta = list(lower = c(0.05, 1.0), upper = c(0.95, 500)),
     truncexp = list(lower = 0.05, upper = 0.95),
     truncunif = list(lower = c(0.0, 0.10), upper = c(0.90, 1.0)),
@@ -381,40 +510,56 @@ estimate_regime <- function(u_sample, v_sample, kernel_cache,
 #'   }
 #'
 #' @export
-compare_regime_families <- function(u_sample, v_sample, kernel_cache,
-                                     families = c("beta", "truncexp", "truncunif"),
-                                     distance_fn = "wasserstein1",
-                                     verbose = TRUE,
-                                     tie_tolerance = 0,
-                                     preferred_family = "beta",
-                                     ...) {
-
+compare_regime_families <- function(
+  u_sample,
+  v_sample,
+  kernel_cache,
+  families = c("beta", "truncexp", "truncunif"),
+  distance_fn = "wasserstein1",
+  verbose = TRUE,
+  tie_tolerance = 0,
+  preferred_family = "beta",
+  ...
+) {
   results <- list()
   comparison_rows <- list()
 
   for (fam in families) {
-    if (verbose) cat("\n--- Estimating regime family:", fam, "---\n")
+    if (verbose) {
+      cat("\n--- Estimating regime family:", fam, "---\n")
+    }
 
-    results[[fam]] <- tryCatch({
-      estimate_regime(u_sample, v_sample, kernel_cache,
-                      regime_family = fam,
-                      distance_fn = distance_fn,
-                      verbose = verbose, ...)
-    }, error = function(e) {
-      warning("Failed for family '", fam, "': ", e$message)
-      NULL
-    })
+    results[[fam]] <- tryCatch(
+      {
+        estimate_regime(
+          u_sample,
+          v_sample,
+          kernel_cache,
+          regime_family = fam,
+          distance_fn = distance_fn,
+          verbose = verbose,
+          ...
+        )
+      },
+      error = function(e) {
+        warning("Failed for family '", fam, "': ", e$message)
+        NULL
+      }
+    )
 
     if (!is.null(results[[fam]])) {
       comparison_rows[[fam]] <- data.frame(
-        family       = fam,
-        distance     = results[[fam]]$distance_min,
+        family = fam,
+        distance = results[[fam]]$distance_min,
         distance_metric = results[[fam]]$distance_metric,
-        median_sgpc  = results[[fam]]$regime$median * 100,
-        mean_sgpc    = results[[fam]]$regime$mean * 100,
-        params       = paste(round(results[[fam]]$regime_param_hat, 4), collapse = ", "),
-        w1           = results[[fam]]$all_distances$wasserstein1,
-        cvm          = results[[fam]]$all_distances$cramer_von_mises,
+        median_sgpc = results[[fam]]$regime$median * 100,
+        mean_sgpc = results[[fam]]$regime$mean * 100,
+        params = paste(
+          round(results[[fam]]$regime_param_hat, 4),
+          collapse = ", "
+        ),
+        w1 = results[[fam]]$all_distances$wasserstein1,
+        cvm = results[[fam]]$all_distances$cramer_von_mises,
         stringsAsFactors = FALSE
       )
     }
@@ -444,8 +589,8 @@ compare_regime_families <- function(u_sample, v_sample, kernel_cache,
   }
 
   list(
-    results     = results,
-    comparison  = comparison,
+    results = results,
+    comparison = comparison,
     best_family = best_family
   )
 }

@@ -44,7 +44,7 @@ CONFIG <- list(
 SAMPLE_SIZES <- c(100, 250, 500, 1000, 2000, 4000)
 
 # Bootstrap settings
-N_BOOTSTRAP <- 200  # More iterations for detailed analysis
+N_BOOTSTRAP <- 200 # More iterations for detailed analysis
 
 cat("Configuration:\n")
 cat("  Grade:", CONFIG$grade_prior, "->", CONFIG$grade_current, "\n")
@@ -87,7 +87,7 @@ true_copulas <- fit_copula_from_pairs(
   scores_current = pairs_full$SCALE_SCORE_CURRENT,
   framework_prior = framework_prior,
   framework_current = framework_current,
-  copula_families = c("t", "gaussian"),  # t-copula + Gaussian baseline
+  copula_families = c("t", "gaussian"), # t-copula + Gaussian baseline
   return_best = FALSE
 )
 
@@ -105,13 +105,17 @@ cat("  Correlation (rho):", round(true_gaussian$parameter[1], 4), "\n")
 cat("  Kendall's tau:", round(true_gaussian$tau, 4), "\n")
 cat("  AIC:", round(true_gaussian$aic, 2), "\n\n")
 
-cat("AIC Improvement (t over Gaussian):", 
-    round(true_gaussian$aic - true_t$aic, 2), "\n\n")
+cat(
+  "AIC Improvement (t over Gaussian):",
+  round(true_gaussian$aic - true_t$aic, 2),
+  "\n\n"
+)
 
 # Calculate tail dependence for true t-copula
 rho_true <- true_t$parameter[1]
 df_true <- true_t$parameter[2]
-tail_dep_true <- 2 * pt(-sqrt((df_true + 1) * (1 - rho_true) / (1 + rho_true)), df = df_true + 1)
+tail_dep_true <- 2 *
+  pt(-sqrt((df_true + 1) * (1 - rho_true) / (1 + rho_true)), df = df_true + 1)
 
 cat("TRUE TAIL DEPENDENCE:\n")
 cat("  Symmetric tail dependence:", round(tail_dep_true, 4), "\n\n")
@@ -127,9 +131,8 @@ cat("====================================================================\n\n")
 df_results <- list()
 
 for (n_sample in SAMPLE_SIZES) {
-  
   cat("Sample size:", n_sample, "\n")
-  
+
   # Bootstrap t-copula estimation
   bootstrap_results <- bootstrap_copula_estimation(
     pairs_data = pairs_full,
@@ -142,24 +145,24 @@ for (n_sample in SAMPLE_SIZES) {
     copula_families = c("t"),
     with_replacement = TRUE
   )
-  
+
   # Extract degrees of freedom from all bootstrap samples
   df_samples <- sapply(bootstrap_results$bootstrap_fits$t, function(fit) {
     if (!is.null(fit) && length(fit$parameter) >= 2) fit$parameter[2] else NA
   })
   df_samples <- df_samples[!is.na(df_samples)]
-  
+
   # Extract rho and tau as well
   rho_samples <- sapply(bootstrap_results$bootstrap_fits$t, function(fit) {
     if (!is.null(fit)) fit$parameter[1] else NA
   })
   rho_samples <- rho_samples[!is.na(rho_samples)]
-  
+
   tau_samples <- sapply(bootstrap_results$bootstrap_fits$t, function(fit) {
     if (!is.null(fit)) fit$tau else NA
   })
   tau_samples <- tau_samples[!is.na(tau_samples)]
-  
+
   # Store results
   df_results[[as.character(n_sample)]] <- list(
     n_sample = n_sample,
@@ -173,11 +176,18 @@ for (n_sample in SAMPLE_SIZES) {
     rho_mean = mean(rho_samples),
     tau_mean = mean(tau_samples)
   )
-  
-  cat("  ν: mean =", round(mean(df_samples), 2),
-      ", SD =", round(sd(df_samples), 2),
-      ", 90% CI = [", round(quantile(df_samples, 0.05), 2), ",",
-      round(quantile(df_samples, 0.95), 2), "]\n")
+
+  cat(
+    "  ν: mean =",
+    round(mean(df_samples), 2),
+    ", SD =",
+    round(sd(df_samples), 2),
+    ", 90% CI = [",
+    round(quantile(df_samples, 0.05), 2),
+    ",",
+    round(quantile(df_samples, 0.95), 2),
+    "]\n"
+  )
   cat("  rho: mean =", round(mean(rho_samples), 4), "\n")
   cat("  tau: mean =", round(mean(tau_samples), 4), "\n\n")
 }
@@ -193,14 +203,17 @@ cat("====================================================================\n\n")
 tail_dep_results <- list()
 
 for (n_sample in SAMPLE_SIZES) {
-  
   result <- df_results[[as.character(n_sample)]]
-  
+
   # Calculate tail dependence for each bootstrap sample
-  tail_dep_samples <- mapply(function(rho, df) {
-    2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
-  }, result$rho_samples, result$df_samples)
-  
+  tail_dep_samples <- mapply(
+    function(rho, df) {
+      2 * pt(-sqrt((df + 1) * (1 - rho) / (1 + rho)), df = df + 1)
+    },
+    result$rho_samples,
+    result$df_samples
+  )
+
   tail_dep_results[[as.character(n_sample)]] <- list(
     n_sample = n_sample,
     tail_dep_samples = tail_dep_samples,
@@ -209,13 +222,24 @@ for (n_sample in SAMPLE_SIZES) {
     q05 = quantile(tail_dep_samples, 0.05),
     q95 = quantile(tail_dep_samples, 0.95)
   )
-  
+
   cat("Sample size:", n_sample, "\n")
-  cat("  Tail dep: mean =", round(mean(tail_dep_samples), 4),
-      ", SD =", round(sd(tail_dep_samples), 4),
-      ", 90% CI = [", round(quantile(tail_dep_samples, 0.05), 4), ",",
-      round(quantile(tail_dep_samples, 0.95), 4), "]\n")
-  cat("  Bias from true:", round(mean(tail_dep_samples) - tail_dep_true, 4), "\n\n")
+  cat(
+    "  Tail dep: mean =",
+    round(mean(tail_dep_samples), 4),
+    ", SD =",
+    round(sd(tail_dep_samples), 4),
+    ", 90% CI = [",
+    round(quantile(tail_dep_samples, 0.05), 4),
+    ",",
+    round(quantile(tail_dep_samples, 0.95), 4),
+    "]\n"
+  )
+  cat(
+    "  Bias from true:",
+    round(mean(tail_dep_samples) - tail_dep_true, 4),
+    "\n\n"
+  )
 }
 
 ################################################################################
@@ -228,10 +252,11 @@ cat("====================================================================\n\n")
 
 comparison_results <- list()
 
-for (n_sample in c(500, 1000, 2000)) {  # Subset for comparison
-  
+for (n_sample in c(500, 1000, 2000)) {
+  # Subset for comparison
+
   cat("Sample size:", n_sample, "\n")
-  
+
   # Bootstrap both families
   bootstrap_results <- bootstrap_copula_estimation(
     pairs_data = pairs_full,
@@ -244,20 +269,23 @@ for (n_sample in c(500, 1000, 2000)) {  # Subset for comparison
     copula_families = c("t", "gaussian"),
     with_replacement = TRUE
   )
-  
+
   # Extract AIC differences
   aic_t <- sapply(bootstrap_results$bootstrap_fits$t, function(fit) {
     if (!is.null(fit)) fit$aic else NA
   })
   aic_t <- aic_t[!is.na(aic_t)]
-  
-  aic_gaussian <- sapply(bootstrap_results$bootstrap_fits$gaussian, function(fit) {
-    if (!is.null(fit)) fit$aic else NA
-  })
+
+  aic_gaussian <- sapply(
+    bootstrap_results$bootstrap_fits$gaussian,
+    function(fit) {
+      if (!is.null(fit)) fit$aic else NA
+    }
+  )
   aic_gaussian <- aic_gaussian[!is.na(aic_gaussian)]
-  
-  delta_aic <- aic_gaussian - aic_t  # Positive = t better
-  
+
+  delta_aic <- aic_gaussian - aic_t # Positive = t better
+
   comparison_results[[as.character(n_sample)]] <- list(
     n_sample = n_sample,
     delta_aic = delta_aic,
@@ -265,12 +293,20 @@ for (n_sample in c(500, 1000, 2000)) {  # Subset for comparison
     sd_delta = sd(delta_aic),
     t_better_pct = 100 * mean(delta_aic > 0)
   )
-  
-  cat("  Δ AIC (Gaussian - t): mean =", round(mean(delta_aic), 2),
-      ", SD =", round(sd(delta_aic), 2), "\n")
+
+  cat(
+    "  Δ AIC (Gaussian - t): mean =",
+    round(mean(delta_aic), 2),
+    ", SD =",
+    round(sd(delta_aic), 2),
+    "\n"
+  )
   cat("  t better:", round(100 * mean(delta_aic > 0), 1), "% of samples\n")
-  cat("  Substantial advantage (Δ > 10):", 
-      round(100 * mean(delta_aic > 10), 1), "% of samples\n\n")
+  cat(
+    "  Substantial advantage (Δ > 10):",
+    round(100 * mean(delta_aic > 10), 1),
+    "% of samples\n\n"
+  )
 }
 
 ################################################################################
@@ -282,100 +318,202 @@ cat("GENERATING VISUALIZATIONS\n")
 cat("====================================================================\n\n")
 
 # Plot 1: Degrees of freedom by sample size
-dir.create("STEP_4_Deep_Dive_Reporting/results", showWarnings = FALSE, recursive = TRUE)
-pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_stability.pdf", width = 10, height = 6)
+dir.create(
+  "STEP_4_Deep_Dive_Reporting/results",
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+pdf(
+  "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_stability.pdf",
+  width = 10,
+  height = 6
+)
 par(mar = c(5, 5, 4, 2))
 
 df_means <- sapply(df_results, function(x) x$df_mean)
 df_q05 <- sapply(df_results, function(x) x$df_q05)
 df_q95 <- sapply(df_results, function(x) x$df_q95)
 
-plot(SAMPLE_SIZES, df_means, type = "o", pch = 16, col = "darkblue", lwd = 2,
-     ylim = range(c(df_q05, df_q95, df_true)),
-     xlab = "Sample Size", ylab = expression("Degrees of Freedom (" * nu * ")"),
-     main = "T-Copula Degrees of Freedom: Stability by Sample Size",
-     log = "x")
-arrows(SAMPLE_SIZES, df_q05, SAMPLE_SIZES, df_q95, 
-       angle = 90, code = 3, length = 0.1, col = "darkblue", lwd = 2)
+plot(
+  SAMPLE_SIZES,
+  df_means,
+  type = "o",
+  pch = 16,
+  col = "darkblue",
+  lwd = 2,
+  ylim = range(c(df_q05, df_q95, df_true)),
+  xlab = "Sample Size",
+  ylab = expression("Degrees of Freedom (" * nu * ")"),
+  main = "T-Copula Degrees of Freedom: Stability by Sample Size",
+  log = "x"
+)
+arrows(
+  SAMPLE_SIZES,
+  df_q05,
+  SAMPLE_SIZES,
+  df_q95,
+  angle = 90,
+  code = 3,
+  length = 0.1,
+  col = "darkblue",
+  lwd = 2
+)
 abline(h = df_true, col = "red", lwd = 2, lty = 2)
-legend("topright", 
-       legend = c(paste("True ν =", round(df_true, 2)), "Bootstrap mean", "90% CI"),
-       col = c("red", "darkblue", "darkblue"),
-       lty = c(2, 1, 1), lwd = 2, pch = c(NA, 16, NA))
+legend(
+  "topright",
+  legend = c(paste("True ν =", round(df_true, 2)), "Bootstrap mean", "90% CI"),
+  col = c("red", "darkblue", "darkblue"),
+  lty = c(2, 1, 1),
+  lwd = 2,
+  pch = c(NA, 16, NA)
+)
 grid()
 dev.off()
-cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_stability.pdf\n")
+cat(
+  "Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_stability.pdf\n"
+)
 
 # Plot 2: Tail dependence by sample size
-pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_tail_dependence.pdf", width = 10, height = 6)
+pdf(
+  "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_tail_dependence.pdf",
+  width = 10,
+  height = 6
+)
 par(mar = c(5, 5, 4, 2))
 
 tail_means <- sapply(tail_dep_results, function(x) x$mean)
 tail_q05 <- sapply(tail_dep_results, function(x) x$q05)
 tail_q95 <- sapply(tail_dep_results, function(x) x$q95)
 
-plot(SAMPLE_SIZES, tail_means, type = "o", pch = 16, col = "darkgreen", lwd = 2,
-     ylim = range(c(tail_q05, tail_q95, tail_dep_true)),
-     xlab = "Sample Size", ylab = "Tail Dependence Coefficient",
-     main = "T-Copula Tail Dependence: Stability by Sample Size",
-     log = "x")
-arrows(SAMPLE_SIZES, tail_q05, SAMPLE_SIZES, tail_q95,
-       angle = 90, code = 3, length = 0.1, col = "darkgreen", lwd = 2)
+plot(
+  SAMPLE_SIZES,
+  tail_means,
+  type = "o",
+  pch = 16,
+  col = "darkgreen",
+  lwd = 2,
+  ylim = range(c(tail_q05, tail_q95, tail_dep_true)),
+  xlab = "Sample Size",
+  ylab = "Tail Dependence Coefficient",
+  main = "T-Copula Tail Dependence: Stability by Sample Size",
+  log = "x"
+)
+arrows(
+  SAMPLE_SIZES,
+  tail_q05,
+  SAMPLE_SIZES,
+  tail_q95,
+  angle = 90,
+  code = 3,
+  length = 0.1,
+  col = "darkgreen",
+  lwd = 2
+)
 abline(h = tail_dep_true, col = "red", lwd = 2, lty = 2)
-legend("topright",
-       legend = c(paste("True λ =", round(tail_dep_true, 4)), "Bootstrap mean", "90% CI"),
-       col = c("red", "darkgreen", "darkgreen"),
-       lty = c(2, 1, 1), lwd = 2, pch = c(NA, 16, NA))
+legend(
+  "topright",
+  legend = c(
+    paste("True λ =", round(tail_dep_true, 4)),
+    "Bootstrap mean",
+    "90% CI"
+  ),
+  col = c("red", "darkgreen", "darkgreen"),
+  lty = c(2, 1, 1),
+  lwd = 2,
+  pch = c(NA, 16, NA)
+)
 grid()
 dev.off()
-cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_tail_dependence.pdf\n")
+cat(
+  "Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_tail_dependence.pdf\n"
+)
 
 # Plot 3: Degrees of freedom distribution for selected sample sizes
-pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_distributions.pdf", width = 12, height = 8)
+pdf(
+  "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_distributions.pdf",
+  width = 12,
+  height = 8
+)
 par(mfrow = c(2, 3), mar = c(4, 4, 3, 1))
 
 for (n_sample in SAMPLE_SIZES) {
   result <- df_results[[as.character(n_sample)]]
-  hist(result$df_samples, 
-       main = paste("n =", n_sample),
-       xlab = expression(nu),
-       col = "lightblue", border = "darkblue",
-       breaks = 20, xlim = c(0, max(result$df_samples, df_true * 1.5)))
+  hist(
+    result$df_samples,
+    main = paste("n =", n_sample),
+    xlab = expression(nu),
+    col = "lightblue",
+    border = "darkblue",
+    breaks = 20,
+    xlim = c(0, max(result$df_samples, df_true * 1.5))
+  )
   abline(v = df_true, col = "red", lwd = 2, lty = 2)
   abline(v = result$df_mean, col = "blue", lwd = 2)
-  legend("topright", legend = c("True", "Mean"), 
-         col = c("red", "blue"), lty = c(2, 1), lwd = 2, cex = 0.8)
+  legend(
+    "topright",
+    legend = c("True", "Mean"),
+    col = c("red", "blue"),
+    lty = c(2, 1),
+    lwd = 2,
+    cex = 0.8
+  )
 }
 
 dev.off()
-cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_distributions.pdf\n")
+cat(
+  "Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_df_distributions.pdf\n"
+)
 
 # Plot 4: T vs Gaussian AIC comparison
 if (length(comparison_results) > 0) {
-  pdf("STEP_4_Deep_Dive_Reporting/results/phase2_t_vs_gaussian_comparison.pdf", width = 10, height = 6)
+  pdf(
+    "STEP_4_Deep_Dive_Reporting/results/phase2_t_vs_gaussian_comparison.pdf",
+    width = 10,
+    height = 6
+  )
   par(mar = c(5, 5, 4, 2))
-  
+
   sample_sizes_comp <- as.numeric(names(comparison_results))
   mean_deltas <- sapply(comparison_results, function(x) x$mean_delta)
   t_better_pcts <- sapply(comparison_results, function(x) x$t_better_pct)
-  
-  plot(sample_sizes_comp, mean_deltas, type = "o", pch = 16, col = "purple", lwd = 2,
-       xlab = "Sample Size", 
-       ylab = expression(Delta * "AIC (Gaussian - t, positive = t better)"),
-       main = "T-Copula Advantage Over Gaussian",
-       ylim = c(0, max(mean_deltas) * 1.2))
+
+  plot(
+    sample_sizes_comp,
+    mean_deltas,
+    type = "o",
+    pch = 16,
+    col = "purple",
+    lwd = 2,
+    xlab = "Sample Size",
+    ylab = expression(Delta * "AIC (Gaussian - t, positive = t better)"),
+    main = "T-Copula Advantage Over Gaussian",
+    ylim = c(0, max(mean_deltas) * 1.2)
+  )
   abline(h = 0, col = "gray", lty = 2)
   abline(h = 10, col = "orange", lty = 2, lwd = 2)
-  text(min(sample_sizes_comp), 10, "Substantial\nadvantage", pos = 3, col = "orange")
-  
+  text(
+    min(sample_sizes_comp),
+    10,
+    "Substantial\nadvantage",
+    pos = 3,
+    col = "orange"
+  )
+
   # Add percentage labels
-  text(sample_sizes_comp, mean_deltas, 
-       paste0(round(t_better_pcts, 0), "%"),
-       pos = 3, col = "purple", font = 2)
-  
+  text(
+    sample_sizes_comp,
+    mean_deltas,
+    paste0(round(t_better_pcts, 0), "%"),
+    pos = 3,
+    col = "purple",
+    font = 2
+  )
+
   grid()
   dev.off()
-  cat("Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_vs_gaussian_comparison.pdf\n")
+  cat(
+    "Created: STEP_4_Deep_Dive_Reporting/results/phase2_t_vs_gaussian_comparison.pdf\n"
+  )
 }
 
 ################################################################################
@@ -387,10 +525,18 @@ cat("SAVING RESULTS\n")
 cat("====================================================================\n\n")
 
 # Save workspace
-save(df_results, tail_dep_results, comparison_results,
-     true_t, true_gaussian, tail_dep_true,
-     file = "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData")
-cat("Saved: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData\n")
+save(
+  df_results,
+  tail_dep_results,
+  comparison_results,
+  true_t,
+  true_gaussian,
+  tail_dep_true,
+  file = "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData"
+)
+cat(
+  "Saved: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_deep_dive.RData\n"
+)
 
 # Create summary table
 summary_dt <- data.table(
@@ -404,7 +550,10 @@ summary_dt <- data.table(
   tau_mean = sapply(df_results, function(x) x$tau_mean)
 )
 
-fwrite(summary_dt, "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_summary.csv")
+fwrite(
+  summary_dt,
+  "STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_summary.csv"
+)
 cat("Saved: STEP_4_Deep_Dive_Reporting/results/phase2_t_copula_summary.csv\n\n")
 
 cat("====================================================================\n")
@@ -417,8 +566,9 @@ cat("\nKey findings:\n")
 cat("  - True ν =", round(df_true, 2), "\n")
 cat("  - True tail dependence =", round(tail_dep_true, 4), "\n")
 cat("  - For TIMSS-like n ≈ 4000:\n")
-cat("      ν precision (SD) =", 
-    round(df_results[["4000"]]$df_sd, 2), "\n")
-cat("      Tail dep precision (SD) =", 
-    round(tail_dep_results[["4000"]]$sd, 4), "\n\n")
-
+cat("      ν precision (SD) =", round(df_results[["4000"]]$df_sd, 2), "\n")
+cat(
+  "      Tail dep precision (SD) =",
+  round(tail_dep_results[["4000"]]$sd, 4),
+  "\n\n"
+)

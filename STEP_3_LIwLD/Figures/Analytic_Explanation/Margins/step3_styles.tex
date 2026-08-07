@@ -11,8 +11,9 @@
 \definecolor{zissouAmber}{HTML}{E1AF00}
 
 %%% Population vs subgroup — the primary semantic distinction
-\definecolor{populationRef}{HTML}{AAAAAA}   % Population PDF border / fill outline
-\definecolor{cdfRefColor}{HTML}{888888}     % Population-reference CDF curve (F_X^ref, F_Y^ref)
+\definecolor{populationRef}{HTML}{7E847D}   % Population PDF border / fill outline
+\definecolor{populationRefFill}{HTML}{9EA49D}   % Population PDF border / fill outline
+\definecolor{cdfRefColor}{HTML}{7E847D}     % Population-reference CDF curve (F_X^ref, F_Y^ref)
 \definecolor{subgroupColor}{HTML}{3B9AB2}   % Zissou teal — subgroup density curve (both margins)
 
 %%% Linkage classes — stayer / leaver / entrant
@@ -66,3 +67,22 @@
 \providecommand{\Fyref}{F_Y^{\mathrm{ref}}}
 \providecommand{\Fxinv}{(F_X^{\mathrm{ref}})^{-1}}
 \providecommand{\Fyinv}{(F_Y^{\mathrm{ref}})^{-1}}
+
+%%% Patch \psdot to honour the opacity= key for font-based dot styles.
+%%% Stock PSTricks (pstricks-dots.tex) only calls \tx@setStrokeTransparency
+%%% before executing Dot, which on GS >=952 sets stroke alpha only.  Font
+%%% glyphs are *filled* via show, so we also need \tx@setTransparency (fill
+%%% alpha) in the PostScript stream.
+\makeatletter
+\def\psdot@ii(#1){%
+  \begin@SpecialObj%
+  \solid@star%
+  \pst@@getcoor{#1}%
+  \addto@pscode{
+    \psk@dotsize
+    \@nameuse{psds@\psk@dotstyle}
+    \tx@setTransparency
+    \tx@setStrokeTransparency
+    \pst@coor Dot}%
+  \end@SpecialObj}
+\makeatother

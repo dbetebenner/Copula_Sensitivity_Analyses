@@ -15,9 +15,11 @@ cat("reasonable, non-zero p-values.\n\n")
 
 # Verify copula package is available (standard CRAN package)
 if (!requireNamespace("copula", quietly = TRUE)) {
-  stop("\n\nERROR: copula package not installed!\n",
-       "Please install from CRAN:\n",
-       "  install.packages('copula')\n\n")
+  stop(
+    "\n\nERROR: copula package not installed!\n",
+    "Please install from CRAN:\n",
+    "  install.packages('copula')\n\n"
+  )
 }
 
 cat("Package: copula (standard CRAN package) ✓\n\n")
@@ -32,16 +34,25 @@ require(copula)
 
 # Configuration
 N_BOOTSTRAP_GOF <- 50
-COPULA_FAMILIES <- c("gaussian", "t", "clayton", "gumbel", "frank", "comonotonic")
+COPULA_FAMILIES <- c(
+  "gaussian",
+  "t",
+  "clayton",
+  "gumbel",
+  "frank",
+  "comonotonic"
+)
 
 # Detect environment (EC2 vs. local)
-is_ec2 <- file.exists("/home/ec2-user") || 
-          file.exists("/sys/hypervisor/uuid") ||
-          Sys.getenv("AWS_EXECUTION_ENV") != ""
+is_ec2 <- file.exists("/home/ec2-user") ||
+  file.exists("/sys/hypervisor/uuid") ||
+  Sys.getenv("AWS_EXECUTION_ENV") != ""
 
 # Set data directory based on environment
 if (is_ec2) {
-  data_dir <- path.expand("~/Dropbox/Damian Betebenner/TEMP/Copula_Sensitivity_Analyses/Data")
+  data_dir <- path.expand(
+    "~/Dropbox/Damian Betebenner/TEMP/Copula_Sensitivity_Analyses/Data"
+  )
   env_label <- "EC2"
 } else {
   data_dir <- "Data"
@@ -62,10 +73,16 @@ cat("Copula families:", length(COPULA_FAMILIES), "\n\n")
 cat("Loading data...\n")
 data_file <- file.path(data_dir, "Copula_Sensitivity_Data_Set_2.Rdata")
 if (!file.exists(data_file)) {
-  stop("\n\nERROR: Data file not found!\n",
-       "  Expected: ", data_file, "\n",
-       "  Environment: ", env_label, "\n",
-       "  Please verify data file location.\n\n")
+  stop(
+    "\n\nERROR: Data file not found!\n",
+    "  Expected: ",
+    data_file,
+    "\n",
+    "  Environment: ",
+    env_label,
+    "\n",
+    "  Please verify data file location.\n\n"
+  )
 }
 load(data_file)
 cat("  Loaded from:", data_file, "✓\n")
@@ -107,7 +124,13 @@ elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
 cat("\n====================================================================\n")
 cat("RESULTS\n")
 cat("====================================================================\n")
-cat("Total time:", round(elapsed, 1), "seconds (", round(elapsed/60, 2), "minutes)\n\n")
+cat(
+  "Total time:",
+  round(elapsed, 1),
+  "seconds (",
+  round(elapsed / 60, 2),
+  "minutes)\n\n"
+)
 
 # Extract results
 pvalues <- sapply(fit_results$results, function(x) x$gof_pvalue)
@@ -117,13 +140,18 @@ gof_stats <- sapply(fit_results$results, function(x) x$gof_statistic)
 # Display table
 cat("Family-by-family results:\n")
 cat("--------------------------------------------------------------------\n")
-cat(sprintf("%-15s | %-30s | %10s | %6s\n", 
-            "Family", "GoF Method", "P-Value", "Pass?"))
+cat(sprintf(
+  "%-15s | %-30s | %10s | %6s\n",
+  "Family",
+  "GoF Method",
+  "P-Value",
+  "Pass?"
+))
 cat("--------------------------------------------------------------------\n")
 
 for (fam in names(fit_results$results)) {
   result <- fit_results$results[[fam]]
-  
+
   # Handle NA p-value for comonotonic
   if (is.na(result$gof_pvalue)) {
     pass_str <- "N/A"
@@ -135,12 +163,14 @@ for (fam in names(fit_results$results)) {
     pass_str <- "FAIL"
     pval_str <- sprintf("%10.4f", result$gof_pvalue)
   }
-  
-  cat(sprintf("%-15s | %-30s | %s | %-6s\n",
-              fam,
-              substr(result$gof_method, 1, 30),
-              pval_str,
-              pass_str))
+
+  cat(sprintf(
+    "%-15s | %-30s | %s | %-6s\n",
+    fam,
+    substr(result$gof_method, 1, 30),
+    pval_str,
+    pass_str
+  ))
 }
 
 cat("\n====================================================================\n")
@@ -152,10 +182,18 @@ parametric_pvals <- pvalues[names(pvalues) != "comonotonic"]
 all_parametric_have_pvals <- all(!is.na(parametric_pvals))
 comonotonic_has_na <- is.na(pvalues["comonotonic"])
 all_have_pvals <- all_parametric_have_pvals && comonotonic_has_na
-cat("1. Parametric families have p-values:", all_parametric_have_pvals, 
-    ifelse(all_parametric_have_pvals, "✓", "✗"), "\n")
-cat("   Comonotonic has NA p-value (expected):", comonotonic_has_na,
-    ifelse(comonotonic_has_na, "✓", "✗"), "\n")
+cat(
+  "1. Parametric families have p-values:",
+  all_parametric_have_pvals,
+  ifelse(all_parametric_have_pvals, "✓", "✗"),
+  "\n"
+)
+cat(
+  "   Comonotonic has NA p-value (expected):",
+  comonotonic_has_na,
+  ifelse(comonotonic_has_na, "✓", "✗"),
+  "\n"
+)
 
 # Check 2: P-values vary (only relevant for parametric families)
 n_unique_pvals <- length(unique(parametric_pvals))
@@ -164,7 +202,12 @@ if (length(parametric_pvals) == 1) {
   cat("   P-value:", round(parametric_pvals[1], 6), "✓\n")
   pval_check <- TRUE
 } else {
-  cat("2. P-value variation:", n_unique_pvals, "unique values out of", length(parametric_pvals))
+  cat(
+    "2. P-value variation:",
+    n_unique_pvals,
+    "unique values out of",
+    length(parametric_pvals)
+  )
   if (n_unique_pvals >= max(2, length(parametric_pvals) * 0.6)) {
     cat(" ✓ GOOD\n")
     cat("   P-values vary across parametric families as expected.\n")
@@ -185,18 +228,29 @@ cat("\n")
 # Check 3: Parametric families use copula::gofCopula; comonotonic uses different method
 parametric_methods <- gof_methods[names(gof_methods) != "comonotonic"]
 all_parametric_use_gof <- all(grepl("copula_gofCopula", parametric_methods))
-comonotonic_method_ok <- grepl("comonotonic_observed_only", gof_methods["comonotonic"])
+comonotonic_method_ok <- grepl(
+  "comonotonic_observed_only",
+  gof_methods["comonotonic"]
+)
 all_use_copula_gof <- all_parametric_use_gof && comonotonic_method_ok
-cat("3. Parametric families using copula::gofCopula:", all_parametric_use_gof,
-    ifelse(all_parametric_use_gof, "✓", "✗"), "\n")
-cat("   Comonotonic using observed-only method:", comonotonic_method_ok,
-    ifelse(comonotonic_method_ok, "✓", "✗"), "\n\n")
+cat(
+  "3. Parametric families using copula::gofCopula:",
+  all_parametric_use_gof,
+  ifelse(all_parametric_use_gof, "✓", "✗"),
+  "\n"
+)
+cat(
+  "   Comonotonic using observed-only method:",
+  comonotonic_method_ok,
+  ifelse(comonotonic_method_ok, "✓", "✗"),
+  "\n\n"
+)
 
 # Check 4: T-copula specific check
 t_result <- fit_results$results$t
-t_ok <- !is.na(t_result$gof_pvalue) && 
-        grepl("copula_gofCopula", t_result$gof_method) &&
-        t_result$gof_pvalue > 0  # Not zero
+t_ok <- !is.na(t_result$gof_pvalue) &&
+  grepl("copula_gofCopula", t_result$gof_method) &&
+  t_result$gof_pvalue > 0 # Not zero
 cat("4. T-copula working correctly:", t_ok, ifelse(t_ok, "✓", "✗"), "\n")
 if (t_ok) {
   cat("   Method:", t_result$gof_method, "\n")
@@ -210,13 +264,22 @@ cat("\n")
 # Check 5: Comonotonic specific check
 comonotonic_result <- fit_results$results$comonotonic
 comonotonic_ok <- !is.na(comonotonic_result$gof_statistic) &&
-                  comonotonic_result$gof_statistic > 1.0 &&  # Should be large
-                  is.na(comonotonic_result$gof_pvalue) &&
-                  grepl("comonotonic_observed_only", comonotonic_result$gof_method)
-cat("5. Comonotonic working correctly:", comonotonic_ok, ifelse(comonotonic_ok, "✓", "✗"), "\n")
+  comonotonic_result$gof_statistic > 1.0 && # Should be large
+  is.na(comonotonic_result$gof_pvalue) &&
+  grepl("comonotonic_observed_only", comonotonic_result$gof_method)
+cat(
+  "5. Comonotonic working correctly:",
+  comonotonic_ok,
+  ifelse(comonotonic_ok, "✓", "✗"),
+  "\n"
+)
 if (comonotonic_ok) {
   cat("   Method:", comonotonic_result$gof_method, "\n")
-  cat("   Statistic:", round(comonotonic_result$gof_statistic, 4), "(expect >> parametric)\n")
+  cat(
+    "   Statistic:",
+    round(comonotonic_result$gof_statistic, 4),
+    "(expect >> parametric)\n"
+  )
   cat("   P-value: NA (expected, no bootstrap)\n")
   cat("   Status: Observed CvM calculated successfully ✓\n")
 }
@@ -225,23 +288,39 @@ cat("\n====================================================================\n")
 cat("FINAL VERDICT\n")
 cat("====================================================================\n\n")
 
-if (all_have_pvals && pval_check && all_use_copula_gof && t_ok && comonotonic_ok) {
+if (
+  all_have_pvals && pval_check && all_use_copula_gof && t_ok && comonotonic_ok
+) {
   cat("✓✓✓ ALL CHECKS PASSED ✓✓✓\n\n")
   cat("The copula::gofCopula migration is working correctly!\n\n")
   cat("Key findings:\n")
-  n_parametric <- length(COPULA_FAMILIES) - 1  # Exclude comonotonic
-  cat("  - All", n_parametric, "parametric families complete GoF testing with bootstrap\n")
+  n_parametric <- length(COPULA_FAMILIES) - 1 # Exclude comonotonic
+  cat(
+    "  - All",
+    n_parametric,
+    "parametric families complete GoF testing with bootstrap\n"
+  )
   cat("  - P-values vary across parametric families (not identical)\n")
   cat("  - Parametric families use copula::gofCopula successfully\n")
   cat("  - Comonotonic calculates observed CvM statistic (no bootstrap)\n")
-  parametric_stats <- sapply(names(parametric_methods), function(m) fit_results$results[[m]]$gof_statistic)
-  cat("  - Comonotonic CvM statistic:", round(comonotonic_result$gof_statistic, 2), 
-      "(>>", round(max(parametric_stats), 2), "max for parametric)\n")
+  parametric_stats <- sapply(names(parametric_methods), function(m) {
+    fit_results$results[[m]]$gof_statistic
+  })
+  cat(
+    "  - Comonotonic CvM statistic:",
+    round(comonotonic_result$gof_statistic, 2),
+    "(>>",
+    round(max(parametric_stats), 2),
+    "max for parametric)\n"
+  )
   cat("  - Migration from gofCopula package successful\n\n")
   cat("CONCLUSION:\n")
   cat("  All 6 families (5 parametric + comonotonic) working correctly!\n")
-  cat("  Comonotonic shows dramatically worse absolute fit (CvM ~", 
-      round(comonotonic_result$gof_statistic, 0), "vs <1 for parametric)\n")
+  cat(
+    "  Comonotonic shows dramatically worse absolute fit (CvM ~",
+    round(comonotonic_result$gof_statistic, 0),
+    "vs <1 for parametric)\n"
+  )
   cat("  Ready for production deployment on EC2 (N=1000).\n\n")
 } else {
   cat("✗ ISSUES DETECTED\n\n")
@@ -252,4 +331,3 @@ if (all_have_pvals && pval_check && all_use_copula_gof && t_ok && comonotonic_ok
 cat("====================================================================\n")
 cat("Test completed:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
 cat("====================================================================\n\n")
-

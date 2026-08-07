@@ -1,6 +1,6 @@
 ############################################################################
 ### Quick test script for panels D2 and E only
-### 
+###
 ### Purpose: Rapidly regenerate panel_d2 and panel_e without running
 ###          the full publication figure pipeline
 ###
@@ -25,7 +25,9 @@ cat("====================================================================\n\n")
 
 # Load cached enhanced statistics
 cat("Loading cached enhanced statistics...\n")
-enhanced_stats <- readRDS("STEP_2_SGPc_Sensitivity/results/sgpc_enhanced_stats.rds")
+enhanced_stats <- readRDS(
+  "STEP_2_SGPc_Sensitivity/results/sgpc_enhanced_stats.rds"
+)
 cat("  Loaded successfully.\n\n")
 
 # Output directory
@@ -38,11 +40,13 @@ p_d2 <- plot_group_bucket_stability(
   enhanced_stats,
   title = "Classification Accuracy/Precision: Group-Level Mean SGPc Category Agreement"
 )
-ggsave(file.path(out_dir, "panel_d2_group_bucket_stability.pdf"),
-       p_d2,
-       width = PANEL_CLASSIFICATION_PAGE_WIDTH,
-       height = PANEL_CLASSIFICATION_PAGE_HEIGHT,
-       device = cairo_pdf)
+ggsave(
+  file.path(out_dir, "panel_d2_group_bucket_stability.pdf"),
+  p_d2,
+  width = PANEL_CLASSIFICATION_PAGE_WIDTH,
+  height = PANEL_CLASSIFICATION_PAGE_HEIGHT,
+  device = cairo_pdf
+)
 cat("  Saved: panel_d2_group_bucket_stability.pdf\n\n")
 
 # --- Panel E ---
@@ -53,11 +57,13 @@ p_e <- plot_decile_stability(
   n_buckets = c(3, 5, 10),
   title = "Classification Accuracy/Precision: Individual-Level SGPc Category Agreement"
 )
-ggsave(file.path(out_dir, "panel_e_decile_stability.pdf"),
-       p_e,
-       width = PANEL_CLASSIFICATION_PAGE_WIDTH,
-       height = PANEL_CLASSIFICATION_PAGE_HEIGHT,
-       device = cairo_pdf)
+ggsave(
+  file.path(out_dir, "panel_e_decile_stability.pdf"),
+  p_e,
+  width = PANEL_CLASSIFICATION_PAGE_WIDTH,
+  height = PANEL_CLASSIFICATION_PAGE_HEIGHT,
+  device = cairo_pdf
+)
 cat("  Saved: panel_e_decile_stability.pdf\n\n")
 
 cat("COMPLETE. Check:\n")

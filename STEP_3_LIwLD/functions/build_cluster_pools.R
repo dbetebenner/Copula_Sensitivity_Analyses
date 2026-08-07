@@ -39,7 +39,10 @@ build_cluster_pools <- function(
     min_pool_n <- 1L
   }
 
-  district_index <- pairs[, .(idx = list(.I), n_district = .N), by = sg_col][order(-n_district)]
+  district_index <- pairs[,
+    .(idx = list(.I), n_district = .N),
+    by = sg_col
+  ][order(-n_district)]
   if (nrow(district_index) < n_growth_strata) {
     return(list(
       pools = list(),
@@ -48,25 +51,41 @@ build_cluster_pools <- function(
     ))
   }
 
-  district_stats <- district_index[, {
-    sg_idx <- idx[[1L]]
-    sgpc <- sgpc_engine(u_full[sg_idx], v_full[sg_idx], p1_copula, scale = scale)
-    list(
-      idx = idx,
-      n_district = as.double(n_district),
-      true_mean_sgpc = as.double(mean(sgpc, na.rm = TRUE)),
-      true_median_sgpc = as.double(median(sgpc, na.rm = TRUE))
-    )
-  }, by = sg_col]
+  district_stats <- district_index[,
+    {
+      sg_idx <- idx[[1L]]
+      sgpc <- sgpc_engine(
+        u_full[sg_idx],
+        v_full[sg_idx],
+        p1_copula,
+        scale = scale
+      )
+      list(
+        idx = idx,
+        n_district = as.double(n_district),
+        true_mean_sgpc = as.double(mean(sgpc, na.rm = TRUE)),
+        true_median_sgpc = as.double(median(sgpc, na.rm = TRUE))
+      )
+    },
+    by = sg_col
+  ]
 
   district_stats <- district_stats[order(true_mean_sgpc, na.last = TRUE)]
-  district_stats[, growth_rank := frank(true_mean_sgpc, ties.method = "average", na.last = "keep")]
-  district_stats[, stratum_id := as.integer(cut(
-    growth_rank,
-    breaks = n_growth_strata,
-    labels = FALSE,
-    include.lowest = TRUE
-  ))]
+  district_stats[,
+    growth_rank := frank(
+      true_mean_sgpc,
+      ties.method = "average",
+      na.last = "keep"
+    )
+  ]
+  district_stats[,
+    stratum_id := as.integer(cut(
+      growth_rank,
+      breaks = n_growth_strata,
+      labels = FALSE,
+      include.lowest = TRUE
+    ))
+  ]
 
   default_labels <- c("Low", "Typical", "High")
   if (n_growth_strata == 3L) {
@@ -74,19 +93,27 @@ build_cluster_pools <- function(
   } else {
     stratum_labels <- paste0("Stratum", seq_len(n_growth_strata))
   }
-  district_stats[, strata_label := stratum_labels[pmax(1L, pmin(n_growth_strata, stratum_id))]]
+  district_stats[,
+    strata_label := stratum_labels[pmax(1L, pmin(n_growth_strata, stratum_id))]
+  ]
 
-  pool_rows <- district_stats[, {
-    pooled_idx <- unlist(idx, use.names = FALSE)
-    list(
-      idx = list(pooled_idx),
-      constituent_districts = paste(as.character(get(sg_col)), collapse = ","),
-      n_constituent_districts = as.double(.N),
-      n_pool_raw = as.double(length(pooled_idx)),
-      true_mean_sgpc = as.double(mean(true_mean_sgpc, na.rm = TRUE)),
-      true_median_sgpc = as.double(median(true_median_sgpc, na.rm = TRUE))
-    )
-  }, by = .(stratum_id, strata_label)]
+  pool_rows <- district_stats[,
+    {
+      pooled_idx <- unlist(idx, use.names = FALSE)
+      list(
+        idx = list(pooled_idx),
+        constituent_districts = paste(
+          as.character(get(sg_col)),
+          collapse = ","
+        ),
+        n_constituent_districts = as.double(.N),
+        n_pool_raw = as.double(length(pooled_idx)),
+        true_mean_sgpc = as.double(mean(true_mean_sgpc, na.rm = TRUE)),
+        true_median_sgpc = as.double(median(true_median_sgpc, na.rm = TRUE))
+      )
+    },
+    by = .(stratum_id, strata_label)
+  ]
 
   pool_rows <- pool_rows[n_pool_raw >= min_pool_n]
 
@@ -98,13 +125,20 @@ build_cluster_pools <- function(
     ))
   }
 
-  pool_rows[, pool_id := paste0(
-    condition_id,
-    "__CLUSTER_",
-    toupper(gsub("[^A-Za-z0-9]+", "_", strata_label))
-  )]
+  pool_rows[,
+    pool_id := paste0(
+      condition_id,
+      "__CLUSTER_",
+      toupper(gsub("[^A-Za-z0-9]+", "_", strata_label))
+    )
+  ]
 
-  pool_rows[, subgroup_id := paste0("CLUSTER_", toupper(gsub("[^A-Za-z0-9]+", "_", strata_label)))]
+  pool_rows[,
+    subgroup_id := paste0(
+      "CLUSTER_",
+      toupper(gsub("[^A-Za-z0-9]+", "_", strata_label))
+    )
+  ]
   pool_rows[, pool_type := "cluster"]
 
   pools <- lapply(seq_len(nrow(pool_rows)), function(i) {

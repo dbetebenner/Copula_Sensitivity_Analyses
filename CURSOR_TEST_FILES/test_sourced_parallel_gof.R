@@ -7,9 +7,13 @@
 #
 ################################################################################
 
-cat("================================================================================\n")
+cat(
+  "================================================================================\n"
+)
 cat("TEST: SOURCED PARALLEL gofCopula()\n")
-cat("================================================================================\n\n")
+cat(
+  "================================================================================\n\n"
+)
 
 # Load copula package (original version)
 cat("1. Loading copula package (original)...\n")
@@ -35,8 +39,14 @@ cat("   Cores to use:", n_cores, "\n\n")
 # Test 1: Sequential (verify backward compatibility)
 cat("4. Testing SEQUENTIAL (cores=NULL)...\n")
 t1 <- system.time({
-  r1 <- gofCopula(copula, data, N=N, method="Sn", 
-                  estim.method="mpl", cores=NULL)
+  r1 <- gofCopula(
+    copula,
+    data,
+    N = N,
+    method = "Sn",
+    estim.method = "mpl",
+    cores = NULL
+  )
 })
 cat("   Time:", sprintf("%.2f", t1[3]), "sec\n")
 cat("   Statistic:", sprintf("%.6f", r1$statistic), "\n")
@@ -44,10 +54,16 @@ cat("   P-value:", sprintf("%.4f", r1$p.value), "\n")
 cat("   ✓ Sequential works\n\n")
 
 # Test 2: Parallel (new feature)
-cat("5. Testing PARALLEL (cores=", n_cores, ")...\n", sep="")
+cat("5. Testing PARALLEL (cores=", n_cores, ")...\n", sep = "")
 t2 <- system.time({
-  r2 <- gofCopula(copula, data, N=N, method="Sn", 
-                  estim.method="mpl", cores=n_cores)
+  r2 <- gofCopula(
+    copula,
+    data,
+    N = N,
+    method = "Sn",
+    estim.method = "mpl",
+    cores = n_cores
+  )
 })
 cat("   Time:", sprintf("%.2f", t2[3]), "sec\n")
 cat("   Statistic:", sprintf("%.6f", r2$statistic), "\n")
@@ -68,9 +84,19 @@ if (speedup > 5 && stat_diff < 1e-10) {
   cat("No package rebuild needed - just source this file in your scripts.\n\n")
 } else {
   cat("\n✗✗✗ VALIDATION FAILED ✗✗✗\n")
-  if (speedup <= 5) cat("  - Speedup too low (", sprintf("%.2f", speedup), "x)\n", sep="")
-  if (stat_diff >= 1e-10) cat("  - Statistics don't match (diff=", sprintf("%.2e", stat_diff), ")\n", sep="")
+  if (speedup <= 5) {
+    cat("  - Speedup too low (", sprintf("%.2f", speedup), "x)\n", sep = "")
+  }
+  if (stat_diff >= 1e-10) {
+    cat(
+      "  - Statistics don't match (diff=",
+      sprintf("%.2e", stat_diff),
+      ")\n",
+      sep = ""
+    )
+  }
 }
 
-cat("================================================================================\n")
-
+cat(
+  "================================================================================\n"
+)

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://liwld.dataimago.dev/schema/manifest.schema.json",
+  "title": "LIwLD Scenario Manifest",
+  "description": "Data contract for one LIwLD interactive scenario. Written by R/export_bundle.R, consumed by app/src/data-loader.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scenario_id",
+    "label",
+    "data_source",
+    "data_classification",
+    "cohort",
+    "n_subgroup",
+    "n_population",
+    "copula",
+    "regime_grid",
+    "v_grid",
+    "argmin",
+    "uniform_ref",
+    "files",
+    "checksums",
+    "build"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Manifest schema version. Bump on breaking field changes."
+    },
+    "scenario_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "Stable identifier used in URL state. Lowercase, alphanumerics + underscores."
+    },
+    "label": {
+      "type": "string",
+      "description": "Human-readable label shown in the UI."
+    },
+    "data_source": {
+      "type": "string",
+      "enum": ["SYNTHETIC", "PHASE_A_REAL_DATA"],
+      "description": "Mirrors STEP3_EXPORT_MODE."
+    },
+    "data_classification": {
+      "type": "string",
+      "enum": ["PUBLIC", "INTERNAL", "RESTRICTED"],
+      "description": "PUBLIC: synthetic or fully de-identified, OK to ship in any deck. INTERNAL: de-identified but not yet review-cleared. RESTRICTED: do not load without auth (loader refuses)."
+    },
+    "cohort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grade_prior", "grade_current", "year_prior", "year_current", "content_area"],
+      "properties": {
+        "grade_prior": { "type": "integer", "minimum": 0, "maximum": 12 },
+        "grade_current": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "year_prior": { "type": "string", "pattern": "^[0-9]{4}$" },
+        "year_current": { "type": "string", "pattern": "^[0-9]{4}$" },
+        "content_area": { "type": "string" },
+        "subgroup_filter": {
+          "type": "string",
+          "description": "Free-text description of the subgroup filter applied (e.g., 'DISTRICT_NUMBER == \"0020\"'). Informational only."
+        }
+      }
+    },
+    "n_subgroup": { "type": "integer", "minimum": 1 },
+    "n_population": { "type": "integer", "minimum": 1 },
+    "copula": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family"],
+      "properties": {
+        "family": { "type": "string", "enum": ["t", "gaussian", "frank", "clayton", "gumbel"] },
+        "rho": { "type": "number", "minimum": -1, "maximum": 1 },
+        "df": { "type": "number", "exclusiveMinimum": 0 },
+        "df_display": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Integer df used for the Panel 2 contour rendering only (mvtnorm::pmvt() requires integer df). Equals round(df) when df is non-integer; omitted when df is already integer or Inf. The statistical record (cCopula, kernel cache, sweep) uses the true fitted df."
+        },
+        "tau": { "type": "number", "minimum": -1, "maximum": 1 },
+        "tail_dep_lower": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tail_dep_upper": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "regime_grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["m_min", "m_max", "m_n", "k_min", "k_max", "k_n", "k_scale"],
+      "description": "Regime parameter grid for the Beta(m, κ) family. Used to interpret panel3_w1_surface.bin and panel5_v_induced.bin.",
+      "properties": {
+        "m_min": { "type": "number", "minimum": 0, "exclusiveMaximum": 1 },
+        "m_max": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "m_n": { "type": "integer", "minimum": 2 },
+        "m_scale": { "type": "string", "enum": ["linear"], "default": "linear" },
+        "k_min": { "type": "number", "exclusiveMinimum": 0 },
+        "k_max": { "type": "number", "exclusiveMinimum": 0 },
+        "k_n": { "type": "integer", "minimum": 2 },
+        "k_scale": { "type": "string", "enum": ["linear", "log"] }
+      }
+    },
+    "v_grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v_min", "v_max", "v_n"],
+      "properties": {
+        "v_min": { "type": "number", "minimum": 0 },
+        "v_max": { "type": "number", "maximum": 1 },
+        "v_n": { "type": "integer", "minimum": 8 }
+      }
+    },
+    "argmin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["m", "k", "w1", "m_idx", "k_idx"],
+      "properties": {
+        "m": { "type": "number" },
+        "k": { "type": "number" },
+        "m_idx": { "type": "integer", "minimum": 0 },
+        "k_idx": { "type": "integer", "minimum": 0 },
+        "w1": { "type": "number", "minimum": 0 }
+      }
+    },
+    "uniform_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The U(0,1) baseline regime — Beta(0.5, 2). Provides the 100% W₁ anchor for the relative readout.",
+      "required": ["m", "k", "w1"],
+      "properties": {
+        "m": { "type": "number" },
+        "k": { "type": "number" },
+        "m_idx": { "type": "integer", "minimum": 0 },
+        "k_idx": { "type": "integer", "minimum": 0 },
+        "w1": { "type": "number", "minimum": 0 }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "panel_1_u",
+        "panel_2_copula",
+        "panel_3_grid",
+        "panel_5_observed_v",
+        "panel_5_induced_v"
+      ],
+      "properties": {
+        "panel_1_u": {
+          "type": "string",
+          "description": "JSON. {u: number[v_n_or_other], pdf_pop, pdf_sub, cdf_pop, cdf_sub}"
+        },
+        "panel_2_copula": {
+          "type": "string",
+          "description": "JSON. Array of {level: number, paths: [[u,v], …][]}"
+        },
+        "panel_3_grid": {
+          "type": "string",
+          "description": "Float32 binary. Row-major [m_n × k_n] W₁ surface."
+        },
+        "panel_5_observed_v": {
+          "type": "string",
+          "description": "JSON. {v, pdf_pop, pdf_sub, cdf_pop, cdf_sub} aligned with v_grid."
+        },
+        "panel_5_induced_v": {
+          "type": "string",
+          "description": "Quantized binary. Uint8 [m_n × k_n × v_n], decode as F_G = byte / 255. CDF only — derive PDF on the client."
+        }
+      }
+    },
+    "checksums": {
+      "type": "object",
+      "description": "SHA-256 of each file (hex), keyed by the same names as `files`.",
+      "patternProperties": {
+        "^[a-z0-9_]+$": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp_utc", "tool", "tool_version"],
+      "properties": {
+        "timestamp_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601, UTC."
+        },
+        "tool": { "type": "string", "const": "liwld_precompute.R" },
+        "tool_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "r_version": { "type": "string" },
+        "host": { "type": "string", "description": "Hostname (informational, optional). Should not be set for PUBLIC scenarios." }
+      }
+    }
+  }
+}

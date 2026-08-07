@@ -24,137 +24,155 @@ if (requireNamespace("ggdensity", quietly = TRUE)) {
 
 # Load goftest for Anderson-Darling tests
 if (!requireNamespace("goftest", quietly = TRUE)) {
-  warning("Package 'goftest' not available. Anderson-Darling tests will be skipped.\n",
-          "Install with: install.packages('goftest')")
+  warning(
+    "Package 'goftest' not available. Anderson-Darling tests will be skipped.\n",
+    "Install with: install.packages('goftest')"
+  )
 }
 
 # Source multi-format export utility
-tryCatch({
-  # Try common locations for export_plot_utils.R
-  possible_paths <- c(
-    "functions/export_plot_utils.R",  # From project root
-    "export_plot_utils.R",            # Same directory
-    "../export_plot_utils.R"          # Parent directory
-  )
-  sourced <- FALSE
-  for (path in possible_paths) {
-    if (file.exists(path)) {
-      source(path, local = FALSE)
-      sourced <- TRUE
-      break
+tryCatch(
+  {
+    # Try common locations for export_plot_utils.R
+    possible_paths <- c(
+      "functions/export_plot_utils.R", # From project root
+      "export_plot_utils.R", # Same directory
+      "../export_plot_utils.R" # Parent directory
+    )
+    sourced <- FALSE
+    for (path in possible_paths) {
+      if (file.exists(path)) {
+        source(path, local = FALSE)
+        sourced <- TRUE
+        break
+      }
     }
+    if (!sourced) {
+      warning(
+        "Could not load export_plot_utils.R - falling back to PDF-only exports"
+      )
+    }
+  },
+  error = function(e) {
+    warning(
+      "Could not load export_plot_utils.R - falling back to PDF-only exports"
+    )
   }
-  if (!sourced) {
-    warning("Could not load export_plot_utils.R - falling back to PDF-only exports")
-  }
-}, error = function(e) {
-  warning("Could not load export_plot_utils.R - falling back to PDF-only exports")
-})
+)
 
 #' Calculate empirical copula values on a grid
-#' 
+#'
 #' @param pseudo_obs Matrix of pseudo-observations (n x 2)
 #' @param grid_size Number of grid points in each dimension (default 300)
 #' @param method Either "ecdf" (empirical CDF) or "density" (kernel density)
-#' 
+#'
 #' @return List with u_grid, v_grid, and copula_values matrices
-#' 
+#'
 #' @details
 #' This is the CURRENT implementation used for all contour plots.
-#' Separate empCopula objects (from copula package) are also created and saved 
+#' Separate empCopula objects (from copula package) are also created and saved
 #' for future SGPc calculations but do NOT affect this plotting pipeline.
-#' 
+#'
 #' OPTIMIZED (Jan 2026): Uses binary search algorithm for ECDF method.
 #' Previous O(n × grid²) complexity reduced to O(grid² + n log n).
 #' Speedup: 10-50× for typical sample sizes (n > 10,000).
-calculate_empirical_copula_grid <- function(pseudo_obs, grid_size = 300, method = "ecdf") {
-  
+calculate_empirical_copula_grid <- function(
+  pseudo_obs,
+  grid_size = 300,
+  method = "ecdf"
+) {
   u_seq <- seq(0.01, 0.99, length.out = grid_size)
   v_seq <- seq(0.01, 0.99, length.out = grid_size)
-  
+
   if (method == "ecdf") {
     # OPTIMIZED: Binary search algorithm for empirical copula
     # C_n(u,v) = proportion of observations where U <= u AND V <= v
     n <- nrow(pseudo_obs)
     U <- pseudo_obs[, 1]
     V <- pseudo_obs[, 2]
-    
+
     # Pre-allocate output matrix
     copula_matrix <- matrix(0, nrow = grid_size, ncol = grid_size)
-    
+
     # For each v threshold, filter observations and use binary search on U
     # This reduces complexity from O(n × grid²) to O(grid² + grid × n log n)
     for (j in seq_along(v_seq)) {
       v_threshold <- v_seq[j]
-      
+
       # Get U values for observations where V <= v_threshold
       v_mask <- V <= v_threshold
       U_filtered <- U[v_mask]
-      
+
       if (length(U_filtered) > 0) {
         # Sort once, then use binary search for all u thresholds
         U_sorted <- sort(U_filtered)
-        
+
         # findInterval gives count of elements <= each u threshold (binary search)
         counts <- findInterval(u_seq, U_sorted)
         copula_matrix[, j] <- counts / n
       }
       # else: copula_matrix[, j] stays 0 (no observations with V <= v_threshold)
     }
-    
   } else if (method == "density") {
     # Use bivariate kernel density estimation for copula density
     require(ks)
-    
+
     # Create grid for KDE
     grid <- expand.grid(u = u_seq, v = v_seq)
-    
+
     # Kernel density estimation
-    H <- Hpi(pseudo_obs)  # Plug-in bandwidth selector
+    H <- Hpi(pseudo_obs) # Plug-in bandwidth selector
     kde_result <- kde(pseudo_obs, H = H, eval.points = as.matrix(grid))
     copula_values <- kde_result$estimate
-    
+
     # Clamp negative values to zero (KDE can produce slightly negative values at boundaries)
     copula_values <- pmax(copula_values, 0)
-    
+
     # Normalize to ensure it's a proper density
     copula_values <- copula_values / sum(copula_values) * grid_size^2
-    
+
     # Reshape to matrix
     copula_matrix <- matrix(copula_values, nrow = grid_size, ncol = grid_size)
   }
-  
+
   return(list(
     u_grid = matrix(rep(u_seq, grid_size), nrow = grid_size, ncol = grid_size),
-    v_grid = matrix(rep(v_seq, each = grid_size), nrow = grid_size, ncol = grid_size),
+    v_grid = matrix(
+      rep(v_seq, each = grid_size),
+      nrow = grid_size,
+      ncol = grid_size
+    ),
     copula_values = copula_matrix,
     method = method
   ))
 }
 
 #' Calculate bootstrap uncertainty for parametric copula on a grid
-#' 
+#'
 #' @param bootstrap_results Bootstrap results from bootstrap_copula_estimation()
 #' @param family Copula family name
 #' @param grid_size Number of grid points in each dimension (default 300)
 #' @param method Either "cdf" or "density"
-#' 
+#'
 #' @return List with point estimate, uncertainty metrics, and confidence bounds
-#' 
+#'
 #' @details
 #' OPTIMIZED (Jan 2026): Uses matrixStats package for row-wise operations.
 #' Falls back to base R apply() if matrixStats not available.
 #' Speedup: 5-20× for row-wise sd and quantile calculations.
-calculate_bootstrap_uncertainty <- function(bootstrap_results, 
-                                           family, 
-                                           grid_size = 300,
-                                           method = "cdf") {
-  
-  if (is.null(bootstrap_results) || is.null(bootstrap_results$bootstrap_results)) {
+calculate_bootstrap_uncertainty <- function(
+  bootstrap_results,
+  family,
+  grid_size = 300,
+  method = "cdf"
+) {
+  if (
+    is.null(bootstrap_results) || is.null(bootstrap_results$bootstrap_results)
+  ) {
     warning("No bootstrap results available for uncertainty calculation")
     return(NULL)
   }
-  
+
   # Extract bootstrap fits for this family
   # Structure: bootstrap_results$bootstrap_results[[b]]$results[[family]]
   boot_fits <- lapply(bootstrap_results$bootstrap_results, function(x) {
@@ -165,31 +183,40 @@ calculate_bootstrap_uncertainty <- function(bootstrap_results,
     }
   })
   boot_fits <- boot_fits[!sapply(boot_fits, is.null)]
-  
+
   if (length(boot_fits) < 10) {
-    warning(sprintf("Insufficient bootstrap samples (%d) for %s", 
-                   length(boot_fits), family))
+    warning(sprintf(
+      "Insufficient bootstrap samples (%d) for %s",
+      length(boot_fits),
+      family
+    ))
     return(NULL)
   }
-  
-  cat(sprintf("  Evaluating %d bootstrap samples on %dx%d grid...\n", 
-              length(boot_fits), grid_size, grid_size))
-  
+
+  cat(sprintf(
+    "  Evaluating %d bootstrap samples on %dx%d grid...\n",
+    length(boot_fits),
+    grid_size,
+    grid_size
+  ))
+
   # Create evaluation grid
   u_seq <- seq(0.01, 0.99, length.out = grid_size)
   v_seq <- seq(0.01, 0.99, length.out = grid_size)
   grid <- expand.grid(u = u_seq, v = v_seq)
   grid_matrix <- as.matrix(grid)
-  
+
   # Evaluate all bootstrap copulas on grid
   n_boot <- length(boot_fits)
   boot_values <- matrix(NA, nrow = nrow(grid), ncol = n_boot)
-  
+
   for (b in 1:n_boot) {
-    if (b %% 50 == 0) cat(sprintf("    Bootstrap %d/%d...\n", b, n_boot))
-    
+    if (b %% 50 == 0) {
+      cat(sprintf("    Bootstrap %d/%d...\n", b, n_boot))
+    }
+
     copula_obj <- boot_fits[[b]]$copula
-    
+
     if (method == "cdf") {
       # Evaluate CDF
       boot_values[, b] <- pCopula(grid_matrix, copula_obj)
@@ -198,41 +225,51 @@ calculate_bootstrap_uncertainty <- function(bootstrap_results,
       boot_values[, b] <- dCopula(grid_matrix, copula_obj)
     }
   }
-  
+
   # Calculate pointwise statistics
   # OPTIMIZED: Use matrixStats for 5-20× faster row-wise operations
   point_estimate <- rowMeans(boot_values, na.rm = TRUE)
-  
+
   if (requireNamespace("matrixStats", quietly = TRUE)) {
     # Fast path: matrixStats (5-20× faster than apply)
     uncertainty_sd <- matrixStats::rowSds(boot_values, na.rm = TRUE)
-    lower_bound <- matrixStats::rowQuantiles(boot_values, probs = 0.05, na.rm = TRUE)
-    upper_bound <- matrixStats::rowQuantiles(boot_values, probs = 0.95, na.rm = TRUE)
+    lower_bound <- matrixStats::rowQuantiles(
+      boot_values,
+      probs = 0.05,
+      na.rm = TRUE
+    )
+    upper_bound <- matrixStats::rowQuantiles(
+      boot_values,
+      probs = 0.95,
+      na.rm = TRUE
+    )
   } else {
     # Fallback: base R apply (slower but no extra dependencies)
     uncertainty_sd <- apply(boot_values, 1, sd, na.rm = TRUE)
     lower_bound <- apply(boot_values, 1, quantile, probs = 0.05, na.rm = TRUE)
     upper_bound <- apply(boot_values, 1, quantile, probs = 0.95, na.rm = TRUE)
   }
-  
+
   # Reshape to matrices
   point_matrix <- matrix(point_estimate, nrow = grid_size, ncol = grid_size)
   sd_matrix <- matrix(uncertainty_sd, nrow = grid_size, ncol = grid_size)
   lower_matrix <- matrix(lower_bound, nrow = grid_size, ncol = grid_size)
   upper_matrix <- matrix(upper_bound, nrow = grid_size, ncol = grid_size)
-  
+
   # Create uncertainty density field for gradient visualization
   # Normalize SD to [0, 1] range
   sd_normalized <- sd_matrix / max(sd_matrix, na.rm = TRUE)
-  
+
   # Create gradient: higher uncertainty → higher opacity
   # Use inverse: we want high uncertainty to be MORE visible (darker)
   uncertainty_density <- sd_normalized
-  
-  cat(sprintf("  Uncertainty range: %.4f to %.4f\n", 
-              min(uncertainty_sd, na.rm = TRUE), 
-              max(uncertainty_sd, na.rm = TRUE)))
-  
+
+  cat(sprintf(
+    "  Uncertainty range: %.4f to %.4f\n",
+    min(uncertainty_sd, na.rm = TRUE),
+    max(uncertainty_sd, na.rm = TRUE)
+  ))
+
   return(list(
     u_grid = matrix(grid$u, nrow = grid_size, ncol = grid_size),
     v_grid = matrix(grid$v, nrow = grid_size, ncol = grid_size),
@@ -247,65 +284,73 @@ calculate_bootstrap_uncertainty <- function(bootstrap_results,
 }
 
 #' Plot empirical copula contours
-#' 
+#'
 #' @param empirical_grid Output from calculate_empirical_copula_grid
 #' @param title Plot title
 #' @param n_contours Number of contour lines to draw
-#' 
+#'
 #' @return ggplot object
-plot_empirical_copula_contour <- function(empirical_grid, 
-                                         title = "Empirical Copula",
-                                         subtitle = NULL,
-                                         x_label = expression(u[prior]),
-                                         y_label = expression(v[current]),
-                                         n_contours = 15) {
-  
+plot_empirical_copula_contour <- function(
+  empirical_grid,
+  title = "Empirical Copula",
+  subtitle = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current]),
+  n_contours = 15
+) {
   # Convert to data.table for ggplot
   plot_data <- data.table(
     u = as.vector(empirical_grid$u_grid),
     v = as.vector(empirical_grid$v_grid),
     value = as.vector(empirical_grid$copula_values)
   )
-  
+
   # Determine if we're plotting density or CDF
   is_density <- (empirical_grid$method == "density")
   is_cdf <- (empirical_grid$method == "ecdf")
-  
+
   # For CDF plots, use specific contour breaks: 0.1, 0.2, ..., 0.9
   # For PDF plots, use bins
   if (is_cdf) {
     contour_levels <- seq(0.1, 0.9, by = 0.1)
     fill_breaks <- seq(0, 1, by = 0.1)
     n_bins <- length(fill_breaks) - 1
-    
+
     p <- ggplot(plot_data, aes(x = u, y = v, z = value)) +
       geom_contour_filled(breaks = fill_breaks, alpha = 0.7) +
-      geom_contour(color = "black", alpha = 0.5, linewidth = 0.5, breaks = contour_levels)
+      geom_contour(
+        color = "black",
+        alpha = 0.5,
+        linewidth = 0.5,
+        breaks = contour_levels
+      )
   } else {
     p <- ggplot(plot_data, aes(x = u, y = v, z = value)) +
       geom_contour_filled(bins = n_contours, alpha = 0.7) +
       geom_contour(color = "black", alpha = 0.5, bins = n_contours)
     n_bins <- n_contours
   }
-  
+
   # Use wesanderson palette if available, otherwise fall back to viridis
   legend_name <- ifelse(is_density, "Density", "C(u,v)")
   legend_guide <- ifelse(is_cdf, "none", "legend")
-  
+
   if (requireNamespace("wesanderson", quietly = TRUE)) {
-    p <- p + scale_fill_manual(
-      values = colorRampPalette(wes_palette("Zissou1"))(n_bins),
-      name = legend_name,
-      guide = legend_guide
-    )
+    p <- p +
+      scale_fill_manual(
+        values = colorRampPalette(wes_palette("Zissou1"))(n_bins),
+        name = legend_name,
+        guide = legend_guide
+      )
   } else {
-    p <- p + scale_fill_viridis_d(
-      option = "plasma",
-      name = legend_name,
-      guide = legend_guide
-    )
+    p <- p +
+      scale_fill_viridis_d(
+        option = "plasma",
+        name = legend_name,
+        guide = legend_guide
+      )
   }
-  
+
   p <- p +
     coord_equal() +
     labs(
@@ -324,20 +369,28 @@ plot_empirical_copula_contour <- function(empirical_grid,
       legend.position = ifelse(is_cdf, "none", "right"),
       panel.grid.minor = element_blank()
     ) +
-    scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
-  
+    scale_x_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    )
+
   # For CDF plots, add inline contour labels
   if (is_cdf) {
     # Calculate label positions along the diagonal
     # For empirical copula, find exact where contours cross the diagonal
     label_data <- data.frame()
-    
+
     for (level in contour_levels) {
       # Search for points very close to diagonal where value ≈ level
       # Use tighter tolerance for more accurate diagonal crossing
       diag_subset <- plot_data[abs(plot_data$u - plot_data$v) < 0.005, ]
-      
+
       if (nrow(diag_subset) > 0) {
         # Find the point closest to target level
         idx <- which.min(abs(diag_subset$value - level))
@@ -353,54 +406,60 @@ plot_empirical_copula_contour <- function(empirical_grid,
           u_pos <- level
         }
       }
-      
-      label_data <- rbind(label_data, data.frame(
-        level = level,
-        u = u_pos - 0.02,  # Fixed offset perpendicular to -45° diagonal
-        v = u_pos - 0.02,
-        label = as.character(level)
-      ))
+
+      label_data <- rbind(
+        label_data,
+        data.frame(
+          level = level,
+          u = u_pos - 0.02, # Fixed offset perpendicular to -45° diagonal
+          v = u_pos - 0.02,
+          label = as.character(level)
+        )
+      )
     }
-    
-    p <- p + 
-      geom_text(data = label_data,
-                aes(x = u, y = v, label = label),
-                size = 3,
-                angle = -45,
-                color = "#141410",  # Dark grey-black for contrast
-                fontface = "bold",
-                hjust = 0.5,
-                vjust = 0,
-                inherit.aes = FALSE)
+
+    p <- p +
+      geom_text(
+        data = label_data,
+        aes(x = u, y = v, label = label),
+        size = 3,
+        angle = -45,
+        color = "#141410", # Dark grey-black for contrast
+        fontface = "bold",
+        hjust = 0.5,
+        vjust = 0,
+        inherit.aes = FALSE
+      )
   }
-  
+
   return(p)
 }
 
 #' Plot parametric copula contours
-#' 
+#'
 #' @param fitted_copula Fitted copula object or copula specification
 #' @param family Copula family name
 #' @param grid_size Number of grid points (default 300)
 #' @param plot_type Either "cdf" or "density"
 #' @param title Optional plot title
 #' @param sample_size Optional sample size to include in title (formatted with commas)
-#' 
+#'
 #' @return ggplot object
-plot_parametric_copula_contour <- function(fitted_copula, 
-                                          family,
-                                          grid_size = 300,
-                                          plot_type = "density",
-                                          title = NULL,
-                                          sample_size = NULL,
-                                          subtitle = NULL,
-                                          x_label = expression(u[prior]),
-                                          y_label = expression(v[current])) {
-  
+plot_parametric_copula_contour <- function(
+  fitted_copula,
+  family,
+  grid_size = 300,
+  plot_type = "density",
+  title = NULL,
+  sample_size = NULL,
+  subtitle = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current])
+) {
   u_seq <- seq(0.01, 0.99, length.out = grid_size)
   v_seq <- seq(0.01, 0.99, length.out = grid_size)
   grid <- expand.grid(u = u_seq, v = v_seq)
-  
+
   # Handle comonotonic copula specially
   if (family == "comonotonic") {
     if (plot_type == "cdf") {
@@ -421,68 +480,80 @@ plot_parametric_copula_contour <- function(fitted_copula,
       copula_values <- dCopula(as.matrix(grid), fitted_copula)
     }
   }
-  
+
   # Convert to data.table
   plot_data <- data.table(
     u = grid$u,
     v = grid$v,
     value = copula_values
   )
-  
+
   # Default title if not provided
   if (is.null(title)) {
     title_family <- tools::toTitleCase(family)
     if (plot_type == "density") {
       title_suffix <- "(PDF)"
     } else {
-      title_suffix <- ""  # CDF is implicit for copula
+      title_suffix <- "" # CDF is implicit for copula
     }
-    
+
     # Add sample size if provided
     if (!is.null(sample_size)) {
       n_formatted <- format(sample_size, big.mark = ",", scientific = FALSE)
-      title <- sprintf("%s Copula %s (n = %s)", title_family, title_suffix, n_formatted)
+      title <- sprintf(
+        "%s Copula %s (n = %s)",
+        title_family,
+        title_suffix,
+        n_formatted
+      )
     } else {
       title <- sprintf("%s Copula %s", title_family, title_suffix)
     }
-    title <- trimws(title)  # Remove extra whitespace
+    title <- trimws(title) # Remove extra whitespace
   }
-  
+
   # For CDF plots, use specific contour breaks: 0.1, 0.2, ..., 0.9
   # For PDF plots, use bins
   if (plot_type == "cdf") {
     contour_levels <- seq(0.1, 0.9, by = 0.1)
     fill_breaks <- seq(0, 1, by = 0.1)
     n_bins <- length(fill_breaks) - 1
-    
+
     p <- ggplot(plot_data, aes(x = u, y = v, z = value)) +
       geom_contour_filled(breaks = fill_breaks, alpha = 0.7) +
-      geom_contour(color = "black", alpha = 0.5, linewidth = 0.5, breaks = contour_levels)
+      geom_contour(
+        color = "black",
+        alpha = 0.5,
+        linewidth = 0.5,
+        breaks = contour_levels
+      )
   } else {
     p <- ggplot(plot_data, aes(x = u, y = v, z = value)) +
       geom_contour_filled(bins = 15, alpha = 0.7) +
       geom_contour(color = "black", alpha = 0.5, bins = 15)
     n_bins <- 15
   }
-  
+
   # Use wesanderson palette if available, otherwise fall back to viridis
   legend_name <- ifelse(plot_type == "density", "Density", "C(u,v)")
   legend_guide <- ifelse(plot_type == "cdf", "none", "legend")
-  
+
   if (requireNamespace("wesanderson", quietly = TRUE)) {
-    p <- p + scale_fill_manual(
-      values = colorRampPalette(wes_palette("Zissou1"))(n_bins),
-      name = legend_name,
-      guide = legend_guide
-    )
+    p <- p +
+      scale_fill_manual(
+        values = colorRampPalette(wes_palette("Zissou1"))(n_bins),
+        name = legend_name,
+        guide = legend_guide
+      )
   } else {
-    p <- p + scale_fill_viridis_d(
-      option = "plasma",
-      name = legend_name,
-      guide = legend_guide
-    )
+    p <- p +
+      scale_fill_viridis_d(
+        option = "plasma",
+        name = legend_name,
+        guide = legend_guide
+      )
   }
-  
+
   p <- p +
     coord_equal() +
     labs(
@@ -501,60 +572,73 @@ plot_parametric_copula_contour <- function(fitted_copula,
       legend.position = ifelse(plot_type == "cdf", "none", "right"),
       panel.grid.minor = element_blank()
     ) +
-    scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
-  
+    scale_x_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    )
+
   # For CDF plots, add inline contour labels
   if (plot_type == "cdf") {
     # Calculate label positions by finding where contours cross the diagonal
     # For each contour level, find the exact point on the diagonal
     label_data <- data.frame()
-    
+
     for (level in contour_levels) {
       # For the diagonal u = v, find where C(u,u) = level
-      
+
       if (family == "comonotonic") {
         # For comonotonic: C(u,v) = min(u,v), so on diagonal C(u,u) = u
         u_pos <- level
       } else {
         # For other copulas, use fitted copula with fine grid
         # Use fine grid to accurately locate diagonal crossing
-        u_test <- seq(0.01, 0.99, by = 0.001)  # Fine grid for accuracy
+        u_test <- seq(0.01, 0.99, by = 0.001) # Fine grid for accuracy
         if (!is.null(fitted_copula)) {
           diag_values <- pCopula(cbind(u_test, u_test), fitted_copula)
           # Find closest to level
           idx <- which.min(abs(diag_values - level))
           u_pos <- u_test[idx]
         } else {
-          u_pos <- level  # Fallback
+          u_pos <- level # Fallback
         }
       }
-      
-      label_data <- rbind(label_data, data.frame(
-        level = level,
-        u = u_pos - 0.02,  # Fixed offset perpendicular to -45° diagonal
-        v = u_pos - 0.02,
-        label = as.character(level)
-      ))
+
+      label_data <- rbind(
+        label_data,
+        data.frame(
+          level = level,
+          u = u_pos - 0.02, # Fixed offset perpendicular to -45° diagonal
+          v = u_pos - 0.02,
+          label = as.character(level)
+        )
+      )
     }
-    
-    p <- p + 
-      geom_text(data = label_data,
-                aes(x = u, y = v, label = label),
-                size = 3,
-                angle = -45,
-                color = "#141410",  # Dark grey-black for contrast
-                fontface = "bold",
-                hjust = 0.5,
-                vjust = 0,
-                inherit.aes = FALSE)
+
+    p <- p +
+      geom_text(
+        data = label_data,
+        aes(x = u, y = v, label = label),
+        size = 3,
+        angle = -45,
+        color = "#141410", # Dark grey-black for contrast
+        fontface = "bold",
+        hjust = 0.5,
+        vjust = 0,
+        inherit.aes = FALSE
+      )
   }
-  
+
   return(p)
 }
 
 #' Plot parametric copula with bootstrap uncertainty ribbons
-#' 
+#'
 #' @param empirical_grid Empirical copula grid for overlay contours
 #' @param uncertainty_results Output from calculate_bootstrap_uncertainty()
 #' @param family Copula family name
@@ -562,50 +646,56 @@ plot_parametric_copula_contour <- function(fitted_copula,
 #' @param plot_type "cdf" or "density"
 #' @param n_gradient_levels Number of gradient levels for ribbon (default 10)
 #' @param sample_size Sample size for title (optional)
-#' 
+#'
 #' @return ggplot object
-plot_copula_with_uncertainty_ribbons <- function(empirical_grid,
-                                                 uncertainty_results,
-                                                 family,
-                                                 title = NULL,
-                                                 plot_type = "cdf",
-                                                 n_gradient_levels = 10,
-                                                 sample_size = NULL,
-                                                 x_label = expression(u[prior]),
-                                                 y_label = expression(v[current])) {
-  
+plot_copula_with_uncertainty_ribbons <- function(
+  empirical_grid,
+  uncertainty_results,
+  family,
+  title = NULL,
+  plot_type = "cdf",
+  n_gradient_levels = 10,
+  sample_size = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current])
+) {
   if (is.null(uncertainty_results)) {
     warning("No uncertainty results provided, falling back to standard plot")
-    return(plot_parametric_copula_contour(NULL, family, plot_type = plot_type, title = title))
+    return(plot_parametric_copula_contour(
+      NULL,
+      family,
+      plot_type = plot_type,
+      title = title
+    ))
   }
-  
+
   # Prepare parametric point estimate data (for Zissou1 background)
   parametric_data <- data.table(
     u = as.vector(uncertainty_results$u_grid),
     v = as.vector(uncertainty_results$v_grid),
     value = as.vector(uncertainty_results$point_estimate)
   )
-  
+
   # Prepare lower and upper bounds for ribbons
   lower_data <- data.table(
     u = as.vector(uncertainty_results$u_grid),
     v = as.vector(uncertainty_results$v_grid),
     value = as.vector(uncertainty_results$lower_bound)
   )
-  
+
   upper_data <- data.table(
     u = as.vector(uncertainty_results$u_grid),
     v = as.vector(uncertainty_results$v_grid),
     value = as.vector(uncertainty_results$upper_bound)
   )
-  
+
   # Prepare empirical data for overlay
   empirical_data <- data.table(
     u = as.vector(empirical_grid$u_grid),
     v = as.vector(empirical_grid$v_grid),
     value = as.vector(empirical_grid$copula_values)
   )
-  
+
   # Default title - use bquote for consistent font rendering
   if (is.null(title)) {
     title_parts <- tools::toTitleCase(family)
@@ -614,92 +704,106 @@ plot_copula_with_uncertainty_ribbons <- function(empirical_grid,
       n_formatted <- format(sample_size, big.mark = ",", scientific = FALSE)
       # Copula IS a CDF, no need to say "CDF" in title
       # Use bquote to match other plot titles
-      title <- bquote(.(title_parts) ~ "Copula with Bootstrap Uncertainty" ~ 
-                     "(n =" ~ .(n_formatted) * ")")
+      title <- bquote(
+        .(title_parts) ~ "Copula with Bootstrap Uncertainty" ~
+          "(n =" ~ .(n_formatted) * ")"
+      )
     } else {
       title <- bquote(.(title_parts) ~ "Copula with Bootstrap Uncertainty")
     }
   }
-  
+
   # Build plot with layers
   p <- ggplot()
-  
+
   # Define contour levels for lines: 0.1, 0.2, ..., 0.9 (9 levels)
   contour_levels <- seq(0.1, 0.9, by = 0.1)
-  
+
   # Define breaks for filled regions: [0, 0.1], (0.1, 0.2], ..., (0.9, 1.0] (10 bins)
   fill_breaks <- seq(0, 1, by = 0.1)
-  n_bins <- length(fill_breaks) - 1  # Number of bins = 10
-  
+  n_bins <- length(fill_breaks) - 1 # Number of bins = 10
+
   # Layer 1: Filled contours from PARAMETRIC point estimate (Zissou1 background)
-  p <- p + 
-    geom_contour_filled(data = parametric_data,
-                       aes(x = u, y = v, z = value),
-                       breaks = fill_breaks, alpha = 0.7)
-  
+  p <- p +
+    geom_contour_filled(
+      data = parametric_data,
+      aes(x = u, y = v, z = value),
+      breaks = fill_breaks,
+      alpha = 0.7
+    )
+
   # Apply Zissou1 palette with 10 colors (no legend - use inline labels instead)
   if (requireNamespace("wesanderson", quietly = TRUE)) {
-    p <- p + scale_fill_manual(
-      values = colorRampPalette(wes_palette("Zissou1"))(n_bins),
-      guide = "none"  # Remove legend - will use inline contour labels
-    )
+    p <- p +
+      scale_fill_manual(
+        values = colorRampPalette(wes_palette("Zissou1"))(n_bins),
+        guide = "none" # Remove legend - will use inline contour labels
+      )
   } else {
-    p <- p + scale_fill_viridis_d(
-      option = "plasma",
-      guide = "none"  # Remove legend - will use inline contour labels
-    )
+    p <- p +
+      scale_fill_viridis_d(
+        option = "plasma",
+        guide = "none" # Remove legend - will use inline contour labels
+      )
   }
-  
+
   # Layer 2: Gradient ribbons around contours (light blue-grey to match parametric)
   # Create multiple contour bands between lower and upper bounds with gradient alpha
   alpha_levels <- seq(0.20, 0.03, length.out = n_gradient_levels)
-  
+
   for (i in 1:n_gradient_levels) {
     # Interpolate between lower and upper bounds
     fraction <- (i - 1) / (n_gradient_levels - 1)
-    
+
     # Create intermediate bound
     interp_data <- data.table(
       u = parametric_data$u,
       v = parametric_data$v,
-      value = lower_data$value + fraction * (upper_data$value - lower_data$value)
+      value = lower_data$value +
+        fraction * (upper_data$value - lower_data$value)
     )
-    
+
     # Add contour band with decreasing alpha (darker near center)
     # Reverse alpha so center is darker
     alpha_val <- alpha_levels[n_gradient_levels - i + 1]
-    
+
     p <- p +
-      geom_contour(data = interp_data,
-                  aes(x = u, y = v, z = value),
-                  color = "#EAAEEA",  # Light magenta to match parametric color scheme
-                  alpha = alpha_val,
-                  linewidth = 2.5,  # Thicker to create ribbon effect
-                  breaks = contour_levels)
+      geom_contour(
+        data = interp_data,
+        aes(x = u, y = v, z = value),
+        color = "#EAAEEA", # Light magenta to match parametric color scheme
+        alpha = alpha_val,
+        linewidth = 2.5, # Thicker to create ribbon effect
+        breaks = contour_levels
+      )
   }
-  
+
   # Layer 3: Parametric point estimate contours (thin, solid, blue)
   p <- p +
-    geom_contour(data = parametric_data,
-                aes(x = u, y = v, z = value),
-                color = "#DD00DD",  # Magenta for parametric
-                linewidth = 0.5, 
-                linetype = "solid",
-                breaks = contour_levels)
-  
+    geom_contour(
+      data = parametric_data,
+      aes(x = u, y = v, z = value),
+      color = "#DD00DD", # Magenta for parametric
+      linewidth = 0.5,
+      linetype = "solid",
+      breaks = contour_levels
+    )
+
   # Layer 4: Empirical contours (thin, solid, black)
   p <- p +
-    geom_contour(data = empirical_data,
-                aes(x = u, y = v, z = value),
-                color = "black",  # Black for empirical
-                linewidth = 0.5,
-                linetype = "solid",
-                breaks = contour_levels)
-  
+    geom_contour(
+      data = empirical_data,
+      aes(x = u, y = v, z = value),
+      color = "black", # Black for empirical
+      linewidth = 0.5,
+      linetype = "solid",
+      breaks = contour_levels
+    )
+
   # Add inline contour labels along diagonal (replacing legend)
   # Calculate label positions by finding exact where contours cross the diagonal
   label_positions <- data.frame()
-  
+
   for (level in contour_levels) {
     if (family == "comonotonic") {
       # For comonotonic: C(u,v) = min(u,v), so on diagonal C(u,u) = u
@@ -709,48 +813,57 @@ plot_copula_with_uncertainty_ribbons <- function(empirical_grid,
       # Search for points very close to diagonal
       param_grid <- parametric_data
       diag_subset <- param_grid[abs(param_grid$u - param_grid$v) < 0.005, ]
-      
+
       if (nrow(diag_subset) > 0) {
         # Find the point closest to target level on the diagonal
         idx <- which.min(abs(diag_subset$value - level))
         u_pos <- diag_subset$u[idx]
       } else {
         # Wider search if needed
-        diag_subset_wide <- param_grid[abs(param_grid$u - param_grid$v) < 0.02, ]
+        diag_subset_wide <- param_grid[
+          abs(param_grid$u - param_grid$v) < 0.02,
+        ]
         if (nrow(diag_subset_wide) > 0) {
           idx <- which.min(abs(diag_subset_wide$value - level))
           u_pos <- diag_subset_wide$u[idx]
         } else {
-          u_pos <- level  # Final fallback
+          u_pos <- level # Final fallback
         }
       }
     }
-    
-    label_positions <- rbind(label_positions, data.frame(
-      level = level,
-      x = u_pos - 0.02,  # Fixed offset perpendicular to -45° diagonal
-      y = u_pos - 0.02,
-      label = as.character(level)
-    ))
+
+    label_positions <- rbind(
+      label_positions,
+      data.frame(
+        level = level,
+        x = u_pos - 0.02, # Fixed offset perpendicular to -45° diagonal
+        y = u_pos - 0.02,
+        label = as.character(level)
+      )
+    )
   }
-  
-  p <- p + 
-    geom_text(data = label_positions,
-              aes(x = x, y = y, label = label),
-              size = 3,
-              angle = -45,  # Rotated to match diagonal
-              color = "#141410",  # Dark grey-black for contrast
-              fontface = "bold",
-              hjust = 0.5,
-              vjust = 0)
-  
+
+  p <- p +
+    geom_text(
+      data = label_positions,
+      aes(x = x, y = y, label = label),
+      size = 3,
+      angle = -45, # Rotated to match diagonal
+      color = "#141410", # Dark grey-black for contrast
+      fontface = "bold",
+      hjust = 0.5,
+      vjust = 0
+    )
+
   # Formatting
   p <- p +
     coord_equal() +
     labs(
       title = title,
-      subtitle = sprintf("N = %d bootstrap samples | Magenta = parametric | Light magenta bands = ± CI | Black = empirical",
-                        uncertainty_results$n_bootstrap),
+      subtitle = sprintf(
+        "N = %d bootstrap samples | Magenta = parametric | Light magenta bands = ± CI | Black = empirical",
+        uncertainty_results$n_bootstrap
+      ),
       x = x_label,
       y = y_label
     ) +
@@ -761,12 +874,20 @@ plot_copula_with_uncertainty_ribbons <- function(empirical_grid,
       plot.margin = margin(20, 4, 7, 4, "pt"),
       plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
       plot.subtitle = element_text(hjust = 0.5, size = 10),
-      legend.position = "none",  # No legend - using inline labels
+      legend.position = "none", # No legend - using inline labels
       panel.grid.minor = element_blank()
     ) +
-    scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
-  
+    scale_x_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    )
+
   return(p)
 }
 
@@ -795,47 +916,50 @@ plot_copula_with_uncertainty_ribbons <- function(empirical_grid,
 #'   λ_U ≈ (2τ - 1 + C(1-τ, 1-τ)) / τ
 #'
 #' @export
-calculate_copula_tail_statistics <- function(u_seq, v_seq, 
-                                              cdf_mat_1, cdf_mat_2,
-                                              tau_tail = 0.10) {
-  
+calculate_copula_tail_statistics <- function(
+  u_seq,
+  v_seq,
+  cdf_mat_1,
+  cdf_mat_2,
+  tau_tail = 0.10
+) {
   # Find grid indices closest to tau and 1-tau
   idx_lower <- which.min(abs(u_seq - tau_tail))
   idx_upper <- which.min(abs(u_seq - (1 - tau_tail)))
-  
+
   # Extract CDF values at (tau, tau) and (1-tau, 1-tau)
   # cdf_mat[i, j] corresponds to C(u_seq[i], v_seq[j])
   cdf_tau_tau_1 <- cdf_mat_1[idx_lower, idx_lower]
   cdf_tau_tau_2 <- cdf_mat_2[idx_lower, idx_lower]
-  
+
   cdf_1mtau_1 <- cdf_mat_1[idx_upper, idx_upper]
   cdf_1mtau_2 <- cdf_mat_2[idx_upper, idx_upper]
-  
+
   # Lower tail dependence: λ_L ≈ C(τ, τ) / τ
   lambda_L_1 <- cdf_tau_tau_1 / tau_tail
   lambda_L_2 <- cdf_tau_tau_2 / tau_tail
-  
+
   # Upper tail dependence: λ_U ≈ (2τ - 1 + C(1-τ, 1-τ)) / τ
   lambda_U_1 <- (2 * tau_tail - 1 + cdf_1mtau_1) / tau_tail
   lambda_U_2 <- (2 * tau_tail - 1 + cdf_1mtau_2) / tau_tail
-  
+
   # Clamp to [0, 1] (numerical estimates can slightly exceed bounds)
   lambda_L_1 <- max(0, min(1, lambda_L_1))
   lambda_L_2 <- max(0, min(1, lambda_L_2))
   lambda_U_1 <- max(0, min(1, lambda_U_1))
   lambda_U_2 <- max(0, min(1, lambda_U_2))
-  
+
   # Calculate differences
   delta_lambda_L <- lambda_L_1 - lambda_L_2
   delta_lambda_U <- lambda_U_1 - lambda_U_2
-  
+
   # Create masks for tail regions
   mask_LL <- outer(u_seq <= tau_tail, v_seq <= tau_tail, "&")
   mask_UU <- outer(u_seq >= (1 - tau_tail), v_seq >= (1 - tau_tail), "&")
-  
+
   # Calculate RMSE in tail regions
   diff_mat <- cdf_mat_1 - cdf_mat_2
-  
+
   if (sum(mask_LL) > 0) {
     tail_LL_rmse <- sqrt(mean(diff_mat[mask_LL]^2))
     tail_LL_mean_abs <- mean(abs(diff_mat[mask_LL]))
@@ -843,7 +967,7 @@ calculate_copula_tail_statistics <- function(u_seq, v_seq,
     tail_LL_rmse <- NA_real_
     tail_LL_mean_abs <- NA_real_
   }
-  
+
   if (sum(mask_UU) > 0) {
     tail_UU_rmse <- sqrt(mean(diff_mat[mask_UU]^2))
     tail_UU_mean_abs <- mean(abs(diff_mat[mask_UU]))
@@ -851,7 +975,7 @@ calculate_copula_tail_statistics <- function(u_seq, v_seq,
     tail_UU_rmse <- NA_real_
     tail_UU_mean_abs <- NA_real_
   }
-  
+
   return(list(
     lambda_L_1 = lambda_L_1,
     lambda_L_2 = lambda_L_2,
@@ -868,31 +992,32 @@ calculate_copula_tail_statistics <- function(u_seq, v_seq,
 }
 
 #' Create comparison plot between empirical and parametric copula
-#' 
+#'
 #' @param empirical_grid Output from calculate_empirical_copula_grid
 #' @param fitted_copula Fitted copula object
 #' @param family Copula family name
 #' @param plot_type "side_by_side", "overlay", or "difference"
-#' 
+#'
 #' @return ggplot object or combined plot
-plot_copula_comparison <- function(empirical_grid, 
-                                  fitted_copula, 
-                                  family,
-                                  plot_type = "side_by_side",
-                                  subtitle = NULL,
-                                  x_label = expression(u[prior]),
-                                  y_label = expression(v[current]),
-                                  copula_result = NULL,
-                                  show_stats = TRUE) {
-  
+plot_copula_comparison <- function(
+  empirical_grid,
+  fitted_copula,
+  family,
+  plot_type = "side_by_side",
+  subtitle = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current]),
+  copula_result = NULL,
+  show_stats = TRUE
+) {
   grid_size <- nrow(empirical_grid$u_grid)
-  
+
   if (plot_type == "difference") {
     # Calculate difference between empirical and parametric
     u_seq <- seq(0.01, 0.99, length.out = grid_size)
     v_seq <- seq(0.01, 0.99, length.out = grid_size)
     grid <- expand.grid(u = u_seq, v = v_seq)
-    
+
     # Get parametric values
     if (family == "comonotonic") {
       if (empirical_grid$method == "density") {
@@ -908,38 +1033,45 @@ plot_copula_comparison <- function(empirical_grid,
         parametric_values <- pCopula(as.matrix(grid), fitted_copula)
       }
     }
-    
+
     # Calculate difference
     diff_values <- parametric_values - as.vector(empirical_grid$copula_values)
-    
+
     plot_data <- data.table(
       u = grid$u,
       v = grid$v,
       difference = diff_values
     )
-    
+
     # Create diverging color scale centered at 0
     max_abs_diff <- max(abs(diff_values), na.rm = TRUE)
-    
+
     # Custom armyblue diverging palette (green-to-blue gradient):
     # Green (empirical higher) -> neutral -> Blue (parametric higher)
-    armyblue_green <- "#8A9048"  # Army olive
-    armyblue_blue <- "#3B9DC5"   # Army blue
-    mid_color <- "#FCFCF4"       # Warm cream center
-    
+    armyblue_green <- "#8A9048" # Army olive
+    armyblue_blue <- "#3B9DC5" # Army blue
+    mid_color <- "#FCFCF4" # Warm cream center
+
     # Create title as expression for consistent font rendering
-    title_expr <- bquote("CDF Difference:" ~ .(tools::toTitleCase(family)) ~ "- Empirical Copula")
-    
+    title_expr <- bquote(
+      "CDF Difference:" ~ .(tools::toTitleCase(family)) ~ "- Empirical Copula"
+    )
+
     p <- ggplot(plot_data, aes(x = u, y = v)) +
       geom_raster(aes(fill = difference), interpolate = TRUE) +
-      geom_contour(aes(z = difference), color = "black", alpha = 0.3, bins = 15) +
+      geom_contour(
+        aes(z = difference),
+        color = "black",
+        alpha = 0.3,
+        bins = 15
+      ) +
       scale_fill_gradient2(
-        low = armyblue_green, 
-        mid = mid_color, 
+        low = armyblue_green,
+        mid = mid_color,
         high = armyblue_blue,
         midpoint = 0,
-        limits = c(-0.03, 0.03),  # ← Fixed range for all families
-        oob = scales::squish,  # Clamp out-of-bounds to extremal colors
+        limits = c(-0.03, 0.03), # ← Fixed range for all families
+        oob = scales::squish, # Clamp out-of-bounds to extremal colors
         name = "Difference\n(Par - Emp)"
       ) +
       coord_equal(clip = "off") +
@@ -963,7 +1095,11 @@ plot_copula_comparison <- function(empirical_grid,
         legend.position = c(0.98, 1.041),
         legend.justification = c(0, 1),
         legend.direction = "vertical",
-        legend.background = element_rect(fill = "transparent", color = NA, linewidth = 0),
+        legend.background = element_rect(
+          fill = "transparent",
+          color = NA,
+          linewidth = 0
+        ),
         legend.key.width = unit(0.35, "cm"),
         legend.key.height = unit(0.9, "cm"),
         legend.title = element_text(size = 9, hjust = 0),
@@ -972,26 +1108,36 @@ plot_copula_comparison <- function(empirical_grid,
         legend.margin = margin(2, 4, 2, 2, "pt"),
         panel.grid.minor = element_blank()
       ) +
-      guides(fill = guide_colorbar(
-        title.position = "top",
-        title.hjust = 0
-      )) +
-      scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
-      scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
-    
+      guides(
+        fill = guide_colorbar(
+          title.position = "top",
+          title.hjust = 0
+        )
+      ) +
+      scale_x_continuous(
+        breaks = seq(0, 1, 0.2),
+        limits = c(0, 1),
+        expand = expansion(mult = 0.02)
+      ) +
+      scale_y_continuous(
+        breaks = seq(0, 1, 0.2),
+        limits = c(0, 1),
+        expand = expansion(mult = 0.02)
+      )
+
     # Calculate copula surface difference statistics
     max_abs_diff <- max(abs(diff_values), na.rm = TRUE)
     mean_abs_diff <- mean(abs(diff_values), na.rm = TRUE)
     rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
     q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
-    
+
     # Add statistics annotation if requested
     if (show_stats) {
       fmt5 <- function(x) sprintf("%.5f", x)
       text_lines <- list()
       y_pos <- 0.015
       y_increment <- 0.02
-      
+
       if (!is.null(copula_result)) {
         # Extract copula fit statistics
         cvm_stat <- copula_result$gof_statistic %||% NA
@@ -999,132 +1145,256 @@ plot_copula_comparison <- function(empirical_grid,
         delta_aic <- copula_result$delta_aic %||% NA
         aic_weight <- copula_result$aic_weight %||% NA
 
-          if (!is.na(cvm_stat)) {
-            text_lines <- c(text_lines, list(list(x_offset = 0.0, y_offset = y_pos,
-                                                  label = sprintf("bold('Absolute Fit (%s):')", tools::toTitleCase(family)))))
-            y_pos <- y_pos + y_increment
+        if (!is.na(cvm_stat)) {
+          text_lines <- c(
+            text_lines,
+            list(list(
+              x_offset = 0.0,
+              y_offset = y_pos,
+              label = sprintf(
+                "bold('Absolute Fit (%s):')",
+                tools::toTitleCase(family)
+              )
+            ))
+          )
+          y_pos <- y_pos + y_increment
 
           if (!is.na(cvm_pval)) {
-            pval_txt <- ifelse(cvm_pval < 0.001, "'<'~0.001", sprintf("'='~%.3f", cvm_pval))
-            text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
-                                                   label = sprintf("CvM==%.4f~'('*italic(p)~%s*')'", cvm_stat, pval_txt))))
+            pval_txt <- ifelse(
+              cvm_pval < 0.001,
+              "'<'~0.001",
+              sprintf("'='~%.3f", cvm_pval)
+            )
+            text_lines <- c(
+              text_lines,
+              list(list(
+                x_offset = 0.01,
+                y_offset = y_pos,
+                label = sprintf(
+                  "CvM==%.4f~'('*italic(p)~%s*')'",
+                  cvm_stat,
+                  pval_txt
+                )
+              ))
+            )
           } else {
-            text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
-                                                   label = sprintf("CvM==%.4f", cvm_stat))))
+            text_lines <- c(
+              text_lines,
+              list(list(
+                x_offset = 0.01,
+                y_offset = y_pos,
+                label = sprintf("CvM==%.4f", cvm_stat)
+              ))
+            )
           }
           y_pos <- y_pos + y_increment
         }
 
-          if (!is.na(delta_aic) || !is.na(aic_weight)) {
-            text_lines <- c(text_lines, list(list(x_offset = 0.0, y_offset = y_pos, label = "bold('Relative Fit:')")))
-            y_pos <- y_pos + y_increment
+        if (!is.na(delta_aic) || !is.na(aic_weight)) {
+          text_lines <- c(
+            text_lines,
+            list(list(
+              x_offset = 0.0,
+              y_offset = y_pos,
+              label = "bold('Relative Fit:')"
+            ))
+          )
+          y_pos <- y_pos + y_increment
 
           if (!is.na(delta_aic)) {
-            text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
-                                                   label = sprintf("Delta*AIC==%.1f", delta_aic))))
+            text_lines <- c(
+              text_lines,
+              list(list(
+                x_offset = 0.01,
+                y_offset = y_pos,
+                label = sprintf("Delta*AIC==%.1f", delta_aic)
+              ))
+            )
             y_pos <- y_pos + y_increment
           }
           if (!is.na(aic_weight)) {
-            text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
-                                                   label = sprintf("wAIC==%.4f", aic_weight))))
+            text_lines <- c(
+              text_lines,
+              list(list(
+                x_offset = 0.01,
+                y_offset = y_pos,
+                label = sprintf("wAIC==%.4f", aic_weight)
+              ))
+            )
             y_pos <- y_pos + y_increment
           }
         }
       }
-      
+
       # === TAIL BEHAVIOUR SECTION ===
       # Calculate tail dependence statistics from the CDF grids
       grid_size <- length(u_seq)
-      emp_cdf_mat <- matrix(as.vector(empirical_grid$copula_values), 
-                            nrow = grid_size, ncol = grid_size, byrow = FALSE)
-      par_cdf_mat <- matrix(parametric_values, 
-                            nrow = grid_size, ncol = grid_size, byrow = FALSE)
-      
+      emp_cdf_mat <- matrix(
+        as.vector(empirical_grid$copula_values),
+        nrow = grid_size,
+        ncol = grid_size,
+        byrow = FALSE
+      )
+      par_cdf_mat <- matrix(
+        parametric_values,
+        nrow = grid_size,
+        ncol = grid_size,
+        byrow = FALSE
+      )
+
       tail_stats <- calculate_copula_tail_statistics(
-        u_seq = u_seq, v_seq = v_seq,
+        u_seq = u_seq,
+        v_seq = v_seq,
         cdf_mat_1 = emp_cdf_mat,
         cdf_mat_2 = par_cdf_mat,
         tau_tail = 0.10
       )
-      
+
       # Add tail behaviour block to statistics
-      text_lines <- c(text_lines, list(list(x_offset = 0.0, y_offset = y_pos, 
-                                             label = "bold('Tail Behaviour (tau = 0.10):')")))
+      text_lines <- c(
+        text_lines,
+        list(list(
+          x_offset = 0.0,
+          y_offset = y_pos,
+          label = "bold('Tail Behaviour (tau = 0.10):')"
+        ))
+      )
       y_pos <- y_pos + y_increment
-      
+
       # Lower tail dependence (λ_L)
-      text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
-                                             label = sprintf("lambda[L]*':'~Emp==%.2f*','~Par==%.2f", 
-                                                            tail_stats$lambda_L_1, tail_stats$lambda_L_2))))
+      text_lines <- c(
+        text_lines,
+        list(list(
+          x_offset = 0.01,
+          y_offset = y_pos,
+          label = sprintf(
+            "lambda[L]*':'~Emp==%.2f*','~Par==%.2f",
+            tail_stats$lambda_L_1,
+            tail_stats$lambda_L_2
+          )
+        ))
+      )
       y_pos <- y_pos + y_increment
-      
+
       # Upper tail dependence (λ_U)
-      text_lines <- c(text_lines, list(list(x_offset = 0.01, y_offset = y_pos,
-                                             label = sprintf("lambda[U]*':'~Emp==%.2f*','~Par==%.2f", 
-                                                            tail_stats$lambda_U_1, tail_stats$lambda_U_2))))
+      text_lines <- c(
+        text_lines,
+        list(list(
+          x_offset = 0.01,
+          y_offset = y_pos,
+          label = sprintf(
+            "lambda[U]*':'~Emp==%.2f*','~Par==%.2f",
+            tail_stats$lambda_U_1,
+            tail_stats$lambda_U_2
+          )
+        ))
+      )
       y_pos <- y_pos + y_increment
       # === END TAIL BEHAVIOUR SECTION ===
 
-        text_lines <- c(list(list(x_offset = 0.0, y_offset = y_pos, label = "bold('Surface Difference:')")),
-                        list(list(x_offset = 0.01, y_offset = y_pos + y_increment, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff)))),
-                        list(list(x_offset = 0.01, y_offset = y_pos + 2*y_increment, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff)))),
-                        list(list(x_offset = 0.01, y_offset = y_pos + 3*y_increment, label = sprintf("RMSE==%s", fmt5(rmse_diff)))),
-                        list(list(x_offset = 0.01, y_offset = y_pos + 4*y_increment, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff)))),
-                        text_lines)
-      
+      text_lines <- c(
+        list(list(
+          x_offset = 0.0,
+          y_offset = y_pos,
+          label = "bold('Surface Difference:')"
+        )),
+        list(list(
+          x_offset = 0.01,
+          y_offset = y_pos + y_increment,
+          label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))
+        )),
+        list(list(
+          x_offset = 0.01,
+          y_offset = y_pos + 2 * y_increment,
+          label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))
+        )),
+        list(list(
+          x_offset = 0.01,
+          y_offset = y_pos + 3 * y_increment,
+          label = sprintf("RMSE==%s", fmt5(rmse_diff))
+        )),
+        list(list(
+          x_offset = 0.01,
+          y_offset = y_pos + 4 * y_increment,
+          label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff))
+        )),
+        text_lines
+      )
+
       # Add background box first
       # Find maximum y_offset to ensure box covers all text
       max_y_offset <- max(sapply(text_lines, function(x) x$y_offset))
       total_height <- max_y_offset + 0.025
       p <- p +
-        annotate("rect",
-                 xmin = 0.01, xmax = 0.25,
-                 ymin = 0.985 - total_height, ymax = 0.985,
-                 fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.82,
-                 linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
-      
+        annotate(
+          "rect",
+          xmin = 0.01,
+          xmax = 0.25,
+          ymin = 0.985 - total_height,
+          ymax = 0.985,
+          fill = rgb(252, 248, 245, maxColorValue = 255),
+          alpha = 0.82,
+          linewidth = 0.2,
+          color = rgb(20, 20, 16, maxColorValue = 255)
+        )
+
       # Add each text line individually with immediate evaluation
       for (i in seq_along(text_lines)) {
         p <- p +
-          annotate("text",
-                   x = 0.02 + text_lines[[i]]$x_offset,
-                   y = 0.99 - text_lines[[i]]$y_offset,
-                   hjust = 0,
-                   vjust = 1,
-                   label = text_lines[[i]]$label,
-                   parse = TRUE,
-                   size = 2.4,
-                   color = "black")
+          annotate(
+            "text",
+            x = 0.02 + text_lines[[i]]$x_offset,
+            y = 0.99 - text_lines[[i]]$y_offset,
+            hjust = 0,
+            vjust = 1,
+            label = text_lines[[i]]$label,
+            parse = TRUE,
+            size = 2.4,
+            color = "black"
+          )
       }
     } ### End of if (show_stats)
-    
+
     return(p)
-    
   } else if (plot_type == "side_by_side") {
     # Create side-by-side plots
-    p1 <- plot_empirical_copula_contour(empirical_grid, title = "Empirical Copula")
-    
-    plot_type_par <- ifelse(empirical_grid$method == "density", "density", "cdf")
-    p2 <- plot_parametric_copula_contour(fitted_copula, family, 
-                                        plot_type = plot_type_par,
-                                        title = sprintf("%s Copula (Fitted)",
-                                                      tools::toTitleCase(family)))
-    
+    p1 <- plot_empirical_copula_contour(
+      empirical_grid,
+      title = "Empirical Copula"
+    )
+
+    plot_type_par <- ifelse(
+      empirical_grid$method == "density",
+      "density",
+      "cdf"
+    )
+    p2 <- plot_parametric_copula_contour(
+      fitted_copula,
+      family,
+      plot_type = plot_type_par,
+      title = sprintf("%s Copula (Fitted)", tools::toTitleCase(family))
+    )
+
     # Combine plots
     combined <- grid.arrange(p1, p2, ncol = 2)
     return(combined)
-    
   } else if (plot_type == "overlay") {
     # Overlay contours (more complex, requires careful handling)
-    warning("Overlay plot type not yet implemented. Using side_by_side instead.")
-    return(plot_copula_comparison(empirical_grid, fitted_copula, family, 
-                                 plot_type = "side_by_side"))
+    warning(
+      "Overlay plot type not yet implemented. Using side_by_side instead."
+    )
+    return(plot_copula_comparison(
+      empirical_grid,
+      fitted_copula,
+      family,
+      plot_type = "side_by_side"
+    ))
   }
 }
 
 
 #' Create comparison plot between two empirical copula methods
-#' 
+#'
 #' @param empirical_copulas Named list with empCopula objects (e.g., raw, bernstein)
 #' @param method1 First method name (e.g., "raw")
 #' @param method2 Second method name (e.g., "bernstein")
@@ -1133,53 +1403,55 @@ plot_copula_comparison <- function(empirical_grid,
 #' @param x_label X-axis label
 #' @param y_label Y-axis label
 #' @param sample_size Optional sample size for title
-#' 
+#'
 #' @return ggplot object showing CDF difference
-plot_empirical_methods_comparison <- function(empirical_copulas,
-                                             method1 = "raw",
-                                             method2 = "bernstein",
-                                             grid_size = 300,
-                                             subtitle = NULL,
-                                             x_label = expression(u[prior]),
-                                             y_label = expression(v[current]),
-                                             sample_size = NULL,
-                                             show_stats = TRUE) {
+plot_empirical_methods_comparison <- function(
+  empirical_copulas,
+  method1 = "raw",
+  method2 = "bernstein",
+  grid_size = 300,
+  subtitle = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current]),
+  sample_size = NULL,
+  show_stats = TRUE
+) {
   require(ggplot2)
   require(data.table)
   require(copula)
-  
+
   # Create grid
   u_seq <- seq(0.01, 0.99, length.out = grid_size)
   v_seq <- seq(0.01, 0.99, length.out = grid_size)
   grid <- expand.grid(u = u_seq, v = v_seq)
-  
+
   # Evaluate both methods
   cdf1 <- pCopula(as.matrix(grid), copula = empirical_copulas[[method1]])
   cdf2 <- pCopula(as.matrix(grid), copula = empirical_copulas[[method2]])
-  
+
   # Calculate difference
   diff_values <- cdf2 - cdf1
-  
+
   plot_data <- data.table(
     u = grid$u,
     v = grid$v,
     difference = diff_values
   )
-  
+
   # Custom armyblue diverging palette (matches parametric comparisons):
   # Green (method1 higher) -> neutral -> Blue (method2 higher)
-  armyblue_green <- "#8A9048"  # Army olive
-  armyblue_blue <- "#3B9DC5"   # Army blue
-  mid_color <- "#FCFCF4"       # Warm cream center
-  
+  armyblue_green <- "#8A9048" # Army olive
+  armyblue_blue <- "#3B9DC5" # Army blue
+  mid_color <- "#FCFCF4" # Warm cream center
+
   # Create title
   method1_label <- tools::toTitleCase(method1)
   method2_label <- tools::toTitleCase(method2)
-  
+
   # Initialize short labels for tail behaviour display (before Deheuvels is added)
   method1_label_tail_behavior <- method1_label
   method2_label_tail_behavior <- method2_label
-  
+
   # Add Deheuvels attribution to raw empirical method (for title only)
   if (tolower(method1) == "raw") {
     method1_label <- paste0(method1_label, " (Deheuvels)")
@@ -1187,26 +1459,30 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
   if (tolower(method2) == "raw") {
     method2_label <- paste0(method2_label, " (Deheuvels)")
   }
-  
+
   if (!is.null(sample_size)) {
     n_formatted <- format(sample_size, big.mark = ",", scientific = FALSE)
-    title_expr <- bquote("CDF Difference:" ~ .(method2_label) ~ "-" ~ .(method1_label) ~ 
-                        "(n =" ~ .(n_formatted) * ")")
+    title_expr <- bquote(
+      "CDF Difference:" ~ .(method2_label) ~ "-" ~ .(method1_label) ~
+        "(n =" ~ .(n_formatted) * ")"
+    )
   } else {
-    title_expr <- bquote("CDF Difference:" ~ .(method2_label) ~ "-" ~ .(method1_label))
+    title_expr <- bquote(
+      "CDF Difference:" ~ .(method2_label) ~ "-" ~ .(method1_label)
+    )
   }
-  
+
   p <- ggplot(plot_data, aes(x = u, y = v)) +
     geom_raster(aes(fill = difference), interpolate = TRUE) +
     # Note: Contours removed for Raw vs Bernstein comparison - differences are too small
     # (±0.001) and contour lines create visual noise rather than useful information
     scale_fill_gradient2(
-      low = armyblue_green, 
-      mid = mid_color, 
+      low = armyblue_green,
+      mid = mid_color,
       high = armyblue_blue,
       midpoint = 0,
-      limits = c(-0.001, 0.001),  # Much smaller range than parametric comparisons
-      oob = scales::squish,  # Clamp out-of-bounds to extremal colors
+      limits = c(-0.001, 0.001), # Much smaller range than parametric comparisons
+      oob = scales::squish, # Clamp out-of-bounds to extremal colors
       name = "Difference\n(Bern - Raw)",
       na.value = "gray50"
     ) +
@@ -1229,7 +1505,11 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
       legend.position = c(0.98, 1.041),
       legend.justification = c(0, 1),
       legend.direction = "vertical",
-      legend.background = element_rect(fill = "transparent", color = NA, linewidth = 0),
+      legend.background = element_rect(
+        fill = "transparent",
+        color = NA,
+        linewidth = 0
+      ),
       legend.key.width = unit(0.35, "cm"),
       legend.key.height = unit(0.9, "cm"),
       legend.title = element_text(size = 9, hjust = 0),
@@ -1238,13 +1518,23 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
       legend.margin = margin(2, 4, 2, 2, "pt"),
       panel.grid.minor = element_blank()
     ) +
-    guides(fill = guide_colorbar(
-      title.position = "top",
-      title.hjust = 0
-    )) +
-    scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
-  
+    guides(
+      fill = guide_colorbar(
+        title.position = "top",
+        title.hjust = 0
+      )
+    ) +
+    scale_x_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      limits = c(0, 1),
+      expand = expansion(mult = 0.02)
+    )
+
   # Calculate and add statistics annotation
   if (show_stats) {
     fmt5 <- function(x) sprintf("%.5f", x)
@@ -1255,62 +1545,111 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
     mean_abs_diff <- mean(abs(diff_values), na.rm = TRUE)
     rmse_diff <- sqrt(mean(diff_values^2, na.rm = TRUE))
     q95_abs_diff <- quantile(abs(diff_values), 0.95, na.rm = TRUE)
-    
+
     # === TAIL BEHAVIOUR SECTION ===
     # Calculate tail dependence statistics from the CDF grids
     cdf_mat_1 <- matrix(cdf1, nrow = grid_size, ncol = grid_size, byrow = FALSE)
     cdf_mat_2 <- matrix(cdf2, nrow = grid_size, ncol = grid_size, byrow = FALSE)
-    
+
     tail_stats <- calculate_copula_tail_statistics(
-      u_seq = u_seq, v_seq = v_seq,
+      u_seq = u_seq,
+      v_seq = v_seq,
       cdf_mat_1 = cdf_mat_1,
       cdf_mat_2 = cdf_mat_2,
       tau_tail = 0.10
     )
     # === END TAIL BEHAVIOUR SECTION ===
-    
+
     text_lines <- list(
-      list(x_offset = 0.0, y_offset = y_pos, label = "bold('Surface Difference:')"),
-      list(x_offset = 0.01, y_offset = y_pos + y_increment, label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))),
-      list(x_offset = 0.01, y_offset = y_pos + 2*y_increment, label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))),
-      list(x_offset = 0.01, y_offset = y_pos + 3*y_increment, label = sprintf("RMSE==%s", fmt5(rmse_diff))),
-      list(x_offset = 0.01, y_offset = y_pos + 4*y_increment, label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff))),
+      list(
+        x_offset = 0.0,
+        y_offset = y_pos,
+        label = "bold('Surface Difference:')"
+      ),
+      list(
+        x_offset = 0.01,
+        y_offset = y_pos + y_increment,
+        label = sprintf("Max~abs(Delta)==%s", fmt5(max_abs_diff))
+      ),
+      list(
+        x_offset = 0.01,
+        y_offset = y_pos + 2 * y_increment,
+        label = sprintf("Mean~abs(Delta)==%s", fmt5(mean_abs_diff))
+      ),
+      list(
+        x_offset = 0.01,
+        y_offset = y_pos + 3 * y_increment,
+        label = sprintf("RMSE==%s", fmt5(rmse_diff))
+      ),
+      list(
+        x_offset = 0.01,
+        y_offset = y_pos + 4 * y_increment,
+        label = sprintf("Q[95](abs(Delta))==%s", fmt5(q95_abs_diff))
+      ),
       # Tail behaviour statistics
-      list(x_offset = 0.0, y_offset = y_pos + 5*y_increment + 0.01, label = "bold('Tail Behaviour (tau = 0.10):')"),
-      list(x_offset = 0.01, y_offset = y_pos + 6*y_increment + 0.01,
-           label = sprintf("lambda[L]*':'~%s==%.2f*','~%s==%.2f", 
-                          method1_label_tail_behavior, tail_stats$lambda_L_1, method2_label_tail_behavior, tail_stats$lambda_L_2)),
-      list(x_offset = 0.01, y_offset = y_pos + 7*y_increment + 0.01,
-           label = sprintf("lambda[U]*':'~%s==%.2f*','~%s==%.2f",
-                          method1_label_tail_behavior, tail_stats$lambda_U_1, method2_label_tail_behavior, tail_stats$lambda_U_2))
+      list(
+        x_offset = 0.0,
+        y_offset = y_pos + 5 * y_increment + 0.01,
+        label = "bold('Tail Behaviour (tau = 0.10):')"
+      ),
+      list(
+        x_offset = 0.01,
+        y_offset = y_pos + 6 * y_increment + 0.01,
+        label = sprintf(
+          "lambda[L]*':'~%s==%.2f*','~%s==%.2f",
+          method1_label_tail_behavior,
+          tail_stats$lambda_L_1,
+          method2_label_tail_behavior,
+          tail_stats$lambda_L_2
+        )
+      ),
+      list(
+        x_offset = 0.01,
+        y_offset = y_pos + 7 * y_increment + 0.01,
+        label = sprintf(
+          "lambda[U]*':'~%s==%.2f*','~%s==%.2f",
+          method1_label_tail_behavior,
+          tail_stats$lambda_U_1,
+          method2_label_tail_behavior,
+          tail_stats$lambda_U_2
+        )
+      )
     )
-    
+
     # Add background box first
     # Find maximum y_offset to ensure box covers all text
     max_y_offset <- max(sapply(text_lines, function(x) x$y_offset))
     total_height <- max_y_offset + 0.025
     p <- p +
-      annotate("rect",
-               xmin = 0.01, xmax = 0.29,
-               ymin = 0.985 - total_height, ymax = 0.985,
-               fill = rgb(252, 248, 245, maxColorValue = 255), alpha = 0.82,
-               linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
-    
+      annotate(
+        "rect",
+        xmin = 0.01,
+        xmax = 0.29,
+        ymin = 0.985 - total_height,
+        ymax = 0.985,
+        fill = rgb(252, 248, 245, maxColorValue = 255),
+        alpha = 0.82,
+        linewidth = 0.2,
+        color = rgb(20, 20, 16, maxColorValue = 255)
+      )
+
     # Add each text line individually with immediate evaluation
     for (i in seq_along(text_lines)) {
       p <- p +
-        annotate("text",
-                 x = 0.02 + text_lines[[i]]$x_offset,
-                 y = 0.985 - text_lines[[i]]$y_offset,
-                 hjust = 0,
-                 vjust = 1,
-                 label = text_lines[[i]]$label,
-                 parse = TRUE,
-                 size = 2.4,
-                 color = "black")
+        annotate(
+          "text",
+          x = 0.02 + text_lines[[i]]$x_offset,
+          y = 0.985 - text_lines[[i]]$y_offset,
+          hjust = 0,
+          vjust = 1,
+          label = text_lines[[i]]$label,
+          parse = TRUE,
+          size = 2.4,
+          color = "black"
+        )
     }
   }
-  
+
   return(p)
 }
 
@@ -1341,43 +1680,49 @@ plot_empirical_methods_comparison <- function(empirical_copulas,
 #'   - Conditional: worst_decile P(|Δ|>10)
 #'
 #' @export
-calculate_ecdf_statistics <- function(values1, 
-                                      values2, 
-                                      u_prior = NULL,
-                                      scenario = c("calibration", "agreement"),
-                                      label1 = "Method1",
-                                      label2 = "Method2") {
-  
+calculate_ecdf_statistics <- function(
+  values1,
+  values2,
+  u_prior = NULL,
+  scenario = c("calibration", "agreement"),
+  label1 = "Method1",
+  label2 = "Method2"
+) {
   scenario <- match.arg(scenario)
   n <- length(values1)
-  
+
   # Common metrics for both scenarios
   diff_raw <- values1 - values2
   mean1 <- mean(values1, na.rm = TRUE)
   mean2 <- mean(values2, na.rm = TRUE)
-  
+
   # ECDFs
   ecdf1 <- ecdf(values1)
   ecdf2 <- ecdf(values2)
   x_grid <- seq(0, 100, length.out = 500)
   F1 <- ecdf1(x_grid)
   F2 <- ecdf2(x_grid)
-  
+
   # Agreement metrics (both scenarios)
-  spearman_rho <- cor(values1, values2, method = "spearman", use = "pairwise.complete.obs")
-  wasserstein1 <- mean(abs(F1 - F2)) * 100  # In percentile points
+  spearman_rho <- cor(
+    values1,
+    values2,
+    method = "spearman",
+    use = "pairwise.complete.obs"
+  )
+  wasserstein1 <- mean(abs(F1 - F2)) * 100 # In percentile points
   q90_abs_diff <- quantile(abs(diff_raw), 0.90, na.rm = TRUE)
   q95_abs_diff <- quantile(abs(diff_raw), 0.95, na.rm = TRUE)
   mae <- mean(abs(diff_raw), na.rm = TRUE)
   pct_large_diff <- mean(abs(diff_raw) > 10, na.rm = TRUE)
-  
+
   # Two-sample KS
   ks_two_sample <- ks.test(values1 / 100, values2 / 100)
   ks_distance <- as.numeric(ks_two_sample$statistic)
-  
+
   # CvM (integrated squared difference)
   cvm_stat <- mean((F1 - F2)^2)
-  
+
   results <- list(
     scenario = scenario,
     label1 = label1,
@@ -1395,67 +1740,89 @@ calculate_ecdf_statistics <- function(values1,
     ks_distance = ks_distance,
     cvm_stat = cvm_stat
   )
-  
+
   # Scenario A: Calibration metrics (vs uniform)
   if (scenario == "calibration") {
     # Uniformity tests for each curve
     ks1_uniform <- ks.test(values1 / 100, "punif")
     ks2_uniform <- ks.test(values2 / 100, "punif")
-    
+
     results$ks_uniform_1 <- as.numeric(ks1_uniform$statistic)
     results$ks_uniform_2 <- as.numeric(ks2_uniform$statistic)
-    
+
     # Anderson-Darling (tail-sensitive) - only if package available
     if (requireNamespace("goftest", quietly = TRUE)) {
       ad_uniform_1 <- goftest::ad.test(values1 / 100, null = "punif")
       ad_uniform_2 <- goftest::ad.test(values2 / 100, null = "punif")
-      
+
       results$ad_uniform_1 <- as.numeric(ad_uniform_1$statistic)
       results$ad_uniform_2 <- as.numeric(ad_uniform_2$statistic)
     } else {
       results$ad_uniform_1 <- NA
       results$ad_uniform_2 <- NA
     }
-    
+
     # Discrete uniformity: max bin deviation (10 bins for deciles)
-    bin_counts1 <- table(cut(values1, breaks = seq(0, 100, 10), include.lowest = TRUE))
+    bin_counts1 <- table(cut(
+      values1,
+      breaks = seq(0, 100, 10),
+      include.lowest = TRUE
+    ))
     bin_props1 <- bin_counts1 / sum(bin_counts1)
     results$max_bin_dev_1 <- max(abs(bin_props1 - 0.1))
-    
-    bin_counts2 <- table(cut(values2, breaks = seq(0, 100, 10), include.lowest = TRUE))
+
+    bin_counts2 <- table(cut(
+      values2,
+      breaks = seq(0, 100, 10),
+      include.lowest = TRUE
+    ))
     bin_props2 <- bin_counts2 / sum(bin_counts2)
     results$max_bin_dev_2 <- max(abs(bin_props2 - 0.1))
-    
+
     # Conditional calibration if u_prior provided
     if (!is.null(u_prior) && length(u_prior) == n) {
-      deciles <- cut(u_prior, breaks = seq(0, 1, 0.1), labels = 1:10, include.lowest = TRUE)
-      
+      deciles <- cut(
+        u_prior,
+        breaks = seq(0, 1, 0.1),
+        labels = 1:10,
+        include.lowest = TRUE
+      )
+
       decile_ks <- sapply(1:10, function(d) {
         idx <- which(deciles == d)
-        if (length(idx) < 10) return(NA)
+        if (length(idx) < 10) {
+          return(NA)
+        }
         ks_test <- ks.test(values1[idx] / 100, "punif")
         as.numeric(ks_test$statistic)
       })
-      
+
       results$max_decile_ks <- max(decile_ks, na.rm = TRUE)
       results$worst_decile <- which.max(decile_ks)
     }
   }
-  
+
   # Scenario B: Conditional agreement metrics
   if (scenario == "agreement" && !is.null(u_prior) && length(u_prior) == n) {
-    deciles <- cut(u_prior, breaks = seq(0, 1, 0.1), labels = 1:10, include.lowest = TRUE)
-    
+    deciles <- cut(
+      u_prior,
+      breaks = seq(0, 1, 0.1),
+      labels = 1:10,
+      include.lowest = TRUE
+    )
+
     decile_large_diff <- sapply(1:10, function(d) {
       idx <- which(deciles == d)
-      if (length(idx) < 10) return(NA)
+      if (length(idx) < 10) {
+        return(NA)
+      }
       mean(abs(diff_raw[idx]) > 10, na.rm = TRUE)
     })
-    
+
     results$worst_decile_pct_large <- max(decile_large_diff, na.rm = TRUE)
     results$worst_decile_num <- which.max(decile_large_diff)
   }
-  
+
   return(results)
 }
 
@@ -1486,20 +1853,21 @@ calculate_ecdf_statistics <- function(values1,
 #' }
 #'
 #' @export
-plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
-                                                        sgpc_raw,
-                                                        sgpc_bernstein,
-                                                        u_obs = NULL,
-                                                        grid_size = 300,
-                                                        subtitle = NULL,
-                                                        x_label = expression(u[prior]),
-                                                        y_label = expression(v[current]),
-                                                        sample_size = NULL) {
-  
+plot_empirical_copula_comparison_with_sgpc <- function(
+  empirical_copulas,
+  sgpc_raw,
+  sgpc_bernstein,
+  u_obs = NULL,
+  grid_size = 300,
+  subtitle = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current]),
+  sample_size = NULL
+) {
   require(ggplot2)
   require(data.table)
   require(patchwork)
-  
+
   # --- Left Panel: Copula CDF Difference ---
   copula_diff_plot <- plot_empirical_methods_comparison(
     empirical_copulas = empirical_copulas,
@@ -1511,7 +1879,7 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     y_label = y_label,
     sample_size = sample_size
   )
-  
+
   # --- Right Panel: SGPc Comparison (ECDF + Heatmap) ---
   # Check for valid SGPc data
   if (is.null(sgpc_raw) || is.null(sgpc_bernstein)) {
@@ -1523,13 +1891,13 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
       statistics = NULL
     ))
   }
-  
+
   # Remove NAs and work with valid pairs
   valid_idx <- !is.na(sgpc_raw) & !is.na(sgpc_bernstein)
   s_raw <- sgpc_raw[valid_idx]
   s_bern <- sgpc_bernstein[valid_idx]
   n_valid <- length(s_raw)
-  
+
   if (n_valid < 10) {
     warning("Insufficient valid SGPc pairs for comparison")
     return(list(
@@ -1539,10 +1907,10 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
       statistics = NULL
     ))
   }
-  
+
   # Also filter u_obs for prior score decile calculation
   u_prior <- if (!is.null(u_obs)) u_obs[valid_idx] else NULL
-  
+
   # Calculate enhanced statistics (SCENARIO A: Calibration)
   # This validates that both Raw and Bernstein empirical copulas yield well-calibrated SGPc
   statistics <- calculate_ecdf_statistics(
@@ -1553,58 +1921,88 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     label1 = "Raw",
     label2 = "Bernstein"
   )
-  
+
   # Calculate ECDFs for plotting
   ecdf_raw <- ecdf(s_raw)
   ecdf_bern <- ecdf(s_bern)
   x_grid <- seq(0, 100, length.out = 500)
   F_raw <- ecdf_raw(x_grid)
   F_bern <- ecdf_bern(x_grid)
-  
+
   # Colors
   color_raw <- "black"
-  color_bern <- "#DD00DD"  # Magenta (consistent with parametric)
-  
+  color_bern <- "#DD00DD" # Magenta (consistent with parametric)
+
   # Armyblue diverging palette for heatmap
   armyblue_palette <- c(
-    "#8A9048",  # Army olive (negative - SGP higher)
+    "#8A9048", # Army olive (negative - SGP higher)
     "#B7BA87",
     "#E2E4C8",
-    "#FCFCF4",  # Neutral center (zero) - warm cream
+    "#FCFCF4", # Neutral center (zero) - warm cream
     "#B7E3ED",
     "#7FC1D3",
-    "#3B9DC5"   # Army blue (positive - SGPc higher)
+    "#3B9DC5" # Army blue (positive - SGPc higher)
   )
- 
+
   # Prepare ECDF data
   ecdf_data <- data.table(
     x = rep(x_grid, 2),
     F = c(F_raw, F_bern),
     Source = rep(c("SGPc (Raw)", "SGPc (Bernstein)"), each = length(x_grid))
   )
-  
+
   # --- Top Right: ECDF Plot ---
   x_limits <- c(0, 100)
   x_breaks <- c(0, 20, 40, 60, 80, 100)
   x_labels <- c("1", "20", "40", "60", "80", "99")
-  
+
   subtitle_text <- paste0(
     "Black = SGPc (Raw) | ",
-    "<span style='color:", color_bern, ";'>Magenta = SGPc (Bernstein)</span>"
+    "<span style='color:",
+    color_bern,
+    ";'>Magenta = SGPc (Bernstein)</span>"
   )
-  
+
   p_ecdf <- ggplot() +
-    geom_abline(slope = 0.01, intercept = 0, linetype = "dashed", 
-                color = "grey60", linewidth = 0.6) +
-    geom_line(data = ecdf_data[Source == "SGPc (Raw)"],
-              aes(x = x, y = F), color = color_raw, linewidth = 0.5) +
-    geom_line(data = ecdf_data[Source == "SGPc (Bernstein)"],
-              aes(x = x, y = F), color = color_bern, linewidth = 0.5) +
-    annotate("text", x = 85, y = 0.78, label = "Uniform\nreference",
-             size = 2.5, color = "grey50", hjust = 0, fontface = "italic") +
+    geom_abline(
+      slope = 0.01,
+      intercept = 0,
+      linetype = "dashed",
+      color = "grey60",
+      linewidth = 0.6
+    ) +
+    geom_line(
+      data = ecdf_data[Source == "SGPc (Raw)"],
+      aes(x = x, y = F),
+      color = color_raw,
+      linewidth = 0.5
+    ) +
+    geom_line(
+      data = ecdf_data[Source == "SGPc (Bernstein)"],
+      aes(x = x, y = F),
+      color = color_bern,
+      linewidth = 0.5
+    ) +
+    annotate(
+      "text",
+      x = 85,
+      y = 0.78,
+      label = "Uniform\nreference",
+      size = 2.5,
+      color = "grey50",
+      hjust = 0,
+      fontface = "italic"
+    ) +
     coord_cartesian(xlim = x_limits, ylim = c(0, 1)) +
-    scale_x_continuous(breaks = x_breaks, labels = x_labels, expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), expand = expansion(mult = 0.02)) +
+    scale_x_continuous(
+      breaks = x_breaks,
+      labels = x_labels,
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      expand = expansion(mult = 0.02)
+    ) +
     labs(
       title = bquote("SGPc Difference:" ~ "Bernstein vs Raw Empirical Copulas"),
       subtitle = subtitle_text,
@@ -1613,168 +2011,311 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     ) +
     theme_minimal() +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 14, face = "bold", margin = margin(0, 0, 5, 0, "pt")),
-      plot.subtitle = ggtext::element_markdown(hjust = 0.5, size = 7, color = "grey40"),
-      axis.title.x = element_text(size = 10, margin = margin(25, 0, 0, 0, "pt")),  # t = top margin
-      axis.title.y = element_text(size = 10, margin = margin(0, 10, 0, 0, "pt")),
+      plot.title = element_text(
+        hjust = 0.5,
+        size = 14,
+        face = "bold",
+        margin = margin(0, 0, 5, 0, "pt")
+      ),
+      plot.subtitle = ggtext::element_markdown(
+        hjust = 0.5,
+        size = 7,
+        color = "grey40"
+      ),
+      axis.title.x = element_text(
+        size = 10,
+        margin = margin(25, 0, 0, 0, "pt")
+      ), # t = top margin
+      axis.title.y = element_text(
+        size = 10,
+        margin = margin(0, 10, 0, 0, "pt")
+      ),
       panel.grid.minor = element_blank(),
       plot.margin = margin(10, 4, 2, 5, "pt"),
       plot.background = element_rect(fill = "transparent", color = NA),
       panel.background = element_rect(fill = "transparent", color = NA),
       aspect.ratio = 0.7
     )
-  
+
   # Add enhanced statistics annotation (SCENARIO A: Calibration)
   # Build plotmath expression using atop()
   # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
   text_lines <- list()
   y_increment <- 0.04
-  
+
   if (!is.na(statistics$ad_uniform_1)) {
     # Anderson-Darling available
     text_lines <- list(
-      list(y_offset = 0*y_increment, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
-      list(y_offset = 1*y_increment, label = sprintf("KS(Raw %%->%% U)==%.3f~'|'~KS(Bern %%->%% U)==%.3f",
-                      statistics$ks_uniform_1, statistics$ks_uniform_2)),
-      list(y_offset = 2*y_increment, label = sprintf("AD(Raw %%->%% U)==%.2f~'|'~AD(Bern %%->%% U)==%.2f",
-                      statistics$ad_uniform_1, statistics$ad_uniform_2)),
-      list(y_offset = 3*y_increment, label = sprintf("'Max bin dev:'~%.3f~'|'~%.3f",
-                      statistics$max_bin_dev_1, statistics$max_bin_dev_2)),
-      list(y_offset = 4*y_increment, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
-                      statistics$spearman_rho, statistics$wasserstein1_pp)),
-      list(y_offset = 5*y_increment, label = sprintf("Q[95](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
-                      statistics$q95_abs_diff, statistics$pct_large_diff_10))
+      list(
+        y_offset = 0 * y_increment,
+        label = sprintf(
+          "italic(n)== '%s'",
+          format(statistics$n, big.mark = ",")
+        )
+      ),
+      list(
+        y_offset = 1 * y_increment,
+        label = sprintf(
+          "KS(Raw %%->%% U)==%.3f~'|'~KS(Bern %%->%% U)==%.3f",
+          statistics$ks_uniform_1,
+          statistics$ks_uniform_2
+        )
+      ),
+      list(
+        y_offset = 2 * y_increment,
+        label = sprintf(
+          "AD(Raw %%->%% U)==%.2f~'|'~AD(Bern %%->%% U)==%.2f",
+          statistics$ad_uniform_1,
+          statistics$ad_uniform_2
+        )
+      ),
+      list(
+        y_offset = 3 * y_increment,
+        label = sprintf(
+          "'Max bin dev:'~%.3f~'|'~%.3f",
+          statistics$max_bin_dev_1,
+          statistics$max_bin_dev_2
+        )
+      ),
+      list(
+        y_offset = 4 * y_increment,
+        label = sprintf(
+          "'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+          statistics$spearman_rho,
+          statistics$wasserstein1_pp
+        )
+      ),
+      list(
+        y_offset = 5 * y_increment,
+        label = sprintf(
+          "Q[95](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+          statistics$q95_abs_diff,
+          statistics$pct_large_diff_10
+        )
+      )
     )
   } else {
     # AD not available (if goftest package missing)
     text_lines <- list(
-      list(y_offset = 0*y_increment, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
-      list(y_offset = 1*y_increment, label = sprintf("KS(Raw %%->%% U)==%.3f~'|'~KS(Bern %%->%% U)==%.3f",
-                      statistics$ks_uniform_1, statistics$ks_uniform_2)),
-      list(y_offset = 2*y_increment, label = sprintf("'Max bin dev:'~%.3f~'|'~%.3f",
-                      statistics$max_bin_dev_1, statistics$max_bin_dev_2)),
-      list(y_offset = 3*y_increment, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
-                      statistics$spearman_rho, statistics$wasserstein1_pp)),
-      list(y_offset = 4*y_increment, label = sprintf("Q[95](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
-                      statistics$q95_abs_diff, statistics$pct_large_diff_10))
+      list(
+        y_offset = 0 * y_increment,
+        label = sprintf(
+          "italic(n)== '%s'",
+          format(statistics$n, big.mark = ",")
+        )
+      ),
+      list(
+        y_offset = 1 * y_increment,
+        label = sprintf(
+          "KS(Raw %%->%% U)==%.3f~'|'~KS(Bern %%->%% U)==%.3f",
+          statistics$ks_uniform_1,
+          statistics$ks_uniform_2
+        )
+      ),
+      list(
+        y_offset = 2 * y_increment,
+        label = sprintf(
+          "'Max bin dev:'~%.3f~'|'~%.3f",
+          statistics$max_bin_dev_1,
+          statistics$max_bin_dev_2
+        )
+      ),
+      list(
+        y_offset = 3 * y_increment,
+        label = sprintf(
+          "'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+          statistics$spearman_rho,
+          statistics$wasserstein1_pp
+        )
+      ),
+      list(
+        y_offset = 4 * y_increment,
+        label = sprintf(
+          "Q[95](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+          statistics$q95_abs_diff,
+          statistics$pct_large_diff_10
+        )
+      )
     )
   }
-  
+
   # Add background box first
   # Find maximum y_offset to ensure box covers all text
   max_y_offset <- max(sapply(text_lines, function(x) x$y_offset))
   total_height <- max_y_offset + 0.05
   p_ecdf <- p_ecdf +
-    annotate("rect",
-             xmin = 2, xmax = 52, # Wider due to dual empirical copula statistics labels
-             ymin = 0.99 - total_height, ymax = 0.99,
-             fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
-             linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
-  
+    annotate(
+      "rect",
+      xmin = 2,
+      xmax = 52, # Wider due to dual empirical copula statistics labels
+      ymin = 0.99 - total_height,
+      ymax = 0.99,
+      fill = rgb(244, 244, 244, maxColorValue = 255),
+      alpha = 0.65,
+      linewidth = 0.2,
+      color = rgb(20, 20, 16, maxColorValue = 255)
+    )
+
   # Add each text line individually with immediate evaluation
   for (i in seq_along(text_lines)) {
     p_ecdf <- p_ecdf +
-      annotate("text",
-               x = 3.5,
-               y = 0.98 - text_lines[[i]]$y_offset,
-               hjust = 0,
-               vjust = 1,
-               label = text_lines[[i]]$label,
-               parse = TRUE,
-               size = 2.0,
-               color = "black")
+      annotate(
+        "text",
+        x = 3.5,
+        y = 0.98 - text_lines[[i]]$y_offset,
+        hjust = 0,
+        vjust = 1,
+        label = text_lines[[i]]$label,
+        parse = TRUE,
+        size = 2.0,
+        color = "black"
+      )
   }
-  
+
   # --- Bottom Right: 10x10 Prior Score × SGPc Decile Heatmap ---
   # Shows dual percentages: Raw SGPc % (top, black) and Bernstein SGPc % (bottom, magenta)
   # Cell color = Deviation (Bernstein - Raw)
   # This matches the format used in plot_empirical_vs_sgp_dual_pct()
-  
+
   if (is.null(u_prior)) {
     p_heatmap <- ggplot() +
-      annotate("text", x = 0.5, y = 0.5, label = "Prior scores (u_obs)\nnot available",
-               size = 4, color = "grey50") +
+      annotate(
+        "text",
+        x = 0.5,
+        y = 0.5,
+        label = "Prior scores (u_obs)\nnot available",
+        size = 4,
+        color = "grey50"
+      ) +
       theme_void() +
       theme(plot.margin = margin(2, 4, 7, 5, "pt"))
   } else {
     # Compute decile bins for prior scores (u) and SGPc values
     # Prior deciles: based on u_obs (0-1 scale)
-    prior_decile <- cut(u_prior, breaks = seq(0, 1, 0.1), 
-                        labels = 1:10, include.lowest = TRUE)
+    prior_decile <- cut(
+      u_prior,
+      breaks = seq(0, 1, 0.1),
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     prior_decile <- factor(prior_decile, levels = 1:10)
-    
+
     # SGPc deciles: based on 0-100 scale
     sgpc_breaks <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
-    raw_decile <- cut(s_raw, breaks = sgpc_breaks, 
-                      labels = 1:10, include.lowest = TRUE)
+    raw_decile <- cut(
+      s_raw,
+      breaks = sgpc_breaks,
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     raw_decile <- factor(raw_decile, levels = 1:10)
-    bern_decile <- cut(s_bern, breaks = sgpc_breaks, 
-                       labels = 1:10, include.lowest = TRUE)
+    bern_decile <- cut(
+      s_bern,
+      breaks = sgpc_breaks,
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     bern_decile <- factor(bern_decile, levels = 1:10)
-    
+
     # Count students in each cell for Raw SGPc (ensure all levels present)
     raw_counts <- table(prior_decile, raw_decile, useNA = "no")
     # Use margin=1 to get conditional percentages within each prior decile row
     # Each row sums to 100%; under uniformity each cell should be 10%
     raw_pct <- prop.table(raw_counts, margin = 1) * 100
-    
+
     # Count students in each cell for Bernstein SGPc
     bern_counts <- table(prior_decile, bern_decile, useNA = "no")
     bern_pct <- prop.table(bern_counts, margin = 1) * 100
-    
+
     # Compute deviation: Bernstein % - Raw %
     deviation <- bern_pct - raw_pct
-    
+
     # Convert to data.table for ggplot
-    heatmap_data <- data.table(expand.grid(prior_decile = 1:10, sgpc_decile = 1:10))
+    heatmap_data <- data.table(expand.grid(
+      prior_decile = 1:10,
+      sgpc_decile = 1:10
+    ))
     heatmap_data[, raw_pct := as.vector(raw_pct)]
     heatmap_data[, bern_pct := as.vector(bern_pct)]
     heatmap_data[, deviation := as.vector(deviation)]
-    
+
     # Fixed color scale range for consistency across all plots
     # Using ±20 as standard range for all 10x10 heatmaps
     color_limit <- 20
-    
+
     # Armyblue diverging palette for deviation (consistent with other heatmaps)
     armyblue_heatmap_palette <- c(
-      "#8A9048",  # Army olive (negative - Raw higher)
+      "#8A9048", # Army olive (negative - Raw higher)
       "#B7BA87",
       "#E2E4C8",
-      "#FCFCF4",  # Neutral center (zero) - warm cream
+      "#FCFCF4", # Neutral center (zero) - warm cream
       "#B7E3ED",
       "#7FC1D3",
-      "#3B9DC5"   # Army blue (positive - Bernstein higher)
+      "#3B9DC5" # Army blue (positive - Bernstein higher)
     )
-    
+
     # Create heatmap
     # X = SGPc Decile, Y = Prior Score Decile
     p_heatmap <- ggplot(heatmap_data, aes(x = sgpc_decile, y = prior_decile)) +
       # Heatmap tiles
       geom_tile(aes(fill = deviation), color = "white", linewidth = 0.3) +
       # Cell text annotations: Raw % (top, black) and Bernstein % (bottom, magenta)
-      geom_text(aes(label = sprintf("%.1f", raw_pct)), 
-                size = 1.8, color = color_raw, nudge_y = 0.15) +
-      geom_text(aes(label = sprintf("%.1f", bern_pct)), 
-                size = 1.8, color = color_bern, nudge_y = -0.15) +
+      geom_text(
+        aes(label = sprintf("%.1f", raw_pct)),
+        size = 1.8,
+        color = color_raw,
+        nudge_y = 0.15
+      ) +
+      geom_text(
+        aes(label = sprintf("%.1f", bern_pct)),
+        size = 1.8,
+        color = color_bern,
+        nudge_y = -0.15
+      ) +
       # Color scale (armyblue diverging)
       scale_fill_gradientn(
         colors = armyblue_heatmap_palette,
-        values = scales::rescale(c(-color_limit, -color_limit*0.67, -color_limit*0.33, 
-                                   0, color_limit*0.33, color_limit*0.67, color_limit)),
+        values = scales::rescale(c(
+          -color_limit,
+          -color_limit * 0.67,
+          -color_limit * 0.33,
+          0,
+          color_limit * 0.33,
+          color_limit * 0.67,
+          color_limit
+        )),
         limits = c(-color_limit, color_limit),
-        oob = scales::squish,  # Clamp out-of-bounds to extremal colors
+        oob = scales::squish, # Clamp out-of-bounds to extremal colors
         name = "Deviation\n(Bern - Raw)"
       ) +
       # Axis formatting - x-axis on top
-      scale_x_continuous(breaks = 1:10, expand = expansion(mult = 0.02),
-                         labels = c("1-10", "11-20", "21-30", "31-40", "41-50",
-                                   "51-60", "61-70", "71-80", "81-90", "91-99"), 
-                         position = "top") +
-      scale_y_reverse(breaks = 1:10, expand = expansion(mult = 0.02),
-                      labels = 1:10) +  # Reversed: Decile 1 at top, Decile 10 at bottom
+      scale_x_continuous(
+        breaks = 1:10,
+        expand = expansion(mult = 0.02),
+        labels = c(
+          "1-10",
+          "11-20",
+          "21-30",
+          "31-40",
+          "41-50",
+          "51-60",
+          "61-70",
+          "71-80",
+          "81-90",
+          "91-99"
+        ),
+        position = "top"
+      ) +
+      scale_y_reverse(
+        breaks = 1:10,
+        expand = expansion(mult = 0.02),
+        labels = 1:10
+      ) + # Reversed: Decile 1 at top, Decile 10 at bottom
       labs(
         caption = paste0(
-          "Cell: Raw% (top, black) / <span style='color:", color_bern, ";'>Bern% (bot, magenta)</span> | ",
+          "Cell: Raw% (top, black) / <span style='color:",
+          color_bern,
+          ";'>Bern% (bot, magenta)</span> | ",
           "Blue: Bern > Raw | Green: Raw > Bern"
         ),
         x = "SGPc Decile",
@@ -1782,11 +2323,26 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
       ) +
       theme_minimal() +
       theme(
-        plot.caption = ggtext::element_markdown(hjust = 0.5, size = 7, color = "grey40"),
+        plot.caption = ggtext::element_markdown(
+          hjust = 0.5,
+          size = 7,
+          color = "grey40"
+        ),
         axis.title.x.top = element_blank(),
-        axis.title.y.left = element_text(size = 9, margin = margin(0, 0, 0, 4, "pt")),
-        axis.text.y.left = element_text(size = 8, hjust = 1, margin = margin(0, 0, 0, 4, "pt")),
-        axis.text.x.top = element_text(size = 6, vjust = 1, margin = margin(6, 0, 0, 0, "pt")),
+        axis.title.y.left = element_text(
+          size = 9,
+          margin = margin(0, 0, 0, 4, "pt")
+        ),
+        axis.text.y.left = element_text(
+          size = 8,
+          hjust = 1,
+          margin = margin(0, 0, 0, 4, "pt")
+        ),
+        axis.text.x.top = element_text(
+          size = 6,
+          vjust = 1,
+          margin = margin(6, 0, 0, 0, "pt")
+        ),
         panel.grid = element_blank(),
         plot.margin = margin(15, 4, 2, 5, "pt"),
         plot.background = element_rect(fill = "transparent", color = NA),
@@ -1803,55 +2359,65 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
         aspect.ratio = 0.88
       )
   }
-  
+
   # --- Combine Right Panel ---
-  right_panel <- p_ecdf / p_heatmap + 
+  right_panel <- p_ecdf /
+    p_heatmap +
     plot_layout(heights = c(0.9, 1.1)) &
     theme(plot.background = element_rect(fill = "transparent", color = NA))
-  
+
   # --- Combine Left + Right into Final Layout ---
   # Use cowplot 3-column layout matching parametric comparison plots
   # Layout: Left (copula diff) | Spacer with annotation | Right (SGPc)
   require(cowplot)
-  
+
   # Create empty spacer for the gap (explicit transparent background for SVG/PNG export)
-  spacer <- ggplot() + theme_void() + 
+  spacer <- ggplot() +
+    theme_void() +
     theme(plot.background = element_rect(fill = "transparent", color = NA))
-  
+
   # 3-column layout with spacer in middle
   # rel_widths = c(5.5, 0.8, 3.7) → ~55% | ~8% gap | ~37%
   # Gives more prominence to left copula diff panel
   base_plot <- cowplot::plot_grid(
-    copula_diff_plot, spacer, right_panel,
-    ncol = 3, rel_widths = c(5.5, 0.8, 3.7),
-    align = "v", axis = "lr"
+    copula_diff_plot,
+    spacer,
+    right_panel,
+    ncol = 3,
+    rel_widths = c(5.5, 0.8, 3.7),
+    align = "v",
+    axis = "lr"
   )
-  
+
   # Add annotation in the spacer column (center of gap)
   # Gap starts at ~55% (5.5/10) and ends at ~63% (6.3/10), so center is ~59%
   # Labels show the mathematical relationship between copula difference and SGPc
   x_center <- 0.599
   label_color <- rgb(20, 20, 16, maxColorValue = 255)
-  
+
   # Box colors: light fill with light border
   box_fill <- rgb(247, 247, 245, maxColorValue = 255)
   box_border <- rgb(227, 227, 225, maxColorValue = 255)
-  
+
   combined <- ggdraw(base_plot) +
     # Rounded rectangle background behind text (drawn first so text is on top)
     draw_grob(
       grid::roundrectGrob(
-        x = x_center, y = 0.47,
-        width = 0.12, height = 0.22,
+        x = x_center,
+        y = 0.47,
+        width = 0.12,
+        height = 0.22,
         r = unit(0.03, "npc"),
         gp = grid::gpar(fill = box_fill, col = box_border, lwd = 1)
       )
     ) +
     # Line 1: ΔC(u,v) → ΔSGPc
     draw_label(
-      label = bquote(C(u,v) %=>% SGPc),
-      x = x_center, y = 0.55,
-      hjust = 0.5, vjust = 0.5,
+      label = bquote(C(u, v) %=>% SGPc),
+      x = x_center,
+      y = 0.55,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       color = label_color
@@ -1859,8 +2425,10 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     # Line 2: via
     draw_label(
       label = "via",
-      x = x_center, y = 0.51,
-      hjust = 0.5, vjust = 0.5,
+      x = x_center,
+      y = 0.51,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       fontface = "italic",
@@ -1868,45 +2436,60 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     ) +
     # Line 3: SGPc(u,v) ≡ F_{V|U}(v|u)
     draw_label(
-      label = bquote(SGPc(u,v) %==% F[V~"|"~U](v~"|"~u)),
-      x = x_center, y = 0.47,
-      hjust = 0.5, vjust = 0.5,
+      label = bquote(SGPc(u, v) %==% F[V ~ "|" ~ U](v ~ "|" ~ u)),
+      x = x_center,
+      y = 0.47,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       color = label_color
     ) +
     # Line 4: = ∂/∂u C(u,v), aligned with ≡ above
     draw_label(
-      label = bquote(~"="~ frac(partialdiff, partialdiff*u)*C(u,v)),
-      x = x_center + 0.022, y = 0.41,
-      hjust = 0.5, vjust = 0.5,
+      label = bquote(~"=" ~ frac(partialdiff, partialdiff * u) * C(u, v)),
+      x = x_center + 0.022,
+      y = 0.41,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       color = label_color
     ) +
     # Ensure transparent background for SVG/PNG export
     theme(plot.background = element_rect(fill = "transparent", color = NA))
-  
+
   # Calculate copula difference statistics
   u_seq <- seq(0.01, 0.99, length.out = grid_size)
   v_seq <- seq(0.01, 0.99, length.out = grid_size)
   grid <- expand.grid(u = u_seq, v = v_seq)
-  
+
   cdf_raw <- pCopula(as.matrix(grid), copula = empirical_copulas$raw)
   cdf_bern <- pCopula(as.matrix(grid), copula = empirical_copulas$bernstein)
   diff_cdf <- cdf_bern - cdf_raw
-  
+
   # Calculate tail statistics for empirical methods comparison
-  raw_cdf_mat <- matrix(cdf_raw, nrow = grid_size, ncol = grid_size, byrow = FALSE)
-  bern_cdf_mat <- matrix(cdf_bern, nrow = grid_size, ncol = grid_size, byrow = FALSE)
-  
+  raw_cdf_mat <- matrix(
+    cdf_raw,
+    nrow = grid_size,
+    ncol = grid_size,
+    byrow = FALSE
+  )
+  bern_cdf_mat <- matrix(
+    cdf_bern,
+    nrow = grid_size,
+    ncol = grid_size,
+    byrow = FALSE
+  )
+
   emp_tail_stats <- calculate_copula_tail_statistics(
-    u_seq = u_seq, v_seq = v_seq,
+    u_seq = u_seq,
+    v_seq = v_seq,
     cdf_mat_1 = raw_cdf_mat,
     cdf_mat_2 = bern_cdf_mat,
     tau_tail = 0.10
   )
-  
+
   copula_diff_stats <- list(
     max_positive = max(diff_cdf, na.rm = TRUE),
     max_negative = min(diff_cdf, na.rm = TRUE),
@@ -1925,76 +2508,87 @@ plot_empirical_copula_comparison_with_sgpc <- function(empirical_copulas,
     tail_LL_rmse = emp_tail_stats$tail_LL_rmse,
     tail_UU_rmse = emp_tail_stats$tail_UU_rmse
   )
-  
+
   return(list(
     combined_plot = combined,
     copula_diff_plot = copula_diff_plot,
     sgpc_panel = right_panel,
-    statistics = statistics,  # Enhanced statistics from calculate_ecdf_statistics
+    statistics = statistics, # Enhanced statistics from calculate_ecdf_statistics
     copula_diff_stats = copula_diff_stats
   ))
 }
 
 
 #' Plot bivariate density of original scores
-#' 
+#'
 #' @param scores_prior Vector of prior scale scores
 #' @param scores_current Vector of current scale scores
 #' @param title Plot title
 #' @param subtitle Plot subtitle (optional)
 #' @param n_bins Number of bins for 2D histogram
 #' @param sample_size Sample size for title (optional)
-#' 
+#'
 #' @return ggplot object
-plot_bivariate_density <- function(scores_prior, 
-                                  scores_current,
-                                  title = "Original Score Distribution",
-                                  subtitle = NULL,
-                                  x_label = "Prior Scale Score",
-                                  y_label = "Latter Scale Score",
-                                  n_bins = 100,
-                                  sample_size = NULL,
-                                  plot_width = 7,
-                                  plot_height = 7) {
-  
+plot_bivariate_density <- function(
+  scores_prior,
+  scores_current,
+  title = "Original Score Distribution",
+  subtitle = NULL,
+  x_label = "Prior Scale Score",
+  y_label = "Latter Scale Score",
+  n_bins = 100,
+  sample_size = NULL,
+  plot_width = 7,
+  plot_height = 7
+) {
   plot_data <- data.table(
     prior = scores_prior,
     current = scores_current
   )
-  
+
   # Create title as expression for consistent font rendering with other plots
   if (!is.null(sample_size)) {
     n_formatted <- format(sample_size, big.mark = ",", scientific = FALSE)
     title <- bquote(.(title) ~ "(n =" ~ .(n_formatted) * ")")
   }
-  
+
   # Calculate axis limits for coord_cartesian (constrains grid lines to data range)
   x_range <- range(scores_prior, na.rm = TRUE)
   y_range <- range(scores_current, na.rm = TRUE)
-  
+
   # Calculate nice breaks that include "round" numbers like 200, 300, etc.
   # Extend range slightly to include nearby round numbers for grid lines
   x_breaks <- pretty(x_range, n = 8)
   y_breaks <- pretty(y_range, n = 8)
-  
+
   # Create 2D density plot with Wes Anderson Zissou1 palette (consistent with other plots)
   p <- ggplot(plot_data, aes(x = prior, y = current)) +
     geom_bin2d(bins = n_bins)
-  
+
   # Apply Wes Anderson Zissou1 palette if available, otherwise fall back to viridis
   if (requireNamespace("wesanderson", quietly = TRUE)) {
     # Create continuous gradient from Zissou1 palette
     zissou_colors <- colorRampPalette(wes_palette("Zissou1"))(100)
-    p <- p + 
-      scale_fill_gradientn(colors = zissou_colors, name = "Count", na.value = "grey90")
+    p <- p +
+      scale_fill_gradientn(
+        colors = zissou_colors,
+        name = "Count",
+        na.value = "grey90"
+      )
   } else {
-    p <- p + 
+    p <- p +
       scale_fill_viridis_c(option = "viridis", name = "Count")
   }
-  
+
   # Add trend line with color that contrasts with Zissou1 palette
   p <- p +
-    geom_smooth(method = "lm", color = "#141410", se = FALSE, linetype = "dashed", linewidth = 0.7) +
+    geom_smooth(
+      method = "lm",
+      color = "#141410",
+      se = FALSE,
+      linetype = "dashed",
+      linewidth = 0.7
+    ) +
     # Set explicit breaks to ensure grid lines at round numbers
     scale_x_continuous(breaks = x_breaks, expand = expansion(mult = 0.02)) +
     scale_y_continuous(breaks = y_breaks, expand = expansion(mult = 0.02)) +
@@ -2015,8 +2609,14 @@ plot_bivariate_density <- function(scores_prior,
       plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
       plot.subtitle = element_text(hjust = 0.5, size = 11),
       # Consistent axis label font sizes
-      axis.title.x = element_text(size = 11, margin = margin(15, 0, 0, 0, "pt")),
-      axis.title.y = element_text(size = 12, margin = margin(0, 15, 0, 0, "pt")),
+      axis.title.x = element_text(
+        size = 11,
+        margin = margin(15, 0, 0, 0, "pt")
+      ),
+      axis.title.y = element_text(
+        size = 12,
+        margin = margin(0, 15, 0, 0, "pt")
+      ),
       axis.text = element_text(size = 11),
       # Move legend inside plot: positioned in lower-right area
       legend.position = c(0.86, 0.21),
@@ -2027,65 +2627,90 @@ plot_bivariate_density <- function(scores_prior,
       legend.text = element_text(size = 8),
       panel.grid.minor = element_blank()
     )
-  
+
   # Add correlation annotation
   corr_value <- cor(scores_prior, scores_current, use = "complete.obs")
-  tau_value <- cor(scores_prior, scores_current, method = "kendall", use = "complete.obs")
-  
+  tau_value <- cor(
+    scores_prior,
+    scores_current,
+    method = "kendall",
+    use = "complete.obs"
+  )
+
   # Create labels with Greek tau using plotmath - build as character strings
   corr_str <- sprintf("%.3f", corr_value)
   tau_str <- sprintf("%.3f", tau_value)
-  
+
   # Build plotmath expressions as character strings (not call objects)
   # These will be parsed by annotate() when parse=TRUE
   label_expr_r <- sprintf("\"Pearson \" * italic(r) * \" = %s\"", corr_str)
   label_expr_tau <- sprintf("\"Kendall's \" * tau * \" = %s\"", tau_str)
-  
+
   # Calculate annotation positions using NPC-like proportions (works across different scales)
   # Target: roughly (0.1, 0.9) in normalized coordinates
   x_span <- diff(x_range)
   y_span <- diff(y_range)
-  annot_x <- x_range[1] + 0.05 * x_span  # 5% from left
-  annot_y1 <- y_range[1] + 0.92 * y_span  # 92% from bottom (first line)
-  annot_y2 <- y_range[1] + 0.88 * y_span  # 87% from bottom (second line)
-  
+  annot_x <- x_range[1] + 0.05 * x_span # 5% from left
+  annot_y1 <- y_range[1] + 0.92 * y_span # 92% from bottom (first line)
+  annot_y2 <- y_range[1] + 0.88 * y_span # 87% from bottom (second line)
+
   # Calculate background box dimensions
   # Text at size 3.5 with ~20 characters needs more width
   text_width_prop <- 0.19
   box_padding_x <- 0.01 * x_span
-  box_padding_y <- 0.015 * y_span  # Increased vertical padding
-  
+  box_padding_y <- 0.015 * y_span # Increased vertical padding
+
   # Estimate text height at size 3.5 (roughly 0.02 of y_span per line)
   text_height <- 0.02 * y_span
-  
+
   box_xmin <- annot_x - box_padding_x
   box_xmax <- annot_x + text_width_prop * x_span + box_padding_x
   # With vjust=1, text TOP is at annot_y1/y2, text extends DOWN
-  box_ymax <- annot_y1 + box_padding_y  # Slightly above first line top
-  box_ymin <- annot_y2 - text_height - box_padding_y  # Below second line bottom
-  
+  box_ymax <- annot_y1 + box_padding_y # Slightly above first line top
+  box_ymin <- annot_y2 - text_height - box_padding_y # Below second line bottom
+
   # Add background rectangle first (so text appears on top)
   # Use same style as ECDF plots
   p <- p +
-    annotate("rect",
-             xmin = box_xmin, xmax = box_xmax,
-             ymin = box_ymin, ymax = box_ymax,
-             fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
-             linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
-  
+    annotate(
+      "rect",
+      xmin = box_xmin,
+      xmax = box_xmax,
+      ymin = box_ymin,
+      ymax = box_ymax,
+      fill = rgb(244, 244, 244, maxColorValue = 255),
+      alpha = 0.65,
+      linewidth = 0.2,
+      color = rgb(20, 20, 16, maxColorValue = 255)
+    )
+
   # Add two separate text annotations on top of background
-  p <- p + 
-    annotate("text", x = annot_x, y = annot_y1,
-            label = label_expr_r,
-            hjust = 0, vjust = 1, size = 3.31, parse = TRUE) +
-    annotate("text", x = annot_x, y = annot_y2,
-            label = label_expr_tau,
-            hjust = 0, vjust = 1, size = 3.31, parse = TRUE)
-  
+  p <- p +
+    annotate(
+      "text",
+      x = annot_x,
+      y = annot_y1,
+      label = label_expr_r,
+      hjust = 0,
+      vjust = 1,
+      size = 3.31,
+      parse = TRUE
+    ) +
+    annotate(
+      "text",
+      x = annot_x,
+      y = annot_y2,
+      label = label_expr_tau,
+      hjust = 0,
+      vjust = 1,
+      size = 3.31,
+      parse = TRUE
+    )
+
   # Attach plot dimensions as attributes for export functions
   attr(p, "plot_width") <- plot_width
   attr(p, "plot_height") <- plot_height
-  
+
   return(p)
 }
 
@@ -2096,7 +2721,6 @@ plot_bivariate_density <- function(scores_prior,
 # - fbox-framed figure inclusion via \includegraphics
 # - Faster iteration (edit .tex and recompile without R)
 # See generate_summary_grid_latex() at the end of this file.
-
 
 # [REMOVED: create_summary_grid_v2 function - replaced by generate_summary_grid_latex()]
 # The following function has been removed to eliminate patchwork-based summary grid.
@@ -2114,10 +2738,8 @@ plot_bivariate_density <- function(scores_prior,
 # The generate_summary_grid_latex() function at the end of this file provides
 # the replacement functionality.
 
-
-
 #' Master function to generate all plots for one condition
-#' 
+#'
 #' @param pseudo_obs Matrix of pseudo-observations
 #' @param original_scores data.table with SCALE_SCORE_PRIOR and SCALE_SCORE_CURRENT
 #' @param copula_results List of fitted copula results for all families
@@ -2130,40 +2752,41 @@ plot_bivariate_density <- function(scores_prior,
 #' @param export_formats Character vector of formats: "pdf", "svg", "png". Default: all three
 #' @param export_dpi Numeric. Base DPI for raster outputs. Default: 300
 #' @param export_verbose Logical. Print export messages? Default: FALSE
-#' 
+#'
 #' @return List of generated plots
-generate_condition_plots <- function(pseudo_obs,
-                                   original_scores,
-                                   copula_results,
-                                   best_family,
-                                   output_dir,
-                                   condition_info,
-                                   bootstrap_results = NULL,
-                                   empirical_copulas = NULL,
-                                   save_plots = TRUE,
-                                   grid_size = 300,
-                                   export_formats = c("pdf", "svg", "png"),
-                                   export_dpi = 300,
-                                   export_verbose = FALSE) {
-  
+generate_condition_plots <- function(
+  pseudo_obs,
+  original_scores,
+  copula_results,
+  best_family,
+  output_dir,
+  condition_info,
+  bootstrap_results = NULL,
+  empirical_copulas = NULL,
+  save_plots = TRUE,
+  grid_size = 300,
+  export_formats = c("pdf", "svg", "png"),
+  export_dpi = 300,
+  export_verbose = FALSE
+) {
   # Create output directory structure
   # New organization: PARAMETRIC/ and EMPIRICAL/ subdirectories
   if (save_plots && !dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
   }
-  
+
   # Create PARAMETRIC and EMPIRICAL subdirectories
   parametric_dir <- file.path(output_dir, "PARAMETRIC")
   empirical_dir <- file.path(output_dir, "EMPIRICAL")
   empirical_raw_dir <- file.path(empirical_dir, "RAW")
   empirical_bernstein_dir <- file.path(empirical_dir, "BERNSTEIN")
-  
+
   if (save_plots) {
     dir.create(parametric_dir, showWarnings = FALSE, recursive = TRUE)
     dir.create(empirical_raw_dir, showWarnings = FALSE, recursive = TRUE)
     dir.create(empirical_bernstein_dir, showWarnings = FALSE, recursive = TRUE)
   }
-  
+
   # Helper function to save ggplot in multiple formats
   # Falls back to PDF-only if export_ggplot_multi_format is not available
   save_ggplot_multi <- function(plot_obj, file_path, width = 6, height = 7) {
@@ -2188,7 +2811,7 @@ generate_condition_plots <- function(pseudo_obs,
       )
     }
   }
-  
+
   # Create descriptive subtitle and axis labels from condition_info
   create_plot_labels <- function(condition_info) {
     # Format content area with SGP::capwords if available
@@ -2197,94 +2820,130 @@ generate_condition_plots <- function(pseudo_obs,
     } else {
       tools::toTitleCase(tolower(condition_info$content))
     }
-    
+
     # Subtitle: For example: "Mathematics | 2005 Grade 4 → 2006 Grade 5"
-    subtitle <- sprintf("%s | %s Grade %d -> %s Grade %d",
-                       content_formatted,
-                       condition_info$year_prior,
-                       condition_info$grade_prior,
-                       condition_info$year_current,
-                       condition_info$grade_current)
-    
+    subtitle <- sprintf(
+      "%s | %s Grade %d -> %s Grade %d",
+      content_formatted,
+      condition_info$year_prior,
+      condition_info$grade_prior,
+      condition_info$year_current,
+      condition_info$grade_current
+    )
+
     # Axis labels with grade-specific subscripts
     x_label <- bquote(u[.(paste("Grade", condition_info$grade_prior))])
     y_label <- bquote(v[.(paste("Grade", condition_info$grade_current))])
-    
+
     return(list(subtitle = subtitle, x_label = x_label, y_label = y_label))
   }
-  
+
   # Generate labels
   labels <- create_plot_labels(condition_info)
-  
+
   # Initialize plot list
   plots <- list()
-  
-  cat(sprintf("Generating copula contour plots for: %s\n", 
-             basename(output_dir)))
-  
+
+  cat(sprintf(
+    "Generating copula contour plots for: %s\n",
+    basename(output_dir)
+  ))
+
   # 1. Calculate empirical copula grids (both CDF and PDF)
   cat("  - Computing empirical copula CDF...\n")
-  empirical_grid_cdf <- calculate_empirical_copula_grid(pseudo_obs, 
-                                                        grid_size = grid_size,
-                                                        method = "ecdf")
-  
+  empirical_grid_cdf <- calculate_empirical_copula_grid(
+    pseudo_obs,
+    grid_size = grid_size,
+    method = "ecdf"
+  )
+
   cat("  - Computing empirical copula PDF...\n")
-  empirical_grid_pdf <- calculate_empirical_copula_grid(pseudo_obs, 
-                                                        grid_size = grid_size,
-                                                        method = "density")
-  
+  empirical_grid_pdf <- calculate_empirical_copula_grid(
+    pseudo_obs,
+    grid_size = grid_size,
+    method = "density"
+  )
+
   # 2. Plot empirical copula (CDF and PDF versions)
   # Calculate Kendall's tau from pseudo-observations for empirical titles
   n_pairs <- nrow(original_scores)
   n_formatted <- format(n_pairs, big.mark = ",", scientific = FALSE)
   empirical_tau <- cor(pseudo_obs[, 1], pseudo_obs[, 2], method = "kendall")
   tau_value_emp <- sprintf("%.3f", empirical_tau)
-  
+
   # Create titles with tau and n (matching parametric copula format)
   title_empirical_cdf <- bquote(
-    "Empirical Copula (" * tau * " = " * .(tau_value_emp) * ", n = " * .(n_formatted) * ")"
+    "Empirical Copula (" *
+      tau *
+      " = " *
+      .(tau_value_emp) *
+      ", n = " *
+      .(n_formatted) *
+      ")"
   )
   title_empirical_pdf <- bquote(
-    "Empirical Copula (PDF) (" * tau * " = " * .(tau_value_emp) * ", n = " * .(n_formatted) * ")"
+    "Empirical Copula (PDF) (" *
+      tau *
+      " = " *
+      .(tau_value_emp) *
+      ", n = " *
+      .(n_formatted) *
+      ")"
   )
-  
-  plots$empirical_cdf <- plot_empirical_copula_contour(empirical_grid_cdf, 
-                                                       title = title_empirical_cdf,
-                                                       subtitle = labels$subtitle,
-                                                       x_label = labels$x_label,
-                                                       y_label = labels$y_label)
-  plots$empirical_pdf <- plot_empirical_copula_contour(empirical_grid_pdf, 
-                                                       title = title_empirical_pdf,
-                                                       subtitle = labels$subtitle,
-                                                       x_label = labels$x_label,
-                                                       y_label = labels$y_label)
-  
+
+  plots$empirical_cdf <- plot_empirical_copula_contour(
+    empirical_grid_cdf,
+    title = title_empirical_cdf,
+    subtitle = labels$subtitle,
+    x_label = labels$x_label,
+    y_label = labels$y_label
+  )
+  plots$empirical_pdf <- plot_empirical_copula_contour(
+    empirical_grid_pdf,
+    title = title_empirical_pdf,
+    subtitle = labels$subtitle,
+    x_label = labels$x_label,
+    y_label = labels$y_label
+  )
+
   # NOTE: KDE-based empirical copula plots (empirical_cdf/pdf) are NOT saved.
   # Only Raw (Deheuvels) and Bernstein smoothed copulas are used downstream.
   # The plots are still computed and stored in the plots list for potential use,
   # but file output goes to EMPIRICAL/RAW/ and EMPIRICAL/BERNSTEIN/ subdirectories.
-  
+
   # === Create empirical copula method plots if empCopula objects provided ===
   if (!is.null(empirical_copulas) && length(empirical_copulas) >= 2) {
     cat("  - Generating additional empirical copula method plots...\n")
-    
+
     # Create grid sequences for evaluation
     u_seq <- seq(0.01, 0.99, length.out = grid_size)
     v_seq <- seq(0.01, 0.99, length.out = grid_size)
-    
+
     # 1. Raw (Deheuvels) empirical CDF - save to EMPIRICAL/RAW/
     cat("    • Raw empirical copula CDF\n")
     raw_grid_cdf <- list(
       u_grid = matrix(rep(u_seq, each = length(v_seq)), nrow = length(u_seq)),
       v_grid = matrix(rep(v_seq, length(u_seq)), nrow = length(u_seq)),
-      copula_values = matrix(pCopula(as.matrix(expand.grid(u_seq, v_seq)), 
-                                     copula = empirical_copulas$raw), 
-                             nrow = length(u_seq)),
+      copula_values = matrix(
+        pCopula(
+          as.matrix(expand.grid(u_seq, v_seq)),
+          copula = empirical_copulas$raw
+        ),
+        nrow = length(u_seq)
+      ),
       method = "ecdf"
     )
-    
-    title_raw_cdf <- bquote("Raw Empirical Copula (" * tau * " = " * .(tau_value_emp) * ", n = " * .(n_formatted) * ")")
-    
+
+    title_raw_cdf <- bquote(
+      "Raw Empirical Copula (" *
+        tau *
+        " = " *
+        .(tau_value_emp) *
+        ", n = " *
+        .(n_formatted) *
+        ")"
+    )
+
     plots$raw_empirical_cdf <- plot_empirical_copula_contour(
       raw_grid_cdf,
       title = title_raw_cdf,
@@ -2292,27 +2951,42 @@ generate_condition_plots <- function(pseudo_obs,
       x_label = labels$x_label,
       y_label = labels$y_label
     )
-    
+
     if (save_plots) {
       # Save to EMPIRICAL/RAW/ subdirectory
-      save_ggplot_multi(plots$raw_empirical_cdf,
-                       file.path(empirical_raw_dir, "raw_copula_CDF"),
-                       width = 7, height = 7)
+      save_ggplot_multi(
+        plots$raw_empirical_cdf,
+        file.path(empirical_raw_dir, "raw_copula_CDF"),
+        width = 7,
+        height = 7
+      )
     }
-    
+
     # 2. Bernstein empirical CDF - save to EMPIRICAL/BERNSTEIN/
     cat("    • Bernstein empirical copula CDF\n")
     bern_grid_cdf <- list(
       u_grid = raw_grid_cdf$u_grid,
       v_grid = raw_grid_cdf$v_grid,
-      copula_values = matrix(pCopula(as.matrix(expand.grid(u_seq, v_seq)), 
-                                     copula = empirical_copulas$bernstein), 
-                             nrow = length(u_seq)),
+      copula_values = matrix(
+        pCopula(
+          as.matrix(expand.grid(u_seq, v_seq)),
+          copula = empirical_copulas$bernstein
+        ),
+        nrow = length(u_seq)
+      ),
       method = "ecdf"
     )
-    
-    title_bern_cdf <- bquote("Bernstein Empirical Copula (" * tau * " = " * .(tau_value_emp) * ", n = " * .(n_formatted) * ")")
-    
+
+    title_bern_cdf <- bquote(
+      "Bernstein Empirical Copula (" *
+        tau *
+        " = " *
+        .(tau_value_emp) *
+        ", n = " *
+        .(n_formatted) *
+        ")"
+    )
+
     plots$bernstein_empirical_cdf <- plot_empirical_copula_contour(
       bern_grid_cdf,
       title = title_bern_cdf,
@@ -2320,14 +2994,17 @@ generate_condition_plots <- function(pseudo_obs,
       x_label = labels$x_label,
       y_label = labels$y_label
     )
-    
+
     if (save_plots) {
       # Save to EMPIRICAL/BERNSTEIN/ subdirectory
-      save_ggplot_multi(plots$bernstein_empirical_cdf,
-                       file.path(empirical_bernstein_dir, "bernstein_copula_CDF"),
-                       width = 7, height = 7)
+      save_ggplot_multi(
+        plots$bernstein_empirical_cdf,
+        file.path(empirical_bernstein_dir, "bernstein_copula_CDF"),
+        width = 7,
+        height = 7
+      )
     }
-    
+
     # 3. Comparison: Bernstein vs Raw - save to EMPIRICAL/ (comparison between methods)
     cat("    • Comparison: Bernstein vs Raw\n")
     comparison_bern_vs_raw <- plot_empirical_methods_comparison(
@@ -2341,24 +3018,27 @@ generate_condition_plots <- function(pseudo_obs,
       sample_size = n_pairs,
       show_stats = TRUE
     )
-    
+
     if (save_plots) {
       # Save to EMPIRICAL/ subdirectory (comparison between empirical methods)
-      save_ggplot_multi(comparison_bern_vs_raw,
-                       file.path(empirical_dir, "comparison_raw_vs_bernstein_CDF"),
-                       width = 8.5, height = 7)
+      save_ggplot_multi(
+        comparison_bern_vs_raw,
+        file.path(empirical_dir, "comparison_raw_vs_bernstein_CDF"),
+        width = 8.5,
+        height = 7
+      )
     }
-    
+
     # NOTE: KDE comparison is skipped - KDE is not used downstream for SGPc calculation.
     # Only Raw (Deheuvels) and Bernstein smoothed copulas are used in the analysis pipeline.
     # See README.md for details on the decision to exclude KDE.
-    
+
     # Store grids for later SGP comparison (if SGP_ORDER_1 is available)
     plots$raw_grid_cdf <- raw_grid_cdf
     plots$bern_grid_cdf <- bern_grid_cdf
   }
   # === END NEW ===
-  
+
   # === MEMORY CLEANUP: Empirical Plots ===
   # Remove temporary grid objects from empirical copula section
   # Helps prevent memory accumulation with 180+ parallel workers
@@ -2366,71 +3046,82 @@ generate_condition_plots <- function(pseudo_obs,
   # Only remove raw_grid_* and bern_grid_* which are fully consumed by this point
   rm(list = ls(pattern = "^raw_grid_|^bern_grid_"))
   # Remove empirical_grid_pdf but NOT empirical_grid_cdf (needed for uncertainty plots)
-  if (exists("empirical_grid_pdf")) rm(empirical_grid_pdf)
+  if (exists("empirical_grid_pdf")) {
+    rm(empirical_grid_pdf)
+  }
   invisible(gc(reset = TRUE))
   # === END MEMORY CLEANUP ===
-  
+
   # === ENRICH COPULA RESULTS WITH COMPARATIVE METRICS ===
   # Calculate delta_aic and aic_weight for all families before plotting
   # This allows the comparison plots to show relative fit statistics
-  
+
   # Extract AIC values for all families
   aic_values <- sapply(copula_results, function(x) {
     if (!is.null(x) && !is.null(x$aic)) x$aic else NA_real_
   })
-  
+
   # Find minimum AIC (excluding NA)
   min_aic <- min(aic_values, na.rm = TRUE)
-  
+
   # Calculate AIC weights
   if (!is.infinite(min_aic) && !is.na(min_aic)) {
     delta_aics <- aic_values - min_aic
     exp_terms <- exp(-0.5 * delta_aics)
     sum_exp <- sum(exp_terms, na.rm = TRUE)
-    
+
     # Enrich each copula result with delta_aic and aic_weight
     for (family in names(copula_results)) {
       if (!is.null(copula_results[[family]])) {
         copula_results[[family]]$delta_aic <- delta_aics[family]
         copula_results[[family]]$aic_weight <- exp_terms[family] / sum_exp
-        
+
         # Note: gof_statistic and gof_pvalue require GoF tests (n_bootstrap_gof > 0)
         # The plotting code handles their absence gracefully
       }
     }
-    cat("  - Enriched copula results with delta_aic and aic_weight for relative fit statistics\n")
+    cat(
+      "  - Enriched copula results with delta_aic and aic_weight for relative fit statistics\n"
+    )
   }
   # === END ENRICHMENT ===
-  
+
   # 3. Plot each fitted parametric copula (both CDF and PDF)
-  cat("  - Generating parametric copula plots (CDF and PDF for each family)...\n")
+  cat(
+    "  - Generating parametric copula plots (CDF and PDF for each family)...\n"
+  )
   for (family in names(copula_results)) {
     if (!is.null(copula_results[[family]])) {
-      
       # Create family-specific subdirectory under PARAMETRIC/
       family_dir <- file.path(parametric_dir, toupper(family))
       if (save_plots && !dir.exists(family_dir)) {
         dir.create(family_dir, recursive = TRUE)
       }
-      
+
       # Get fitted copula
       if (family == "comonotonic") {
-        fitted_cop <- NULL  # Special handling for comonotonic
+        fitted_cop <- NULL # Special handling for comonotonic
       } else {
         fitted_cop <- copula_results[[family]]$copula
       }
-      
+
       # Format tau value for title (n_pairs and n_formatted already defined above)
       tau_value <- sprintf("%.3f", copula_results[[family]]$kendall_tau)
-      
+
       # Generate CDF plot (copula IS a CDF, no need to say "CDF")
       # Use bquote() for proper Greek tau rendering in PDF export
       title_expr <- bquote(
-        .(tools::toTitleCase(family)) ~ " Copula (" * tau * " = " * .(tau_value) * ", n = " * .(n_formatted) * ")"
+        .(tools::toTitleCase(family)) ~ " Copula (" *
+          tau *
+          " = " *
+          .(tau_value) *
+          ", n = " *
+          .(n_formatted) *
+          ")"
       )
-      
+
       plots[[paste0(family, "_cdf")]] <- plot_parametric_copula_contour(
-        fitted_cop, 
+        fitted_cop,
         family,
         grid_size = grid_size,
         plot_type = "cdf",
@@ -2440,14 +3131,20 @@ generate_condition_plots <- function(pseudo_obs,
         x_label = labels$x_label,
         y_label = labels$y_label
       )
-      
+
       # Generate PDF plot (explicitly label as PDF/density)
       title_expr_pdf <- bquote(
-        .(tools::toTitleCase(family)) ~ " Copula Density Function (PDF) (" * tau * " = " * .(tau_value) * ", n = " * .(n_formatted) * ")"
+        .(tools::toTitleCase(family)) ~ " Copula Density Function (PDF) (" *
+          tau *
+          " = " *
+          .(tau_value) *
+          ", n = " *
+          .(n_formatted) *
+          ")"
       )
-      
+
       plots[[paste0(family, "_pdf")]] <- plot_parametric_copula_contour(
-        fitted_cop, 
+        fitted_cop,
         family,
         grid_size = grid_size,
         plot_type = "density",
@@ -2457,59 +3154,81 @@ generate_condition_plots <- function(pseudo_obs,
         x_label = labels$x_label,
         y_label = labels$y_label
       )
-      
+
       if (save_plots) {
         # Save to family subdirectory (multi-format)
-        save_ggplot_multi(plots[[paste0(family, "_cdf")]],
-                         file.path(family_dir, sprintf("%s_copula_CDF", family)),
-                         width = 7, height = 7)  # No legend (removed for CDF)
-        save_ggplot_multi(plots[[paste0(family, "_pdf")]],
-                         file.path(family_dir, sprintf("%s_copula_PDF", family)),
-                         width = 8.5, height = 7)  # Has legend
+        save_ggplot_multi(
+          plots[[paste0(family, "_cdf")]],
+          file.path(family_dir, sprintf("%s_copula_CDF", family)),
+          width = 7,
+          height = 7
+        ) # No legend (removed for CDF)
+        save_ggplot_multi(
+          plots[[paste0(family, "_pdf")]],
+          file.path(family_dir, sprintf("%s_copula_PDF", family)),
+          width = 8.5,
+          height = 7
+        ) # Has legend
       }
     }
   }
-  
+
   # === MEMORY CLEANUP: Parametric Plots ===
   # Remove plot objects from parametric loop to prevent accumulation
   # Critical for 180+ parallel workers processing 966 conditions
   rm(list = ls(pattern = "^parametric_grid_"))
   invisible(gc(reset = TRUE))
   # === END MEMORY CLEANUP ===
-  
+
   # 4. Create comparison plots (empirical vs each parametric family)
   # Now includes SGPc comparison panel and exports summary files
-  cat("  - Creating comparison plots with SGPc panels (empirical vs parametric)...\n")
-  
+  cat(
+    "  - Creating comparison plots with SGPc panels (empirical vs parametric)...\n"
+  )
+
   # Extract traditional SGP columns from original_scores if available
   # Supports both legacy (SGP_ORDER_1, SGP) and span-specific (SGP_ORDER_1_SPAN_N_YEAR) naming
   sgp_order_1 <- NULL
   sgp_best <- NULL
   sgp_order_1_col_name <- NULL
   sgp_col_name <- NULL
-  
+
   if (!is.null(original_scores)) {
     # Check for SGP_ORDER_1 column (span-specific or legacy)
     # Pattern: SGP_ORDER_1_SPAN_N_YEAR (new) or SGP_ORDER_1 (legacy)
-    sgp_order_1_cols <- grep("^SGP_ORDER_1(_SPAN_[0-9]_YEAR)?$", names(original_scores), value = TRUE)
-    
+    sgp_order_1_cols <- grep(
+      "^SGP_ORDER_1(_SPAN_[0-9]_YEAR)?$",
+      names(original_scores),
+      value = TRUE
+    )
+
     if (length(sgp_order_1_cols) > 0) {
       # Prefer span-specific if available, otherwise use legacy
       if (any(grepl("_SPAN_", sgp_order_1_cols))) {
-        sgp_order_1_col_name <- sgp_order_1_cols[grepl("_SPAN_", sgp_order_1_cols)][1]
+        sgp_order_1_col_name <- sgp_order_1_cols[grepl(
+          "_SPAN_",
+          sgp_order_1_cols
+        )][1]
       } else {
         sgp_order_1_col_name <- "SGP_ORDER_1"
       }
       sgp_order_1 <- original_scores[[sgp_order_1_col_name]]
       n_valid_sgp1 <- sum(!is.na(sgp_order_1))
-      cat(sprintf("    Found SGP_ORDER_1: %d valid values (%.1f%%)\n",
-                  n_valid_sgp1, 100 * n_valid_sgp1 / nrow(original_scores)))
+      cat(sprintf(
+        "    Found SGP_ORDER_1: %d valid values (%.1f%%)\n",
+        n_valid_sgp1,
+        100 * n_valid_sgp1 / nrow(original_scores)
+      ))
     }
-    
+
     # Check for SGP column (span-specific or legacy)
     # Pattern: SGP_SPAN_N_YEAR (new) or SGP (legacy)
-    sgp_cols <- grep("^SGP(_SPAN_[0-9]_YEAR)?$", names(original_scores), value = TRUE)
-    
+    sgp_cols <- grep(
+      "^SGP(_SPAN_[0-9]_YEAR)?$",
+      names(original_scores),
+      value = TRUE
+    )
+
     if (length(sgp_cols) > 0) {
       # Prefer span-specific if available, otherwise use legacy
       if (any(grepl("_SPAN_", sgp_cols))) {
@@ -2519,225 +3238,320 @@ generate_condition_plots <- function(pseudo_obs,
       }
       sgp_best <- original_scores[[sgp_col_name]]
       n_valid_sgpb <- sum(!is.na(sgp_best))
-      cat(sprintf("    Found SGP (best): %d valid values (%.1f%%)\n",
-                  n_valid_sgpb, 100 * n_valid_sgpb / nrow(original_scores)))
+      cat(sprintf(
+        "    Found SGP (best): %d valid values (%.1f%%)\n",
+        n_valid_sgpb,
+        100 * n_valid_sgpb / nrow(original_scores)
+      ))
     }
-    
+
     if (is.null(sgp_order_1) && is.null(sgp_best)) {
       cat("    No traditional SGP columns found in original_scores\n")
     }
   }
-  
+
   # Calculate SGPc for empirical copula (Bernstein) once for all comparisons
   sgpc_empirical <- NULL
   if (!is.null(empirical_copulas) && !is.null(empirical_copulas$bernstein)) {
     cat("    Calculating SGPc for empirical (Bernstein) copula...\n")
     u_obs <- pseudo_obs[, 1]
     v_obs <- pseudo_obs[, 2]
-    
-    sgpc_empirical <- tryCatch({
-      sgpc_engine(u_obs, v_obs, empirical_copulas$bernstein, scale = "percentile")
-    }, error = function(e) {
-      warning("Failed to calculate empirical SGPc: ", e$message)
-      NULL
-    })
-    
+
+    sgpc_empirical <- tryCatch(
+      {
+        sgpc_engine(
+          u_obs,
+          v_obs,
+          empirical_copulas$bernstein,
+          scale = "percentile"
+        )
+      },
+      error = function(e) {
+        warning("Failed to calculate empirical SGPc: ", e$message)
+        NULL
+      }
+    )
+
     if (!is.null(sgpc_empirical)) {
-      cat(sprintf("      Empirical SGPc: n=%d, mean=%.1f, sd=%.1f\n",
-                  sum(!is.na(sgpc_empirical)),
-                  mean(sgpc_empirical, na.rm = TRUE),
-                  sd(sgpc_empirical, na.rm = TRUE)))
+      cat(sprintf(
+        "      Empirical SGPc: n=%d, mean=%.1f, sd=%.1f\n",
+        sum(!is.na(sgpc_empirical)),
+        mean(sgpc_empirical, na.rm = TRUE),
+        sd(sgpc_empirical, na.rm = TRUE)
+      ))
     }
   } else {
-    cat("    WARNING: No Bernstein empirical copula available for SGPc calculation\n")
+    cat(
+      "    WARNING: No Bernstein empirical copula available for SGPc calculation\n"
+    )
   }
-  
+
   # Calculate SGPc for Raw empirical copula (for comparison)
   sgpc_raw <- NULL
   if (!is.null(empirical_copulas) && !is.null(empirical_copulas$raw)) {
     cat("    Calculating SGPc for empirical (Raw) copula...\n")
     u_obs <- pseudo_obs[, 1]
     v_obs <- pseudo_obs[, 2]
-    
-    sgpc_raw <- tryCatch({
-      sgpc_engine(u_obs, v_obs, empirical_copulas$raw, scale = "percentile")
-    }, error = function(e) {
-      warning("Failed to calculate raw empirical SGPc: ", e$message)
-      NULL
-    })
-    
+
+    sgpc_raw <- tryCatch(
+      {
+        sgpc_engine(u_obs, v_obs, empirical_copulas$raw, scale = "percentile")
+      },
+      error = function(e) {
+        warning("Failed to calculate raw empirical SGPc: ", e$message)
+        NULL
+      }
+    )
+
     if (!is.null(sgpc_raw)) {
-      cat(sprintf("      Raw SGPc: n=%d, mean=%.1f, sd=%.1f\n",
-                  sum(!is.na(sgpc_raw)),
-                  mean(sgpc_raw, na.rm = TRUE),
-                  sd(sgpc_raw, na.rm = TRUE)))
+      cat(sprintf(
+        "      Raw SGPc: n=%d, mean=%.1f, sd=%.1f\n",
+        sum(!is.na(sgpc_raw)),
+        mean(sgpc_raw, na.rm = TRUE),
+        sd(sgpc_raw, na.rm = TRUE)
+      ))
     }
   }
-  
+
   # Generate SGPc vs SGP comparison plots for empirical copulas
   # These show dual-percentage 10x10 grids comparing empirical SGPc to traditional SGP
   # Saved to EMPIRICAL/RAW/ and EMPIRICAL/BERNSTEIN/ subdirectories
   # Column name is stored in sgp_order_1_col_name (may be span-specific or legacy)
   if (!is.null(sgp_order_1) && sum(!is.na(sgp_order_1)) > 10) {
-    cat("  - Creating SGPc vs SGP_ORDER_1 comparison plots for empirical copulas...\n")
+    cat(
+      "  - Creating SGPc vs SGP_ORDER_1 comparison plots for empirical copulas...\n"
+    )
     u_obs <- pseudo_obs[, 1]
-    
+
     # Bernstein vs SGP (dual-percentage grid)
     if (!is.null(sgpc_empirical)) {
       cat("    • Bernstein SGPc vs SGP_ORDER_1 (dual-percentage grid)\n")
-      bernstein_vs_sgp <- tryCatch({
-        plot_empirical_vs_sgp_dual_pct(
-          sgpc_empirical = sgpc_empirical,
-          sgp_order_1 = sgp_order_1,
-          u_obs = u_obs,
-          method = "bernstein",
-          show_stats = TRUE
-        )
-      }, error = function(e) {
-        warning("Failed to create Bernstein vs SGP comparison: ", e$message)
-        NULL
-      })
-      
+      bernstein_vs_sgp <- tryCatch(
+        {
+          plot_empirical_vs_sgp_dual_pct(
+            sgpc_empirical = sgpc_empirical,
+            sgp_order_1 = sgp_order_1,
+            u_obs = u_obs,
+            method = "bernstein",
+            show_stats = TRUE
+          )
+        },
+        error = function(e) {
+          warning("Failed to create Bernstein vs SGP comparison: ", e$message)
+          NULL
+        }
+      )
+
       if (!is.null(bernstein_vs_sgp) && save_plots) {
-        save_ggplot_multi(bernstein_vs_sgp$plot,
-                         file.path(empirical_bernstein_dir, "bernstein_vs_SGP_ORDER_1_comparison"),
-                         width = 7, height = 12)
+        save_ggplot_multi(
+          bernstein_vs_sgp$plot,
+          file.path(
+            empirical_bernstein_dir,
+            "bernstein_vs_SGP_ORDER_1_comparison"
+          ),
+          width = 7,
+          height = 12
+        )
         plots$bernstein_vs_sgp <- bernstein_vs_sgp$plot
-        cat("      Saved to: EMPIRICAL/BERNSTEIN/bernstein_vs_SGP_ORDER_1_comparison.pdf\n")
+        cat(
+          "      Saved to: EMPIRICAL/BERNSTEIN/bernstein_vs_SGP_ORDER_1_comparison.pdf\n"
+        )
       }
     }
-    
+
     # Raw vs SGP (dual-percentage grid)
     if (!is.null(sgpc_raw)) {
       cat("    • Raw SGPc vs SGP_ORDER_1 (dual-percentage grid)\n")
-      raw_vs_sgp <- tryCatch({
-        plot_empirical_vs_sgp_dual_pct(
-          sgpc_empirical = sgpc_raw,
-          sgp_order_1 = sgp_order_1,
-          u_obs = u_obs,
-          method = "raw",
-          show_stats = TRUE
-        )
-      }, error = function(e) {
-        warning("Failed to create Raw vs SGP comparison: ", e$message)
-        NULL
-      })
-      
+      raw_vs_sgp <- tryCatch(
+        {
+          plot_empirical_vs_sgp_dual_pct(
+            sgpc_empirical = sgpc_raw,
+            sgp_order_1 = sgp_order_1,
+            u_obs = u_obs,
+            method = "raw",
+            show_stats = TRUE
+          )
+        },
+        error = function(e) {
+          warning("Failed to create Raw vs SGP comparison: ", e$message)
+          NULL
+        }
+      )
+
       if (!is.null(raw_vs_sgp) && save_plots) {
-        save_ggplot_multi(raw_vs_sgp$plot,
-                         file.path(empirical_raw_dir, "raw_vs_SGP_ORDER_1_comparison"),
-                         width = 7, height = 12)
+        save_ggplot_multi(
+          raw_vs_sgp$plot,
+          file.path(empirical_raw_dir, "raw_vs_SGP_ORDER_1_comparison"),
+          width = 7,
+          height = 12
+        )
         plots$raw_vs_sgp <- raw_vs_sgp$plot
         cat("      Saved to: EMPIRICAL/RAW/raw_vs_SGP_ORDER_1_comparison.pdf\n")
       }
     }
   } else {
-    cat("  - Skipping SGPc vs SGP_ORDER_1 comparison (no valid SGP_ORDER_1 data)\n")
+    cat(
+      "  - Skipping SGPc vs SGP_ORDER_1 comparison (no valid SGP_ORDER_1 data)\n"
+    )
   }
-  
+
   # Generate combined Raw vs Bernstein comparison (copula diff + ECDF + heatmap)
-  if (!is.null(sgpc_raw) && !is.null(sgpc_empirical) && !is.null(empirical_copulas)) {
+  if (
+    !is.null(sgpc_raw) &&
+      !is.null(sgpc_empirical) &&
+      !is.null(empirical_copulas)
+  ) {
     cat("  - Creating combined Raw vs Bernstein comparison plot...\n")
     u_obs <- pseudo_obs[, 1]
-    
-    raw_vs_bern_combined <- tryCatch({
-      plot_empirical_copula_comparison_with_sgpc(
-        empirical_copulas = empirical_copulas,
-        sgpc_raw = sgpc_raw,
-        sgpc_bernstein = sgpc_empirical,
-        u_obs = u_obs,
-        grid_size = grid_size,
-        subtitle = labels$subtitle,
-        x_label = labels$x_label,
-        y_label = labels$y_label,
-        sample_size = n_pairs
-      )
-    }, error = function(e) {
-      warning("Failed to create combined Raw vs Bernstein comparison: ", e$message)
-      NULL
-    })
-    
+
+    raw_vs_bern_combined <- tryCatch(
+      {
+        plot_empirical_copula_comparison_with_sgpc(
+          empirical_copulas = empirical_copulas,
+          sgpc_raw = sgpc_raw,
+          sgpc_bernstein = sgpc_empirical,
+          u_obs = u_obs,
+          grid_size = grid_size,
+          subtitle = labels$subtitle,
+          x_label = labels$x_label,
+          y_label = labels$y_label,
+          sample_size = n_pairs
+        )
+      },
+      error = function(e) {
+        warning(
+          "Failed to create combined Raw vs Bernstein comparison: ",
+          e$message
+        )
+        NULL
+      }
+    )
+
     if (!is.null(raw_vs_bern_combined) && save_plots) {
-      save_ggplot_multi(raw_vs_bern_combined$combined_plot,
-                       file.path(empirical_dir, "comparison_raw_vs_bernstein_full"),
-                       width = 15, height = 8)
+      save_ggplot_multi(
+        raw_vs_bern_combined$combined_plot,
+        file.path(empirical_dir, "comparison_raw_vs_bernstein_full"),
+        width = 15,
+        height = 8
+      )
       plots$raw_vs_bernstein_combined <- raw_vs_bern_combined$combined_plot
       cat("    • Saved combined Raw vs Bernstein plot to EMPIRICAL/\n")
     }
   }
-  
+
   for (family in names(copula_results)) {
     if (!is.null(copula_results[[family]])) {
-      
       # Use PARAMETRIC subdirectory for family-specific outputs
       family_dir <- file.path(parametric_dir, toupper(family))
-      
+
       if (family != "comonotonic") {
         fitted_copula <- copula_results[[family]]$copula
       } else {
         fitted_copula <- NULL
       }
-      
+
       # Calculate SGPc for this parametric family
       sgpc_parametric <- NULL
       if (!is.null(sgpc_empirical)) {
         cat(sprintf("    Calculating SGPc for %s copula...\n", family))
         u_obs <- pseudo_obs[, 1]
         v_obs <- pseudo_obs[, 2]
-        
-        sgpc_parametric <- tryCatch({
-          if (family == "comonotonic") {
-            sgpc_engine(u_obs, v_obs, "comonotonic", scale = "percentile")
-          } else {
-            sgpc_engine(u_obs, v_obs, fitted_copula, scale = "percentile")
+
+        sgpc_parametric <- tryCatch(
+          {
+            if (family == "comonotonic") {
+              sgpc_engine(u_obs, v_obs, "comonotonic", scale = "percentile")
+            } else {
+              sgpc_engine(u_obs, v_obs, fitted_copula, scale = "percentile")
+            }
+          },
+          error = function(e) {
+            warning(sprintf(
+              "Failed to calculate %s SGPc: %s",
+              family,
+              e$message
+            ))
+            NULL
           }
-        }, error = function(e) {
-          warning(sprintf("Failed to calculate %s SGPc: %s", family, e$message))
-          NULL
-        })
+        )
       }
-      
+
       # Create combined comparison plot with SGPc panel if both SGPc available
       if (!is.null(sgpc_empirical) && !is.null(sgpc_parametric)) {
-        cat(sprintf("    Creating combined comparison plot for %s...\n", family))
-        
-        comparison_result <- tryCatch({
-          plot_copula_comparison_with_sgpc(
-            empirical_grid = empirical_grid_cdf,
-            fitted_copula = fitted_copula,
-            family = family,
-            sgpc_empirical = sgpc_empirical,
-            sgpc_parametric = sgpc_parametric,
-            u_obs = u_obs,  # Pass prior pseudo-obs for decile heatmap
-            subtitle = labels$subtitle,
-            x_label = labels$x_label,
-            y_label = labels$y_label,
-            copula_result = copula_results[[family]],
-            sgp_order_1 = sgp_order_1,  # Traditional SGP (single prior)
-            sgp_best = sgp_best          # Traditional SGP (best available)
-          )
-        }, error = function(e) {
-          warning(sprintf("Failed to create combined plot for %s: %s", family, e$message))
-          NULL
-        })
-        
+        cat(sprintf(
+          "    Creating combined comparison plot for %s...\n",
+          family
+        ))
+
+        comparison_result <- tryCatch(
+          {
+            plot_copula_comparison_with_sgpc(
+              empirical_grid = empirical_grid_cdf,
+              fitted_copula = fitted_copula,
+              family = family,
+              sgpc_empirical = sgpc_empirical,
+              sgpc_parametric = sgpc_parametric,
+              u_obs = u_obs, # Pass prior pseudo-obs for decile heatmap
+              subtitle = labels$subtitle,
+              x_label = labels$x_label,
+              y_label = labels$y_label,
+              copula_result = copula_results[[family]],
+              sgp_order_1 = sgp_order_1, # Traditional SGP (single prior)
+              sgp_best = sgp_best # Traditional SGP (best available)
+            )
+          },
+          error = function(e) {
+            warning(sprintf(
+              "Failed to create combined plot for %s: %s",
+              family,
+              e$message
+            ))
+            NULL
+          }
+        )
+
         if (!is.null(comparison_result)) {
-          plots[[paste0("comparison_", family)]] <- comparison_result$copula_diff_plot
-          plots[[paste0("comparison_full_", family)]] <- comparison_result$combined_plot
-          cat(sprintf("      ✓ Combined plot created for %s (copula diff + ECDF + heatmap)\n", family))
-          
+          plots[[paste0(
+            "comparison_",
+            family
+          )]] <- comparison_result$copula_diff_plot
+          plots[[paste0(
+            "comparison_full_",
+            family
+          )]] <- comparison_result$combined_plot
+          cat(sprintf(
+            "      ✓ Combined plot created for %s (copula diff + ECDF + heatmap)\n",
+            family
+          ))
+
           if (save_plots) {
             # Save individual copula diff plot (legacy filename for compatibility)
-            save_ggplot_multi(comparison_result$copula_diff_plot,
-                             file.path(family_dir, sprintf("comparison_empirical_vs_%s_CDF", family)),
-                             width = 8.5, height = 7)
-            
+            save_ggplot_multi(
+              comparison_result$copula_diff_plot,
+              file.path(
+                family_dir,
+                sprintf("comparison_empirical_vs_%s_CDF", family)
+              ),
+              width = 8.5,
+              height = 7
+            )
+
             # Save combined plot (copula diff + ECDF + heatmap) - 15x8 matches test_heatmap.R dimensions
-            save_ggplot_multi(comparison_result$combined_plot,
-                             file.path(family_dir, sprintf("comparison_empirical_vs_%s_full", family)),
-                             width = 15, height = 8)
-            cat(sprintf("      ✓ Saved comparison_empirical_vs_%s_full to %s\n", family, family_dir))
-            
+            save_ggplot_multi(
+              comparison_result$combined_plot,
+              file.path(
+                family_dir,
+                sprintf("comparison_empirical_vs_%s_full", family)
+              ),
+              width = 15,
+              height = 8
+            )
+            cat(sprintf(
+              "      ✓ Saved comparison_empirical_vs_%s_full to %s\n",
+              family,
+              family_dir
+            ))
+
             # Export summary files (.md and .json)
             export_copula_summary(
               output_dir = family_dir,
@@ -2747,7 +3561,10 @@ generate_condition_plots <- function(pseudo_obs,
               sgpc_stats = comparison_result$statistics,
               copula_diff_stats = comparison_result$copula_diff_stats,
               n_pairs = n_pairs,
-              base_filename = sprintf("comparison_empirical_vs_%s_summary", family)
+              base_filename = sprintf(
+                "comparison_empirical_vs_%s_summary",
+                family
+              )
             )
             cat(sprintf("      Exported summary files for %s\n", family))
           }
@@ -2755,7 +3572,10 @@ generate_condition_plots <- function(pseudo_obs,
       } else {
         # Fallback: Create basic comparison plot without SGPc panel
         # This happens when SGPc is not calculated (no Bernstein copula or calculation failed)
-        cat(sprintf("      ⚠ SGPc not available for %s - using basic comparison plot (no ECDF/heatmap)\n", family))
+        cat(sprintf(
+          "      ⚠ SGPc not available for %s - using basic comparison plot (no ECDF/heatmap)\n",
+          family
+        ))
         plots[[paste0("comparison_", family)]] <- plot_copula_comparison(
           empirical_grid_cdf,
           fitted_copula,
@@ -2767,45 +3587,65 @@ generate_condition_plots <- function(pseudo_obs,
           copula_result = copula_results[[family]],
           show_stats = TRUE
         )
-        
+
         if (save_plots) {
-          save_ggplot_multi(plots[[paste0("comparison_", family)]],
-                           file.path(family_dir, sprintf("comparison_empirical_vs_%s_CDF", family)),
-                           width = 8.5, height = 7)
-          
+          save_ggplot_multi(
+            plots[[paste0("comparison_", family)]],
+            file.path(
+              family_dir,
+              sprintf("comparison_empirical_vs_%s_CDF", family)
+            ),
+            width = 8.5,
+            height = 7
+          )
+
           # Calculate copula diff stats for fallback export
           u_seq <- seq(0.01, 0.99, length.out = grid_size)
           v_seq <- seq(0.01, 0.99, length.out = grid_size)
           grid <- expand.grid(u = u_seq, v = v_seq)
-          
+
           if (family == "comonotonic") {
             parametric_values <- pmin(grid$u, grid$v)
           } else {
             parametric_values <- pCopula(as.matrix(grid), fitted_copula)
           }
-          
-          diff_values <- as.vector(empirical_grid_cdf$copula_values) - parametric_values
-          
+
+          diff_values <- as.vector(empirical_grid_cdf$copula_values) -
+            parametric_values
+
           # Calculate tail statistics for fallback
-          emp_cdf_mat <- matrix(as.vector(empirical_grid_cdf$copula_values), 
-                                nrow = grid_size, ncol = grid_size, byrow = FALSE)
-          par_cdf_mat <- matrix(parametric_values, 
-                                nrow = grid_size, ncol = grid_size, byrow = FALSE)
-          
+          emp_cdf_mat <- matrix(
+            as.vector(empirical_grid_cdf$copula_values),
+            nrow = grid_size,
+            ncol = grid_size,
+            byrow = FALSE
+          )
+          par_cdf_mat <- matrix(
+            parametric_values,
+            nrow = grid_size,
+            ncol = grid_size,
+            byrow = FALSE
+          )
+
           fallback_tail_stats <- calculate_copula_tail_statistics(
-            u_seq = u_seq, v_seq = v_seq,
+            u_seq = u_seq,
+            v_seq = v_seq,
             cdf_mat_1 = emp_cdf_mat,
             cdf_mat_2 = par_cdf_mat,
             tau_tail = 0.10
           )
-          
+
           fallback_copula_diff_stats <- list(
             max_positive = max(diff_values, na.rm = TRUE),
             max_negative = min(diff_values, na.rm = TRUE),
             mean_abs_diff = mean(abs(diff_values), na.rm = TRUE),
             median_abs_diff = median(abs(diff_values), na.rm = TRUE),
             rmse_diff = sqrt(mean(diff_values^2, na.rm = TRUE)),
-            q95_abs_diff = as.numeric(quantile(abs(diff_values), 0.95, na.rm = TRUE)),
+            q95_abs_diff = as.numeric(quantile(
+              abs(diff_values),
+              0.95,
+              na.rm = TRUE
+            )),
             # Tail behaviour statistics
             tau_tail = fallback_tail_stats$tau_tail,
             lambda_L_emp = fallback_tail_stats$lambda_L_1,
@@ -2817,7 +3657,7 @@ generate_condition_plots <- function(pseudo_obs,
             tail_LL_rmse = fallback_tail_stats$tail_LL_rmse,
             tail_UU_rmse = fallback_tail_stats$tail_UU_rmse
           )
-          
+
           # Export summary files without SGPc stats
           export_copula_summary(
             output_dir = family_dir,
@@ -2827,27 +3667,32 @@ generate_condition_plots <- function(pseudo_obs,
             sgpc_stats = NULL,
             copula_diff_stats = fallback_copula_diff_stats,
             n_pairs = n_pairs,
-            base_filename = sprintf("comparison_empirical_vs_%s_summary", family)
+            base_filename = sprintf(
+              "comparison_empirical_vs_%s_summary",
+              family
+            )
           )
-          cat(sprintf("      Exported summary files for %s (no SGPc)\n", family))
+          cat(sprintf(
+            "      Exported summary files for %s (no SGPc)\n",
+            family
+          ))
         }
       }
     }
   }
-  
+
   # 4b. Add bootstrap uncertainty overlay plots if bootstrap results available
   if (!is.null(bootstrap_results)) {
     cat("  - Creating bootstrap uncertainty overlay plots...\n")
-    
+
     # Get sample size for title
     n_sample <- nrow(original_scores)
-    
+
     for (family in names(copula_results)) {
       if (!is.null(copula_results[[family]]) && family != "comonotonic") {
-        
         cat(sprintf("    Processing %s family...\n", family))
         family_dir <- file.path(parametric_dir, toupper(family))
-        
+
         # Calculate bootstrap uncertainty for CDF
         cat("      Calculating CDF uncertainty...\n")
         uncertainty_cdf <- calculate_bootstrap_uncertainty(
@@ -2856,10 +3701,10 @@ generate_condition_plots <- function(pseudo_obs,
           grid_size = grid_size,
           method = "cdf"
         )
-        
+
         if (!is.null(uncertainty_cdf)) {
           # Create ribbon plot with gradient uncertainty (CDF)
-          plots[[paste0(family, "_uncertainty_cdf")]] <- 
+          plots[[paste0(family, "_uncertainty_cdf")]] <-
             plot_copula_with_uncertainty_ribbons(
               empirical_grid = empirical_grid_cdf,
               uncertainty_results = uncertainty_cdf,
@@ -2870,40 +3715,58 @@ generate_condition_plots <- function(pseudo_obs,
               x_label = labels$x_label,
               y_label = labels$y_label
             )
-          
+
           if (save_plots) {
-            save_ggplot_multi(plots[[paste0(family, "_uncertainty_cdf")]],
-                             file.path(family_dir, sprintf("%s_copula_with_uncertainty_CDF", family)),
-                             width = 7, height = 7)  # No legend (square for coord_equal)
+            save_ggplot_multi(
+              plots[[paste0(family, "_uncertainty_cdf")]],
+              file.path(
+                family_dir,
+                sprintf("%s_copula_with_uncertainty_CDF", family)
+              ),
+              width = 7,
+              height = 7
+            ) # No legend (square for coord_equal)
           }
         } else {
           cat("      WARNING: No uncertainty results for", family, "CDF\n")
         }
-        
-        # Note: PDF uncertainty plots are skipped - the ribbon visualization 
-        # is designed for CDFs (bounded [0,1]) and doesn't translate well to 
+
+        # Note: PDF uncertainty plots are skipped - the ribbon visualization
+        # is designed for CDFs (bounded [0,1]) and doesn't translate well to
         # unbounded PDF values. Standard PDF plots without uncertainty are sufficient.
       }
     }
-    
+
     cat("  - Bootstrap uncertainty plots complete!\n")
     # Now we can clean up empirical_grid_cdf as it's no longer needed
-    if (exists("empirical_grid_cdf")) rm(empirical_grid_cdf)
+    if (exists("empirical_grid_cdf")) {
+      rm(empirical_grid_cdf)
+    }
     invisible(gc(reset = TRUE))
   } else {
     cat("  - No bootstrap results provided, skipping uncertainty plots\n")
     # Clean up empirical_grid_cdf even if bootstrap was skipped
-    if (exists("empirical_grid_cdf")) rm(empirical_grid_cdf)
+    if (exists("empirical_grid_cdf")) {
+      rm(empirical_grid_cdf)
+    }
     invisible(gc(reset = TRUE))
   }
-  
+
   # 5. Plot original bivariate density
   cat("  - Creating bivariate density plot of original scores...\n")
-  
+
   # Create specific labels with year and grade info
-  x_label <- sprintf("%s Grade %d", condition_info$year_prior, condition_info$grade_prior)
-  y_label <- sprintf("%s Grade %d", condition_info$year_current, condition_info$grade_current)
-  
+  x_label <- sprintf(
+    "%s Grade %d",
+    condition_info$year_prior,
+    condition_info$grade_prior
+  )
+  y_label <- sprintf(
+    "%s Grade %d",
+    condition_info$year_current,
+    condition_info$grade_current
+  )
+
   plots$original <- plot_bivariate_density(
     original_scores$SCALE_SCORE_PRIOR,
     original_scores$SCALE_SCORE_CURRENT,
@@ -2913,59 +3776,66 @@ generate_condition_plots <- function(pseudo_obs,
     y_label = y_label,
     sample_size = n_pairs
   )
-  
+
   if (save_plots) {
-    save_ggplot_multi(plots$original,
-                     file.path(output_dir, "bivariate_density_original"),
-                     width = 7, height = 7)  # Square format, legend inside plot
+    save_ggplot_multi(
+      plots$original,
+      file.path(output_dir, "bivariate_density_original"),
+      width = 7,
+      height = 7
+    ) # Square format, legend inside plot
   }
-  
+
   # 6. Create summary grid (LaTeX-based for precise layout control)
   cat("  - Creating summary grid (LaTeX)...\n")
-  
+
   if (save_plots) {
     # Generate LaTeX-based summary grid
     # Uses \includegraphics to embed existing PDFs with fbox framing
     # Metadata rendered as native LaTeX text for optimal typography
-    tryCatch({
-      generate_summary_grid_latex(
-        output_dir = output_dir,
-        condition_info = condition_info,
-        best_family = best_family,
-        copula_results = copula_results,
-        sgpc_stats = NULL,
-        compile_pdf = TRUE,
-        keep_tex = FALSE,  # Set TRUE for debugging
-        fbox_sep = 1,
-        export_formats = export_formats,
-        export_dpi = export_dpi
-      )
-    }, error = function(e) {
-      warning("LaTeX summary grid generation failed: ", e$message)
-      cat("    ✗ summary_grid.pdf generation failed\n")
-    })
+    tryCatch(
+      {
+        generate_summary_grid_latex(
+          output_dir = output_dir,
+          condition_info = condition_info,
+          best_family = best_family,
+          copula_results = copula_results,
+          sgpc_stats = NULL,
+          compile_pdf = TRUE,
+          keep_tex = FALSE, # Set TRUE for debugging
+          fbox_sep = 1,
+          export_formats = export_formats,
+          export_dpi = export_dpi
+        )
+      },
+      error = function(e) {
+        warning("LaTeX summary grid generation failed: ", e$message)
+        cat("    ✗ summary_grid.pdf generation failed\n")
+      }
+    )
   }
-  
+
   cat("  - Complete!\n\n")
-  
+
   return(plots)
 }
 
 #' Create comparison matrix across multiple conditions
-#' 
+#'
 #' @param condition_dirs Vector of directories containing condition results
 #' @param output_file Path for output PDF
 #' @param plot_type Type of plots to compare
-#' 
+#'
 #' @return None (saves to file)
-create_cross_condition_comparison <- function(condition_dirs,
-                                             output_file,
-                                             plot_type = "empirical") {
-  
+create_cross_condition_comparison <- function(
+  condition_dirs,
+  output_file,
+  plot_type = "empirical"
+) {
   # Implementation for creating matrix of plots across conditions
   # This would load saved data from each condition and create comparison
   # To be implemented based on specific needs
-  
+
   warning("Cross-condition comparison not yet fully implemented")
 }
 
@@ -2974,7 +3844,9 @@ create_cross_condition_comparison <- function(condition_dirs,
 #' Check if ggdensity package is available and suggest installation
 check_ggdensity <- function() {
   if (!requireNamespace("ggdensity", quietly = TRUE)) {
-    message("Note: The 'ggdensity' package can provide enhanced density visualizations.")
+    message(
+      "Note: The 'ggdensity' package can provide enhanced density visualizations."
+    )
     message("Install with: install.packages('ggdensity')")
     message("Proceeding with standard ggplot2 methods.")
     return(FALSE)
@@ -2983,10 +3855,10 @@ check_ggdensity <- function() {
 }
 
 #' Use ggdensity for enhanced contour plots if available
-#' 
+#'
 #' @param data Data for plotting
 #' @param ... Additional arguments
-#' 
+#'
 #' @return ggplot object
 plot_with_ggdensity <- function(data, ...) {
   if (check_ggdensity()) {
@@ -3000,10 +3872,10 @@ plot_with_ggdensity <- function(data, ...) {
 }
 
 #' Plot Parametric Copula Contours with Bootstrap Uncertainty
-#' 
+#'
 #' Visualizes copula density with uncertainty bands derived from parametric bootstrap.
 #' Shows how parameter uncertainty affects the copula density across the unit square.
-#' 
+#'
 #' @param fitted_copula Fitted copula object (point estimate)
 #' @param bootstrap_results Output from bootstrap_copula_estimation()
 #' @param family Copula family name ("gaussian", "t", "clayton", "gumbel", "frank")
@@ -3014,20 +3886,20 @@ plot_with_ggdensity <- function(data, ...) {
 #'   - "quantiles": Side-by-side comparison of lower/point/upper
 #' @param alpha Confidence level (default 0.90 for 90% bands)
 #' @param title Optional custom title
-#' 
+#'
 #' @return ggplot object with uncertainty visualization
-#' 
+#'
 #' @details
-#' The bootstrap results should come from bootstrap_copula_estimation() with 
+#' The bootstrap results should come from bootstrap_copula_estimation() with
 #' sampling_method="paired" to preserve within-student correlation structure.
-#' 
+#'
 #' For each bootstrap sample:
 #' 1. Evaluates copula density on grid
 #' 2. Calculates pointwise quantiles across bootstrap samples
 #' 3. Visualizes uncertainty as bands or heatmaps
-#' 
+#'
 #' Wider bands indicate greater parameter uncertainty in that region.
-#' 
+#'
 #' @examples
 #' # After running bootstrap_copula_estimation():
 #' plot_copula_with_uncertainty(
@@ -3037,82 +3909,120 @@ plot_with_ggdensity <- function(data, ...) {
 #'   uncertainty_method = "confidence_band",
 #'   alpha = 0.90
 #' )
-plot_copula_with_uncertainty <- function(fitted_copula,
-                                        bootstrap_results,
-                                        family,
-                                        grid_size = 300,
-                                        uncertainty_method = "confidence_band",
-                                        alpha = 0.90,
-                                        title = NULL,
-                                        subtitle = NULL,
-                                        x_label = expression(u[prior]),
-                                        y_label = expression(v[current])) {
-  
+plot_copula_with_uncertainty <- function(
+  fitted_copula,
+  bootstrap_results,
+  family,
+  grid_size = 300,
+  uncertainty_method = "confidence_band",
+  alpha = 0.90,
+  title = NULL,
+  subtitle = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current])
+) {
   require(ggplot2)
   require(data.table)
   require(copula)
-  
+
   # Create evaluation grid
   u_seq <- seq(0.01, 0.99, length.out = grid_size)
   v_seq <- seq(0.01, 0.99, length.out = grid_size)
   grid <- expand.grid(u = u_seq, v = v_seq)
   grid_matrix <- as.matrix(grid)
-  
+
   # Evaluate point estimate (original fit)
   density_point <- dCopula(grid_matrix, fitted_copula)
-  
+
   # Evaluate on each bootstrap copula
   n_bootstrap <- length(bootstrap_results$bootstrap_results)
   density_boot_matrix <- matrix(NA, nrow = nrow(grid), ncol = n_bootstrap)
-  
-  cat("  Evaluating", n_bootstrap, "bootstrap copulas on", grid_size, "x", grid_size, "grid...\n")
-  
+
+  cat(
+    "  Evaluating",
+    n_bootstrap,
+    "bootstrap copulas on",
+    grid_size,
+    "x",
+    grid_size,
+    "grid...\n"
+  )
+
   n_success <- 0
   for (b in 1:n_bootstrap) {
     boot_result <- bootstrap_results$bootstrap_results[[b]]
     if (!is.null(boot_result) && !is.null(boot_result$results[[family]])) {
       boot_cop <- boot_result$results[[family]]$copula
       if (!is.null(boot_cop)) {
-        tryCatch({
-          density_boot_matrix[, b] <- dCopula(grid_matrix, boot_cop)
-          n_success <- n_success + 1
-        }, error = function(e) {
-          # Skip failed evaluations
-        })
+        tryCatch(
+          {
+            density_boot_matrix[, b] <- dCopula(grid_matrix, boot_cop)
+            n_success <- n_success + 1
+          },
+          error = function(e) {
+            # Skip failed evaluations
+          }
+        )
       }
     }
   }
-  
-  cat("  Successfully evaluated", n_success, "of", n_bootstrap, "bootstrap samples\n")
-  
+
+  cat(
+    "  Successfully evaluated",
+    n_success,
+    "of",
+    n_bootstrap,
+    "bootstrap samples\n"
+  )
+
   if (n_success < 10) {
-    warning("Too few successful bootstrap evaluations (<10). Uncertainty estimates may be unreliable.")
+    warning(
+      "Too few successful bootstrap evaluations (<10). Uncertainty estimates may be unreliable."
+    )
   }
-  
+
   # Calculate quantiles at each grid point
   # OPTIMIZED: Use matrixStats for 5-20× faster row-wise operations
   lower_quantile <- (1 - alpha) / 2
   upper_quantile <- 1 - lower_quantile
-  
+
   if (requireNamespace("matrixStats", quietly = TRUE)) {
     # Fast path: matrixStats
-    density_lower <- matrixStats::rowQuantiles(density_boot_matrix, probs = lower_quantile, na.rm = TRUE)
-    density_upper <- matrixStats::rowQuantiles(density_boot_matrix, probs = upper_quantile, na.rm = TRUE)
+    density_lower <- matrixStats::rowQuantiles(
+      density_boot_matrix,
+      probs = lower_quantile,
+      na.rm = TRUE
+    )
+    density_upper <- matrixStats::rowQuantiles(
+      density_boot_matrix,
+      probs = upper_quantile,
+      na.rm = TRUE
+    )
     density_median <- matrixStats::rowMedians(density_boot_matrix, na.rm = TRUE)
     density_sd <- matrixStats::rowSds(density_boot_matrix, na.rm = TRUE)
   } else {
     # Fallback: base R apply
-    density_lower <- apply(density_boot_matrix, 1, quantile, 
-                          probs = lower_quantile, na.rm = TRUE)
-    density_upper <- apply(density_boot_matrix, 1, quantile, 
-                          probs = upper_quantile, na.rm = TRUE)
+    density_lower <- apply(
+      density_boot_matrix,
+      1,
+      quantile,
+      probs = lower_quantile,
+      na.rm = TRUE
+    )
+    density_upper <- apply(
+      density_boot_matrix,
+      1,
+      quantile,
+      probs = upper_quantile,
+      na.rm = TRUE
+    )
     density_median <- apply(density_boot_matrix, 1, median, na.rm = TRUE)
     density_sd <- apply(density_boot_matrix, 1, sd, na.rm = TRUE)
   }
-  
+
   # Calculate coefficient of variation as uncertainty measure
-  density_cv <- density_sd / pmax(abs(density_point), 1e-6)  # Avoid division by zero
-  
+  density_cv <- density_sd / pmax(abs(density_point), 1e-6) # Avoid division by zero
+
   # Create plot data
   plot_data <- data.table(
     u = grid$u,
@@ -3121,17 +4031,19 @@ plot_copula_with_uncertainty <- function(fitted_copula,
     density_lower = density_lower,
     density_upper = density_upper,
     density_median = density_median,
-    density_cv = pmin(density_cv, 2)  # Cap at 2 for visualization
+    density_cv = pmin(density_cv, 2) # Cap at 2 for visualization
   )
-  
+
   # Default title - use bquote for consistent font rendering
   if (is.null(title)) {
-    title <- bquote(.(tools::toTitleCase(family)) ~ "Copula with" ~ 
-                   .(round(alpha * 100)) * "% Confidence Bands")
+    title <- bquote(
+      .(tools::toTitleCase(family)) ~ "Copula with" ~
+        .(round(alpha * 100)) * "% Confidence Bands"
+    )
   }
-  
+
   ## VISUALIZATION OPTIONS
-  
+
   if (uncertainty_method == "confidence_band") {
     # Option 1: Confidence bands (RECOMMENDED)
     p <- ggplot(plot_data, aes(x = u, y = v)) +
@@ -3139,17 +4051,41 @@ plot_copula_with_uncertainty <- function(fitted_copula,
       geom_contour_filled(aes(z = density_point), alpha = 0.5, bins = 15) +
       scale_fill_viridis_d(option = "plasma", name = "Density") +
       # Lower bound contours (dashed blue)
-      geom_contour(aes(z = density_lower), color = "blue", 
-                  alpha = 0.6, linetype = "dashed", linewidth = 0.6, bins = 10) +
+      geom_contour(
+        aes(z = density_lower),
+        color = "blue",
+        alpha = 0.6,
+        linetype = "dashed",
+        linewidth = 0.6,
+        bins = 10
+      ) +
       # Upper bound contours (dashed red)
-      geom_contour(aes(z = density_upper), color = "red", 
-                  alpha = 0.6, linetype = "dashed", linewidth = 0.6, bins = 10) +
+      geom_contour(
+        aes(z = density_upper),
+        color = "red",
+        alpha = 0.6,
+        linetype = "dashed",
+        linewidth = 0.6,
+        bins = 10
+      ) +
       # Point estimate (solid black)
-      geom_contour(aes(z = density_point), color = "black", linewidth = 0.8, bins = 15) +
+      geom_contour(
+        aes(z = density_point),
+        color = "black",
+        linewidth = 0.8,
+        bins = 15
+      ) +
       coord_equal() +
       labs(
         title = title,
-        subtitle = if (!is.null(subtitle)) subtitle else sprintf("Based on %d bootstrap samples (paired resampling)", n_success),
+        subtitle = if (!is.null(subtitle)) {
+          subtitle
+        } else {
+          sprintf(
+            "Based on %d bootstrap samples (paired resampling)",
+            n_success
+          )
+        },
         x = x_label,
         y = y_label,
         caption = "Black = Point estimate | Blue/Red dashed = Confidence bounds"
@@ -3164,22 +4100,42 @@ plot_copula_with_uncertainty <- function(fitted_copula,
         legend.position = "right",
         panel.grid.minor = element_blank()
       ) +
-      scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
-      scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
-    
+      scale_x_continuous(
+        breaks = seq(0, 1, 0.2),
+        limits = c(0, 1),
+        expand = expansion(mult = 0.02)
+      ) +
+      scale_y_continuous(
+        breaks = seq(0, 1, 0.2),
+        limits = c(0, 1),
+        expand = expansion(mult = 0.02)
+      )
   } else if (uncertainty_method == "uncertainty_heatmap") {
     # Option 2: Show uncertainty as heatmap
     p <- ggplot(plot_data, aes(x = u, y = v)) +
       # Uncertainty as background
       geom_raster(aes(fill = density_cv), alpha = 0.8) +
-      scale_fill_viridis_c(option = "magma", name = "CV\n(Uncertainty)", 
-                          limits = c(0, 2), oob = scales::squish) +
+      scale_fill_viridis_c(
+        option = "magma",
+        name = "CV\n(Uncertainty)",
+        limits = c(0, 2),
+        oob = scales::squish
+      ) +
       # Point estimate contours overlaid
-      geom_contour(aes(z = density_point), color = "white", linewidth = 0.6, bins = 15) +
+      geom_contour(
+        aes(z = density_point),
+        color = "white",
+        linewidth = 0.6,
+        bins = 15
+      ) +
       coord_equal() +
       labs(
         title = paste(title, "- Uncertainty Heatmap"),
-        subtitle = if (!is.null(subtitle)) subtitle else "Higher values = greater parameter uncertainty",
+        subtitle = if (!is.null(subtitle)) {
+          subtitle
+        } else {
+          "Higher values = greater parameter uncertainty"
+        },
         x = x_label,
         y = y_label
       ) +
@@ -3192,13 +4148,20 @@ plot_copula_with_uncertainty <- function(fitted_copula,
         plot.subtitle = element_text(hjust = 0.5, size = 10),
         legend.position = "right"
       ) +
-      scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02)) +
-      scale_y_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = expansion(mult = 0.02))
-    
+      scale_x_continuous(
+        breaks = seq(0, 1, 0.2),
+        limits = c(0, 1),
+        expand = expansion(mult = 0.02)
+      ) +
+      scale_y_continuous(
+        breaks = seq(0, 1, 0.2),
+        limits = c(0, 1),
+        expand = expansion(mult = 0.02)
+      )
   } else if (uncertainty_method == "quantiles") {
     # Option 3: Side-by-side quantile plots
     require(gridExtra)
-    
+
     base_theme <- theme_minimal() +
       theme(
         plot.background = element_rect(fill = "transparent", color = NA),
@@ -3208,48 +4171,79 @@ plot_copula_with_uncertainty <- function(fitted_copula,
         legend.position = "right",
         panel.grid.minor = element_blank()
       )
-    
+
     p1 <- ggplot(plot_data, aes(x = u, y = v, z = density_lower)) +
       geom_contour_filled(bins = 15, alpha = 0.7) +
       geom_contour(color = "black", alpha = 0.5, bins = 15) +
       scale_fill_viridis_d(option = "plasma", name = "Density") +
       coord_equal() +
-      labs(title = sprintf("Lower %d%%", round(lower_quantile * 100)),
-           x = x_label, y = y_label) +
+      labs(
+        title = sprintf("Lower %d%%", round(lower_quantile * 100)),
+        x = x_label,
+        y = y_label
+      ) +
       base_theme +
-      scale_x_continuous(breaks = seq(0, 1, 0.01), expand = expansion(mult = 0.02)) +
-      scale_y_continuous(breaks = seq(0, 1, 0.01), expand = expansion(mult = 0.02))
-    
+      scale_x_continuous(
+        breaks = seq(0, 1, 0.01),
+        expand = expansion(mult = 0.02)
+      ) +
+      scale_y_continuous(
+        breaks = seq(0, 1, 0.01),
+        expand = expansion(mult = 0.02)
+      )
+
     p2 <- ggplot(plot_data, aes(x = u, y = v, z = density_point)) +
       geom_contour_filled(bins = 15, alpha = 0.7) +
       geom_contour(color = "black", alpha = 0.5, bins = 15) +
       scale_fill_viridis_d(option = "plasma", name = "Density") +
       coord_equal() +
-      labs(title = "Point Estimate",
-           x = x_label, y = y_label) +
+      labs(title = "Point Estimate", x = x_label, y = y_label) +
       base_theme +
-      scale_x_continuous(breaks = seq(0, 1, 0.01), expand = expansion(mult = 0.02)) +
-      scale_y_continuous(breaks = seq(0, 1, 0.01), expand = expansion(mult = 0.02))
-    
+      scale_x_continuous(
+        breaks = seq(0, 1, 0.01),
+        expand = expansion(mult = 0.02)
+      ) +
+      scale_y_continuous(
+        breaks = seq(0, 1, 0.01),
+        expand = expansion(mult = 0.02)
+      )
+
     p3 <- ggplot(plot_data, aes(x = u, y = v, z = density_upper)) +
       geom_contour_filled(bins = 15, alpha = 0.7) +
       geom_contour(color = "black", alpha = 0.5, bins = 15) +
       scale_fill_viridis_d(option = "plasma", name = "Density") +
       coord_equal() +
-      labs(title = sprintf("Upper %d%%", round(upper_quantile * 100)),
-           x = x_label, y = y_label) +
+      labs(
+        title = sprintf("Upper %d%%", round(upper_quantile * 100)),
+        x = x_label,
+        y = y_label
+      ) +
       base_theme +
-      scale_x_continuous(breaks = seq(0, 1, 0.01), expand = expansion(mult = 0.02)) +
-      scale_y_continuous(breaks = seq(0, 1, 0.01), expand = expansion(mult = 0.02))
-    
-    p <- grid.arrange(p1, p2, p3, ncol = 3,
-                     top = grid::textGrob(
-                       sprintf("%s Copula - Bootstrap Quantiles (%d samples)", 
-                              tools::toTitleCase(family), n_success),
-                       gp = grid::gpar(fontsize = 14, fontface = "bold")
-                     ))
+      scale_x_continuous(
+        breaks = seq(0, 1, 0.01),
+        expand = expansion(mult = 0.02)
+      ) +
+      scale_y_continuous(
+        breaks = seq(0, 1, 0.01),
+        expand = expansion(mult = 0.02)
+      )
+
+    p <- grid.arrange(
+      p1,
+      p2,
+      p3,
+      ncol = 3,
+      top = grid::textGrob(
+        sprintf(
+          "%s Copula - Bootstrap Quantiles (%d samples)",
+          tools::toTitleCase(family),
+          n_success
+        ),
+        gp = grid::gpar(fontsize = 14, fontface = "bold")
+      )
+    )
   }
-  
+
   return(p)
 }
 
@@ -3278,7 +4272,7 @@ plot_copula_with_uncertainty <- function(fitted_copula,
 #'
 #' The top panel shows ECDFs:
 #' - Black line: Empirical copula SGPc
-#' - Blue line: Parametric copula SGPc  
+#' - Blue line: Parametric copula SGPc
 #' - Dashed grey: Uniform reference (labeled)
 #'
 #' The bottom panel shows a 10x10 decile heatmap:
@@ -3292,61 +4286,62 @@ plot_copula_with_uncertainty <- function(fitted_copula,
 #' The heatmap shows how the parametric copula deviates from this ideal.
 #'
 #' @export
-plot_sgpc_comparison_panel <- function(sgpc_empirical,
-                                       sgpc_parametric,
-                                       u_obs = NULL,
-                                       family,
-                                       show_stats = TRUE,
-                                       show_cutpoints = TRUE,
-                                       sgp_order_1 = NULL,
-                                       sgp_best = NULL) {
-  
+plot_sgpc_comparison_panel <- function(
+  sgpc_empirical,
+  sgpc_parametric,
+  u_obs = NULL,
+  family,
+  show_stats = TRUE,
+  show_cutpoints = TRUE,
+  sgp_order_1 = NULL,
+  sgp_best = NULL
+) {
   require(ggplot2)
   require(data.table)
-  
+
   # Use 0-100 scale internally, display as 1-99
   x_limits <- c(0, 100)
   x_breaks <- c(0, 20, 40, 60, 80, 100)
   x_labels <- c("1", "20", "40", "60", "80", "99")
-  
+
   # Capitalize family name for display
   family_title <- tools::toTitleCase(family)
-  
+
   # Define colors for all methods (Wes Anderson Zissou1-inspired)
   color_empirical <- "black"
-  color_parametric <- "#DD00DD"  # Magenta
-  color_sgp_order_1 <- "#3B9AB2"  # Teal-green (Zissou1)
-  color_sgp_best <- "#E1AF00"     # Gold (Zissou1)
-  
+  color_parametric <- "#DD00DD" # Magenta
+  color_sgp_order_1 <- "#3B9AB2" # Teal-green (Zissou1)
+  color_sgp_best <- "#E1AF00" # Gold (Zissou1)
+
   # Remove NAs and work with raw percentile values
   valid_idx <- !is.na(sgpc_empirical) & !is.na(sgpc_parametric)
   s_emp <- sgpc_empirical[valid_idx]
   s_par <- sgpc_parametric[valid_idx]
   n_valid <- length(s_emp)
-  
+
   # Also filter SGP values to same valid indices
   s_sgp1 <- if (!is.null(sgp_order_1)) sgp_order_1[valid_idx] else NULL
   s_sgpb <- if (!is.null(sgp_best)) sgp_best[valid_idx] else NULL
-  
+
   # Check which SGP columns have valid data
   has_sgp_order_1 <- !is.null(s_sgp1) && sum(!is.na(s_sgp1)) > 10
   has_sgp_best <- !is.null(s_sgpb) && sum(!is.na(s_sgpb)) > 10
-  
+
   if (n_valid < 10) {
     warning("Fewer than 10 valid SGPc pairs for comparison")
     return(NULL)
   }
-  
+
   # Calculate ECDFs on 0-100 scale
   ecdf_emp <- ecdf(s_emp)
   ecdf_par <- ecdf(s_par)
-  
+
   # Create evaluation grid (0-100)
   x_grid <- seq(0, 100, length.out = 500)
   F_emp <- ecdf_emp(x_grid)
   F_par <- ecdf_par(x_grid)
   delta_F <- F_emp - F_par
-  
+
   # Calculate ECDFs for traditional SGP if available
   F_sgp1 <- NULL
   F_sgpb <- NULL
@@ -3360,7 +4355,7 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
     ecdf_sgpb <- ecdf(s_sgpb_valid)
     F_sgpb <- ecdf_sgpb(x_grid)
   }
-  
+
   # Calculate enhanced statistics (SCENARIO B: Agreement)
   # This assesses how well the parametric copula approximates the empirical baseline
   statistics <- calculate_ecdf_statistics(
@@ -3371,89 +4366,168 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
     label1 = "Empirical",
     label2 = family_title
   )
-  
+
   # Prepare ECDF data for ggplot (copula-based methods)
   ecdf_data <- data.table(
     x = rep(x_grid, 2),
     F = c(F_emp, F_par),
     Source = rep(c("Empirical", family_title), each = length(x_grid))
   )
-  
+
   # Add SGP ECDF data if available
   if (has_sgp_order_1) {
-    ecdf_data <- rbind(ecdf_data, data.table(
-      x = x_grid,
-      F = F_sgp1,
-      Source = "SGP (1 prior)"
-    ))
+    ecdf_data <- rbind(
+      ecdf_data,
+      data.table(
+        x = x_grid,
+        F = F_sgp1,
+        Source = "SGP (1 prior)"
+      )
+    )
   }
   if (has_sgp_best) {
-    ecdf_data <- rbind(ecdf_data, data.table(
-      x = x_grid,
-      F = F_sgpb,
-      Source = "SGP (best)"
-    ))
+    ecdf_data <- rbind(
+      ecdf_data,
+      data.table(
+        x = x_grid,
+        F = F_sgpb,
+        Source = "SGP (best)"
+      )
+    )
   }
-  
+
   # --- Top Panel: ECDF Curves ---
   # Build subtitle dynamically based on which SGP data is available
   subtitle_parts <- c(
     "Black = Empirical",
-    paste0("<span style='color:", color_parametric, ";'>Magenta = ", family_title, "</span>")
+    paste0(
+      "<span style='color:",
+      color_parametric,
+      ";'>Magenta = ",
+      family_title,
+      "</span>"
+    )
   )
   if (has_sgp_order_1) {
-    subtitle_parts <- c(subtitle_parts, 
-                        paste0("<span style='color:", color_sgp_order_1, ";'>Teal = SGP (1 prior)</span>"))
+    subtitle_parts <- c(
+      subtitle_parts,
+      paste0(
+        "<span style='color:",
+        color_sgp_order_1,
+        ";'>Teal = SGP (1 prior)</span>"
+      )
+    )
   }
   if (has_sgp_best) {
-    subtitle_parts <- c(subtitle_parts, 
-                        paste0("<span style='color:", color_sgp_best, ";'>Gold = SGP (best)</span>"))
+    subtitle_parts <- c(
+      subtitle_parts,
+      paste0(
+        "<span style='color:",
+        color_sgp_best,
+        ";'>Gold = SGP (best)</span>"
+      )
+    )
   }
   subtitle_text <- paste(subtitle_parts, collapse = " | ")
-  
+
   p_ecdf <- ggplot() +
     # Uniform reference line (45 degrees on 0-100 scale)
-    geom_abline(slope = 0.01, intercept = 0, linetype = "dashed", 
-                color = "grey60", linewidth = 0.6) +
+    geom_abline(
+      slope = 0.01,
+      intercept = 0,
+      linetype = "dashed",
+      color = "grey60",
+      linewidth = 0.6
+    ) +
     # ECDF curves - Copula-based (solid lines)
-    geom_line(data = ecdf_data[Source == "Empirical"],
-              aes(x = x, y = F), color = color_empirical, linewidth = 0.5) +
-    geom_line(data = ecdf_data[Source == family_title],
-              aes(x = x, y = F), color = color_parametric, linewidth = 0.5)
-  
+    geom_line(
+      data = ecdf_data[Source == "Empirical"],
+      aes(x = x, y = F),
+      color = color_empirical,
+      linewidth = 0.5
+    ) +
+    geom_line(
+      data = ecdf_data[Source == family_title],
+      aes(x = x, y = F),
+      color = color_parametric,
+      linewidth = 0.5
+    )
+
   # Add SGP ECDF curves if available (dashed lines)
   if (has_sgp_order_1) {
     p_ecdf <- p_ecdf +
-      geom_line(data = ecdf_data[Source == "SGP (1 prior)"],
-                aes(x = x, y = F), color = color_sgp_order_1, linewidth = 0.5, linetype = "dashed")
+      geom_line(
+        data = ecdf_data[Source == "SGP (1 prior)"],
+        aes(x = x, y = F),
+        color = color_sgp_order_1,
+        linewidth = 0.5,
+        linetype = "dashed"
+      )
   }
   if (has_sgp_best) {
     p_ecdf <- p_ecdf +
-      geom_line(data = ecdf_data[Source == "SGP (best)"],
-                aes(x = x, y = F), color = color_sgp_best, linewidth = 0.5, linetype = "dashed")
+      geom_line(
+        data = ecdf_data[Source == "SGP (best)"],
+        aes(x = x, y = F),
+        color = color_sgp_best,
+        linewidth = 0.5,
+        linetype = "dashed"
+      )
   }
-  
+
   p_ecdf <- p_ecdf +
     # Label the uniform reference line
-    annotate("text", x = 85, y = 0.78, label = "Uniform\nreference",
-             size = 2.5, color = "grey50", hjust = 0, fontface = "italic") +
+    annotate(
+      "text",
+      x = 85,
+      y = 0.78,
+      label = "Uniform\nreference",
+      size = 2.5,
+      color = "grey50",
+      hjust = 0,
+      fontface = "italic"
+    ) +
     # Formatting
     coord_cartesian(xlim = x_limits, ylim = c(0, 1)) +
-    scale_x_continuous(breaks = x_breaks, labels = x_labels, expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), expand = expansion(mult = 0.02)) +
+    scale_x_continuous(
+      breaks = x_breaks,
+      labels = x_labels,
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      expand = expansion(mult = 0.02)
+    ) +
     labs(
       # Title matches left panel's bquote style
-      title = bquote("SGPc Difference:" ~ .(family_title) ~ "- Empirical Copula"),
+      title = bquote(
+        "SGPc Difference:" ~ .(family_title) ~ "- Empirical Copula"
+      ),
       subtitle = subtitle_text,
       x = "SGPc / SGP",
       y = "Cumulative Proportion"
     ) +
     theme_minimal() +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 14, face = "bold", margin = margin(0, 0, 5, 0, "pt")),
-      plot.subtitle = ggtext::element_markdown(hjust = 0.5, size = 7, color = "grey40"),
-      axis.title.x = element_text(size = 10, margin = margin(10, 0, 0, 0, "pt")),
-      axis.title.y = element_text(size = 10, margin = margin(0, 10, 0, 0, "pt")),
+      plot.title = element_text(
+        hjust = 0.5,
+        size = 14,
+        face = "bold",
+        margin = margin(0, 0, 5, 0, "pt")
+      ),
+      plot.subtitle = ggtext::element_markdown(
+        hjust = 0.5,
+        size = 7,
+        color = "grey40"
+      ),
+      axis.title.x = element_text(
+        size = 10,
+        margin = margin(10, 0, 0, 0, "pt")
+      ),
+      axis.title.y = element_text(
+        size = 10,
+        margin = margin(0, 10, 0, 0, "pt")
+      ),
       panel.grid.minor = element_blank(),
       # Margins: gap now handled by spacer column, so minimal left margin
       plot.margin = margin(10, 4, 2, 5, "pt"),
@@ -3462,72 +4536,121 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
       # Force aspect ratio to fill allocated width (height/width)
       aspect.ratio = 0.7
     )
-  
+
   # Add enhanced statistics annotation (SCENARIO B: Agreement)
   if (show_stats) {
     y_increment <- 0.04
     # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
     text_lines <- list(
-      list(y_offset = 0*y_increment, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
-      list(y_offset = 1*y_increment, label = sprintf("'mean (Emp/Par):'~%.1f~'/'~%.1f",
-                      statistics$mean1, statistics$mean2)),
-      list(y_offset = 2*y_increment, label = sprintf("'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
-                      statistics$spearman_rho, statistics$wasserstein1_pp)),
-      list(y_offset = 3*y_increment, label = sprintf("'Deviation:'~Q[90](abs(Delta))==%.1f~'|'~Q[95]==%.1f",
-                      statistics$q90_abs_diff, statistics$q95_abs_diff)),
-      list(y_offset = 4*y_increment, label = sprintf("P(abs(Delta) > 10)==%.3f~'|'~MAE==%.2f",
-                      statistics$pct_large_diff_10, statistics$mae)),
-      list(y_offset = 5*y_increment, label = sprintf("'KS (2-sample)'==%.4f", statistics$ks_distance))
+      list(
+        y_offset = 0 * y_increment,
+        label = sprintf(
+          "italic(n)== '%s'",
+          format(statistics$n, big.mark = ",")
+        )
+      ),
+      list(
+        y_offset = 1 * y_increment,
+        label = sprintf(
+          "'mean (Emp/Par):'~%.1f~'/'~%.1f",
+          statistics$mean1,
+          statistics$mean2
+        )
+      ),
+      list(
+        y_offset = 2 * y_increment,
+        label = sprintf(
+          "'Agreement:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+          statistics$spearman_rho,
+          statistics$wasserstein1_pp
+        )
+      ),
+      list(
+        y_offset = 3 * y_increment,
+        label = sprintf(
+          "'Deviation:'~Q[90](abs(Delta))==%.1f~'|'~Q[95]==%.1f",
+          statistics$q90_abs_diff,
+          statistics$q95_abs_diff
+        )
+      ),
+      list(
+        y_offset = 4 * y_increment,
+        label = sprintf(
+          "P(abs(Delta) > 10)==%.3f~'|'~MAE==%.2f",
+          statistics$pct_large_diff_10,
+          statistics$mae
+        )
+      ),
+      list(
+        y_offset = 5 * y_increment,
+        label = sprintf("'KS (2-sample)'==%.4f", statistics$ks_distance)
+      )
     )
-    
+
     # Add background box first
     # Find maximum y_offset to ensure box covers all text
     max_y_offset <- max(sapply(text_lines, function(x) x$y_offset))
     total_height <- max_y_offset + 0.05
     p_ecdf <- p_ecdf +
-      annotate("rect",
-               xmin = 2, xmax = 41,
-               ymin = 0.99 - total_height, ymax = 0.99,
-               fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
-               linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
-    
+      annotate(
+        "rect",
+        xmin = 2,
+        xmax = 41,
+        ymin = 0.99 - total_height,
+        ymax = 0.99,
+        fill = rgb(244, 244, 244, maxColorValue = 255),
+        alpha = 0.65,
+        linewidth = 0.2,
+        color = rgb(20, 20, 16, maxColorValue = 255)
+      )
+
     # Add each text line individually with immediate evaluation
     for (i in seq_along(text_lines)) {
       p_ecdf <- p_ecdf +
-        annotate("text",
-                 x = 3.5,
-                 y = 0.98 - text_lines[[i]]$y_offset,
-                 hjust = 0,
-                 vjust = 1,
-                 label = text_lines[[i]]$label,
-                 parse = TRUE,
-                 size = 2.0,
-                 color = "black")
+        annotate(
+          "text",
+          x = 3.5,
+          y = 0.98 - text_lines[[i]]$y_offset,
+          hjust = 0,
+          vjust = 1,
+          label = text_lines[[i]]$label,
+          parse = TRUE,
+          size = 2.0,
+          color = "black"
+        )
     }
   }
-  
+
   # --- Bottom Panel: 10x10 Decile Heatmap ---
   # Shows deviation: Parametric % - Empirical % (matches copula diff plot convention)
-  
+
   # Full armyblue palette for gradient (matches left panel)
   # Negative = Empirical higher (green), Positive = Parametric higher (blue)
   armyblue_palette <- c(
-    "#8A9048",  # most negative (Par - Emp < 0, empirical higher) - army olive
+    "#8A9048", # most negative (Par - Emp < 0, empirical higher) - army olive
     "#B7BA87",
     "#E2E4C8",
-    "#FCFCF4",  # neutral center (zero) - warm cream
+    "#FCFCF4", # neutral center (zero) - warm cream
     "#B7E3ED",
     "#7FC1D3",
-    "#3B9DC5"   # most positive (Par - Emp > 0, parametric higher) - army blue
+    "#3B9DC5" # most positive (Par - Emp > 0, parametric higher) - army blue
   )
-  
+
   # Check if we have u_obs for decile binning
   if (is.null(u_obs)) {
-    warning("u_obs not provided - cannot create decile heatmap. Using fallback.")
+    warning(
+      "u_obs not provided - cannot create decile heatmap. Using fallback."
+    )
     # Fallback: create a simple placeholder
     p_heatmap <- ggplot() +
-      annotate("text", x = 0.5, y = 0.5, label = "Prior scores (u_obs)\nnot available",
-               size = 4, color = "grey50") +
+      annotate(
+        "text",
+        x = 0.5,
+        y = 0.5,
+        label = "Prior scores (u_obs)\nnot available",
+        size = 4,
+        color = "grey50"
+      ) +
       theme_void() +
       theme(plot.margin = margin(2, 4, 7, 5, "pt"))
   } else {
@@ -3535,95 +4658,162 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
     # Prior deciles: based on u_obs (0-1 scale), as factors with all levels
     # Filter u_obs to same valid indices as SGPc data
     u_obs_valid <- u_obs[valid_idx]
-    prior_decile <- cut(u_obs_valid, breaks = seq(0, 1, 0.1), 
-                        labels = 1:10, include.lowest = TRUE)
+    prior_decile <- cut(
+      u_obs_valid,
+      breaks = seq(0, 1, 0.1),
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     prior_decile <- factor(prior_decile, levels = 1:10)
-    
+
     # SGPc deciles: based on 1-99 scale
     sgpc_breaks <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
-    sgpc_emp_decile <- cut(s_emp, breaks = sgpc_breaks, 
-                           labels = 1:10, include.lowest = TRUE)
+    sgpc_emp_decile <- cut(
+      s_emp,
+      breaks = sgpc_breaks,
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     sgpc_emp_decile <- factor(sgpc_emp_decile, levels = 1:10)
-    sgpc_par_decile <- cut(s_par, breaks = sgpc_breaks, 
-                           labels = 1:10, include.lowest = TRUE)
+    sgpc_par_decile <- cut(
+      s_par,
+      breaks = sgpc_breaks,
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     sgpc_par_decile <- factor(sgpc_par_decile, levels = 1:10)
-    
+
     # Count students in each cell for empirical (ensure all levels present)
     emp_counts <- table(prior_decile, sgpc_emp_decile, useNA = "no")
     # Use margin=1 to get conditional percentages within each prior decile column
     # Each column sums to 100%; under uniformity each cell should be 10%
     emp_pct <- prop.table(emp_counts, margin = 1) * 100
-    
+
     # Count students in each cell for parametric (ensure all levels present)
     par_counts <- table(prior_decile, sgpc_par_decile, useNA = "no")
     par_pct <- prop.table(par_counts, margin = 1) * 100
-    
+
     # Compute deviation: Parametric % - Empirical % (matches copula diff plot)
     # (Positive = parametric has more students in this cell than empirical)
     deviation <- par_pct - emp_pct
-    
+
     # Convert to data.table for ggplot
     # table() output: rows = prior_decile, cols = sgpc_decile
     # as.vector() on matrix goes column by column: [1,1], [2,1], ..., [10,1], [1,2], ...
     # expand.grid() expands first arg fastest: prior=1,sgpc=1; prior=2,sgpc=1; ...
     # So they match directly without transpose
-    heatmap_data <- data.table(expand.grid(prior_decile = 1:10, sgpc_decile = 1:10))
+    heatmap_data <- data.table(expand.grid(
+      prior_decile = 1:10,
+      sgpc_decile = 1:10
+    ))
     heatmap_data[, emp_pct := as.vector(emp_pct)]
     heatmap_data[, par_pct := as.vector(par_pct)]
     heatmap_data[, deviation := as.vector(deviation)]
-    
+
     # Fixed color scale range for consistency across all plots
     # Using ±20 as standard range for all 10x10 heatmaps
     color_limit <- 20
-    
+
     # NOTE: Marginal summary table removed per user request.
     # Traditional SGP comparison is shown via lines in the ECDF plot (top panel) only.
-    # For direct SGPc vs SGP_ORDER_1 comparison, see the dedicated plots in EMPIRICAL/RAW/ 
+    # For direct SGPc vs SGP_ORDER_1 comparison, see the dedicated plots in EMPIRICAL/RAW/
     # and EMPIRICAL/BERNSTEIN/ directories (e.g., bernstein_vs_SGP_ORDER_1_comparison.pdf).
-    
+
     # Create heatmap
     # Transposed: X = SGPc Decile (aligns with ECDF above), Y = Prior Score Decile
     p_heatmap <- ggplot(heatmap_data, aes(x = sgpc_decile, y = prior_decile)) +
       # Heatmap tiles
       geom_tile(aes(fill = deviation), color = "white", linewidth = 0.3) +
       # Cell text annotations: Empirical % (top, black) and Parametric % (bottom, magenta)
-      geom_text(aes(label = sprintf("%.1f", emp_pct)), 
-                size = 1.8, color = "black", nudge_y = 0.15) +
-      geom_text(aes(label = sprintf("%.1f", par_pct)), 
-                size = 1.8, color = color_parametric, nudge_y = -0.15) +
+      geom_text(
+        aes(label = sprintf("%.1f", emp_pct)),
+        size = 1.8,
+        color = "black",
+        nudge_y = 0.15
+      ) +
+      geom_text(
+        aes(label = sprintf("%.1f", par_pct)),
+        size = 1.8,
+        color = color_parametric,
+        nudge_y = -0.15
+      ) +
       # Color scale (armyblue diverging) - matches copula diff plot
       scale_fill_gradientn(
         colors = armyblue_palette,
-        values = scales::rescale(c(-color_limit, -color_limit*0.67, -color_limit*0.33, 
-                                   0, color_limit*0.33, color_limit*0.67, color_limit)),
+        values = scales::rescale(c(
+          -color_limit,
+          -color_limit * 0.67,
+          -color_limit * 0.33,
+          0,
+          color_limit * 0.33,
+          color_limit * 0.67,
+          color_limit
+        )),
         limits = c(-color_limit, color_limit),
-        oob = scales::squish,  # Clamp out-of-bounds to extremal colors
+        oob = scales::squish, # Clamp out-of-bounds to extremal colors
         name = "Deviation\n(Par - Emp)"
       ) +
       # Axis formatting - x-axis on top (SGPc Decile, aligns with ECDF)
-      scale_x_continuous(breaks = 1:10, expand = expansion(mult = 0.02),
-                         labels = c("1-10", "11-20", "21-30", "31-40", "41-50",
-                                   "51-60", "61-70", "71-80", "81-90", "91-99"), 
-                         position = "top") +
-      scale_y_reverse(breaks = 1:10, expand = expansion(mult = 0.02),
-                      labels = 1:10) +  # Reversed: Decile 1 at top, Decile 10 at bottom
-      coord_cartesian() +  # Allow flexible aspect ratio to fill available width
+      scale_x_continuous(
+        breaks = 1:10,
+        expand = expansion(mult = 0.02),
+        labels = c(
+          "1-10",
+          "11-20",
+          "21-30",
+          "31-40",
+          "41-50",
+          "51-60",
+          "61-70",
+          "71-80",
+          "81-90",
+          "91-99"
+        ),
+        position = "top"
+      ) +
+      scale_y_reverse(
+        breaks = 1:10,
+        expand = expansion(mult = 0.02),
+        labels = 1:10
+      ) + # Reversed: Decile 1 at top, Decile 10 at bottom
+      coord_cartesian() + # Allow flexible aspect ratio to fill available width
       labs(
         # Caption with colored text: parametric family in magenta
         caption = paste0(
-          "Cell: Emp% (top) / <span style='color:", color_parametric, ";'>", family_title, 
-          "% (bot)</span> | Blue: ", family_title, " > Emp | Green: Emp > ", family_title
+          "Cell: Emp% (top) / <span style='color:",
+          color_parametric,
+          ";'>",
+          family_title,
+          "% (bot)</span> | Blue: ",
+          family_title,
+          " > Emp | Green: Emp > ",
+          family_title
         ),
-        x = "SGPc Decile",  # X-axis label now on heatmap
+        x = "SGPc Decile", # X-axis label now on heatmap
         y = "Prior Score Decile"
       ) +
       theme_minimal() +
       theme(
-        plot.caption = ggtext::element_markdown(hjust = 0.5, size = 7, color = "grey40"),
+        plot.caption = ggtext::element_markdown(
+          hjust = 0.5,
+          size = 7,
+          color = "grey40"
+        ),
         axis.title.x.top = element_blank(),
-        axis.title.y.left = element_text(size = 9, margin = margin(0, 0, 0, 4, "pt")),
-        axis.text.y.left = element_text(size = 9, hjust = 1, margin = margin(0, 0, 0, 4, "pt")),
-        axis.text.x.top = element_text(size = 6, vjust = 1, margin = margin(6, 0, 0, 0, "pt")),
+        axis.title.y.left = element_text(
+          size = 9,
+          margin = margin(0, 0, 0, 4, "pt")
+        ),
+        axis.text.y.left = element_text(
+          size = 9,
+          hjust = 1,
+          margin = margin(0, 0, 0, 4, "pt")
+        ),
+        axis.text.x.top = element_text(
+          size = 6,
+          vjust = 1,
+          margin = margin(6, 0, 0, 0, "pt")
+        ),
         panel.grid = element_blank(),
         plot.margin = margin(15, 4, 2, 5, "pt"),
         plot.background = element_rect(fill = "transparent", color = NA),
@@ -3639,40 +4829,66 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
         legend.text = element_text(size = 6),
         aspect.ratio = 0.88
       )
-    
+
     # NOTE: Marginal summary table combination removed - SGP comparison is in ECDF panel only
   }
-  
+
   # --- Combine Panels ---
   # ECDF on top, heatmap on bottom (slightly more height for heatmap due to square cells)
   combined <- NULL
-  
+
   if (requireNamespace("patchwork", quietly = TRUE)) {
     require(patchwork)
     # Use & to apply transparent background to all subplots in patchwork
-    combined <- p_ecdf / p_heatmap + 
+    combined <- p_ecdf /
+      p_heatmap +
       plot_layout(heights = c(0.9, 1.1)) &
       theme(plot.background = element_rect(fill = "transparent", color = NA))
   } else if (requireNamespace("cowplot", quietly = TRUE)) {
     require(cowplot)
-    combined <- cowplot::plot_grid(p_ecdf, p_heatmap, 
-                                   ncol = 1, rel_heights = c(0.9, 1.1),
-                                   align = "v", axis = "lr") +
+    combined <- cowplot::plot_grid(
+      p_ecdf,
+      p_heatmap,
+      ncol = 1,
+      rel_heights = c(0.9, 1.1),
+      align = "v",
+      axis = "lr"
+    ) +
       theme(plot.background = element_rect(fill = "transparent", color = NA))
   } else {
     require(gridExtra)
-    combined <- gridExtra::arrangeGrob(p_ecdf, p_heatmap, 
-                                       ncol = 1, heights = c(0.9, 1.1))
+    combined <- gridExtra::arrangeGrob(
+      p_ecdf,
+      p_heatmap,
+      ncol = 1,
+      heights = c(0.9, 1.1)
+    )
   }
-  
+
   # Calculate additional statistics for SGP if available
   mean_sgp1 <- if (has_sgp_order_1) mean(s_sgp1, na.rm = TRUE) else NA
   mean_sgpb <- if (has_sgp_best) mean(s_sgpb, na.rm = TRUE) else NA
-  cor_emp_sgp1 <- if (has_sgp_order_1) cor(s_emp, s_sgp1, use = "pairwise.complete.obs") else NA
-  cor_emp_sgpb <- if (has_sgp_best) cor(s_emp, s_sgpb, use = "pairwise.complete.obs") else NA
-  cor_par_sgp1 <- if (has_sgp_order_1) cor(s_par, s_sgp1, use = "pairwise.complete.obs") else NA
-  cor_par_sgpb <- if (has_sgp_best) cor(s_par, s_sgpb, use = "pairwise.complete.obs") else NA
-  
+  cor_emp_sgp1 <- if (has_sgp_order_1) {
+    cor(s_emp, s_sgp1, use = "pairwise.complete.obs")
+  } else {
+    NA
+  }
+  cor_emp_sgpb <- if (has_sgp_best) {
+    cor(s_emp, s_sgpb, use = "pairwise.complete.obs")
+  } else {
+    NA
+  }
+  cor_par_sgp1 <- if (has_sgp_order_1) {
+    cor(s_par, s_sgp1, use = "pairwise.complete.obs")
+  } else {
+    NA
+  }
+  cor_par_sgpb <- if (has_sgp_best) {
+    cor(s_par, s_sgpb, use = "pairwise.complete.obs")
+  } else {
+    NA
+  }
+
   # Return list with plot and enhanced statistics
   # Add SGP-specific stats to the enhanced statistics object
   statistics$has_sgp_order_1 <- has_sgp_order_1
@@ -3683,10 +4899,10 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
   statistics$cor_empirical_sgp_best <- cor_emp_sgpb
   statistics$cor_parametric_sgp_order_1 <- cor_par_sgp1
   statistics$cor_parametric_sgp_best <- cor_par_sgpb
-  
+
   return(list(
     plot = combined,
-    statistics = statistics  # Enhanced statistics from calculate_ecdf_statistics + SGP extras
+    statistics = statistics # Enhanced statistics from calculate_ecdf_statistics + SGP extras
   ))
 }
 
@@ -3715,52 +4931,53 @@ plot_sgpc_comparison_panel <- function(sgpc_empirical,
 #' }
 #'
 #' @export
-plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
-                                              sgp_order_1,
-                                              u_obs = NULL,
-                                              method = "bernstein",
-                                              show_stats = TRUE,
-                                              show_cutpoints = TRUE) {
-  
+plot_empirical_vs_sgp_comparison <- function(
+  sgpc_empirical,
+  sgp_order_1,
+  u_obs = NULL,
+  method = "bernstein",
+  show_stats = TRUE,
+  show_cutpoints = TRUE
+) {
   require(ggplot2)
   require(data.table)
   require(patchwork)
-  
+
   # Use 0-100 scale internally, display as 1-99
   x_limits <- c(0, 100)
   x_breaks <- c(0, 20, 40, 60, 80, 100)
   x_labels <- c("1", "20", "40", "60", "80", "99")
-  
+
   # Capitalize method name for display
   method_title <- tools::toTitleCase(method)
-  
+
   # Define colors (SGPc = black, SGP = teal to match the dashed line convention)
   color_sgpc <- "black"
-  color_sgp <- "#3B9AB2"  # Teal (same as SGP_ORDER_1 in other plots)
-  
+  color_sgp <- "#3B9AB2" # Teal (same as SGP_ORDER_1 in other plots)
+
   # Remove NAs and work with raw percentile values
   valid_idx <- !is.na(sgpc_empirical) & !is.na(sgp_order_1)
   s_sgpc <- sgpc_empirical[valid_idx]
   s_sgp <- sgp_order_1[valid_idx]
   n_valid <- length(s_sgpc)
-  
+
   # Also filter u_obs for prior score decile calculation
   u_prior <- if (!is.null(u_obs)) u_obs[valid_idx] else NULL
-  
+
   if (n_valid < 10) {
     warning("Fewer than 10 valid pairs for empirical vs SGP comparison")
     return(NULL)
   }
-  
+
   # Calculate ECDFs on 0-100 scale
   ecdf_sgpc <- ecdf(s_sgpc)
   ecdf_sgp <- ecdf(s_sgp)
-  
+
   # Create evaluation grid (0-100)
   x_grid <- seq(0, 100, length.out = 500)
   F_sgpc <- ecdf_sgpc(x_grid)
   F_sgp <- ecdf_sgp(x_grid)
-  
+
   # Calculate enhanced statistics (SCENARIO A: Calibration + SGP comparison)
   # This validates empirical copula calibration and compares to traditional SGP
   statistics <- calculate_ecdf_statistics(
@@ -3771,192 +4988,362 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
     label1 = "SGPc",
     label2 = "SGP"
   )
-  
+
   # Prepare ECDF data for ggplot
   ecdf_data <- data.table(
     x = rep(x_grid, 2),
     F = c(F_sgpc, F_sgp),
-    Source = rep(c(paste0("SGPc (", method_title, ")"), "SGP (ORDER_1)"), each = length(x_grid))
+    Source = rep(
+      c(paste0("SGPc (", method_title, ")"), "SGP (ORDER_1)"),
+      each = length(x_grid)
+    )
   )
-  
+
   # --- Top Panel: ECDF Curves ---
   subtitle_text <- paste0(
-    "Black = SGPc (", method_title, ") | ",
-    "<span style='color:", color_sgp, ";'>Teal = SGP (ORDER_1)</span>"
+    "Black = SGPc (",
+    method_title,
+    ") | ",
+    "<span style='color:",
+    color_sgp,
+    ";'>Teal = SGP (ORDER_1)</span>"
   )
-  
+
   p_ecdf <- ggplot() +
     # Uniform reference line (45 degrees on 0-100 scale)
-    geom_abline(slope = 0.01, intercept = 0, linetype = "dashed", 
-                color = "grey60", linewidth = 0.6) +
+    geom_abline(
+      slope = 0.01,
+      intercept = 0,
+      linetype = "dashed",
+      color = "grey60",
+      linewidth = 0.6
+    ) +
     # ECDF curves
-    geom_line(data = ecdf_data[Source == paste0("SGPc (", method_title, ")")],
-              aes(x = x, y = F), color = color_sgpc, linewidth = 0.5) +
-    geom_line(data = ecdf_data[Source == "SGP (ORDER_1)"],
-              aes(x = x, y = F), color = color_sgp, linewidth = 0.5) +
+    geom_line(
+      data = ecdf_data[Source == paste0("SGPc (", method_title, ")")],
+      aes(x = x, y = F),
+      color = color_sgpc,
+      linewidth = 0.5
+    ) +
+    geom_line(
+      data = ecdf_data[Source == "SGP (ORDER_1)"],
+      aes(x = x, y = F),
+      color = color_sgp,
+      linewidth = 0.5
+    ) +
     # Label the uniform reference line
-    annotate("text", x = 85, y = 0.78, label = "Uniform\nreference",
-             size = 2.5, color = "grey50", hjust = 0, fontface = "italic") +
+    annotate(
+      "text",
+      x = 85,
+      y = 0.78,
+      label = "Uniform\nreference",
+      size = 2.5,
+      color = "grey50",
+      hjust = 0,
+      fontface = "italic"
+    ) +
     # Formatting
     coord_cartesian(xlim = x_limits, ylim = c(0, 1)) +
-    scale_x_continuous(breaks = x_breaks, labels = x_labels, expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), expand = expansion(mult = 0.02)) +
+    scale_x_continuous(
+      breaks = x_breaks,
+      labels = x_labels,
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      expand = expansion(mult = 0.02)
+    ) +
     labs(
-      title = bquote("SGPc (" * .(method_title) * ") vs Traditional SGP Comparison"),
+      title = bquote(
+        "SGPc (" * .(method_title) * ") vs Traditional SGP Comparison"
+      ),
       subtitle = subtitle_text,
       x = "SGPc / SGP",
       y = "Cumulative Proportion"
     ) +
     theme_minimal() +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 14, face = "bold", margin = margin(0, 0, 5, 0, "pt")),
-      plot.subtitle = ggtext::element_markdown(hjust = 0.5, size = 7, color = "grey40"),
-      axis.title.x = element_text(size = 10, margin = margin(10, 0, 0, 0, "pt")),
-      axis.title.y = element_text(size = 10, margin = margin(0, 10, 0, 0, "pt")),
+      plot.title = element_text(
+        hjust = 0.5,
+        size = 14,
+        face = "bold",
+        margin = margin(0, 0, 5, 0, "pt")
+      ),
+      plot.subtitle = ggtext::element_markdown(
+        hjust = 0.5,
+        size = 7,
+        color = "grey40"
+      ),
+      axis.title.x = element_text(
+        size = 10,
+        margin = margin(10, 0, 0, 0, "pt")
+      ),
+      axis.title.y = element_text(
+        size = 10,
+        margin = margin(0, 10, 0, 0, "pt")
+      ),
       panel.grid.minor = element_blank(),
       plot.margin = margin(10, 4, 2, 5, "pt"),
       plot.background = element_rect(fill = "transparent", color = NA),
       panel.background = element_rect(fill = "transparent", color = NA),
       aspect.ratio = 0.7
     )
-  
+
   # Add enhanced statistics annotation (SCENARIO A: Calibration + SGP)
   if (show_stats) {
     # Create separate lines with consistent positioning (no nested atop to avoid font shrinkage)
     text_lines <- list()
-    
+
     if (!is.na(statistics$ad_uniform_1) && !is.null(statistics$max_decile_ks)) {
       # Full display: AD tests + conditional calibration
       text_lines <- list(
-        list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
-        list(y_offset = 0.03, label = sprintf("KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
-                        statistics$ks_uniform_1, statistics$ks_uniform_2)),
-        list(y_offset = 0.06, label = sprintf("'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
-                        statistics$spearman_rho, statistics$wasserstein1_pp)),
-        list(y_offset = 0.09, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
-                        statistics$q90_abs_diff, statistics$pct_large_diff_10)),
-        list(y_offset = 0.12, label = sprintf("'Max decile KS:'~%.3f~'(decile'~%d*')'",
-                        statistics$max_decile_ks, statistics$worst_decile))
+        list(
+          y_offset = 0.00,
+          label = sprintf(
+            "italic(n)== '%s'",
+            format(statistics$n, big.mark = ",")
+          )
+        ),
+        list(
+          y_offset = 0.03,
+          label = sprintf(
+            "KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
+            statistics$ks_uniform_1,
+            statistics$ks_uniform_2
+          )
+        ),
+        list(
+          y_offset = 0.06,
+          label = sprintf(
+            "'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+            statistics$spearman_rho,
+            statistics$wasserstein1_pp
+          )
+        ),
+        list(
+          y_offset = 0.09,
+          label = sprintf(
+            "Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+            statistics$q90_abs_diff,
+            statistics$pct_large_diff_10
+          )
+        ),
+        list(
+          y_offset = 0.12,
+          label = sprintf(
+            "'Max decile KS:'~%.3f~'(decile'~%d*')'",
+            statistics$max_decile_ks,
+            statistics$worst_decile
+          )
+        )
       )
     } else if (!is.na(statistics$ad_uniform_1)) {
       # AD available but no u_prior for conditional
       text_lines <- list(
-        list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
-        list(y_offset = 0.03, label = sprintf("KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
-                        statistics$ks_uniform_1, statistics$ks_uniform_2)),
-        list(y_offset = 0.06, label = sprintf("AD(SGPc %%->%% U)==%.2f~'|'~AD(SGP %%->%% U)==%.2f",
-                        statistics$ad_uniform_1, statistics$ad_uniform_2)),
-        list(y_offset = 0.09, label = sprintf("'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
-                        statistics$spearman_rho, statistics$wasserstein1_pp)),
-        list(y_offset = 0.12, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
-                        statistics$q90_abs_diff, statistics$pct_large_diff_10))
+        list(
+          y_offset = 0.00,
+          label = sprintf(
+            "italic(n)== '%s'",
+            format(statistics$n, big.mark = ",")
+          )
+        ),
+        list(
+          y_offset = 0.03,
+          label = sprintf(
+            "KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
+            statistics$ks_uniform_1,
+            statistics$ks_uniform_2
+          )
+        ),
+        list(
+          y_offset = 0.06,
+          label = sprintf(
+            "AD(SGPc %%->%% U)==%.2f~'|'~AD(SGP %%->%% U)==%.2f",
+            statistics$ad_uniform_1,
+            statistics$ad_uniform_2
+          )
+        ),
+        list(
+          y_offset = 0.09,
+          label = sprintf(
+            "'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+            statistics$spearman_rho,
+            statistics$wasserstein1_pp
+          )
+        ),
+        list(
+          y_offset = 0.12,
+          label = sprintf(
+            "Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+            statistics$q90_abs_diff,
+            statistics$pct_large_diff_10
+          )
+        )
       )
     } else {
       # Minimal display (no AD, no conditional)
       text_lines <- list(
-        list(y_offset = 0.00, label = sprintf("italic(n)== '%s'", format(statistics$n, big.mark = ","))),
-        list(y_offset = 0.03, label = sprintf("KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
-                        statistics$ks_uniform_1, statistics$ks_uniform_2)),
-        list(y_offset = 0.06, label = sprintf("'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
-                        statistics$spearman_rho, statistics$wasserstein1_pp)),
-        list(y_offset = 0.09, label = sprintf("Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
-                        statistics$q90_abs_diff, statistics$pct_large_diff_10))
+        list(
+          y_offset = 0.00,
+          label = sprintf(
+            "italic(n)== '%s'",
+            format(statistics$n, big.mark = ",")
+          )
+        ),
+        list(
+          y_offset = 0.03,
+          label = sprintf(
+            "KS(SGPc %%->%% U)==%.3f~'|'~KS(SGP %%->%% U)==%.3f",
+            statistics$ks_uniform_1,
+            statistics$ks_uniform_2
+          )
+        ),
+        list(
+          y_offset = 0.06,
+          label = sprintf(
+            "'vs SGP:'~rho[s]==%.3f~'|'~W[1]==%.1f~pp",
+            statistics$spearman_rho,
+            statistics$wasserstein1_pp
+          )
+        ),
+        list(
+          y_offset = 0.09,
+          label = sprintf(
+            "Q[90](abs(Delta))==%.1f~'|'~P(abs(Delta) > 10)==%.3f",
+            statistics$q90_abs_diff,
+            statistics$pct_large_diff_10
+          )
+        )
       )
     }
-    
+
     # Add background box first
     # Find maximum y_offset to ensure box covers all text
     max_y_offset <- max(sapply(text_lines, function(x) x$y_offset))
     total_height <- max_y_offset + 0.035
     p_ecdf <- p_ecdf +
-      annotate("rect",
-               xmin = 1.8, xmax = 45,
-               ymin = 0.985 - total_height, ymax = 0.985,
-               fill = rgb(244, 244, 244, maxColorValue = 255), alpha = 0.65,
-               linewidth = 0.2, color = rgb(20, 20, 16, maxColorValue = 255))
-    
+      annotate(
+        "rect",
+        xmin = 1.8,
+        xmax = 45,
+        ymin = 0.985 - total_height,
+        ymax = 0.985,
+        fill = rgb(244, 244, 244, maxColorValue = 255),
+        alpha = 0.65,
+        linewidth = 0.2,
+        color = rgb(20, 20, 16, maxColorValue = 255)
+      )
+
     # Add each text line individually with immediate evaluation
     for (i in seq_along(text_lines)) {
       p_ecdf <- p_ecdf +
-        annotate("text",
-                 x = 2,
-                 y = 0.98 - text_lines[[i]]$y_offset,
-                 hjust = 0,
-                 vjust = 1,
-                 label = text_lines[[i]]$label,
-                 parse = TRUE,
-                 size = 2.3,
-                 color = "black")
+        annotate(
+          "text",
+          x = 2,
+          y = 0.98 - text_lines[[i]]$y_offset,
+          hjust = 0,
+          vjust = 1,
+          label = text_lines[[i]]$label,
+          parse = TRUE,
+          size = 2.3,
+          color = "black"
+        )
     }
   }
-  
+
   # --- Bottom Panel: 10x10 Decile Heatmap ---
   # Bin by prior score decile (if u_obs provided) and SGPc/SGP deciles
-  
+
   # Create decile bins for SGPc and SGP
   decile_breaks <- seq(0, 100, by = 10)
   decile_labels <- paste0(seq(1, 91, by = 10), "-", seq(10, 100, by = 10))
-  
-  sgpc_decile <- cut(s_sgpc, breaks = decile_breaks, labels = 1:10, include.lowest = TRUE)
-  sgp_decile <- cut(s_sgp, breaks = decile_breaks, labels = 1:10, include.lowest = TRUE)
-  
+
+  sgpc_decile <- cut(
+    s_sgpc,
+    breaks = decile_breaks,
+    labels = 1:10,
+    include.lowest = TRUE
+  )
+  sgp_decile <- cut(
+    s_sgp,
+    breaks = decile_breaks,
+    labels = 1:10,
+    include.lowest = TRUE
+  )
+
   # Create prior score decile bins if u_obs available
   if (!is.null(u_prior)) {
     prior_decile_breaks <- seq(0, 1, by = 0.1)
-    prior_decile <- cut(u_prior, breaks = prior_decile_breaks, labels = 1:10, include.lowest = TRUE)
+    prior_decile <- cut(
+      u_prior,
+      breaks = prior_decile_breaks,
+      labels = 1:10,
+      include.lowest = TRUE
+    )
   } else {
     prior_decile <- rep(NA, n_valid)
   }
-  
+
   # Create cross-tabulation for heatmap
   heatmap_dt <- data.table(
     sgpc_decile = as.numeric(sgpc_decile),
     sgp_decile = as.numeric(sgp_decile)
   )
-  
+
   # Count observations in each cell
   heatmap_counts <- heatmap_dt[, .N, by = .(sgpc_decile, sgp_decile)]
   heatmap_counts[, pct := N / n_valid * 100]
-  
+
   # Calculate deviation from expected (10% per cell along diagonal)
   # Deviation is relative to SGPc (rows)
   heatmap_counts[, deviation := pct - ifelse(sgpc_decile == sgp_decile, 10, 0)]
-  
+
   # For the heatmap, we want to show row percentages (for each SGPc decile, what % in each SGP decile)
   row_totals <- heatmap_dt[, .N, by = sgpc_decile]
   setnames(row_totals, "N", "row_total")
   heatmap_counts <- merge(heatmap_counts, row_totals, by = "sgpc_decile")
   heatmap_counts[, row_pct := N / row_total * 100]
-  
+
   # Color scale: deviation from expected uniform 10%
   # Blue = SGP higher than SGPc, Red = SGPc higher than SGP
   armyblue_palette <- c(
-    "#8A9048",  # most negative (Emp - Par < 0, parametric higher) - army olive
+    "#8A9048", # most negative (Emp - Par < 0, parametric higher) - army olive
     "#B7BA87",
     "#E2E4C8",
-    "#FCFCF4",  # neutral center (zero) - warm cream
+    "#FCFCF4", # neutral center (zero) - warm cream
     "#B7E3ED",
     "#7FC1D3",
-    "#3B9DC5"   # most positive (Emp - Par > 0, empirical higher) - army blue
+    "#3B9DC5" # most positive (Emp - Par > 0, empirical higher) - army blue
   )
-  
-  p_heatmap <- ggplot(heatmap_counts, aes(x = factor(sgp_decile), y = factor(sgpc_decile))) +
+
+  p_heatmap <- ggplot(
+    heatmap_counts,
+    aes(x = factor(sgp_decile), y = factor(sgpc_decile))
+  ) +
     geom_tile(aes(fill = row_pct - 10), color = "white", linewidth = 0.3) +
-    geom_text(aes(label = sprintf("%.1f", row_pct)), size = 2.5, color = "black") +
+    geom_text(
+      aes(label = sprintf("%.1f", row_pct)),
+      size = 2.5,
+      color = "black"
+    ) +
     scale_fill_gradient2(
       low = armyblue_palette[1],
       mid = armyblue_palette[4],
       high = armyblue_palette[7],
       midpoint = 0,
       limits = c(-15, 15),
-      oob = scales::squish,  # Clamp out-of-bounds to extremal colors
+      oob = scales::squish, # Clamp out-of-bounds to extremal colors
       name = "Deviation\nfrom 10%",
       na.value = "gray90"
     ) +
     scale_x_discrete(labels = decile_labels) +
     scale_y_discrete(labels = decile_labels) +
     labs(
-      title = paste0("SGPc (", method_title, ") vs SGP (ORDER_1) Decile Cross-Tabulation"),
+      title = paste0(
+        "SGPc (",
+        method_title,
+        ") vs SGP (ORDER_1) Decile Cross-Tabulation"
+      ),
       x = "SGP (ORDER_1) Decile",
       y = paste0("SGPc (", method_title, ") Decile")
     ) +
@@ -3973,17 +5360,17 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
       plot.background = element_rect(fill = "transparent", color = NA),
       panel.background = element_rect(fill = "transparent", color = NA)
     )
-  
+
   # --- Combine Panels ---
   combined <- p_ecdf / p_heatmap + plot_layout(heights = c(1, 1.5))
-  
+
   # Return list with enhanced statistics
   # Add method to statistics object
   statistics$method <- method
-  
+
   return(list(
     plot = combined,
-    statistics = statistics  # Enhanced statistics from calculate_ecdf_statistics
+    statistics = statistics # Enhanced statistics from calculate_ecdf_statistics
   ))
 }
 
@@ -4018,231 +5405,347 @@ plot_empirical_vs_sgp_comparison <- function(sgpc_empirical,
 #' in near-zero deviation (cream/white coloring throughout).
 #'
 #' @export
-plot_empirical_vs_sgp_dual_pct <- function(sgpc_empirical,
-                                           sgp_order_1,
-                                           u_obs = NULL,
-                                           method = "bernstein",
-                                           show_stats = TRUE) {
-  
+plot_empirical_vs_sgp_dual_pct <- function(
+  sgpc_empirical,
+  sgp_order_1,
+  u_obs = NULL,
+  method = "bernstein",
+  show_stats = TRUE
+) {
   require(ggplot2)
   require(data.table)
   require(patchwork)
-  
+
   # Use 0-100 scale internally, display as 1-99
   x_limits <- c(0, 100)
   x_breaks <- c(0, 20, 40, 60, 80, 100)
   x_labels <- c("1", "20", "40", "60", "80", "99")
-  
+
   # Capitalize method name for display
   method_title <- tools::toTitleCase(method)
-  
+
   # Define colors (SGPc = black, SGP = teal)
   color_sgpc <- "black"
-  color_sgp <- "#3B9AB2"  # Teal (same as SGP_ORDER_1 in other plots)
-  
+  color_sgp <- "#3B9AB2" # Teal (same as SGP_ORDER_1 in other plots)
+
   # Remove NAs and work with raw percentile values
   valid_idx <- !is.na(sgpc_empirical) & !is.na(sgp_order_1)
   s_sgpc <- sgpc_empirical[valid_idx]
   s_sgp <- sgp_order_1[valid_idx]
   n_valid <- length(s_sgpc)
-  
+
   # Also filter u_obs for prior score decile calculation
   u_prior <- if (!is.null(u_obs)) u_obs[valid_idx] else NULL
-  
+
   if (n_valid < 10) {
     warning("Fewer than 10 valid pairs for empirical vs SGP comparison")
     return(NULL)
   }
-  
+
   # Calculate ECDFs on 0-100 scale
   ecdf_sgpc <- ecdf(s_sgpc)
   ecdf_sgp <- ecdf(s_sgp)
-  
+
   # Create evaluation grid (0-100)
   x_grid <- seq(0, 100, length.out = 500)
   F_sgpc <- ecdf_sgpc(x_grid)
   F_sgp <- ecdf_sgp(x_grid)
   delta_F <- F_sgpc - F_sgp
-  
+
   # Calculate statistics (all on 0-100 scale)
   diff_raw <- s_sgpc - s_sgp
   mean_sgpc <- mean(s_sgpc, na.rm = TRUE)
   mean_sgp <- mean(s_sgp, na.rm = TRUE)
   median_diff <- median(diff_raw, na.rm = TRUE)
-  
+
   # KS test (use normalized 0-1 for proper test)
   ks_result <- ks.test(s_sgpc / 100, s_sgp / 100)
   ks_distance <- as.numeric(ks_result$statistic)
-  
+
   # Cramér-von Mises: integrated squared difference between ECDFs
   cvm_stat <- mean((F_sgpc - F_sgp)^2)
-  
+
   # Correlation
   corr <- cor(s_sgpc, s_sgp, use = "pairwise.complete.obs")
-  
+
   # Proportion with large disagreement (>10 percentile points)
   pct_large_diff <- mean(abs(diff_raw) > 10, na.rm = TRUE)
-  
+
   # Max CDF difference
   max_cdf_diff <- max(abs(delta_F), na.rm = TRUE)
-  
+
   # Prepare ECDF data for ggplot
   ecdf_data <- data.table(
     x = rep(x_grid, 2),
     F = c(F_sgpc, F_sgp),
-    Source = rep(c(paste0("SGPc (", method_title, ")"), "SGP (ORDER_1)"), each = length(x_grid))
+    Source = rep(
+      c(paste0("SGPc (", method_title, ")"), "SGP (ORDER_1)"),
+      each = length(x_grid)
+    )
   )
-  
+
   # --- Top Panel: ECDF Curves ---
   subtitle_text <- paste0(
-    "Black = SGPc (", method_title, ") | ",
-    "<span style='color:", color_sgp, ";'>Teal = SGP (ORDER_1)</span>"
+    "Black = SGPc (",
+    method_title,
+    ") | ",
+    "<span style='color:",
+    color_sgp,
+    ";'>Teal = SGP (ORDER_1)</span>"
   )
-  
+
   p_ecdf <- ggplot() +
     # Uniform reference line (45 degrees on 0-100 scale)
-    geom_abline(slope = 0.01, intercept = 0, linetype = "dashed", 
-                color = "grey60", linewidth = 0.6) +
+    geom_abline(
+      slope = 0.01,
+      intercept = 0,
+      linetype = "dashed",
+      color = "grey60",
+      linewidth = 0.6
+    ) +
     # ECDF curves
-    geom_line(data = ecdf_data[Source == paste0("SGPc (", method_title, ")")],
-              aes(x = x, y = F), color = color_sgpc, linewidth = 0.5) +
-    geom_line(data = ecdf_data[Source == "SGP (ORDER_1)"],
-              aes(x = x, y = F), color = color_sgp, linewidth = 0.5) +
+    geom_line(
+      data = ecdf_data[Source == paste0("SGPc (", method_title, ")")],
+      aes(x = x, y = F),
+      color = color_sgpc,
+      linewidth = 0.5
+    ) +
+    geom_line(
+      data = ecdf_data[Source == "SGP (ORDER_1)"],
+      aes(x = x, y = F),
+      color = color_sgp,
+      linewidth = 0.5
+    ) +
     # Label the uniform reference line
-    annotate("text", x = 85, y = 0.78, label = "Uniform\nreference",
-             size = 2.5, color = "grey50", hjust = 0, fontface = "italic") +
+    annotate(
+      "text",
+      x = 85,
+      y = 0.78,
+      label = "Uniform\nreference",
+      size = 2.5,
+      color = "grey50",
+      hjust = 0,
+      fontface = "italic"
+    ) +
     # Formatting
     coord_cartesian(xlim = x_limits, ylim = c(0, 1)) +
-    scale_x_continuous(breaks = x_breaks, labels = x_labels, expand = expansion(mult = 0.02)) +
-    scale_y_continuous(breaks = seq(0, 1, 0.2), expand = expansion(mult = 0.02)) +
+    scale_x_continuous(
+      breaks = x_breaks,
+      labels = x_labels,
+      expand = expansion(mult = 0.02)
+    ) +
+    scale_y_continuous(
+      breaks = seq(0, 1, 0.2),
+      expand = expansion(mult = 0.02)
+    ) +
     labs(
-      title = bquote("SGPc" ~ "(" * .(method_title) * ")" ~ "vs SGP (ORDER_1) Comparison"),
+      title = bquote(
+        "SGPc" ~ "(" * .(method_title) * ")" ~ "vs SGP (ORDER_1) Comparison"
+      ),
       subtitle = subtitle_text,
       x = "SGPc / SGP",
       y = "Cumulative Proportion"
     ) +
     theme_minimal() +
     theme(
-      plot.title = element_text(hjust = 0.5, size = 14, face = "bold", margin = margin(0, 0, 5, 0, "pt")),
-      plot.subtitle = ggtext::element_markdown(hjust = 0.5, size = 7, color = "grey40"),
-      axis.title.x = element_text(size = 10, margin = margin(10, 0, 0, 0, "pt")),
-      axis.title.y = element_text(size = 10, margin = margin(0, 10, 0, 0, "pt")),
+      plot.title = element_text(
+        hjust = 0.5,
+        size = 14,
+        face = "bold",
+        margin = margin(0, 0, 5, 0, "pt")
+      ),
+      plot.subtitle = ggtext::element_markdown(
+        hjust = 0.5,
+        size = 7,
+        color = "grey40"
+      ),
+      axis.title.x = element_text(
+        size = 10,
+        margin = margin(10, 0, 0, 0, "pt")
+      ),
+      axis.title.y = element_text(
+        size = 10,
+        margin = margin(0, 10, 0, 0, "pt")
+      ),
       panel.grid.minor = element_blank(),
       plot.margin = margin(10, 5, 5, 5, "pt"),
       plot.background = element_rect(fill = "transparent", color = NA),
       panel.background = element_rect(fill = "transparent", color = NA),
       aspect.ratio = 0.8
     )
-  
+
   # Add statistics annotation if requested
   if (show_stats) {
     stats_label <- sprintf(
       "n = %s\nmean (SGPc/SGP): %.1f / %.1f\nmed(diff) = %.1f\nKS = %.3f\nCvM = %.5f\nr = %.3f\nP(|diff|>10) = %.3f",
       format(n_valid, big.mark = ","),
-      mean_sgpc, mean_sgp,
+      mean_sgpc,
+      mean_sgp,
       median_diff,
       ks_distance,
       cvm_stat,
       corr,
       pct_large_diff
     )
-    
+
     p_ecdf <- p_ecdf +
-      annotate("label", x = 2, y = 0.98, hjust = 0, vjust = 1,
-               label = stats_label, size = 2.5, 
-               fill = "white", alpha = 0.85,
-               label.padding = unit(0.3, "lines"))
+      annotate(
+        "label",
+        x = 2,
+        y = 0.98,
+        hjust = 0,
+        vjust = 1,
+        label = stats_label,
+        size = 2.5,
+        fill = "white",
+        alpha = 0.85,
+        label.padding = unit(0.3, "lines")
+      )
   }
-  
+
   # --- Bottom Panel: 10x10 Prior Score Decile × SGPc/SGP Decile Grid ---
   # This mirrors the parametric comparison heatmap structure
-  
+
   # Armyblue diverging palette for deviation
   armyblue_palette <- c(
-    "#8A9048",  # Army olive (negative - SGP higher)
+    "#8A9048", # Army olive (negative - SGP higher)
     "#B7BA87",
     "#E2E4C8",
-    "#FCFCF4",  # Neutral center (zero) - warm cream
+    "#FCFCF4", # Neutral center (zero) - warm cream
     "#B7E3ED",
     "#7FC1D3",
-    "#3B9DC5"   # Army blue (positive - SGPc higher)
+    "#3B9DC5" # Army blue (positive - SGPc higher)
   )
-  
+
   if (is.null(u_prior)) {
     warning("u_obs not provided - cannot create prior score decile heatmap")
     p_heatmap <- ggplot() +
-      annotate("text", x = 0.5, y = 0.5, label = "Prior scores (u_obs)\nnot available",
-               size = 4, color = "grey50") +
+      annotate(
+        "text",
+        x = 0.5,
+        y = 0.5,
+        label = "Prior scores (u_obs)\nnot available",
+        size = 4,
+        color = "grey50"
+      ) +
       theme_void() +
       theme(plot.margin = margin(2, 4, 7, 5, "pt"))
   } else {
     # Compute decile bins for prior scores (u) and SGPc/SGP
     # Prior deciles: based on u_obs (0-1 scale)
-    prior_decile <- cut(u_prior, breaks = seq(0, 1, 0.1), 
-                        labels = 1:10, include.lowest = TRUE)
+    prior_decile <- cut(
+      u_prior,
+      breaks = seq(0, 1, 0.1),
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     prior_decile <- factor(prior_decile, levels = 1:10)
-    
+
     # SGPc/SGP deciles: based on 1-99 scale
     sgpc_breaks <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
-    sgpc_decile <- cut(s_sgpc, breaks = sgpc_breaks, 
-                       labels = 1:10, include.lowest = TRUE)
+    sgpc_decile <- cut(
+      s_sgpc,
+      breaks = sgpc_breaks,
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     sgpc_decile <- factor(sgpc_decile, levels = 1:10)
-    sgp_decile <- cut(s_sgp, breaks = sgpc_breaks, 
-                      labels = 1:10, include.lowest = TRUE)
+    sgp_decile <- cut(
+      s_sgp,
+      breaks = sgpc_breaks,
+      labels = 1:10,
+      include.lowest = TRUE
+    )
     sgp_decile <- factor(sgp_decile, levels = 1:10)
-    
+
     # Count students in each cell for SGPc empirical (ensure all levels present)
     sgpc_counts <- table(prior_decile, sgpc_decile, useNA = "no")
     # Use margin=1 to get conditional percentages within each prior decile row
     # Each row sums to 100%; under uniformity each cell should be 10%
     sgpc_pct <- prop.table(sgpc_counts, margin = 1) * 100
-    
+
     # Count students in each cell for SGP_ORDER_1
     sgp_counts <- table(prior_decile, sgp_decile, useNA = "no")
     sgp_pct <- prop.table(sgp_counts, margin = 1) * 100
-    
+
     # Compute deviation: SGPc % - SGP %
     deviation <- sgpc_pct - sgp_pct
-    
+
     # Convert to data.table for ggplot
-    heatmap_data <- data.table(expand.grid(prior_decile = 1:10, sgpc_decile = 1:10))
+    heatmap_data <- data.table(expand.grid(
+      prior_decile = 1:10,
+      sgpc_decile = 1:10
+    ))
     heatmap_data[, sgpc_pct := as.vector(sgpc_pct)]
     heatmap_data[, sgp_pct := as.vector(sgp_pct)]
     heatmap_data[, deviation := as.vector(deviation)]
-    
+
     # Fixed color scale range for consistency across all plots
     # Using ±20 as standard range for all 10x10 heatmaps
     color_limit <- 20
-    
+
     # Create heatmap
     # X = SGPc/SGP Decile, Y = Prior Score Decile
     p_heatmap <- ggplot(heatmap_data, aes(x = sgpc_decile, y = prior_decile)) +
       # Heatmap tiles
       geom_tile(aes(fill = deviation), color = "white", linewidth = 0.3) +
       # Cell text annotations: SGPc % (top, black) and SGP % (bottom, teal)
-      geom_text(aes(label = sprintf("%.1f", sgpc_pct)), 
-                size = 3.0, color = color_sgpc, nudge_y = 0.15) +
-      geom_text(aes(label = sprintf("%.1f", sgp_pct)), 
-                size = 3.0, color = color_sgp, nudge_y = -0.15) +
+      geom_text(
+        aes(label = sprintf("%.1f", sgpc_pct)),
+        size = 3.0,
+        color = color_sgpc,
+        nudge_y = 0.15
+      ) +
+      geom_text(
+        aes(label = sprintf("%.1f", sgp_pct)),
+        size = 3.0,
+        color = color_sgp,
+        nudge_y = -0.15
+      ) +
       # Color scale (armyblue diverging)
       scale_fill_gradientn(
         colors = armyblue_palette,
-        values = scales::rescale(c(-color_limit, -color_limit*0.67, -color_limit*0.33, 
-                                   0, color_limit*0.33, color_limit*0.67, color_limit)),
+        values = scales::rescale(c(
+          -color_limit,
+          -color_limit * 0.67,
+          -color_limit * 0.33,
+          0,
+          color_limit * 0.33,
+          color_limit * 0.67,
+          color_limit
+        )),
         limits = c(-color_limit, color_limit),
-        oob = scales::squish,  # Clamp out-of-bounds to extremal colors
+        oob = scales::squish, # Clamp out-of-bounds to extremal colors
         name = "Deviation\n(SGPc - SGP)"
       ) +
       # Axis formatting - x-axis on top
-      scale_x_continuous(breaks = 1:10, expand = expansion(mult = 0.02),
-                         labels = c("1-10", "11-20", "21-30", "31-40", "41-50",
-                                   "51-60", "61-70", "71-80", "81-90", "91-99"), 
-                         position = "top") +
-      scale_y_reverse(breaks = 1:10, expand = expansion(mult = 0.02),
-                      labels = 1:10) +  # Reversed: Decile 1 at top, Decile 10 at bottom
+      scale_x_continuous(
+        breaks = 1:10,
+        expand = expansion(mult = 0.02),
+        labels = c(
+          "1-10",
+          "11-20",
+          "21-30",
+          "31-40",
+          "41-50",
+          "51-60",
+          "61-70",
+          "71-80",
+          "81-90",
+          "91-99"
+        ),
+        position = "top"
+      ) +
+      scale_y_reverse(
+        breaks = 1:10,
+        expand = expansion(mult = 0.02),
+        labels = 1:10
+      ) + # Reversed: Decile 1 at top, Decile 10 at bottom
       labs(
         caption = paste0(
-          "Cell: SGPc% (top, black) / <span style='color:", color_sgp, ";'>SGP% (bot, teal)</span> | ",
+          "Cell: SGPc% (top, black) / <span style='color:",
+          color_sgp,
+          ";'>SGP% (bot, teal)</span> | ",
           "Blue: SGPc > SGP | Green: SGP > SGPc"
         ),
         x = "SGPc / SGP Decile",
@@ -4250,11 +5753,26 @@ plot_empirical_vs_sgp_dual_pct <- function(sgpc_empirical,
       ) +
       theme_minimal() +
       theme(
-        plot.caption = ggtext::element_markdown(hjust = 0.5, size = 7, color = "grey40"),
+        plot.caption = ggtext::element_markdown(
+          hjust = 0.5,
+          size = 7,
+          color = "grey40"
+        ),
         axis.title.x.top = element_blank(),
-        axis.title.y.left = element_text(size = 9, margin = margin(0, 0, 0, 4, "pt")),
-        axis.text.y.left = element_text(size = 9, hjust = 1, margin = margin(0, 0, 0, 4, "pt")),
-        axis.text.x.top = element_text(size = 7, vjust = 1, margin = margin(6, 0, 0, 0, "pt")),
+        axis.title.y.left = element_text(
+          size = 9,
+          margin = margin(0, 0, 0, 4, "pt")
+        ),
+        axis.text.y.left = element_text(
+          size = 9,
+          hjust = 1,
+          margin = margin(0, 0, 0, 4, "pt")
+        ),
+        axis.text.x.top = element_text(
+          size = 7,
+          vjust = 1,
+          margin = margin(6, 0, 0, 0, "pt")
+        ),
         panel.grid = element_blank(),
         plot.margin = margin(5, 35, 10, 5, "pt"),
         plot.background = element_rect(fill = "transparent", color = NA),
@@ -4266,15 +5784,16 @@ plot_empirical_vs_sgp_dual_pct <- function(sgpc_empirical,
         legend.key.width = unit(0.25, "cm"),
         legend.title = element_text(size = 7),
         legend.text = element_text(size = 6),
-        aspect.ratio = 0.95 
+        aspect.ratio = 0.95
       )
   }
-  
+
   # --- Combine Panels ---
-  combined <- p_ecdf / p_heatmap + 
+  combined <- p_ecdf /
+    p_heatmap +
     plot_layout(heights = c(0.9, 1.1)) &
     theme(plot.background = element_rect(fill = "transparent", color = NA))
-  
+
   # Return list with plot and statistics
   return(list(
     plot = combined,
@@ -4322,22 +5841,23 @@ plot_empirical_vs_sgp_dual_pct <- function(sgpc_empirical,
 #' }
 #'
 #' @export
-plot_copula_comparison_with_sgpc <- function(empirical_grid,
-                                              fitted_copula,
-                                              family,
-                                              sgpc_empirical,
-                                              sgpc_parametric,
-                                              u_obs = NULL,
-                                              subtitle = NULL,
-                                              x_label = expression(u[prior]),
-                                              y_label = expression(v[current]),
-                                              copula_result = NULL,
-                                              sgp_order_1 = NULL,
-                                              sgp_best = NULL) {
-  
+plot_copula_comparison_with_sgpc <- function(
+  empirical_grid,
+  fitted_copula,
+  family,
+  sgpc_empirical,
+  sgpc_parametric,
+  u_obs = NULL,
+  subtitle = NULL,
+  x_label = expression(u[prior]),
+  y_label = expression(v[current]),
+  copula_result = NULL,
+  sgp_order_1 = NULL,
+  sgp_best = NULL
+) {
   require(ggplot2)
   require(data.table)
-  
+
   # --- Left Panel: Copula CDF Difference ---
   copula_diff_plot <- plot_copula_comparison(
     empirical_grid = empirical_grid,
@@ -4350,13 +5870,13 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
     copula_result = copula_result,
     show_stats = TRUE
   )
-  
+
   # Calculate copula difference statistics
   grid_size <- nrow(empirical_grid$u_grid)
   u_seq <- seq(0.01, 0.99, length.out = grid_size)
   v_seq <- seq(0.01, 0.99, length.out = grid_size)
   grid <- expand.grid(u = u_seq, v = v_seq)
-  
+
   if (family == "comonotonic") {
     if (empirical_grid$method == "density") {
       parametric_values <- ifelse(abs(grid$u - grid$v) < 0.02, 10, 0.1)
@@ -4370,24 +5890,33 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
       parametric_values <- pCopula(as.matrix(grid), fitted_copula)
     }
   }
-  
+
   diff_values <- as.vector(empirical_grid$copula_values) - parametric_values
-  
+
   # === TAIL STATISTICS CALCULATION ===
   # Reshape CDF vectors to matrices for tail calculation
-  emp_cdf_mat <- matrix(as.vector(empirical_grid$copula_values), 
-                        nrow = grid_size, ncol = grid_size, byrow = FALSE)
-  par_cdf_mat <- matrix(parametric_values, 
-                        nrow = grid_size, ncol = grid_size, byrow = FALSE)
-  
+  emp_cdf_mat <- matrix(
+    as.vector(empirical_grid$copula_values),
+    nrow = grid_size,
+    ncol = grid_size,
+    byrow = FALSE
+  )
+  par_cdf_mat <- matrix(
+    parametric_values,
+    nrow = grid_size,
+    ncol = grid_size,
+    byrow = FALSE
+  )
+
   tail_stats <- calculate_copula_tail_statistics(
-    u_seq = u_seq, v_seq = v_seq,
+    u_seq = u_seq,
+    v_seq = v_seq,
     cdf_mat_1 = emp_cdf_mat,
     cdf_mat_2 = par_cdf_mat,
     tau_tail = 0.10
   )
   # === END TAIL STATISTICS ===
-  
+
   copula_diff_stats <- list(
     # Existing statistics
     max_positive = max(diff_values, na.rm = TRUE),
@@ -4408,7 +5937,7 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
     tail_LL_rmse = tail_stats$tail_LL_rmse,
     tail_UU_rmse = tail_stats$tail_UU_rmse
   )
-  
+
   # --- Right Panel: SGPc Comparison ---
   sgpc_result <- plot_sgpc_comparison_panel(
     sgpc_empirical = sgpc_empirical,
@@ -4420,9 +5949,11 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
     sgp_order_1 = sgp_order_1,
     sgp_best = sgp_best
   )
-  
+
   if (is.null(sgpc_result)) {
-    warning("SGPc comparison panel generation failed, returning copula diff only")
+    warning(
+      "SGPc comparison panel generation failed, returning copula diff only"
+    )
     return(list(
       combined_plot = copula_diff_plot,
       copula_diff_plot = copula_diff_plot,
@@ -4431,28 +5962,33 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
       copula_diff_stats = copula_diff_stats
     ))
   }
-  
+
   sgpc_panel <- sgpc_result$plot
   sgpc_stats <- sgpc_result$statistics
-  
+
   # --- Combine Panels with Annotation ---
   # Layout: Left (copula diff) | Spacer with annotation | Right (SGPc)
   # 3-column approach gives precise control over gap width
   require(cowplot)
-  
+
   # Create empty spacer for the gap (explicit transparent background for SVG/PNG export)
-  spacer <- ggplot() + theme_void() + 
+  spacer <- ggplot() +
+    theme_void() +
     theme(plot.background = element_rect(fill = "transparent", color = NA))
-  
+
   # 3-column layout with spacer in middle
   # rel_widths = c(5.5, 0.8, 3.7) → ~55% | ~8% gap | ~37%
   # Gives more prominence to left copula diff panel
   base_plot <- cowplot::plot_grid(
-    copula_diff_plot, spacer, sgpc_panel,
-    ncol = 3, rel_widths = c(5.5, 0.8, 3.7),
-    align = "v", axis = "lr"
+    copula_diff_plot,
+    spacer,
+    sgpc_panel,
+    ncol = 3,
+    rel_widths = c(5.5, 0.8, 3.7),
+    align = "v",
+    axis = "lr"
   )
-  
+
   # Add annotation in the spacer column (center of gap)
   # Gap starts at ~55% (5.5/10) and ends at ~63% (6.3/10), so center is ~59%
   # Four separate labels for full control over positioning and font size:
@@ -4461,29 +5997,33 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
   #   Line 3: SGPc(u,v) ≡ F_{V|U}(v|u)
   #   Line 4: = ∂/∂u C(u,v)  (aligned with ≡)
   # Using bquote() for consistency with plot titles; fontfamily = "sans" for SVG/PNG export
-  
+
   x_center <- 0.6
-  label_color <- rgb(20, 20, 16, maxColorValue = 255)  # Light text on dark box
-  
+  label_color <- rgb(20, 20, 16, maxColorValue = 255) # Light text on dark box
+
   # Box colors: dark fill with light border
   box_fill <- rgb(247, 247, 245, maxColorValue = 255)
   box_border <- rgb(227, 227, 225, maxColorValue = 255)
-  
+
   combined_plot <- ggdraw(base_plot) +
     # Rounded rectangle background behind text (drawn first so text is on top)
     draw_grob(
       grid::roundrectGrob(
-        x = x_center, y = 0.47,
-        width = 0.12, height = 0.22,
+        x = x_center,
+        y = 0.47,
+        width = 0.12,
+        height = 0.22,
         r = unit(0.03, "npc"),
         gp = grid::gpar(fill = box_fill, col = box_border, lwd = 1)
       )
     ) +
     # Line 1: ΔC(u,v) → ΔSGPc
     draw_label(
-      label = bquote(C(u,v) %=>% SGPc),
-      x = x_center, y = 0.55,
-      hjust = 0.5, vjust = 0.5,
+      label = bquote(C(u, v) %=>% SGPc),
+      x = x_center,
+      y = 0.55,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       color = label_color
@@ -4491,8 +6031,10 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
     # Line 2: via
     draw_label(
       label = "via",
-      x = x_center, y = 0.51,
-      hjust = 0.5, vjust = 0.5,
+      x = x_center,
+      y = 0.51,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       fontface = "italic",
@@ -4500,25 +6042,29 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
     ) +
     # Line 3: SGPc(u,v) ≡ F_{V|U}(v|u)
     draw_label(
-      label = bquote(SGPc(u,v) %==% F[V~"|"~U](v~"|"~u)),
-      x = x_center, y = 0.47,
-      hjust = 0.5, vjust = 0.5,
+      label = bquote(SGPc(u, v) %==% F[V ~ "|" ~ U](v ~ "|" ~ u)),
+      x = x_center,
+      y = 0.47,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       color = label_color
     ) +
     # Line 4: = ∂/∂u C(u,v), aligned with ≡ above
     draw_label(
-      label = bquote(~"="~ frac(partialdiff, partialdiff*u)*C(u,v)),
-      x = x_center + 0.022, y = 0.41,
-      hjust = 0.5, vjust = 0.5,
+      label = bquote(~"=" ~ frac(partialdiff, partialdiff * u) * C(u, v)),
+      x = x_center + 0.022,
+      y = 0.41,
+      hjust = 0.5,
+      vjust = 0.5,
       size = 10,
       fontfamily = "sans",
       color = label_color
     ) +
     # Ensure transparent background for SVG/PNG export
     theme(plot.background = element_rect(fill = "transparent", color = NA))
-  
+
   return(list(
     combined_plot = combined_plot,
     copula_diff_plot = copula_diff_plot,
@@ -4552,27 +6098,31 @@ plot_copula_comparison_with_sgpc <- function(empirical_grid,
 #' }
 #'
 #' @export
-export_copula_summary <- function(output_dir,
-                                   family,
-                                   condition_info,
-                                   copula_result,
-                                   sgpc_stats,
-                                   copula_diff_stats,
-                                   n_pairs = NULL,
-                                   base_filename = NULL) {
-  
+export_copula_summary <- function(
+  output_dir,
+  family,
+  condition_info,
+  copula_result,
+  sgpc_stats,
+  copula_diff_stats,
+  n_pairs = NULL,
+  base_filename = NULL
+) {
   require(jsonlite)
-  
+
   # Create output directory if needed
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
   }
-  
+
   # Default filename based on family
   if (is.null(base_filename)) {
-    base_filename <- sprintf("comparison_empirical_vs_%s_summary", tolower(family))
+    base_filename <- sprintf(
+      "comparison_empirical_vs_%s_summary",
+      tolower(family)
+    )
   }
-  
+
   # Extract copula parameters
   copula_params <- list()
   if (!is.null(copula_result)) {
@@ -4600,7 +6150,7 @@ export_copula_summary <- function(output_dir,
       copula_params$df <- copula_result$df
     }
   }
-  
+
   # Build the full summary structure
   summary_data <- list(
     metadata = list(
@@ -4633,42 +6183,76 @@ export_copula_summary <- function(output_dir,
         n_students = sgpc_stats$n %||% sgpc_stats$n_valid %||% NA,
         # Note: calculate_ecdf_statistics() returns mean1/mean2, not mean_sgpc/mean_sgp
         # Store full precision - rounding happens in display layer (generate_summary_grid_latex)
-        mean_empirical = sgpc_stats$mean1 %||% sgpc_stats$mean_empirical %||% NA,
-        mean_parametric = sgpc_stats$mean2 %||% sgpc_stats$mean_parametric %||% NA,
+        mean_empirical = sgpc_stats$mean1 %||%
+          sgpc_stats$mean_empirical %||%
+          NA,
+        mean_parametric = sgpc_stats$mean2 %||%
+          sgpc_stats$mean_parametric %||%
+          NA,
         median_diff = round(sgpc_stats$median_diff %||% NA, 2),
         ks_distance = round(sgpc_stats$ks_distance %||% NA, 4),
         ks_pvalue = round(sgpc_stats$ks_pvalue %||% NA, 6),
         cvm_stat = round(sgpc_stats$cvm_stat %||% NA, 6),
         # Note: calculate_ecdf_statistics() returns spearman_rho, not correlation
-        correlation = round(sgpc_stats$spearman_rho %||% sgpc_stats$correlation %||% NA, 4),
-        pct_diff_gt_10 = round(sgpc_stats$pct_large_diff_10 %||% sgpc_stats$pct_diff_gt_10 %||% NA, 4),
+        correlation = round(
+          sgpc_stats$spearman_rho %||% sgpc_stats$correlation %||% NA,
+          4
+        ),
+        pct_diff_gt_10 = round(
+          sgpc_stats$pct_large_diff_10 %||% sgpc_stats$pct_diff_gt_10 %||% NA,
+          4
+        ),
         max_cdf_diff = round(sgpc_stats$max_cdf_diff %||% NA, 4)
       )
     } else {
-      cat("  ⚠ SGPc statistics are NULL - SGPc comparison fields will be unavailable\n")
+      cat(
+        "  ⚠ SGPc statistics are NULL - SGPc comparison fields will be unavailable\n"
+      )
       list(available = FALSE)
     },
     # NEW: Traditional SGP comparison (b-spline quantile regression)
-    traditional_sgp_comparison = if (!is.null(sgpc_stats) && 
-                                     (isTRUE(sgpc_stats$has_sgp_order_1) || 
-                                      isTRUE(sgpc_stats$has_sgp_best))) {
+    traditional_sgp_comparison = if (
+      !is.null(sgpc_stats) &&
+        (isTRUE(sgpc_stats$has_sgp_order_1) ||
+          isTRUE(sgpc_stats$has_sgp_best))
+    ) {
       list(
         has_sgp_order_1 = isTRUE(sgpc_stats$has_sgp_order_1),
         has_sgp_best = isTRUE(sgpc_stats$has_sgp_best),
-        mean_sgp_order_1 = if (isTRUE(sgpc_stats$has_sgp_order_1)) 
-          round(sgpc_stats$mean_sgp_order_1 %||% NA, 2) else NA,
-        mean_sgp_best = if (isTRUE(sgpc_stats$has_sgp_best)) 
-          round(sgpc_stats$mean_sgp_best %||% NA, 2) else NA,
+        mean_sgp_order_1 = if (isTRUE(sgpc_stats$has_sgp_order_1)) {
+          round(sgpc_stats$mean_sgp_order_1 %||% NA, 2)
+        } else {
+          NA
+        },
+        mean_sgp_best = if (isTRUE(sgpc_stats$has_sgp_best)) {
+          round(sgpc_stats$mean_sgp_best %||% NA, 2)
+        } else {
+          NA
+        },
         # Correlations: SGPc (empirical) vs traditional SGP
-        cor_empirical_vs_sgp_order_1 = if (isTRUE(sgpc_stats$has_sgp_order_1)) 
-          round(sgpc_stats$cor_empirical_sgp_order_1 %||% NA, 4) else NA,
-        cor_empirical_vs_sgp_best = if (isTRUE(sgpc_stats$has_sgp_best)) 
-          round(sgpc_stats$cor_empirical_sgp_best %||% NA, 4) else NA,
+        cor_empirical_vs_sgp_order_1 = if (isTRUE(sgpc_stats$has_sgp_order_1)) {
+          round(sgpc_stats$cor_empirical_sgp_order_1 %||% NA, 4)
+        } else {
+          NA
+        },
+        cor_empirical_vs_sgp_best = if (isTRUE(sgpc_stats$has_sgp_best)) {
+          round(sgpc_stats$cor_empirical_sgp_best %||% NA, 4)
+        } else {
+          NA
+        },
         # Correlations: SGPc (parametric) vs traditional SGP
-        cor_parametric_vs_sgp_order_1 = if (isTRUE(sgpc_stats$has_sgp_order_1)) 
-          round(sgpc_stats$cor_parametric_sgp_order_1 %||% NA, 4) else NA,
-        cor_parametric_vs_sgp_best = if (isTRUE(sgpc_stats$has_sgp_best)) 
-          round(sgpc_stats$cor_parametric_sgp_best %||% NA, 4) else NA
+        cor_parametric_vs_sgp_order_1 = if (
+          isTRUE(sgpc_stats$has_sgp_order_1)
+        ) {
+          round(sgpc_stats$cor_parametric_sgp_order_1 %||% NA, 4)
+        } else {
+          NA
+        },
+        cor_parametric_vs_sgp_best = if (isTRUE(sgpc_stats$has_sgp_best)) {
+          round(sgpc_stats$cor_parametric_sgp_best %||% NA, 4)
+        } else {
+          NA
+        }
       )
     } else {
       list(available = FALSE)
@@ -4686,10 +6270,16 @@ export_copula_summary <- function(output_dir,
         tail_behaviour = list(
           tau = copula_diff_stats$tau_tail %||% 0.10,
           lambda_L_empirical = round(copula_diff_stats$lambda_L_emp %||% NA, 3),
-          lambda_L_parametric = round(copula_diff_stats$lambda_L_par %||% NA, 3),
+          lambda_L_parametric = round(
+            copula_diff_stats$lambda_L_par %||% NA,
+            3
+          ),
           delta_lambda_L = round(copula_diff_stats$delta_lambda_L %||% NA, 3),
           lambda_U_empirical = round(copula_diff_stats$lambda_U_emp %||% NA, 3),
-          lambda_U_parametric = round(copula_diff_stats$lambda_U_par %||% NA, 3),
+          lambda_U_parametric = round(
+            copula_diff_stats$lambda_U_par %||% NA,
+            3
+          ),
           delta_lambda_U = round(copula_diff_stats$delta_lambda_U %||% NA, 3),
           tail_LL_rmse = round(copula_diff_stats$tail_LL_rmse %||% NA, 5),
           tail_UU_rmse = round(copula_diff_stats$tail_UU_rmse %||% NA, 5)
@@ -4724,36 +6314,42 @@ export_copula_summary <- function(output_dir,
       is_best_aic = copula_result$is_best %||% FALSE
     )
   )
-  
+
   # --- Write JSON ---
   json_file <- file.path(output_dir, paste0(base_filename, ".json"))
   write_json(summary_data, json_file, pretty = TRUE, auto_unbox = TRUE)
-  
+
   # --- Write Markdown ---
   md_file <- file.path(output_dir, paste0(base_filename, ".md"))
-  
+
   # Format content area nicely
   content_formatted <- if (!is.na(summary_data$condition$content_area)) {
     tools::toTitleCase(tolower(summary_data$condition$content_area))
   } else {
     "Unknown"
   }
-  
+
   # Format copula parameters
   params_str <- if (length(copula_params) > 0) {
-    paste(sapply(names(copula_params), function(nm) {
-      val <- copula_params[[nm]]
-      if (is.numeric(val)) sprintf("%s=%.3f", nm, val)
-      else sprintf("%s=%s", nm, val)
-    }), collapse = ", ")
+    paste(
+      sapply(names(copula_params), function(nm) {
+        val <- copula_params[[nm]]
+        if (is.numeric(val)) {
+          sprintf("%s=%.3f", nm, val)
+        } else {
+          sprintf("%s=%s", nm, val)
+        }
+      }),
+      collapse = ", "
+    )
   } else {
     "N/A"
   }
-  
+
   # Build markdown content
   # Base sections always included
   md_header <- sprintf(
-'# Copula Comparison Summary: Empirical vs %s
+    '# Copula Comparison Summary: Empirical vs %s
 
 ## Condition
 - **Dataset**: %s
@@ -4793,12 +6389,15 @@ export_copula_summary <- function(output_dir,
     summary_data$copula$gof_pvalue %||% NA,
     summary_data$copula$gof_method %||% "N/A"
   )
-  
+
   # Relative fit section (conditional - only if relative_fit metrics are available)
   rel_fit <- summary_data$relative_fit %||% list()
-  if (!is.na(rel_fit$delta_aic_vs_best %||% NA) || !is.na(rel_fit$aic_weight %||% NA)) {
+  if (
+    !is.na(rel_fit$delta_aic_vs_best %||% NA) ||
+      !is.na(rel_fit$aic_weight %||% NA)
+  ) {
     md_relative_fit <- sprintf(
-'
+      '
 ## Relative Fit (vs Best Model)
 - **ΔAIC (vs best)**: %.1f
 - **Akaike Weight (wAIC)**: %.4f
@@ -4811,11 +6410,15 @@ export_copula_summary <- function(output_dir,
   } else {
     md_relative_fit <- ""
   }
-  
+
   # SGPc section (conditional - only if sgpc_stats is available)
-  if (!is.null(sgpc_stats) && !is.null(sgpc_stats$n_valid) && sgpc_stats$n_valid > 0) {
+  if (
+    !is.null(sgpc_stats) &&
+      !is.null(sgpc_stats$n_valid) &&
+      sgpc_stats$n_valid > 0
+  ) {
     md_sgpc <- sprintf(
-'
+      '
 ## SGPc Comparison (n = %s)
 
 | Metric | Value |
@@ -4843,17 +6446,26 @@ export_copula_summary <- function(output_dir,
   } else {
     md_sgpc <- "\n## SGPc Comparison\n\n*SGPc comparison not available for this condition.*\n"
   }
-  
+
   # NEW: Traditional SGP comparison section (b-spline quantile regression)
   md_traditional_sgp <- ""
-  if (!is.null(sgpc_stats) && (isTRUE(sgpc_stats$has_sgp_order_1) || isTRUE(sgpc_stats$has_sgp_best))) {
+  if (
+    !is.null(sgpc_stats) &&
+      (isTRUE(sgpc_stats$has_sgp_order_1) || isTRUE(sgpc_stats$has_sgp_best))
+  ) {
     md_traditional_sgp <- "\n## Traditional SGP Comparison (B-Spline Quantile Regression)\n\n"
-    md_traditional_sgp <- paste0(md_traditional_sgp, 
-      "Comparison of copula-based SGPc with traditional b-spline quantile regression SGPs.\n\n")
-    
+    md_traditional_sgp <- paste0(
+      md_traditional_sgp,
+      "Comparison of copula-based SGPc with traditional b-spline quantile regression SGPs.\n\n"
+    )
+
     # Build the table header
-    md_traditional_sgp <- paste0(md_traditional_sgp,
-      "| Metric | SGPc (Empirical) | SGPc (", tools::toTitleCase(family), ") |")
+    md_traditional_sgp <- paste0(
+      md_traditional_sgp,
+      "| Metric | SGPc (Empirical) | SGPc (",
+      tools::toTitleCase(family),
+      ") |"
+    )
     if (isTRUE(sgpc_stats$has_sgp_order_1)) {
       md_traditional_sgp <- paste0(md_traditional_sgp, " SGP (1 prior) |")
     }
@@ -4861,10 +6473,17 @@ export_copula_summary <- function(output_dir,
       md_traditional_sgp <- paste0(md_traditional_sgp, " SGP (best) |")
     }
     md_traditional_sgp <- paste0(md_traditional_sgp, "\n")
-    
+
     # Table separator
-    md_traditional_sgp <- paste0(md_traditional_sgp, "|--------|------------------|")
-    md_traditional_sgp <- paste0(md_traditional_sgp, paste0(rep("-", nchar(tools::toTitleCase(family)) + 9), collapse = ""), "|")
+    md_traditional_sgp <- paste0(
+      md_traditional_sgp,
+      "|--------|------------------|"
+    )
+    md_traditional_sgp <- paste0(
+      md_traditional_sgp,
+      paste0(rep("-", nchar(tools::toTitleCase(family)) + 9), collapse = ""),
+      "|"
+    )
     if (isTRUE(sgpc_stats$has_sgp_order_1)) {
       md_traditional_sgp <- paste0(md_traditional_sgp, "--------------|")
     }
@@ -4872,61 +6491,101 @@ export_copula_summary <- function(output_dir,
       md_traditional_sgp <- paste0(md_traditional_sgp, "------------|")
     }
     md_traditional_sgp <- paste0(md_traditional_sgp, "\n")
-    
+
     # Mean row
-    md_traditional_sgp <- paste0(md_traditional_sgp,
-      sprintf("| Mean | %.1f | %.1f |", 
-              sgpc_stats$mean_sgpc %||% sgpc_stats$mean_empirical %||% NA,
-              sgpc_stats$mean_sgp %||% sgpc_stats$mean_parametric %||% NA))
+    md_traditional_sgp <- paste0(
+      md_traditional_sgp,
+      sprintf(
+        "| Mean | %.1f | %.1f |",
+        sgpc_stats$mean_sgpc %||% sgpc_stats$mean_empirical %||% NA,
+        sgpc_stats$mean_sgp %||% sgpc_stats$mean_parametric %||% NA
+      )
+    )
     if (isTRUE(sgpc_stats$has_sgp_order_1)) {
-      md_traditional_sgp <- paste0(md_traditional_sgp, 
-        sprintf(" %.1f |", sgpc_stats$mean_sgp_order_1 %||% NA))
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(" %.1f |", sgpc_stats$mean_sgp_order_1 %||% NA)
+      )
     }
     if (isTRUE(sgpc_stats$has_sgp_best)) {
-      md_traditional_sgp <- paste0(md_traditional_sgp, 
-        sprintf(" %.1f |", sgpc_stats$mean_sgp_best %||% NA))
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(" %.1f |", sgpc_stats$mean_sgp_best %||% NA)
+      )
     }
     md_traditional_sgp <- paste0(md_traditional_sgp, "\n")
-    
+
     # Correlation section
-    md_traditional_sgp <- paste0(md_traditional_sgp, "\n### Correlations with Traditional SGP\n\n")
-    
+    md_traditional_sgp <- paste0(
+      md_traditional_sgp,
+      "\n### Correlations with Traditional SGP\n\n"
+    )
+
     if (isTRUE(sgpc_stats$has_sgp_order_1)) {
-      md_traditional_sgp <- paste0(md_traditional_sgp,
-        sprintf("**SGP (1 prior)** - Single prior b-spline quantile regression:\n"))
-      md_traditional_sgp <- paste0(md_traditional_sgp,
-        sprintf("- Correlation with SGPc (Empirical): r = %.4f\n", 
-                sgpc_stats$cor_empirical_sgp_order_1 %||% NA))
-      md_traditional_sgp <- paste0(md_traditional_sgp,
-        sprintf("- Correlation with SGPc (%s): r = %.4f\n\n", 
-                tools::toTitleCase(family),
-                sgpc_stats$cor_parametric_sgp_order_1 %||% NA))
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(
+          "**SGP (1 prior)** - Single prior b-spline quantile regression:\n"
+        )
+      )
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(
+          "- Correlation with SGPc (Empirical): r = %.4f\n",
+          sgpc_stats$cor_empirical_sgp_order_1 %||% NA
+        )
+      )
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(
+          "- Correlation with SGPc (%s): r = %.4f\n\n",
+          tools::toTitleCase(family),
+          sgpc_stats$cor_parametric_sgp_order_1 %||% NA
+        )
+      )
     }
-    
+
     if (isTRUE(sgpc_stats$has_sgp_best)) {
-      md_traditional_sgp <- paste0(md_traditional_sgp,
-        sprintf("**SGP (best)** - Best available (typically 2 priors when available):\n"))
-      md_traditional_sgp <- paste0(md_traditional_sgp,
-        sprintf("- Correlation with SGPc (Empirical): r = %.4f\n", 
-                sgpc_stats$cor_empirical_sgp_best %||% NA))
-      md_traditional_sgp <- paste0(md_traditional_sgp,
-        sprintf("- Correlation with SGPc (%s): r = %.4f\n\n", 
-                tools::toTitleCase(family),
-                sgpc_stats$cor_parametric_sgp_best %||% NA))
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(
+          "**SGP (best)** - Best available (typically 2 priors when available):\n"
+        )
+      )
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(
+          "- Correlation with SGPc (Empirical): r = %.4f\n",
+          sgpc_stats$cor_empirical_sgp_best %||% NA
+        )
+      )
+      md_traditional_sgp <- paste0(
+        md_traditional_sgp,
+        sprintf(
+          "- Correlation with SGPc (%s): r = %.4f\n\n",
+          tools::toTitleCase(family),
+          sgpc_stats$cor_parametric_sgp_best %||% NA
+        )
+      )
     }
-    
+
     # Interpretation note
-    md_traditional_sgp <- paste0(md_traditional_sgp,
-      "*Note: SGP (1 prior) provides the most direct comparison since SGPc also uses a single prior.*\n")
+    md_traditional_sgp <- paste0(
+      md_traditional_sgp,
+      "*Note: SGP (1 prior) provides the most direct comparison since SGPc also uses a single prior.*\n"
+    )
   }
-  
+
   # Copula CDF diff section and footer
-  if (!is.null(copula_diff_stats) && !isTRUE(summary_data$copula_cdf_diff$available == FALSE)) {
+  if (
+    !is.null(copula_diff_stats) &&
+      !isTRUE(summary_data$copula_cdf_diff$available == FALSE)
+  ) {
     # Extract tail behaviour from summary_data
     tail_beh <- summary_data$copula_cdf_diff$tail_behaviour %||% list()
-    
+
     md_cdf_diff <- sprintf(
-'
+      '
 ## Copula CDF Difference
 - **Max Positive** (Emp > %s): %.5f
 - **Max Negative** (Emp < %s): %.5f
@@ -4962,16 +6621,18 @@ export_copula_summary <- function(output_dir,
   } else {
     md_cdf_diff <- "\n## Copula CDF Difference\n\n*CDF difference statistics not available.*\n"
   }
-  
+
   # NEW: Parameter recommendation section for AI-assisted parameter selection
   # Only include if we have stratification info (year_span)
   if (!is.na(summary_data$stratification$year_span)) {
     year_span <- summary_data$stratification$year_span
-    content_formatted <- tools::toTitleCase(tolower(summary_data$condition$content_area %||% ""))
-    
+    content_formatted <- tools::toTitleCase(tolower(
+      summary_data$condition$content_area %||% ""
+    ))
+
     # Provide guidance based on the fit results
     md_recommendations <- sprintf(
-'
+      '
 ## Parameter Recommendations for Similar Conditions
 
 This condition represents a **%d-year span** for **%s**. Based on this analysis:
@@ -5020,20 +6681,28 @@ tau(my_copula)  # Should be approximately %.3f
   } else {
     md_recommendations <- ""
   }
-  
+
   md_footer <- sprintf(
-'
+    '
 ---
 *Generated: %s*
 ',
     summary_data$metadata$generated_at
   )
-  
+
   # Combine all sections
-  md_content <- paste0(md_header, md_relative_fit, md_sgpc, md_traditional_sgp, md_cdf_diff, md_recommendations, md_footer)
-  
+  md_content <- paste0(
+    md_header,
+    md_relative_fit,
+    md_sgpc,
+    md_traditional_sgp,
+    md_cdf_diff,
+    md_recommendations,
+    md_footer
+  )
+
   writeLines(md_content, md_file)
-  
+
   invisible(NULL)
 }
 
@@ -5064,29 +6733,30 @@ tau(my_copula)  # Should be approximately %.3f
 #' }
 #'
 #' @export
-export_analysis_manifest <- function(results_dt,
-                                     output_dir,
-                                     manifest_filename = "analysis_manifest.json",
-                                     include_sensitivity = TRUE) {
-  
+export_analysis_manifest <- function(
+  results_dt,
+  output_dir,
+  manifest_filename = "analysis_manifest.json",
+  include_sensitivity = TRUE
+) {
   require(jsonlite)
   require(data.table)
-  
+
   # Ensure results_dt is a data.table
   if (!is.data.table(results_dt)) {
     results_dt <- as.data.table(results_dt)
   }
-  
+
   # Create output directory if needed
   if (!dir.exists(output_dir)) {
     dir.create(output_dir, recursive = TRUE)
   }
-  
+
   # --- Metadata ---
   n_conditions <- length(unique(results_dt$condition_id))
   n_families <- length(unique(results_dt$family))
   n_datasets <- length(unique(results_dt$dataset_id))
-  
+
   metadata <- list(
     manifest_version = "1.0",
     generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
@@ -5096,22 +6766,22 @@ export_analysis_manifest <- function(results_dt,
     families_tested = sort(unique(results_dt$family)),
     year_spans_tested = sort(unique(results_dt$year_span))
   )
-  
+
   # --- Parameter Recommendations by Year Span ---
   # For each year_span, compute typical parameter ranges from t-copula fits
   param_recommendations <- list()
-  
+
   year_spans <- sort(unique(results_dt$year_span))
-  
+
   for (span in year_spans) {
     # Filter to t-copula fits for this span (t-copula is typically best)
     t_fits <- results_dt[family == "t" & year_span == span]
-    
+
     if (nrow(t_fits) > 0) {
       # Calculate parameter ranges (exclude outliers using 5th/95th percentiles)
       # Handle both column naming conventions: correlation_rho/degrees_freedom or parameter_1/parameter_2
       has_named_params <- "correlation_rho" %in% names(t_fits)
-      
+
       tau_values <- t_fits$tau[!is.na(t_fits$tau)]
       if (has_named_params) {
         rho_values <- t_fits$correlation_rho[!is.na(t_fits$correlation_rho)]
@@ -5122,25 +6792,51 @@ export_analysis_manifest <- function(results_dt,
         df_values <- t_fits$parameter_2[!is.na(t_fits$parameter_2)]
       }
       tail_dep_values <- t_fits$tail_dep_lower[!is.na(t_fits$tail_dep_lower)]
-      
+
       # Calculate ranges and medians (handle single-value case)
-      tau_range <- if (length(tau_values) >= 2) quantile(tau_values, c(0.05, 0.95)) else c(tau_values[1], tau_values[1])
-      rho_range <- if (length(rho_values) >= 2) quantile(rho_values, c(0.05, 0.95)) else if (length(rho_values) == 1) c(rho_values[1], rho_values[1]) else c(NA, NA)
-      df_range <- if (length(df_values) >= 2) quantile(df_values, c(0.05, 0.95)) else if (length(df_values) == 1) c(df_values[1], df_values[1]) else c(NA, NA)
-      tail_dep_range <- if (length(tail_dep_values) >= 2) quantile(tail_dep_values, c(0.05, 0.95)) else if (length(tail_dep_values) == 1) c(tail_dep_values[1], tail_dep_values[1]) else c(NA, NA)
-      
+      tau_range <- if (length(tau_values) >= 2) {
+        quantile(tau_values, c(0.05, 0.95))
+      } else {
+        c(tau_values[1], tau_values[1])
+      }
+      rho_range <- if (length(rho_values) >= 2) {
+        quantile(rho_values, c(0.05, 0.95))
+      } else if (length(rho_values) == 1) {
+        c(rho_values[1], rho_values[1])
+      } else {
+        c(NA, NA)
+      }
+      df_range <- if (length(df_values) >= 2) {
+        quantile(df_values, c(0.05, 0.95))
+      } else if (length(df_values) == 1) {
+        c(df_values[1], df_values[1])
+      } else {
+        c(NA, NA)
+      }
+      tail_dep_range <- if (length(tail_dep_values) >= 2) {
+        quantile(tail_dep_values, c(0.05, 0.95))
+      } else if (length(tail_dep_values) == 1) {
+        c(tail_dep_values[1], tail_dep_values[1])
+      } else {
+        c(NA, NA)
+      }
+
       tau_median <- if (length(tau_values) > 0) median(tau_values) else NA
       rho_median <- if (length(rho_values) > 0) median(rho_values) else NA
       df_median <- if (length(df_values) > 0) median(df_values) else NA
-      
+
       # Determine recommended family based on AIC weight
-      family_summary <- results_dt[year_span == span, .(
-        mean_aic_weight = mean(delta_aic_vs_best == 0, na.rm = TRUE),
-        n_best = sum(delta_aic_vs_best == 0, na.rm = TRUE)
-      ), by = family][order(-mean_aic_weight)]
-      
+      family_summary <- results_dt[
+        year_span == span,
+        .(
+          mean_aic_weight = mean(delta_aic_vs_best == 0, na.rm = TRUE),
+          n_best = sum(delta_aic_vs_best == 0, na.rm = TRUE)
+        ),
+        by = family
+      ][order(-mean_aic_weight)]
+
       recommended_family <- family_summary$family[1]
-      
+
       span_key <- paste0("year_span_", span)
       param_recommendations[[span_key]] <- list(
         year_span = span,
@@ -5164,20 +6860,20 @@ export_analysis_manifest <- function(results_dt,
       )
     }
   }
-  
+
   # --- Parameter Recommendations by Content Area ---
   content_recommendations <- list()
-  
+
   content_areas <- unique(results_dt$content_area)
   content_areas <- content_areas[!is.na(content_areas)]
-  
+
   for (content in content_areas) {
     t_fits <- results_dt[family == "t" & content_area == content]
-    
+
     if (nrow(t_fits) > 0) {
       tau_median <- median(t_fits$tau, na.rm = TRUE)
       tau_range <- quantile(t_fits$tau, c(0.05, 0.95), na.rm = TRUE)
-      
+
       content_key <- tolower(gsub(" ", "_", content))
       content_recommendations[[content_key]] <- list(
         content_area = content,
@@ -5189,10 +6885,10 @@ export_analysis_manifest <- function(results_dt,
       )
     }
   }
-  
+
   # --- COMPREHENSIVE META-ANALYSIS ENHANCEMENTS (Option B) ---
   cat("\n=== COMPREHENSIVE META-ANALYSIS ===\n")
-  
+
   # Helper function: Calculate stability metrics
   calc_stability <- function(values, param_name = "parameter") {
     n <- length(values[!is.na(values)])
@@ -5210,14 +6906,14 @@ export_analysis_manifest <- function(results_dt,
         stability = "INSUFFICIENT_DATA"
       ))
     }
-    
+
     mean_val <- mean(values, na.rm = TRUE)
     median_val <- median(values, na.rm = TRUE)
     sd_val <- sd(values, na.rm = TRUE)
     cv_val <- if (abs(mean_val) > 1e-10) sd_val / abs(mean_val) else NA
     iqr_val <- IQR(values, na.rm = TRUE)
     mad_val <- mad(values, na.rm = TRUE)
-    
+
     # Bootstrap confidence interval (95%)
     if (n >= 10) {
       boot_samples <- replicate(1000, {
@@ -5231,7 +6927,7 @@ export_analysis_manifest <- function(results_dt,
       ci_lower <- NA
       ci_upper <- NA
     }
-    
+
     # Stability classification
     stability <- if (is.na(cv_val)) {
       "UNKNOWN"
@@ -5242,7 +6938,7 @@ export_analysis_manifest <- function(results_dt,
     } else {
       "LOW"
     }
-    
+
     list(
       n = n,
       mean = round(mean_val, 4),
@@ -5256,18 +6952,21 @@ export_analysis_manifest <- function(results_dt,
       stability = stability
     )
   }
-  
+
   # 1. CROSS-STRATIFIED RECOMMENDATIONS (year_span × content_area)
   cat("1. Computing cross-stratified recommendations...\n")
   cross_strat_recommendations <- list()
-  
+
   for (span in year_spans) {
     for (content in content_areas) {
-      t_fits <- results_dt[family == "t" & year_span == span & content_area == content]
-      
-      if (nrow(t_fits) >= 2) {  # Need at least 2 for meaningful statistics
+      t_fits <- results_dt[
+        family == "t" & year_span == span & content_area == content
+      ]
+
+      if (nrow(t_fits) >= 2) {
+        # Need at least 2 for meaningful statistics
         has_named_params <- "correlation_rho" %in% names(t_fits)
-        
+
         tau_values <- t_fits$tau[!is.na(t_fits$tau)]
         if (has_named_params) {
           rho_values <- t_fits$correlation_rho[!is.na(t_fits$correlation_rho)]
@@ -5276,21 +6975,34 @@ export_analysis_manifest <- function(results_dt,
           rho_values <- t_fits$parameter_1[!is.na(t_fits$parameter_1)]
           df_values <- t_fits$parameter_2[!is.na(t_fits$parameter_2)]
         }
-        
+
         tau_stats <- calc_stability(tau_values, "tau")
         rho_stats <- calc_stability(rho_values, "rho")
         df_stats <- calc_stability(df_values, "df")
-        
+
         # Overall stability: worst of the three
-        overall_stability <- if (tau_stats$stability == "LOW" || rho_stats$stability == "LOW" || df_stats$stability == "LOW") {
+        overall_stability <- if (
+          tau_stats$stability == "LOW" ||
+            rho_stats$stability == "LOW" ||
+            df_stats$stability == "LOW"
+        ) {
           "LOW"
-        } else if (tau_stats$stability == "MEDIUM" || rho_stats$stability == "MEDIUM" || df_stats$stability == "MEDIUM") {
+        } else if (
+          tau_stats$stability == "MEDIUM" ||
+            rho_stats$stability == "MEDIUM" ||
+            df_stats$stability == "MEDIUM"
+        ) {
           "MEDIUM"
         } else {
           tau_stats$stability
         }
-        
-        stratum_key <- paste0("year_", span, "_", tolower(gsub(" ", "_", content)))
+
+        stratum_key <- paste0(
+          "year_",
+          span,
+          "_",
+          tolower(gsub(" ", "_", content))
+        )
         cross_strat_recommendations[[stratum_key]] <- list(
           year_span = span,
           content_area = content,
@@ -5300,146 +7012,190 @@ export_analysis_manifest <- function(results_dt,
           rho = rho_stats,
           df = df_stats,
           overall_stability = overall_stability,
-          use_case = sprintf("Canonical copula for %d-year %s progressions", span, content)
+          use_case = sprintf(
+            "Canonical copula for %d-year %s progressions",
+            span,
+            content
+          )
         )
       }
     }
   }
-  
+
   # 2. GRADE-LEVEL EFFECTS ANALYSIS
   cat("2. Analyzing grade-level effects...\n")
   grade_level_analysis <- list()
-  
+
   # Define grade bands
-  best_fits_extended <- results_dt[!is.na(delta_aic_vs_best) & delta_aic_vs_best == 0]
-  best_fits_extended[, grade_band := fcase(
-    grade_current <= 5, "elementary",
-    grade_current <= 8, "middle",
-    grade_current <= 12, "high",
-    default = "other"
-  )]
-  
+  best_fits_extended <- results_dt[
+    !is.na(delta_aic_vs_best) & delta_aic_vs_best == 0
+  ]
+  best_fits_extended[,
+    grade_band := fcase(
+      grade_current <= 5  , "elementary" ,
+      grade_current <= 8  , "middle"     ,
+      grade_current <= 12 , "high"       ,
+      default = "other"
+    )
+  ]
+
   for (band in c("elementary", "middle", "high")) {
     band_data <- best_fits_extended[grade_band == band]
     if (nrow(band_data) >= 5) {
       tau_stats <- calc_stability(band_data$tau, "tau")
-      
+
       grade_level_analysis[[band]] <- list(
         grade_band = band,
         n_conditions = nrow(band_data),
         tau = tau_stats,
-        grade_range = paste0("G", min(band_data$grade_current, na.rm = TRUE), 
-                            "-G", max(band_data$grade_current, na.rm = TRUE))
+        grade_range = paste0(
+          "G",
+          min(band_data$grade_current, na.rm = TRUE),
+          "-G",
+          max(band_data$grade_current, na.rm = TRUE)
+        )
       )
     }
   }
-  
+
   # 3. STATISTICAL SIGNIFICANCE TESTS
   cat("3. Performing statistical significance tests...\n")
   statistical_tests <- list()
-  
+
   # Test 1: Does tau differ by content area?
-  if (length(unique(best_fits_extended$content_area)) > 1 && nrow(best_fits_extended) > 10) {
-    tryCatch({
-      # Kruskal-Wallis test (non-parametric ANOVA)
-      kw_test <- kruskal.test(tau ~ content_area, data = best_fits_extended)
-      statistical_tests$content_area_effect <- list(
-        test = "Kruskal-Wallis",
-        hypothesis = "H0: Kendall's tau does not differ across content areas",
-        statistic = round(kw_test$statistic, 3),
-        p_value = round(kw_test$p.value, 6),
-        significant = kw_test$p.value < 0.05,
-        interpretation = if (kw_test$p.value < 0.05) {
-          "Content area has a statistically significant effect on dependence strength"
-        } else {
-          "No significant difference in tau across content areas"
-        }
-      )
-    }, error = function(e) {
-      statistical_tests$content_area_effect <- list(error = e$message)
-    })
+  if (
+    length(unique(best_fits_extended$content_area)) > 1 &&
+      nrow(best_fits_extended) > 10
+  ) {
+    tryCatch(
+      {
+        # Kruskal-Wallis test (non-parametric ANOVA)
+        kw_test <- kruskal.test(tau ~ content_area, data = best_fits_extended)
+        statistical_tests$content_area_effect <- list(
+          test = "Kruskal-Wallis",
+          hypothesis = "H0: Kendall's tau does not differ across content areas",
+          statistic = round(kw_test$statistic, 3),
+          p_value = round(kw_test$p.value, 6),
+          significant = kw_test$p.value < 0.05,
+          interpretation = if (kw_test$p.value < 0.05) {
+            "Content area has a statistically significant effect on dependence strength"
+          } else {
+            "No significant difference in tau across content areas"
+          }
+        )
+      },
+      error = function(e) {
+        statistical_tests$content_area_effect <- list(error = e$message)
+      }
+    )
   }
-  
+
   # Test 2: Does tau decline with year_span?
-  if (length(unique(best_fits_extended$year_span)) > 1 && nrow(best_fits_extended) > 10) {
-    tryCatch({
-      cor_test <- cor.test(best_fits_extended$year_span, best_fits_extended$tau, 
-                          method = "spearman")
-      statistical_tests$year_span_trend <- list(
-        test = "Spearman correlation",
-        hypothesis = "H0: No monotonic relationship between year_span and tau",
-        correlation = round(cor_test$estimate, 3),
-        p_value = round(cor_test$p.value, 6),
-        significant = cor_test$p.value < 0.05,
-        interpretation = if (cor_test$p.value < 0.05 && cor_test$estimate < 0) {
-          "Kendall's tau significantly decreases with longer time spans"
-        } else if (cor_test$p.value < 0.05 && cor_test$estimate > 0) {
-          "Kendall's tau significantly increases with longer time spans (unexpected)"
-        } else {
-          "No significant monotonic trend in tau with year span"
-        }
-      )
-    }, error = function(e) {
-      statistical_tests$year_span_trend <- list(error = e$message)
-    })
+  if (
+    length(unique(best_fits_extended$year_span)) > 1 &&
+      nrow(best_fits_extended) > 10
+  ) {
+    tryCatch(
+      {
+        cor_test <- cor.test(
+          best_fits_extended$year_span,
+          best_fits_extended$tau,
+          method = "spearman"
+        )
+        statistical_tests$year_span_trend <- list(
+          test = "Spearman correlation",
+          hypothesis = "H0: No monotonic relationship between year_span and tau",
+          correlation = round(cor_test$estimate, 3),
+          p_value = round(cor_test$p.value, 6),
+          significant = cor_test$p.value < 0.05,
+          interpretation = if (
+            cor_test$p.value < 0.05 && cor_test$estimate < 0
+          ) {
+            "Kendall's tau significantly decreases with longer time spans"
+          } else if (cor_test$p.value < 0.05 && cor_test$estimate > 0) {
+            "Kendall's tau significantly increases with longer time spans (unexpected)"
+          } else {
+            "No significant monotonic trend in tau with year span"
+          }
+        )
+      },
+      error = function(e) {
+        statistical_tests$year_span_trend <- list(error = e$message)
+      }
+    )
   }
-  
+
   # Test 3: Grade-level effect (if enough data)
-  if (length(unique(best_fits_extended$grade_band)) > 1 && nrow(best_fits_extended) > 10) {
-    tryCatch({
-      kw_grade <- kruskal.test(tau ~ grade_band, data = best_fits_extended)
-      statistical_tests$grade_level_effect <- list(
-        test = "Kruskal-Wallis",
-        hypothesis = "H0: Kendall's tau does not differ across grade bands",
-        statistic = round(kw_grade$statistic, 3),
-        p_value = round(kw_grade$p.value, 6),
-        significant = kw_grade$p.value < 0.05,
-        interpretation = if (kw_grade$p.value < 0.05) {
-          "Grade level (elementary/middle/high) has a significant effect on dependence"
-        } else {
-          "No significant difference in tau across grade levels"
-        }
-      )
-    }, error = function(e) {
-      statistical_tests$grade_level_effect <- list(error = e$message)
-    })
+  if (
+    length(unique(best_fits_extended$grade_band)) > 1 &&
+      nrow(best_fits_extended) > 10
+  ) {
+    tryCatch(
+      {
+        kw_grade <- kruskal.test(tau ~ grade_band, data = best_fits_extended)
+        statistical_tests$grade_level_effect <- list(
+          test = "Kruskal-Wallis",
+          hypothesis = "H0: Kendall's tau does not differ across grade bands",
+          statistic = round(kw_grade$statistic, 3),
+          p_value = round(kw_grade$p.value, 6),
+          significant = kw_grade$p.value < 0.05,
+          interpretation = if (kw_grade$p.value < 0.05) {
+            "Grade level (elementary/middle/high) has a significant effect on dependence"
+          } else {
+            "No significant difference in tau across grade levels"
+          }
+        )
+      },
+      error = function(e) {
+        statistical_tests$grade_level_effect <- list(error = e$message)
+      }
+    )
   }
-  
+
   # 4. EFFECT SIZE QUANTIFICATION
   cat("4. Quantifying effect sizes...\n")
   effect_sizes <- list()
-  
+
   # Effect size for content area (eta-squared)
-  if ("content_area_effect" %in% names(statistical_tests) && 
-      statistical_tests$content_area_effect$significant) {
-    tryCatch({
-      # Calculate eta-squared (proportion of variance explained)
-      grand_mean <- mean(best_fits_extended$tau, na.rm = TRUE)
-      ss_between <- sum(best_fits_extended[, .(
-        n = .N,
-        mean_tau = mean(tau, na.rm = TRUE)
-      ), by = content_area][, n * (mean_tau - grand_mean)^2])
-      ss_total <- sum((best_fits_extended$tau - grand_mean)^2, na.rm = TRUE)
-      eta_squared <- ss_between / ss_total
-      
-      effect_sizes$content_area <- list(
-        measure = "eta_squared",
-        value = round(eta_squared, 4),
-        interpretation = if (eta_squared < 0.01) {
-          "negligible"
-        } else if (eta_squared < 0.06) {
-          "small"
-        } else if (eta_squared < 0.14) {
-          "medium"
-        } else {
-          "large"
-        }
-      )
-    }, error = function(e) {
-      effect_sizes$content_area <- list(error = e$message)
-    })
+  if (
+    "content_area_effect" %in%
+      names(statistical_tests) &&
+      statistical_tests$content_area_effect$significant
+  ) {
+    tryCatch(
+      {
+        # Calculate eta-squared (proportion of variance explained)
+        grand_mean <- mean(best_fits_extended$tau, na.rm = TRUE)
+        ss_between <- sum(best_fits_extended[,
+          .(
+            n = .N,
+            mean_tau = mean(tau, na.rm = TRUE)
+          ),
+          by = content_area
+        ][, n * (mean_tau - grand_mean)^2])
+        ss_total <- sum((best_fits_extended$tau - grand_mean)^2, na.rm = TRUE)
+        eta_squared <- ss_between / ss_total
+
+        effect_sizes$content_area <- list(
+          measure = "eta_squared",
+          value = round(eta_squared, 4),
+          interpretation = if (eta_squared < 0.01) {
+            "negligible"
+          } else if (eta_squared < 0.06) {
+            "small"
+          } else if (eta_squared < 0.14) {
+            "medium"
+          } else {
+            "large"
+          }
+        )
+      },
+      error = function(e) {
+        effect_sizes$content_area <- list(error = e$message)
+      }
+    )
   }
-  
+
   # 5. FALLBACK HIERARCHY SPECIFICATION
   cat("5. Defining fallback hierarchy for sparse strata...\n")
   fallback_hierarchy <- list(
@@ -5465,16 +7221,19 @@ export_analysis_manifest <- function(results_dt,
       )
     )
   )
-  
+
   # --- Family Selection Summary ---
-  family_summary <- results_dt[, .(
-    n_conditions = .N,
-    n_best_aic = sum(delta_aic_vs_best == 0, na.rm = TRUE),
-    pct_best = round(mean(delta_aic_vs_best == 0, na.rm = TRUE) * 100, 1),
-    mean_delta_aic = round(mean(delta_aic_vs_best, na.rm = TRUE), 1),
-    mean_tau = round(mean(tau, na.rm = TRUE), 3)
-  ), by = family][order(-n_best_aic)]
-  
+  family_summary <- results_dt[,
+    .(
+      n_conditions = .N,
+      n_best_aic = sum(delta_aic_vs_best == 0, na.rm = TRUE),
+      pct_best = round(mean(delta_aic_vs_best == 0, na.rm = TRUE) * 100, 1),
+      mean_delta_aic = round(mean(delta_aic_vs_best, na.rm = TRUE), 1),
+      mean_tau = round(mean(tau, na.rm = TRUE), 3)
+    ),
+    by = family
+  ][order(-n_best_aic)]
+
   family_selection <- lapply(seq_len(nrow(family_summary)), function(i) {
     list(
       family = family_summary$family[i],
@@ -5485,12 +7244,12 @@ export_analysis_manifest <- function(results_dt,
       mean_tau = family_summary$mean_tau[i]
     )
   })
-  
+
   # --- Conditions Index ---
   # Create index of all conditions with their best family
   # Handle NA values in delta_aic_vs_best (some families like comonotonic may have NA AIC)
   best_fits <- results_dt[!is.na(delta_aic_vs_best) & delta_aic_vs_best == 0]
-  
+
   conditions_index <- lapply(seq_len(nrow(best_fits)), function(i) {
     row <- best_fits[i]
     list(
@@ -5505,19 +7264,19 @@ export_analysis_manifest <- function(results_dt,
       n_pairs = row$n_pairs
     )
   })
-  
+
   # --- Build Full Manifest ---
   manifest <- list(
     metadata = metadata,
     parameter_recommendations = list(
       by_year_span = param_recommendations,
       by_content_area = content_recommendations,
-      cross_stratified = cross_strat_recommendations  # NEW: Comprehensive cross-strat
+      cross_stratified = cross_strat_recommendations # NEW: Comprehensive cross-strat
     ),
-    grade_level_analysis = grade_level_analysis,  # NEW
-    statistical_tests = statistical_tests,  # NEW
-    effect_sizes = effect_sizes,  # NEW
-    fallback_hierarchy = fallback_hierarchy,  # NEW
+    grade_level_analysis = grade_level_analysis, # NEW
+    statistical_tests = statistical_tests, # NEW
+    effect_sizes = effect_sizes, # NEW
+    fallback_hierarchy = fallback_hierarchy, # NEW
     family_selection_summary = family_selection,
     conditions_index = conditions_index,
     usage_guide = list(
@@ -5534,28 +7293,44 @@ export_analysis_manifest <- function(results_dt,
       )
     )
   )
-  
+
   # --- Write Manifest ---
   manifest_path <- file.path(output_dir, manifest_filename)
-  
-  tryCatch({
-    write_json(manifest, manifest_path, pretty = TRUE, auto_unbox = TRUE)
-    cat(sprintf("\nAnalysis manifest written to: %s\n", manifest_path))
-    cat(sprintf("  - %d conditions across %d datasets\n", n_conditions, n_datasets))
-    cat(sprintf("  - %d families tested\n", n_families))
-    cat(sprintf("  - Parameter recommendations for %d year spans\n", length(param_recommendations)))
-    cat(sprintf("  - %d cross-stratified recommendations\n", length(cross_strat_recommendations)))
-    cat(sprintf("  - %d statistical tests performed\n", length(statistical_tests)))
-  }, error = function(e) {
-    warning("Failed to write manifest JSON: ", e$message)
-  })
-  
+
+  tryCatch(
+    {
+      write_json(manifest, manifest_path, pretty = TRUE, auto_unbox = TRUE)
+      cat(sprintf("\nAnalysis manifest written to: %s\n", manifest_path))
+      cat(sprintf(
+        "  - %d conditions across %d datasets\n",
+        n_conditions,
+        n_datasets
+      ))
+      cat(sprintf("  - %d families tested\n", n_families))
+      cat(sprintf(
+        "  - Parameter recommendations for %d year spans\n",
+        length(param_recommendations)
+      ))
+      cat(sprintf(
+        "  - %d cross-stratified recommendations\n",
+        length(cross_strat_recommendations)
+      ))
+      cat(sprintf(
+        "  - %d statistical tests performed\n",
+        length(statistical_tests)
+      ))
+    },
+    error = function(e) {
+      warning("Failed to write manifest JSON: ", e$message)
+    }
+  )
+
   # --- Export Canonical Lookup Table (CSV) ---
   cat("\n6. Exporting canonical copula lookup table (CSV)...\n")
-  
+
   # Build flat table for easy R/Python lookup
   canonical_rows <- list()
-  
+
   for (stratum_id in names(cross_strat_recommendations)) {
     rec <- cross_strat_recommendations[[stratum_id]]
     canonical_rows[[length(canonical_rows) + 1]] <- data.table(
@@ -5564,7 +7339,7 @@ export_analysis_manifest <- function(results_dt,
       content_area = rec$content_area,
       n_conditions = rec$n_conditions,
       best_family = rec$recommended_family,
-      
+
       # Tau statistics
       tau_median = rec$tau$median,
       tau_mean = rec$tau$mean,
@@ -5575,7 +7350,7 @@ export_analysis_manifest <- function(results_dt,
       tau_ci_lower = rec$tau$ci_lower,
       tau_ci_upper = rec$tau$ci_upper,
       tau_stability = rec$tau$stability,
-      
+
       # Rho statistics
       rho_median = rec$rho$median,
       rho_mean = rec$rho$mean,
@@ -5586,7 +7361,7 @@ export_analysis_manifest <- function(results_dt,
       rho_ci_lower = rec$rho$ci_lower,
       rho_ci_upper = rec$rho$ci_upper,
       rho_stability = rec$rho$stability,
-      
+
       # Degrees of freedom statistics
       df_median = rec$df$median,
       df_mean = rec$df$mean,
@@ -5597,26 +7372,38 @@ export_analysis_manifest <- function(results_dt,
       df_ci_lower = rec$df$ci_lower,
       df_ci_upper = rec$df$ci_upper,
       df_stability = rec$df$stability,
-      
+
       # Overall assessment
       overall_stability = rec$overall_stability,
       use_case = rec$use_case
     )
   }
-  
+
   if (length(canonical_rows) > 0) {
     canonical_table <- rbindlist(canonical_rows)
     setorder(canonical_table, year_span, content_area)
-    
+
     csv_path <- file.path(output_dir, "canonical_copula_parameters.csv")
     fwrite(canonical_table, csv_path)
     cat(sprintf("Canonical lookup table written to: %s\n", csv_path))
-    cat(sprintf("  - %d strata with sufficient data (n >= 2)\n", nrow(canonical_table)))
-    cat(sprintf("  - HIGH stability strata: %d\n", sum(canonical_table$overall_stability == "HIGH")))
-    cat(sprintf("  - MEDIUM stability strata: %d\n", sum(canonical_table$overall_stability == "MEDIUM")))
-    cat(sprintf("  - LOW stability strata: %d\n", sum(canonical_table$overall_stability == "LOW")))
+    cat(sprintf(
+      "  - %d strata with sufficient data (n >= 2)\n",
+      nrow(canonical_table)
+    ))
+    cat(sprintf(
+      "  - HIGH stability strata: %d\n",
+      sum(canonical_table$overall_stability == "HIGH")
+    ))
+    cat(sprintf(
+      "  - MEDIUM stability strata: %d\n",
+      sum(canonical_table$overall_stability == "MEDIUM")
+    ))
+    cat(sprintf(
+      "  - LOW stability strata: %d\n",
+      sum(canonical_table$overall_stability == "LOW")
+    ))
   }
-  
+
   # --- Export Grade-Level Analysis Table (CSV) ---
   if (length(grade_level_analysis) > 0) {
     grade_rows <- list()
@@ -5633,7 +7420,7 @@ export_analysis_manifest <- function(results_dt,
         tau_stability = rec$tau$stability
       )
     }
-    
+
     if (length(grade_rows) > 0) {
       grade_table <- rbindlist(grade_rows)
       grade_csv_path <- file.path(output_dir, "grade_level_analysis.csv")
@@ -5641,7 +7428,7 @@ export_analysis_manifest <- function(results_dt,
       cat(sprintf("Grade-level analysis written to: %s\n", grade_csv_path))
     }
   }
-  
+
   # --- Export Statistical Tests Summary (CSV) ---
   if (length(statistical_tests) > 0) {
     test_rows <- list()
@@ -5652,14 +7439,20 @@ export_analysis_manifest <- function(results_dt,
           test_name = test_name,
           test_type = test$test,
           hypothesis = test$hypothesis,
-          statistic = if ("statistic" %in% names(test)) test$statistic else if ("correlation" %in% names(test)) test$correlation else NA,
+          statistic = if ("statistic" %in% names(test)) {
+            test$statistic
+          } else if ("correlation" %in% names(test)) {
+            test$correlation
+          } else {
+            NA
+          },
           p_value = test$p_value,
           significant = test$significant,
           interpretation = test$interpretation
         )
       }
     }
-    
+
     if (length(test_rows) > 0) {
       test_table <- rbindlist(test_rows, fill = TRUE)
       test_csv_path <- file.path(output_dir, "statistical_tests.csv")
@@ -5667,9 +7460,9 @@ export_analysis_manifest <- function(results_dt,
       cat(sprintf("Statistical tests summary written to: %s\n", test_csv_path))
     }
   }
-  
+
   cat("\n=== COMPREHENSIVE META-ANALYSIS COMPLETE ===\n\n")
-  
+
   # Return manifest object for further processing (e.g., markdown export)
   # Using return() instead of invisible() to ensure tryCatch captures it
   return(manifest)
@@ -5688,17 +7481,16 @@ export_analysis_manifest <- function(results_dt,
 #'
 #' @export
 export_manifest_markdown <- function(manifest_file, output_file = NULL) {
-  
   require(jsonlite)
-  
+
   # Read manifest
   manifest <- fromJSON(manifest_file)
-  
+
   # Default output path
   if (is.null(output_file)) {
     output_file <- sub("\\.json$", ".md", manifest_file)
   }
-  
+
   # --- Build Markdown ---
   md_lines <- c(
     "# Copula Analysis Manifest",
@@ -5710,8 +7502,14 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
     "",
     sprintf("- **Conditions analyzed:** %d", manifest$metadata$n_conditions),
     sprintf("- **Datasets:** %d", manifest$metadata$n_datasets),
-    sprintf("- **Families tested:** %s", paste(manifest$metadata$families_tested, collapse = ", ")),
-    sprintf("- **Year spans:** %s", paste(manifest$metadata$year_spans_tested, collapse = ", ")),
+    sprintf(
+      "- **Families tested:** %s",
+      paste(manifest$metadata$families_tested, collapse = ", ")
+    ),
+    sprintf(
+      "- **Year spans:** %s",
+      paste(manifest$metadata$year_spans_tested, collapse = ", ")
+    ),
     "",
     "---",
     "",
@@ -5721,13 +7519,14 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
     "copula parameters based on the time span between assessments.",
     ""
   )
-  
+
   # Add year span recommendations
   for (span_name in names(manifest$parameter_recommendations$by_year_span)) {
     rec <- manifest$parameter_recommendations$by_year_span[[span_name]]
-    
+
     # Start with common header and tau (available for all families)
-    md_lines <- c(md_lines,
+    md_lines <- c(
+      md_lines,
       sprintf("### %d-Year Span", rec$year_span),
       "",
       sprintf("- **Recommended family:** %s", rec$recommended_family),
@@ -5735,45 +7534,88 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
       "",
       "| Parameter | Median | Range (5th-95th) |",
       "|-----------|--------|------------------|",
-      sprintf("| Kendall's τ | %.3f | [%.3f, %.3f] |", 
-              as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"]),
-              as.numeric(if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"]),
-              as.numeric(if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"]))
+      sprintf(
+        "| Kendall's τ | %.3f | [%.3f, %.3f] |",
+        as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"]),
+        as.numeric(
+          if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"]
+        ),
+        as.numeric(
+          if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"]
+        )
+      )
     )
-    
+
     # Add t-copula specific parameters (rho, df) only when family is "t"
     is_t_family <- grepl("^t", rec$recommended_family, ignore.case = TRUE)
     if (is_t_family && !is.null(rec$rho) && !is.null(rec$df)) {
-      md_lines <- c(md_lines,
-        sprintf("| Correlation ρ | %.3f | [%.3f, %.3f] |",
-                as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]),
-                as.numeric(if (is.list(rec$rho)) rec$rho$range[1] else rec$rho["range.5%"]),
-                as.numeric(if (is.list(rec$rho)) rec$rho$range[2] else rec$rho["range.95%"])),
-        sprintf("| Degrees of freedom | %.1f | [%.1f, %.1f] |",
-                as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"]),
-                as.numeric(if (is.list(rec$df)) rec$df$range[1] else rec$df["range.5%"]),
-                as.numeric(if (is.list(rec$df)) rec$df$range[2] else rec$df["range.95%"]))
+      md_lines <- c(
+        md_lines,
+        sprintf(
+          "| Correlation ρ | %.3f | [%.3f, %.3f] |",
+          as.numeric(
+            if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]
+          ),
+          as.numeric(
+            if (is.list(rec$rho)) rec$rho$range[1] else rec$rho["range.5%"]
+          ),
+          as.numeric(
+            if (is.list(rec$rho)) rec$rho$range[2] else rec$rho["range.95%"]
+          )
+        ),
+        sprintf(
+          "| Degrees of freedom | %.1f | [%.1f, %.1f] |",
+          as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"]),
+          as.numeric(
+            if (is.list(rec$df)) rec$df$range[1] else rec$df["range.5%"]
+          ),
+          as.numeric(
+            if (is.list(rec$df)) rec$df$range[2] else rec$df["range.95%"]
+          )
+        )
       )
     }
-    
+
     # Add tail dependence if available (relevant for t, clayton, gumbel)
     if (!is.null(rec$tail_dependence)) {
-      tail_range1 <- as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[1] else rec$tail_dependence["range.5%"])
-      tail_range2 <- as.numeric(if (is.list(rec$tail_dependence)) rec$tail_dependence$range[2] else rec$tail_dependence["range.95%"])
+      tail_range1 <- as.numeric(
+        if (is.list(rec$tail_dependence)) {
+          rec$tail_dependence$range[1]
+        } else {
+          rec$tail_dependence["range.5%"]
+        }
+      )
+      tail_range2 <- as.numeric(
+        if (is.list(rec$tail_dependence)) {
+          rec$tail_dependence$range[2]
+        } else {
+          rec$tail_dependence["range.95%"]
+        }
+      )
       if (!is.na(tail_range1) && !is.na(tail_range2)) {
-        md_lines <- c(md_lines,
-          sprintf("| Tail dependence | - | [%.4f, %.4f] |", tail_range1, tail_range2)
+        md_lines <- c(
+          md_lines,
+          sprintf(
+            "| Tail dependence | - | [%.4f, %.4f] |",
+            tail_range1,
+            tail_range2
+          )
         )
       }
     }
-    
+
     # Add R code example (family-specific)
     md_lines <- c(md_lines, "")
     if (is_t_family && !is.null(rec$rho) && !is.null(rec$df)) {
-      rho_val <- as.numeric(if (is.list(rec$rho)) rec$rho$median else rec$rho["median"])
-      df_val <- as.numeric(if (is.list(rec$df)) rec$df$median else rec$df["median"])
+      rho_val <- as.numeric(
+        if (is.list(rec$rho)) rec$rho$median else rec$rho["median"]
+      )
+      df_val <- as.numeric(
+        if (is.list(rec$df)) rec$df$median else rec$df["median"]
+      )
       if (!is.na(rho_val) && !is.na(df_val)) {
-        md_lines <- c(md_lines,
+        md_lines <- c(
+          md_lines,
           "**R code:**",
           "```r",
           "library(copula)",
@@ -5783,22 +7625,30 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
       }
     } else {
       # Generic code example for non-t families
-      tau_val <- as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"])
+      tau_val <- as.numeric(
+        if (is.list(rec$tau)) rec$tau$median else rec$tau["median"]
+      )
       if (!is.na(tau_val)) {
-        md_lines <- c(md_lines,
+        md_lines <- c(
+          md_lines,
           "**R code:**",
           "```r",
           "library(copula)",
-          sprintf("# For %s copula, use tau = %.3f to derive parameter", rec$recommended_family, tau_val),
+          sprintf(
+            "# For %s copula, use tau = %.3f to derive parameter",
+            rec$recommended_family,
+            tau_val
+          ),
           "```"
         )
       }
     }
     md_lines <- c(md_lines, "")
   }
-  
+
   # Add content area recommendations
-  md_lines <- c(md_lines,
+  md_lines <- c(
+    md_lines,
     "---",
     "",
     "## Parameter Recommendations by Content Area",
@@ -5806,22 +7656,36 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
     "| Content Area | Median τ | Range (5th-95th) | n |",
     "|--------------|----------|------------------|---|"
   )
-  
-  for (content_name in names(manifest$parameter_recommendations$by_content_area)) {
+
+  for (content_name in names(
+    manifest$parameter_recommendations$by_content_area
+  )) {
     rec <- manifest$parameter_recommendations$by_content_area[[content_name]]
-    tau_median <- as.numeric(if (is.list(rec$tau)) rec$tau$median else rec$tau["median"])
-    tau_range1 <- as.numeric(if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"])
-    tau_range2 <- as.numeric(if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"])
-    md_lines <- c(md_lines,
-      sprintf("| %s | %.3f | [%.3f, %.3f] | %d |",
-              rec$content_area, tau_median,
-              tau_range1, tau_range2,
-              rec$n_conditions)
+    tau_median <- as.numeric(
+      if (is.list(rec$tau)) rec$tau$median else rec$tau["median"]
+    )
+    tau_range1 <- as.numeric(
+      if (is.list(rec$tau)) rec$tau$range[1] else rec$tau["range.5%"]
+    )
+    tau_range2 <- as.numeric(
+      if (is.list(rec$tau)) rec$tau$range[2] else rec$tau["range.95%"]
+    )
+    md_lines <- c(
+      md_lines,
+      sprintf(
+        "| %s | %.3f | [%.3f, %.3f] | %d |",
+        rec$content_area,
+        tau_median,
+        tau_range1,
+        tau_range2,
+        rec$n_conditions
+      )
     )
   }
-  
+
   # Add family selection summary
-  md_lines <- c(md_lines,
+  md_lines <- c(
+    md_lines,
     "",
     "---",
     "",
@@ -5830,29 +7694,41 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
     "| Family | Times Best (AIC) | % Best | Mean ΔAIC |",
     "|--------|------------------|--------|-----------|"
   )
-  
+
   # family_selection_summary is a data.frame when read by fromJSON (array of objects)
   fam_summary <- manifest$family_selection_summary
   if (is.data.frame(fam_summary)) {
     for (i in seq_len(nrow(fam_summary))) {
-      md_lines <- c(md_lines,
-        sprintf("| %s | %d | %.1f%% | %.1f |",
-                fam_summary$family[i], fam_summary$n_best_aic[i], 
-                fam_summary$pct_best[i], fam_summary$mean_delta_aic[i])
+      md_lines <- c(
+        md_lines,
+        sprintf(
+          "| %s | %d | %.1f%% | %.1f |",
+          fam_summary$family[i],
+          fam_summary$n_best_aic[i],
+          fam_summary$pct_best[i],
+          fam_summary$mean_delta_aic[i]
+        )
       )
     }
   } else {
     # Fallback for list format
     for (fam in fam_summary) {
-      md_lines <- c(md_lines,
-        sprintf("| %s | %d | %.1f%% | %.1f |",
-                fam$family, fam$n_best_aic, fam$pct_best, fam$mean_delta_aic)
+      md_lines <- c(
+        md_lines,
+        sprintf(
+          "| %s | %d | %.1f%% | %.1f |",
+          fam$family,
+          fam$n_best_aic,
+          fam$pct_best,
+          fam$mean_delta_aic
+        )
       )
     }
   }
-  
+
   # Add usage guide
-  md_lines <- c(md_lines,
+  md_lines <- c(
+    md_lines,
     "",
     "---",
     "",
@@ -5894,11 +7770,11 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
     "",
     sprintf("*Generated: %s*", manifest$metadata$generated_at)
   )
-  
+
   # Write markdown
   writeLines(md_lines, output_file)
   cat(sprintf("Manifest markdown written to: %s\n", output_file))
-  
+
   invisible(NULL)
 }
 
@@ -5921,51 +7797,73 @@ export_manifest_markdown <- function(manifest_file, output_file = NULL) {
 #' @return Invisible path to the generated PDF (or .tex if compile_pdf=FALSE)
 #'
 #' @export
-generate_summary_grid_latex <- function(output_dir,
-                                        condition_info,
-                                        best_family,
-                                        copula_results = NULL,
-                                        sgpc_stats = NULL,
-                                        compile_pdf = TRUE,
-                                        keep_tex = FALSE,
-                                        fbox_sep = 4,
-                                        export_formats = c("pdf", "svg", "png"),
-                                        export_dpi = 300) {
-  
+generate_summary_grid_latex <- function(
+  output_dir,
+  condition_info,
+  best_family,
+  copula_results = NULL,
+  sgpc_stats = NULL,
+  compile_pdf = TRUE,
+  keep_tex = FALSE,
+  fbox_sep = 4,
+  export_formats = c("pdf", "svg", "png"),
+  export_dpi = 300
+) {
   # [NEW] Normalize output_dir to absolute path to prevent relative-path bugs after setwd()
   # This ensures file.exists() checks work correctly even after changing working directory
   output_dir <- normalizePath(output_dir, winslash = "/", mustWork = FALSE)
-  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
   output_dir <- normalizePath(output_dir, winslash = "/", mustWork = TRUE)
-  
+
   # [NEW] Debug logging for daemon environments (especially useful on EC2)
   if (getOption("copula.debug_summary_grid", FALSE)) {
     cat("\n=== [DEBUG] Summary Grid Conversion ===\n")
     cat(sprintf("  Working dir: %s\n", getwd()))
     cat(sprintf("  Output dir (normalized): %s\n", output_dir))
-    cat(sprintf("  Export formats: %s\n", paste(export_formats, collapse = ", ")))
+    cat(sprintf(
+      "  Export formats: %s\n",
+      paste(export_formats, collapse = ", ")
+    ))
     cat(sprintf("  pdf2svg path: %s\n", Sys.which("pdf2svg")))
     cat(sprintf("  pdftoppm path: %s\n", Sys.which("pdftoppm")))
     cat(sprintf("  convert path: %s\n", Sys.which("convert")))
     cat("========================================\n\n")
   }
-  
+
   # --- Load metadata from JSON if available ---
-  json_path <- file.path(output_dir, "PARAMETRIC", toupper(best_family),
-                         sprintf("comparison_empirical_vs_%s_summary.json", best_family))
-  
+  json_path <- file.path(
+    output_dir,
+    "PARAMETRIC",
+    toupper(best_family),
+    sprintf("comparison_empirical_vs_%s_summary.json", best_family)
+  )
+
   metadata <- NULL
   if (file.exists(json_path)) {
     cat(sprintf("✓ Found metadata JSON: %s\n", basename(json_path)))
-    metadata <- tryCatch({
-      jsonlite::fromJSON(json_path)
-    }, error = function(e) {
-      warning(sprintf("Could not read JSON metadata from %s: %s", json_path, e$message))
-      NULL
-    })
+    metadata <- tryCatch(
+      {
+        jsonlite::fromJSON(json_path)
+      },
+      error = function(e) {
+        warning(sprintf(
+          "Could not read JSON metadata from %s: %s",
+          json_path,
+          e$message
+        ))
+        NULL
+      }
+    )
   } else {
-    warning(sprintf("Metadata JSON not found: %s\n  This may result in incomplete summary grid fields.", json_path))
-    cat("  Note: SGPc comparison fields will show '--' if JSON metadata is missing.\n")
+    warning(sprintf(
+      "Metadata JSON not found: %s\n  This may result in incomplete summary grid fields.",
+      json_path
+    ))
+    cat(
+      "  Note: SGPc comparison fields will show '--' if JSON metadata is missing.\n"
+    )
   }
 
   metadata <- metadata %||% list()
@@ -5975,27 +7873,32 @@ generate_summary_grid_latex <- function(output_dir,
   traditional_sgp_meta <- metadata$traditional_sgp_comparison %||% list()
   strat_meta <- metadata$stratification %||% list()
   relative_meta <- metadata$relative_fit %||% list()
-  
+
   # --- Extract values for display ---
   # Condition info
-  content_area <- condition_info$content %||% cond_meta$content_area %||% "Unknown"
+  content_area <- condition_info$content %||%
+    cond_meta$content_area %||%
+    "Unknown"
   content_formatted <- tools::toTitleCase(tolower(content_area))
   grade_prior <- condition_info$grade_prior %||% cond_meta$grade_prior
 
   grade_current <- condition_info$grade_current %||% cond_meta$grade_current
   year_prior <- condition_info$year_prior %||% cond_meta$year_prior
   year_current <- condition_info$year_current %||% cond_meta$year_current
-  dataset_id <- condition_info$dataset_id %||% cond_meta$dataset_id %||% "Unknown"
-  dataset_number <- condition_info$dataset_number %||% cond_meta$dataset_number %||% 
-                    gsub("dataset_", "", dataset_id)
-  
+  dataset_id <- condition_info$dataset_id %||%
+    cond_meta$dataset_id %||%
+    "Unknown"
+  dataset_number <- condition_info$dataset_number %||%
+    cond_meta$dataset_number %||%
+    gsub("dataset_", "", dataset_id)
+
   # Copula parameters
   family_title <- tools::toTitleCase(best_family)
   n_pairs <- copula_meta$n_pairs %||% condition_info$n_pairs %||% NA
   kendall_tau <- copula_meta$kendall_tau %||% NA
   aic_val <- copula_meta$aic %||% NA
   bic_val <- copula_meta$bic %||% NA
-  
+
   # Extract copula-specific parameters
   params_list <- copula_meta$parameters
   param_str <- ""
@@ -6011,49 +7914,68 @@ generate_summary_grid_latex <- function(output_dir,
       param_str <- sprintf("param$=%.3f$", params_list$param)
     }
   }
-  
+
   # Extract tail dependence coefficients
   # Try multiple sources: metadata (JSON), copula_results, or copula_meta
   tail_dep_meta <- metadata$tail_dependence %||% list()
-  lambda_L <- copula_results[[best_family]]$tail_dependence_lower %||% 
-              tail_dep_meta$lower %||% NA
-  lambda_U <- copula_results[[best_family]]$tail_dependence_upper %||% 
-              tail_dep_meta$upper %||% NA
-  
+  lambda_L <- copula_results[[best_family]]$tail_dependence_lower %||%
+    tail_dep_meta$lower %||%
+    NA
+  lambda_U <- copula_results[[best_family]]$tail_dependence_upper %||%
+    tail_dep_meta$upper %||%
+    NA
+
   # SGPc comparison stats
   # Note: calculate_ecdf_statistics() returns mean1/mean2 and spearman_rho
   # JSON exports them as mean_empirical/mean_parametric/correlation
-  mean_emp <- sgpc_meta$mean_empirical %||% sgpc_stats$mean1 %||% sgpc_stats$mean_empirical %||% NA
-  mean_par <- sgpc_meta$mean_parametric %||% sgpc_stats$mean2 %||% sgpc_stats$mean_parametric %||% NA
-  corr_val <- sgpc_meta$correlation %||% sgpc_stats$spearman_rho %||% sgpc_stats$correlation %||% NA
+  mean_emp <- sgpc_meta$mean_empirical %||%
+    sgpc_stats$mean1 %||%
+    sgpc_stats$mean_empirical %||%
+    NA
+  mean_par <- sgpc_meta$mean_parametric %||%
+    sgpc_stats$mean2 %||%
+    sgpc_stats$mean_parametric %||%
+    NA
+  corr_val <- sgpc_meta$correlation %||%
+    sgpc_stats$spearman_rho %||%
+    sgpc_stats$correlation %||%
+    NA
   ks_dist <- sgpc_meta$ks_distance %||% sgpc_stats$ks_distance %||% NA
-  
+
   # Diagnostic: Check if SGPc stats are missing
   if (is.na(mean_emp) && is.na(mean_par) && is.na(corr_val)) {
-    warning("SGPc comparison statistics are missing. This typically means:\n",
-            "  1. CALCULATE_SGPC was set to FALSE, or\n",
-            "  2. SGPc calculation failed during plot generation, or\n",
-            "  3. JSON metadata file is missing/incomplete.\n",
-            "  → SGPc comparison fields will display as '--' in summary grid.")
+    warning(
+      "SGPc comparison statistics are missing. This typically means:\n",
+      "  1. CALCULATE_SGPC was set to FALSE, or\n",
+      "  2. SGPc calculation failed during plot generation, or\n",
+      "  3. JSON metadata file is missing/incomplete.\n",
+      "  → SGPc comparison fields will display as '--' in summary grid."
+    )
   }
-  
+
   # Traditional SGP comparison
-  has_sgp <- !is.null(traditional_sgp_meta$has_sgp_order_1) && 
-             traditional_sgp_meta$has_sgp_order_1
+  has_sgp <- !is.null(traditional_sgp_meta$has_sgp_order_1) &&
+    traditional_sgp_meta$has_sgp_order_1
   cor_emp_sgp <- traditional_sgp_meta$cor_empirical_vs_sgp_order_1 %||% NA
   cor_par_sgp <- traditional_sgp_meta$cor_parametric_vs_sgp_order_1 %||% NA
-  
+
   # Extract CvM statistic for SGPc comparison (needed for fields_available)
   cvm_stat <- sgpc_meta$cvm_stat %||% NA
-  
+
   # --- Determine PDF paths (relative to output_dir) ---
   # These will be relative paths in the LaTeX document
   bivariate_pdf <- "bivariate_density_original.pdf"
-  uncertainty_pdf <- file.path("PARAMETRIC", toupper(best_family),
-                               sprintf("%s_copula_with_uncertainty_CDF.pdf", best_family))
-  comparison_pdf <- file.path("PARAMETRIC", toupper(best_family),
-                              sprintf("comparison_empirical_vs_%s_full.pdf", best_family))
-  
+  uncertainty_pdf <- file.path(
+    "PARAMETRIC",
+    toupper(best_family),
+    sprintf("%s_copula_with_uncertainty_CDF.pdf", best_family)
+  )
+  comparison_pdf <- file.path(
+    "PARAMETRIC",
+    toupper(best_family),
+    sprintf("comparison_empirical_vs_%s_full.pdf", best_family)
+  )
+
   # Verify files exist
   if (!file.exists(file.path(output_dir, bivariate_pdf))) {
     warning("Bivariate density PDF not found: ", bivariate_pdf)
@@ -6064,28 +7986,52 @@ generate_summary_grid_latex <- function(output_dir,
   if (!file.exists(file.path(output_dir, comparison_pdf))) {
     warning("Comparison PDF not found: ", comparison_pdf)
   }
-  
+
   # --- Build LaTeX document ---
   # Format numbers for display with better edge case handling
   fmt_num <- function(x, digits = 3) {
-    if (is.null(x)) return("\\textendash\\textendash")
-    if (length(x) == 0) return("\\textendash\\textendash")
-    if (!is.numeric(x)) return("\\textendash\\textendash")
-    if (is.na(x)) return("\\textendash\\textendash")
-    if (is.nan(x)) return("\\textendash\\textendash")
-    if (is.infinite(x)) return(if (x > 0) "$+\\infty$" else "$-\\infty$")
+    if (is.null(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (length(x) == 0) {
+      return("\\textendash\\textendash")
+    }
+    if (!is.numeric(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (is.na(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (is.nan(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (is.infinite(x)) {
+      return(if (x > 0) "$+\\infty$" else "$-\\infty$")
+    }
     format(round(x, digits), nsmall = digits)
   }
   fmt_int <- function(x) {
-    if (is.null(x)) return("\\textendash\\textendash")
-    if (length(x) == 0) return("\\textendash\\textendash")
-    if (!is.numeric(x)) return("\\textendash\\textendash")
-    if (is.na(x)) return("\\textendash\\textendash")
-    if (is.nan(x)) return("\\textendash\\textendash")
-    if (is.infinite(x)) return("\\textendash\\textendash")
+    if (is.null(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (length(x) == 0) {
+      return("\\textendash\\textendash")
+    }
+    if (!is.numeric(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (is.na(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (is.nan(x)) {
+      return("\\textendash\\textendash")
+    }
+    if (is.infinite(x)) {
+      return("\\textendash\\textendash")
+    }
     format(x, big.mark = ",", scientific = FALSE)
   }
-  
+
   # Extract metadata for enhanced display
   n_pairs <- copula_meta$n_pairs %||% NA
   scaling_type <- strat_meta$scaling_type %||% NA
@@ -6093,7 +8039,7 @@ generate_summary_grid_latex <- function(output_dir,
   pandemic_period <- strat_meta$pandemic_period %||% NA
   testing_mode_prior <- strat_meta$testing_mode_prior %||% NA
   testing_mode_current <- strat_meta$testing_mode_current %||% NA
-  
+
   # Format for display
   n_pairs_str <- fmt_int(n_pairs)
   scaling_display <- if (!is.na(scaling_type)) {
@@ -6101,7 +8047,7 @@ generate_summary_grid_latex <- function(output_dir,
   } else {
     "\\textendash\\textendash"
   }
-  
+
   # Build scale note with pandemic info if applicable
   note_parts <- c()
   if (!is.na(scale_note) && nchar(scale_note) > 0) {
@@ -6118,33 +8064,43 @@ generate_summary_grid_latex <- function(output_dir,
       NULL
     }
     if (!is.null(pandemic_detail)) {
-      mode_info <- if (!is.na(testing_mode_prior) && !is.na(testing_mode_current) &&
-                      testing_mode_prior != testing_mode_current) {
-        sprintf("%s $\\rightarrow$ %s", 
-                tools::toTitleCase(gsub("_", "-", testing_mode_prior)),
-                tools::toTitleCase(gsub("_", "-", testing_mode_current)))
+      mode_info <- if (
+        !is.na(testing_mode_prior) &&
+          !is.na(testing_mode_current) &&
+          testing_mode_prior != testing_mode_current
+      ) {
+        sprintf(
+          "%s $\\rightarrow$ %s",
+          tools::toTitleCase(gsub("_", "-", testing_mode_prior)),
+          tools::toTitleCase(gsub("_", "-", testing_mode_current))
+        )
       } else {
         NULL
       }
       if (!is.null(mode_info)) {
-        note_parts <- c(note_parts, sprintf("%s: %s", pandemic_detail, mode_info))
+        note_parts <- c(
+          note_parts,
+          sprintf("%s: %s", pandemic_detail, mode_info)
+        )
       } else {
         note_parts <- c(note_parts, pandemic_detail)
       }
     }
   }
-  
+
   # Fit quality display (delta AIC or "Best fit")
   delta_aic_raw <- relative_meta$delta_aic_vs_best %||% NA
   delta_aic <- suppressWarnings(as.numeric(delta_aic_raw))
   is_best <- relative_meta$is_best_aic %||% FALSE
-  
+
   # Diagnostic: Check fit quality data
   if (is.na(delta_aic) && !isTRUE(is_best)) {
     cat("  Note: Delta AIC is NA and is_best_aic is FALSE/missing.\n")
-    cat("        Displaying 'Best fit' as default (likely only one copula family tested).\n")
+    cat(
+      "        Displaying 'Best fit' as default (likely only one copula family tested).\n"
+    )
   }
-  
+
   fit_quality_str <- if (isTRUE(is_best)) {
     "{\\color{armyblue}\\textbf{Best fit}}"
   } else if (is.na(delta_aic) || is.nan(delta_aic)) {
@@ -6157,7 +8113,7 @@ generate_summary_grid_latex <- function(output_dir,
     sign_str <- if (delta_aic >= 0) "+" else ""
     sprintf("$\\Delta$AIC: %s%s", sign_str, fmt_num(abs(delta_aic), 1))
   }
-  
+
   tex_lines <- c(
     "\\documentclass[border=5pt]{standalone}",
     "\\usepackage{graphicx}",
@@ -6187,8 +8143,15 @@ generate_summary_grid_latex <- function(output_dir,
     "\\colorbox{titlebg}{%",
     "\\begin{minipage}[c][0.6in][c]{0.99\\textwidth}",
     "\\centering",
-    sprintf("{\\color{titletext}\\LARGE\\bfseries Copula Analysis Data Set %s: %s \\raisebox{0.15ex}{\\large\\ding{97}} Grade %d\\,\\raisebox{0.05ex}{\\ding{254}}\\,%d \\raisebox{0.15ex}{\\large\\ding{97}} Year %s\\,\\raisebox{0.05ex}{\\ding{254}}\\,%s}",
-            dataset_number, content_formatted, grade_prior, grade_current, year_prior, year_current),
+    sprintf(
+      "{\\color{titletext}\\LARGE\\bfseries Copula Analysis Data Set %s: %s \\raisebox{0.15ex}{\\large\\ding{97}} Grade %d\\,\\raisebox{0.05ex}{\\ding{254}}\\,%d \\raisebox{0.15ex}{\\large\\ding{97}} Year %s\\,\\raisebox{0.05ex}{\\ding{254}}\\,%s}",
+      dataset_number,
+      content_formatted,
+      grade_prior,
+      grade_current,
+      year_prior,
+      year_current
+    ),
     "\\end{minipage}%",
     "}",
     "",
@@ -6210,13 +8173,17 @@ generate_summary_grid_latex <- function(output_dir,
     "",
     "{\\bfseries Condition Info:}\\\\",
     sprintf("\\quad Content: %s\\\\", content_formatted),
-    sprintf("\\quad Grade: %d $\\rightarrow$ %d\\\\", grade_prior, grade_current),
+    sprintf(
+      "\\quad Grade: %d $\\rightarrow$ %d\\\\",
+      grade_prior,
+      grade_current
+    ),
     sprintf("\\quad Year: %s $\\rightarrow$ %s\\\\", year_prior, year_current),
     sprintf("\\quad Data Set: %s\\\\", gsub("_", "\\\\_", dataset_id)),
     sprintf("\\quad $n$ pairs: %s\\\\", n_pairs_str),
     sprintf("\\quad Scale: %s\\\\", scaling_display)
   )
-  
+
   # Conditionally add scale note if present
   if (length(note_parts) > 0) {
     note_text <- paste(note_parts, collapse = "; ")
@@ -6224,21 +8191,28 @@ generate_summary_grid_latex <- function(output_dir,
     if (nchar(note_text) > 80) {
       note_text <- paste0(substr(note_text, 1, 77), "...")
     }
-    tex_lines <- c(tex_lines,
+    tex_lines <- c(
+      tex_lines,
       sprintf("\\quad {\\footnotesize\\itshape Note: %s}\\\\[0.5em]", note_text)
     )
   }
-  
-  tex_lines <- c(tex_lines,
+
+  tex_lines <- c(
+    tex_lines,
     "",
     "{\\bfseries Best-Fitting Copula:}\\\\",
     sprintf("\\quad Family: {\\bfseries %s}\\\\", family_title),
     sprintf("\\quad Fit Quality: %s\\\\", fit_quality_str)
   )
-  
+
   # Diagnostic: Track field availability for summary report
   fields_available <- list(
-    condition_info = !any(is.na(c(grade_prior, grade_current, year_prior, year_current))),
+    condition_info = !any(is.na(c(
+      grade_prior,
+      grade_current,
+      year_prior,
+      year_current
+    ))),
     n_pairs = !is.na(n_pairs),
     copula_params = nchar(param_str) > 0,
     kendall_tau = !is.na(kendall_tau),
@@ -6249,57 +8223,79 @@ generate_summary_grid_latex <- function(output_dir,
     sgpc_cvm = !is.na(cvm_stat),
     sgp_comparison = has_sgp && !is.null(cor_emp_sgp) && !is.na(cor_emp_sgp)
   )
-  
+
   # Add parameters if available
   if (nchar(param_str) > 0) {
     tex_lines <- c(tex_lines, sprintf("\\quad Params: %s\\\\", param_str))
   }
-  
+
   # Format CvM statistic for display
-  cvm_str <- if (!is.null(cvm_stat) && is.numeric(cvm_stat) && !is.na(cvm_stat)) {
+  cvm_str <- if (
+    !is.null(cvm_stat) && is.numeric(cvm_stat) && !is.na(cvm_stat)
+  ) {
     fmt_num(cvm_stat, 6)
   } else {
     if (is.na(cvm_stat)) {
-      cat("  Note: CvM statistic is NA (SGPc comparison may not have been calculated)\n")
+      cat(
+        "  Note: CvM statistic is NA (SGPc comparison may not have been calculated)\n"
+      )
     }
     "\\textendash\\textendash"
   }
-  
-  tex_lines <- c(tex_lines,
+
+  tex_lines <- c(
+    tex_lines,
     sprintf("\\quad Kendall $\\tau$: %s\\\\", fmt_num(kendall_tau)),
     sprintf("\\quad AIC: %s\\\\", fmt_num(aic_val, 1)),
     sprintf("\\quad BIC: %s\\\\", fmt_num(bic_val, 1))
   )
-  
+
   # Add tail dependence if available (theoretical values from copula parameters)
   if (!is.na(lambda_L) || !is.na(lambda_U)) {
-    tex_lines <- c(tex_lines,
-      sprintf("\\quad $\\lambda_L$: %s, $\\lambda_U$: %s \\textit{(theor.)}\\\\[0.5em]", 
-              fmt_num(lambda_L, 2), fmt_num(lambda_U, 2)))
+    tex_lines <- c(
+      tex_lines,
+      sprintf(
+        "\\quad $\\lambda_L$: %s, $\\lambda_U$: %s \\textit{(theor.)}\\\\[0.5em]",
+        fmt_num(lambda_L, 2),
+        fmt_num(lambda_U, 2)
+      )
+    )
   } else {
     # Add vertical space before SGPc section even if no tail dependence
     tex_lines <- c(tex_lines, "\\\\[0.5em]")
   }
-  
-  tex_lines <- c(tex_lines,
+
+  tex_lines <- c(
+    tex_lines,
     "",
     "{\\bfseries SGPc Comparison:}\\\\",
-    sprintf("\\quad Mean Emp/Par: %s / %s\\\\", fmt_num(mean_emp, 1), fmt_num(mean_par, 1)),
+    sprintf(
+      "\\quad Mean Emp/Par: %s / %s\\\\",
+      fmt_num(mean_emp, 1),
+      fmt_num(mean_par, 1)
+    ),
     sprintf("\\quad $\\rho_{s}$: %s\\\\", fmt_num(corr_val)),
     sprintf("\\quad KS Distance: %s\\\\", fmt_num(ks_dist)),
     sprintf("\\quad CvM Statistic: %s\\\\[0.5em]", cvm_str)
   )
-  
+
   # Add traditional SGP comparison if available
-  if (has_sgp && !is.null(cor_emp_sgp) && is.numeric(cor_emp_sgp) && !is.na(cor_emp_sgp)) {
-    tex_lines <- c(tex_lines,
+  if (
+    has_sgp &&
+      !is.null(cor_emp_sgp) &&
+      is.numeric(cor_emp_sgp) &&
+      !is.na(cor_emp_sgp)
+  ) {
+    tex_lines <- c(
+      tex_lines,
       "{\\bfseries SGP Comparison:}\\\\",
       sprintf("\\quad $r$(Emp,SGP): %s\\\\", fmt_num(cor_emp_sgp)),
       sprintf("\\quad $r$(Par,SGP): %s\\\\[0.5em]", fmt_num(cor_par_sgp))
     )
   }
-  
-  tex_lines <- c(tex_lines,
+
+  tex_lines <- c(
+    tex_lines,
     "",
     "{\\footnotesize\\itshape Right panel: parametric fit with bootstrap uncertainty bands.}",
     "",
@@ -6310,13 +8306,19 @@ generate_summary_grid_latex <- function(output_dir,
     "\\begin{minipage}[t]{0.40\\textwidth}%",
     "\\vspace*{0pt}% Ensure consistent top baseline",
     "\\centering%",
-    sprintf("\\fbox{\\includegraphics[width=0.98\\textwidth]{%s}}", bivariate_pdf),
+    sprintf(
+      "\\fbox{\\includegraphics[width=0.98\\textwidth]{%s}}",
+      bivariate_pdf
+    ),
     "\\end{minipage}%",
     "\\hspace{0.001\\textwidth}%",
     "\\begin{minipage}[t]{0.40\\textwidth}%",
     "\\vspace*{0pt}% Ensure consistent top baseline",
     "\\centering",
-    sprintf("\\fbox{\\includegraphics[width=0.98\\textwidth]{%s}}", uncertainty_pdf),
+    sprintf(
+      "\\fbox{\\includegraphics[width=0.98\\textwidth]{%s}}",
+      uncertainty_pdf
+    ),
     "\\end{minipage}%",
     "",
     "\\vspace{0.025in}%",
@@ -6325,179 +8327,276 @@ generate_summary_grid_latex <- function(output_dir,
     "\\noindent%",
     "\\begin{center}%",
     "\\hspace{-0.009\\textwidth}%",
-    sprintf("\\fbox{\\includegraphics[width=0.99\\textwidth]{%s}}", comparison_pdf),
+    sprintf(
+      "\\fbox{\\includegraphics[width=0.99\\textwidth]{%s}}",
+      comparison_pdf
+    ),
     "\\end{center}%",
     "",
     "\\end{minipage}",
     "",
     "\\end{document}"
   )
-  
+
   # --- Write .tex file ---
   tex_path <- file.path(output_dir, "summary_grid.tex")
   writeLines(tex_lines, tex_path)
   cat(sprintf("  LaTeX source written: %s\n", tex_path))
-  
+
   # --- Compile to PDF ---
   # IMPORTANT: output_dir has been normalized to absolute path above.
   # This ensures file.exists() checks work correctly after setwd() calls below.
   if (compile_pdf) {
     pdf_path <- file.path(output_dir, "summary_grid.pdf")
-    
+
     # Try tinytex first, then system pdflatex
     compiled <- FALSE
-    
+
     if (requireNamespace("tinytex", quietly = TRUE)) {
-      tryCatch({
-        # tinytex::pdflatex expects to run from the directory containing the .tex
-        old_wd <- getwd()
-        setwd(output_dir)
-        on.exit(setwd(old_wd), add = TRUE)
-        
-        tinytex::pdflatex("summary_grid.tex", pdf_file = "summary_grid.pdf")
-        compiled <- TRUE
-        cat(sprintf("  ✓ PDF compiled via tinytex: %s\n", pdf_path))
-      }, error = function(e) {
-        warning("tinytex compilation failed: ", e$message)
-      })
-    }
-    
-    if (!compiled && Sys.which("pdflatex") != "") {
-      tryCatch({
-        old_wd <- getwd()
-        setwd(output_dir)
-        on.exit(setwd(old_wd), add = TRUE)
-        
-        status <- system2("pdflatex", 
-                          args = c("-interaction=nonstopmode", "summary_grid.tex"),
-                          stdout = FALSE, stderr = FALSE)
-        compiled <- identical(status, 0L)
-        if (compiled) {
-          cat(sprintf("  ✓ PDF compiled via system pdflatex: %s\n", pdf_path))
-        } else {
-          warning(sprintf("pdflatex exited with status %s", status))
+      tryCatch(
+        {
+          # tinytex::pdflatex expects to run from the directory containing the .tex
+          old_wd <- getwd()
+          setwd(output_dir)
+          on.exit(setwd(old_wd), add = TRUE)
+
+          tinytex::pdflatex("summary_grid.tex", pdf_file = "summary_grid.pdf")
+          compiled <- TRUE
+          cat(sprintf("  ✓ PDF compiled via tinytex: %s\n", pdf_path))
+        },
+        error = function(e) {
+          warning("tinytex compilation failed: ", e$message)
         }
-      }, error = function(e) {
-        warning("System pdflatex compilation failed: ", e$message)
-      })
+      )
     }
-    
+
+    if (!compiled && Sys.which("pdflatex") != "") {
+      tryCatch(
+        {
+          old_wd <- getwd()
+          setwd(output_dir)
+          on.exit(setwd(old_wd), add = TRUE)
+
+          status <- system2(
+            "pdflatex",
+            args = c("-interaction=nonstopmode", "summary_grid.tex"),
+            stdout = FALSE,
+            stderr = FALSE
+          )
+          compiled <- identical(status, 0L)
+          if (compiled) {
+            cat(sprintf("  ✓ PDF compiled via system pdflatex: %s\n", pdf_path))
+          } else {
+            warning(sprintf("pdflatex exited with status %s", status))
+          }
+        },
+        error = function(e) {
+          warning("System pdflatex compilation failed: ", e$message)
+        }
+      )
+    }
+
     if (!compiled) {
-      warning("Could not compile PDF. Install tinytex: install.packages('tinytex'); tinytex::install_tinytex()")
-      cat("  ✗ PDF compilation failed - .tex file retained for manual compilation\n")
+      warning(
+        "Could not compile PDF. Install tinytex: install.packages('tinytex'); tinytex::install_tinytex()"
+      )
+      cat(
+        "  ✗ PDF compilation failed - .tex file retained for manual compilation\n"
+      )
       keep_tex <- TRUE
     }
-    
+
     # Clean up auxiliary files
     aux_files <- c("summary_grid.aux", "summary_grid.log", "summary_grid.out")
     for (f in aux_files) {
       f_path <- file.path(output_dir, f)
       if (file.exists(f_path)) file.remove(f_path)
     }
-    
+
     # Remove .tex if not keeping
     if (!keep_tex && compiled && file.exists(tex_path)) {
       file.remove(tex_path)
     }
-    
+
     # --- Convert PDF to SVG and PNG if requested ---
     if (compiled && file.exists(pdf_path)) {
-      
       # SVG conversion using pdf2svg
       if ("svg" %in% export_formats) {
         svg_path <- file.path(output_dir, "summary_grid.svg")
         if (Sys.which("pdf2svg") != "") {
-          tryCatch({
-            status <- system2("pdf2svg", 
-                              args = c(pdf_path, svg_path),
-                              stdout = FALSE, stderr = FALSE)
-            if (identical(status, 0L) && file.exists(svg_path)) {
-              cat(sprintf("  ✓ SVG converted via pdf2svg: %s\n", svg_path))
-            } else {
-              warning(sprintf("pdf2svg failed (exit: %s) or did not produce output", status))
+          tryCatch(
+            {
+              status <- system2(
+                "pdf2svg",
+                args = c(pdf_path, svg_path),
+                stdout = FALSE,
+                stderr = FALSE
+              )
+              if (identical(status, 0L) && file.exists(svg_path)) {
+                cat(sprintf("  ✓ SVG converted via pdf2svg: %s\n", svg_path))
+              } else {
+                warning(sprintf(
+                  "pdf2svg failed (exit: %s) or did not produce output",
+                  status
+                ))
+              }
+            },
+            error = function(e) {
+              warning("pdf2svg conversion failed: ", e$message)
             }
-          }, error = function(e) {
-            warning("pdf2svg conversion failed: ", e$message)
-          })
+          )
         } else {
           cat("  ⚠ pdf2svg not found - skipping SVG conversion\n")
-          cat("    Install with: sudo apt install pdf2svg (Linux) or brew install pdf2svg (macOS)\n")
+          cat(
+            "    Install with: sudo apt install pdf2svg (Linux) or brew install pdf2svg (macOS)\n"
+          )
         }
       }
-      
+
       # PNG conversion using pdftoppm (poppler) or ImageMagick convert as fallback
       if ("png" %in% export_formats) {
         png_path <- file.path(output_dir, "summary_grid@2x.png")
         png_converted <- FALSE
-        
+
         # Try pdftoppm first (from poppler-utils) - produces high quality output
         if (Sys.which("pdftoppm") != "") {
-          tryCatch({
-            # pdftoppm outputs to summary_grid-1.png, we'll rename it
-            tmp_prefix <- file.path(output_dir, "summary_grid_tmp")
-            status <- system2("pdftoppm", 
-                              args = c("-png", "-r", as.character(export_dpi * 2), "-singlefile", 
-                                       pdf_path, tmp_prefix),
-                              stdout = FALSE, stderr = FALSE)
-            if (!identical(status, 0L)) {
-              warning(sprintf("pdftoppm exited with status %s", status))
+          tryCatch(
+            {
+              # pdftoppm outputs to summary_grid-1.png, we'll rename it
+              tmp_prefix <- file.path(output_dir, "summary_grid_tmp")
+              status <- system2(
+                "pdftoppm",
+                args = c(
+                  "-png",
+                  "-r",
+                  as.character(export_dpi * 2),
+                  "-singlefile",
+                  pdf_path,
+                  tmp_prefix
+                ),
+                stdout = FALSE,
+                stderr = FALSE
+              )
+              if (!identical(status, 0L)) {
+                warning(sprintf("pdftoppm exited with status %s", status))
+              }
+              tmp_png <- paste0(tmp_prefix, ".png")
+              if (file.exists(tmp_png)) {
+                file.rename(tmp_png, png_path)
+                png_converted <- TRUE
+                cat(sprintf(
+                  "  ✓ PNG converted via pdftoppm (%ddpi): %s\n",
+                  export_dpi * 2,
+                  png_path
+                ))
+              }
+            },
+            error = function(e) {
+              warning("pdftoppm conversion failed: ", e$message)
             }
-            tmp_png <- paste0(tmp_prefix, ".png")
-            if (file.exists(tmp_png)) {
-              file.rename(tmp_png, png_path)
-              png_converted <- TRUE
-              cat(sprintf("  ✓ PNG converted via pdftoppm (%ddpi): %s\n", export_dpi * 2, png_path))
-            }
-          }, error = function(e) {
-            warning("pdftoppm conversion failed: ", e$message)
-          })
+          )
         }
-        
+
         # Fallback to ImageMagick convert
         if (!png_converted && Sys.which("convert") != "") {
-          tryCatch({
-            status <- system2("convert", 
-                              args = c("-density", as.character(export_dpi * 2), 
-                                       pdf_path, "-quality", "95", png_path),
-                              stdout = FALSE, stderr = FALSE)
-            if (!identical(status, 0L)) {
-              warning(sprintf("ImageMagick convert exited with status %s", status))
+          tryCatch(
+            {
+              status <- system2(
+                "convert",
+                args = c(
+                  "-density",
+                  as.character(export_dpi * 2),
+                  pdf_path,
+                  "-quality",
+                  "95",
+                  png_path
+                ),
+                stdout = FALSE,
+                stderr = FALSE
+              )
+              if (!identical(status, 0L)) {
+                warning(sprintf(
+                  "ImageMagick convert exited with status %s",
+                  status
+                ))
+              }
+              if (file.exists(png_path)) {
+                png_converted <- TRUE
+                cat(sprintf(
+                  "  ✓ PNG converted via ImageMagick (%ddpi): %s\n",
+                  export_dpi * 2,
+                  png_path
+                ))
+              }
+            },
+            error = function(e) {
+              warning("ImageMagick convert failed: ", e$message)
             }
-            if (file.exists(png_path)) {
-              png_converted <- TRUE
-              cat(sprintf("  ✓ PNG converted via ImageMagick (%ddpi): %s\n", export_dpi * 2, png_path))
-            }
-          }, error = function(e) {
-            warning("ImageMagick convert failed: ", e$message)
-          })
+          )
         }
-        
+
         if (!png_converted) {
           cat("  ⚠ PNG conversion tools not found - skipping PNG conversion\n")
-          cat("    Install pdftoppm: sudo apt install poppler-utils (Linux) or brew install poppler (macOS)\n")
-          cat("    Or ImageMagick: sudo apt install imagemagick (Linux) or brew install imagemagick (macOS)\n")
+          cat(
+            "    Install pdftoppm: sudo apt install poppler-utils (Linux) or brew install poppler (macOS)\n"
+          )
+          cat(
+            "    Or ImageMagick: sudo apt install imagemagick (Linux) or brew install imagemagick (macOS)\n"
+          )
         }
       }
     }
-    
+
     # Print diagnostic summary of field availability
     cat("\n=== Summary Grid Field Availability ===\n")
-    cat(sprintf("  Condition Info: %s\n", if (fields_available$condition_info) "✓" else "✗ MISSING"))
-    cat(sprintf("  Sample Size (n): %s\n", if (fields_available$n_pairs) "✓" else "✗ MISSING"))
-    cat(sprintf("  Copula Parameters: %s\n", if (fields_available$copula_params) "✓" else "✗ MISSING"))
-    cat(sprintf("  Kendall's τ: %s\n", if (fields_available$kendall_tau) "✓" else "✗ MISSING"))
-    cat(sprintf("  AIC/BIC: %s\n", if (fields_available$aic_bic) "✓" else "✗ MISSING"))
-    cat(sprintf("  SGPc Means (Emp/Par): %s\n", if (fields_available$sgpc_means) "✓" else "✗ MISSING"))
-    cat(sprintf("  SGPc Correlation: %s\n", if (fields_available$sgpc_corr) "✓" else "✗ MISSING"))
-    cat(sprintf("  SGPc KS Distance: %s\n", if (fields_available$sgpc_ks) "✓" else "✗ MISSING"))
-    cat(sprintf("  SGPc CvM Statistic: %s\n", if (fields_available$sgpc_cvm) "✓" else "✗ MISSING"))
-    cat(sprintf("  SGP Comparison: %s\n", if (fields_available$sgp_comparison) "✓" else "✗ MISSING"))
-    
+    cat(sprintf(
+      "  Condition Info: %s\n",
+      if (fields_available$condition_info) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  Sample Size (n): %s\n",
+      if (fields_available$n_pairs) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  Copula Parameters: %s\n",
+      if (fields_available$copula_params) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  Kendall's τ: %s\n",
+      if (fields_available$kendall_tau) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  AIC/BIC: %s\n",
+      if (fields_available$aic_bic) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  SGPc Means (Emp/Par): %s\n",
+      if (fields_available$sgpc_means) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  SGPc Correlation: %s\n",
+      if (fields_available$sgpc_corr) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  SGPc KS Distance: %s\n",
+      if (fields_available$sgpc_ks) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  SGPc CvM Statistic: %s\n",
+      if (fields_available$sgpc_cvm) "✓" else "✗ MISSING"
+    ))
+    cat(sprintf(
+      "  SGP Comparison: %s\n",
+      if (fields_available$sgp_comparison) "✓" else "✗ MISSING"
+    ))
+
     missing_fields <- names(fields_available)[!unlist(fields_available)]
     if (length(missing_fields) > 0) {
       cat("\n⚠ Missing fields detected. Common causes:\n")
       if ("sgpc_means" %in% missing_fields || "sgpc_corr" %in% missing_fields) {
-        cat("  • SGPc fields: Set CALCULATE_SGPC=TRUE and ensure Bernstein copula is available\n")
+        cat(
+          "  • SGPc fields: Set CALCULATE_SGPC=TRUE and ensure Bernstein copula is available\n"
+        )
       }
       if ("sgp_comparison" %in% missing_fields) {
         cat("  • SGP comparison: Ensure SGP_ORDER_1 column exists in dataset\n")
@@ -6509,12 +8608,12 @@ generate_summary_grid_latex <- function(output_dir,
       cat("\n✓ All fields successfully populated\n")
     }
     cat("=====================================\n\n")
-    
+
     invisible(pdf_path)
   } else {
     invisible(tex_path)
   }
-  
+
   # === FINAL MEMORY CLEANUP ===
   # Force garbage collection at end of plot generation
   # Critical for memory management with 180+ parallel workers

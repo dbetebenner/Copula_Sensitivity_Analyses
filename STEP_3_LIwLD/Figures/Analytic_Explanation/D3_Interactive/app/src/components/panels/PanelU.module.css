@@ -1,0 +1,47 @@
+/* Panel #1 — Prior U distributions. */
+
+.host {
+  width: 100%;
+  height: 100%;
+}
+
+.host svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Axis */
+.axis,
+.axisTick {
+  stroke: var(--e-border-panel);
+  stroke-width: 1px;
+}
+.axisLabel {
+  fill: var(--e-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Population (uniform-by-construction) — dashed grey. */
+.popLine {
+  fill: none;
+  stroke: var(--e-population-stroke);
+  stroke-width: var(--e-stroke);
+  stroke-dasharray: 4 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Subgroup density. */
+.subLine {
+  fill: none;
+  stroke: var(--e-subgroup-observed);
+  stroke-width: var(--e-stroke-bold);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.subFill {
+  fill: var(--e-subgroup-fill);
+  opacity: 0.32;
+}

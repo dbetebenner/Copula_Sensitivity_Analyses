@@ -17,7 +17,9 @@ source("functions/copula_bootstrap.R")
 
 # Load dataset configurations
 source("dataset_configs.R")
-if (file.exists("dataset_configs_local.R")) source("dataset_configs_local.R")
+if (file.exists("dataset_configs_local.R")) {
+  source("dataset_configs_local.R")
+}
 
 # Load a dataset for testing (use dataset_1)
 cat("Loading test data (dataset_1)...\n")
@@ -38,12 +40,12 @@ cat("  Content: MATHEMATICS\n\n")
 
 # Filter data for this condition
 test_pairs <- STATE_DATA_LONG[
-  VALID_CASE == "VALID_CASE" & 
-  GRADE == 5 &  # Current grade
-  YEAR == "2011" &  # Current year
-  CONTENT_AREA == "MATHEMATICS" &
-  !is.na(SCALE_SCORE) &
-  !is.na(SCALE_SCORE_PRIOR),
+  VALID_CASE == "VALID_CASE" &
+    GRADE == 5 & # Current grade
+    YEAR == "2011" & # Current year
+    CONTENT_AREA == "MATHEMATICS" &
+    !is.na(SCALE_SCORE) &
+    !is.na(SCALE_SCORE_PRIOR),
   .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT = SCALE_SCORE)
 ]
 
@@ -58,7 +60,14 @@ cat("====================================================================\n")
 cat("FITTING T-COPULA VARIANTS\n")
 cat("====================================================================\n\n")
 
-copula_families <- c("gaussian", "t", "t_df5", "t_df10", "t_df15", "comonotonic")
+copula_families <- c(
+  "gaussian",
+  "t",
+  "t_df5",
+  "t_df10",
+  "t_df15",
+  "comonotonic"
+)
 
 fit_result <- fit_copula_from_pairs(
   scores_prior = test_pairs$SCALE_SCORE_PRIOR,
@@ -67,7 +76,7 @@ fit_result <- fit_copula_from_pairs(
   framework_current = NULL,
   copula_families = copula_families,
   return_best = FALSE,
-  use_empirical_ranks = TRUE  # Phase 1 approach
+  use_empirical_ranks = TRUE # Phase 1 approach
 )
 
 # Display results
@@ -91,7 +100,7 @@ results_dt <- data.table(
 for (fam in copula_families) {
   if (!is.null(fit_result$results[[fam]])) {
     res <- fit_result$results[[fam]]
-    
+
     # Extract rho and df
     if (fam %in% c("gaussian", "t", "t_df5", "t_df10", "t_df15")) {
       correlation_rho <- res$parameter
@@ -100,18 +109,30 @@ for (fam in copula_families) {
       correlation_rho <- NA_real_
       degrees_freedom <- NA_real_
     }
-    
-    results_dt <- rbind(results_dt, data.table(
-      family = fam,
-      kendall_tau = res$kendall_tau,
-      loglik = res$loglik,
-      aic = res$aic,
-      bic = res$bic,
-      tail_dep_lower = if (!is.null(res$tail_dependence_lower)) res$tail_dependence_lower else 0,
-      tail_dep_upper = if (!is.null(res$tail_dependence_upper)) res$tail_dependence_upper else 0,
-      correlation_rho = correlation_rho,
-      degrees_freedom = degrees_freedom
-    ), fill = TRUE)
+
+    results_dt <- rbind(
+      results_dt,
+      data.table(
+        family = fam,
+        kendall_tau = res$kendall_tau,
+        loglik = res$loglik,
+        aic = res$aic,
+        bic = res$bic,
+        tail_dep_lower = if (!is.null(res$tail_dependence_lower)) {
+          res$tail_dependence_lower
+        } else {
+          0
+        },
+        tail_dep_upper = if (!is.null(res$tail_dependence_upper)) {
+          res$tail_dependence_upper
+        } else {
+          0
+        },
+        correlation_rho = correlation_rho,
+        degrees_freedom = degrees_freedom
+      ),
+      fill = TRUE
+    )
   }
 }
 
@@ -166,8 +187,12 @@ cat("✓ Check 4: Tail dependence pattern (should increase as df decreases)?\n")
 t_only <- results_dt[family %in% t_variants]
 cat("  family    df    tail_dep\n")
 for (i in 1:nrow(t_only)) {
-  cat(sprintf("  %-8s  %5.1f  %.6f\n", t_only[i, family], t_only[i, degrees_freedom], 
-              t_only[i, tail_dep_upper]))
+  cat(sprintf(
+    "  %-8s  %5.1f  %.6f\n",
+    t_only[i, family],
+    t_only[i, degrees_freedom],
+    t_only[i, tail_dep_upper]
+  ))
 }
 cat("\n")
 
@@ -184,7 +209,11 @@ if (best_t == "t") {
 } else {
   aic_free <- results_dt[family == "t", aic]
   delta_aic <- aic_free - best_aic
-  cat("  → Constrained df outperforms free by ΔAIC =", round(delta_aic, 2), "\n")
+  cat(
+    "  → Constrained df outperforms free by ΔAIC =",
+    round(delta_aic, 2),
+    "\n"
+  )
   cat("  → This suggests free estimation may be too conservative!\n\n")
 }
 
@@ -197,7 +226,9 @@ cat("  ΔAIC (Gaussian - best t-copula):", round(delta_aic_gaussian, 2), "\n")
 if (delta_aic_gaussian > 10) {
   cat("  ✓ Best t-copula substantially outperforms Gaussian\n\n")
 } else {
-  cat("  ⚠ Small difference (tail dependence may be weak in this condition)\n\n")
+  cat(
+    "  ⚠ Small difference (tail dependence may be weak in this condition)\n\n"
+  )
 }
 
 # Check 7: Comonotonic still worst?
@@ -225,9 +256,13 @@ cat("  - Ready for full STEP 1 analysis ✓\n\n")
 
 cat("Key Finding:\n")
 if (best_t != "t") {
-  cat("  ** Constrained df (", best_t, ") outperforms free estimation! **\n", sep = "")
+  cat(
+    "  ** Constrained df (",
+    best_t,
+    ") outperforms free estimation! **\n",
+    sep = ""
+  )
   cat("  This validates your hypothesis about large-sample conservatism.\n\n")
 } else {
   cat("  Free estimation is optimal for this condition.\n\n")
 }
-

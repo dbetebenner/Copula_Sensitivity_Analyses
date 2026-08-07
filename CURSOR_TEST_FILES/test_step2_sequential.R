@@ -18,9 +18,9 @@ cat("STEP 2 SEQUENTIAL EXECUTION TEST\n")
 cat("====================================================================\n\n")
 
 # Configuration
-STEPS_TO_RUN <- c(2)                    # Run only STEP_2
-USE_PARALLEL_STEP2 <- FALSE             # Force sequential mode
-DATASETS_TO_RUN <- "dataset_4"          # Use dataset_4 (fastest for testing)
+STEPS_TO_RUN <- c(2) # Run only STEP_2
+USE_PARALLEL_STEP2 <- FALSE # Force sequential mode
+DATASETS_TO_RUN <- "dataset_4" # Use dataset_4 (fastest for testing)
 
 # Select which experiment(s) to test
 # Options:
@@ -32,7 +32,7 @@ DATASETS_TO_RUN <- "dataset_4"          # Use dataset_4 (fastest for testing)
 EXPERIMENT_TO_RUN_STEP2 <- c("exp_1_grade_span")
 
 # Optional: Reduce bootstrap for faster testing
-N_BOOTSTRAP <- 25  # Default is 50, use 25 for quick tests
+N_BOOTSTRAP <- 25 # Default is 50, use 25 for quick tests
 
 # Optional: Skip completed experiments
 SKIP_COMPLETED_STEP2 <- FALSE
@@ -42,7 +42,11 @@ cat("  Dataset:", DATASETS_TO_RUN, "\n")
 cat("  Mode: SEQUENTIAL\n")
 cat("  Bootstrap iterations:", N_BOOTSTRAP, "\n")
 if (!is.null(EXPERIMENT_TO_RUN_STEP2)) {
-  cat("  Experiments to run:", paste(EXPERIMENT_TO_RUN_STEP2, collapse = ", "), "\n")
+  cat(
+    "  Experiments to run:",
+    paste(EXPERIMENT_TO_RUN_STEP2, collapse = ", "),
+    "\n"
+  )
 } else {
   cat("  Experiments to run: ALL (1-4)\n")
 }

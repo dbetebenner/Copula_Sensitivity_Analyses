@@ -1,0 +1,110 @@
+%%%%
+%%%% step3_infographic_panel_b1b2.tex - Standalone Panel B1 & B2 PDF for colleagues
+%%%%
+%%%% Contains: title, B1 and B2 graphics side-by-side, B1B2 text, footnotes 2-7.
+%%%%
+\documentclass[10pt]{article}
+\usepackage[paperwidth=8.3in,paperheight=21.8in,margin=0in]{geometry}
+\usepackage{graphicx}
+\usepackage[svgnames]{xcolor}
+\usepackage{../../../../../../Papers/Betebenner_Braun/Paper_1/styles/dataimago}
+
+\input{step3_styles}
+\input{data/summary_metrics}
+
+\pagestyle{empty}
+\begin{document}
+
+%% --- Title block (from header band wording) ---
+\noindent
+\hspace{0.25in}%
+\parbox{7.80in}{%
+  \vspace{0.20in}
+  {\large\bfseries B1 \& B2. Estimate subgroup growth regime $\symbf{\GShat}$
+    (copula + regime $\;\Rightarrow\;$ induced marginal)}
+
+  \vspace{0.04in}
+  {\normalsize\color{subtitleGrey}%
+    Choose $G \in \mathcal{G}_{\mathrm{Beta}}$ to minimize
+    $\Wone\bigl(F^{\mathrm{obs}}_{V,S},\,F_{G}\bigr)$,
+    where $F_G(v) = \mathbb{E}_{U}\!\left[\,G\bigl(\Fzero(v\mid U)\bigr)\right]$}%
+  \vspace{0.15in}
+}
+
+%% --- Graphics: B1 and B2 side by side ---
+\noindent
+\hspace{0.25in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_B1_graphic.pdf}%
+\hspace{0.05in}%
+\includegraphics[width=3.85in,height=3.95in]{outputs/step3_panel_B2_graphic.pdf}%
+
+\vspace{0.10in}
+
+%% --- Text panel ---
+\noindent
+\hspace{0.25in}%
+\begin{minipage}[t]{7.75in}\vspace{0pt}%
+  \includegraphics[width=\linewidth]{outputs/step3_panel_B1B2_text.pdf}%
+\end{minipage}%
+
+\vspace{0.35in}
+
+%% --- Footnotes 2--7 (wrapped in minipage for left/right margins) ---
+\noindent
+\hspace{0.25in}%
+\begin{minipage}[t]{7.55in}
+{\footnotesize%
+$^{2}$ The baseline copula used for inference is selected from canonical STEP~1 sensitivity analyses
+over 966 longitudinal conditions across four datasets: the $t$-copula is best by AIC in
+63.6\% of conditions (Frank: 30.7\%). In the cross-stratified canonical table below
+(content area $\times$ year span), the recommended family is $t$ in every cell; entries
+report $(\rho,\mathrm{df})$ medians.
+
+\vspace{2pt}
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\textbf{Content area} & \textbf{1-year} & \textbf{2-year} & \textbf{3-year} & \textbf{4-year} \\
+\hline
+\noalign{\vspace{2pt}}
+MATHEMATICS & (0.85, 25.26) & (0.81, 27.40) & (0.78, 28.38) & (0.76, 27.34) \\
+READING     & (0.84, 28.33) & (0.80, 29.34) & (0.77, 26.63) & (0.76, 28.22) \\
+WRITING     & (0.85, 23.72) & (0.82, 27.58) & (0.80, 27.22) & (0.77, 23.86) \\
+ELA         & (0.84, 41.95) & (0.79, 46.41) & (0.76, 51.57) & (0.72, 42.04) \\
+\end{tabular}
+\end{center}
+
+\vspace{6pt}
+$^{3}$ Other regime families considered include the truncated exponential family
+(the maximum-entropy distribution on a finite interval with a fixed mean) and the
+truncated uniform family. If acceptable accuracy and precision are already achieved
+under the Beta family, additional growth-regime optimization and fine-tuning should
+only improve the recovered fit.
+
+\vspace{4pt}
+$^{4}$ Here, $U$ denotes the subgroup’s prior-grade reference quantile (pseudo-observation), 
+and $C_0$ is the canonical baseline copula selected from STEP 1 by content area and year span. 
+The fitted growth regime $\widehat{G}_S$ (distribution of latent $P=\SGPc/100$) and $C_0$ 
+define a forward map \[ (U,\;C_0,\;\widehat{G}_S)\ \longmapsto\ F_{\widehat{G}_S}(v)=\mathbb{E}_U\!\left[\widehat{G}_S\!\left(F_0(v\mid U)\right)\right], \] 
+with corresponding induced density $f_{\widehat{G}_S}(v)$. The latent SGPc distribution itself 
+is given by $\widehat{G}_S$ (density $\widehat{g}_S(p)=d\widehat{G}_S/dp$), which is estimated 
+by matching $F_{\widehat{G}_S}$ to the observed current marginal.
+
+\vspace{4pt}
+$^{5}$ We assume $P\perp U$. That is, $p$ is drawn independently of starting
+point within the subgroup; meaning there is no correlation between the starting point $u$ and
+the growth regime. This assumption is investigated more deeply in the full paper.
+
+\vspace{4pt}
+$^{6}$ The Beta family, $\mathrm{Beta}(\alpha, \beta)$, is reparameterized via
+$\alpha = \kappa m$ and $\beta = \kappa(1-m)$, so that $m = \mathbb{E}[P] = \alpha / (\alpha + \beta)$
+(the regime center, mean \SGPc~on the 0--1 scale) and $\kappa = \alpha + \beta$
+(the concentration parameter).
+
+\vspace{4pt}
+$^{7}$ Alternative minimum-distance criteria (e.g., Cramer--von Mises,
+$\int_0^1 \{F_1(v)-F_2(v)\}^2\,dv$) are also valid for regime fitting. If acceptable
+accuracy and precision are already achieved under Wasserstein--1, then additional
+growth-regime optimization and fine-tuning should only improve the recovered fit.}
+\end{minipage}
+
+\end{document}

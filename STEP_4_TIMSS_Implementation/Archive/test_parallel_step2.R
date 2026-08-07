@@ -18,7 +18,11 @@ cat("\n")
 # Test configuration
 cat("Test Configuration:\n")
 cat("  Available cores:", detectCores(), "\n")
-cat("  Will use:", if (exists("N_CORES")) N_CORES else detectCores() - 2, "cores\n")
+cat(
+  "  Will use:",
+  if (exists("N_CORES")) N_CORES else detectCores() - 2,
+  "cores\n"
+)
 cat("  Testing: 3 methods (subset)\n\n")
 
 # Temporarily modify TRANSFORMATION_METHODS to test with just 3 methods
@@ -48,23 +52,25 @@ results_file <- "STEP_3_Application_Implementation/results/exp5_transformation_v
 
 if (file.exists(results_file)) {
   results <- fread(results_file)
-  
+
   cat("Results verification:\n")
   cat("  Total methods processed:", nrow(results), "\n")
   cat("  Expected: 15 methods\n\n")
-  
+
   cat("Classification breakdown:\n")
   print(table(results$classification))
   cat("\n")
-  
+
   cat("Methods that select correct copula:\n")
-  correct_copula <- results[copula_correct == TRUE, .(method, classification, ks_pvalue, best_copula)]
+  correct_copula <- results[
+    copula_correct == TRUE,
+    .(method, classification, ks_pvalue, best_copula)
+  ]
   print(correct_copula)
   cat("\n")
-  
+
   cat("✓ TEST PASSED\n")
   cat("Parallel implementation working correctly!\n\n")
-  
 } else {
   cat("✗ TEST FAILED\n")
   cat("Results file not found:", results_file, "\n\n")

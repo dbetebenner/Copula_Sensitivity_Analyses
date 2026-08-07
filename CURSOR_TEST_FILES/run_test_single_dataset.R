@@ -9,10 +9,10 @@ cat("TEST RUN: SINGLE DATASET (dataset_1)\n")
 cat("====================================================================\n\n")
 
 # Set configuration for testing
-DATASETS_TO_RUN <- c("dataset_1")  # Test with just first dataset
-STEPS_TO_RUN <- 1                   # Just Step 1 for now
-BATCH_MODE <- FALSE                 # Interactive mode to see progress
-SKIP_COMPLETED <- FALSE             # Force fresh run
+DATASETS_TO_RUN <- c("dataset_1") # Test with just first dataset
+STEPS_TO_RUN <- 1 # Just Step 1 for now
+BATCH_MODE <- FALSE # Interactive mode to see progress
+SKIP_COMPLETED <- FALSE # Force fresh run
 
 cat("Configuration:\n")
 cat("  Datasets:", paste(DATASETS_TO_RUN, collapse = ", "), "\n")
@@ -38,8 +38,9 @@ cat("   - Verify dataset_id = 'dataset_1' in all rows\n")
 cat("3. Verify all 34 columns present in CSV:\n")
 cat("   - 3 dataset identifiers\n")
 cat("   - 7 scaling/transition metadata columns\n")
-cat("   - 7 condition identifiers (including year_span, year_prior, year_current)\n")
+cat(
+  "   - 7 condition identifiers (including year_span, year_prior, year_current)\n"
+)
 cat("   - 14 copula results and parameters\n")
 cat("   - 3 calculated metrics (best_aic, best_bic, delta_aic_vs_best)\n")
 cat("4. If successful, proceed to run with all 3 datasets\n\n")
-

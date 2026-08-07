@@ -1,0 +1,41 @@
+/* MathStrip — the three identities, shown horizontally in a slim row. */
+
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--p-space-3);
+  padding: var(--p-space-2) 0;
+  font-size: var(--p-text-sm);
+  color: var(--e-text);
+}
+
+.divider {
+  color: var(--e-text-muted);
+  user-select: none;
+}
+
+.identity {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--p-space-2);
+  white-space: nowrap;
+}
+
+.identityLabel {
+  color: var(--e-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--p-text-xs);
+  font-weight: 600;
+}
+
+.identityMath {
+  color: var(--e-text);
+  /* KaTeX produces inline-math by default; no extra styling needed. */
+}
+
+/* Below 1100px the math wraps; let it. */
+@media (max-width: 1100px) {
+  .strip { gap: var(--p-space-2); }
+}

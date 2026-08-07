@@ -60,7 +60,10 @@ cat(sprintf("Sample size: n = %s\n\n", format(n_pairs, big.mark = ",")))
 
 # Fit a single copula (t-copula) for testing
 cat("Fitting t-copula...\n")
-pseudo_obs <- pobs(as.matrix(pairs_test[, .(SCALE_SCORE_PRIOR, SCALE_SCORE_CURRENT)]))
+pseudo_obs <- pobs(as.matrix(pairs_test[, .(
+  SCALE_SCORE_PRIOR,
+  SCALE_SCORE_CURRENT
+)]))
 fitted_t <- fitCopula(tCopula(dim = 2), pseudo_obs, method = "mpl")
 fitted_copula <- tCopula(
   param = coef(fitted_t)[1],
@@ -83,7 +86,7 @@ time_start_100 <- Sys.time()
 p_comonotonic_100 <- plot_parametric_copula_contour(
   fitted_copula = NULL,
   family = "comonotonic",
-  grid_size = 100,  # Force 100
+  grid_size = 100, # Force 100
   plot_type = "cdf",
   title = "Comonotonic Copula (grid=100)",
   sample_size = n_pairs
@@ -96,15 +99,19 @@ cat(sprintf("  Computation time: %.3f seconds\n", time_100))
 export_ggplot_multi_format(
   plot_obj = p_comonotonic_100,
   base_filename = file.path(output_dir, "comonotonic_grid100"),
-  width = 10, height = 8,
+  width = 10,
+  height = 8,
   formats = EXPORT_FORMATS,
   dpi = EXPORT_DPI,
   verbose = FALSE
 )
 
-pdf_size_100 <- file.size(file.path(output_dir, "comonotonic_grid100.pdf")) / 1024
-svg_size_100 <- file.size(file.path(output_dir, "comonotonic_grid100.svg")) / 1024
-png_size_100 <- file.size(file.path(output_dir, "comonotonic_grid100@2x.png")) / 1024
+pdf_size_100 <- file.size(file.path(output_dir, "comonotonic_grid100.pdf")) /
+  1024
+svg_size_100 <- file.size(file.path(output_dir, "comonotonic_grid100.svg")) /
+  1024
+png_size_100 <- file.size(file.path(output_dir, "comonotonic_grid100@2x.png")) /
+  1024
 
 cat(sprintf("  PDF size: %.1f KB\n", pdf_size_100))
 cat(sprintf("  SVG size: %.1f KB\n", svg_size_100))
@@ -123,7 +130,7 @@ time_start_300 <- Sys.time()
 p_comonotonic_300 <- plot_parametric_copula_contour(
   fitted_copula = NULL,
   family = "comonotonic",
-  grid_size = 300,  # Force 300
+  grid_size = 300, # Force 300
   plot_type = "cdf",
   title = "Comonotonic Copula (grid=300)",
   sample_size = n_pairs
@@ -135,15 +142,19 @@ cat(sprintf("  Computation time: %.3f seconds\n", time_300))
 export_ggplot_multi_format(
   plot_obj = p_comonotonic_300,
   base_filename = file.path(output_dir, "comonotonic_grid300"),
-  width = 10, height = 8,
+  width = 10,
+  height = 8,
   formats = EXPORT_FORMATS,
   dpi = EXPORT_DPI,
   verbose = FALSE
 )
 
-pdf_size_300 <- file.size(file.path(output_dir, "comonotonic_grid300.pdf")) / 1024
-svg_size_300 <- file.size(file.path(output_dir, "comonotonic_grid300.svg")) / 1024
-png_size_300 <- file.size(file.path(output_dir, "comonotonic_grid300@2x.png")) / 1024
+pdf_size_300 <- file.size(file.path(output_dir, "comonotonic_grid300.pdf")) /
+  1024
+svg_size_300 <- file.size(file.path(output_dir, "comonotonic_grid300.svg")) /
+  1024
+png_size_300 <- file.size(file.path(output_dir, "comonotonic_grid300@2x.png")) /
+  1024
 
 cat(sprintf("  PDF size: %.1f KB\n", pdf_size_300))
 cat(sprintf("  SVG size: %.1f KB\n", svg_size_300))
@@ -174,7 +185,8 @@ cat(sprintf("  Computation time: %.3f seconds\n", time_t100))
 export_ggplot_multi_format(
   plot_obj = p_t_100,
   base_filename = file.path(output_dir, "t_copula_grid100"),
-  width = 10, height = 8,
+  width = 10,
+  height = 8,
   formats = EXPORT_FORMATS,
   dpi = EXPORT_DPI,
   verbose = FALSE
@@ -182,7 +194,8 @@ export_ggplot_multi_format(
 
 pdf_size_t100 <- file.size(file.path(output_dir, "t_copula_grid100.pdf")) / 1024
 svg_size_t100 <- file.size(file.path(output_dir, "t_copula_grid100.svg")) / 1024
-png_size_t100 <- file.size(file.path(output_dir, "t_copula_grid100@2x.png")) / 1024
+png_size_t100 <- file.size(file.path(output_dir, "t_copula_grid100@2x.png")) /
+  1024
 
 cat(sprintf("  PDF size: %.1f KB\n", pdf_size_t100))
 cat(sprintf("  SVG size: %.1f KB\n", svg_size_t100))
@@ -213,7 +226,8 @@ cat(sprintf("  Computation time: %.3f seconds\n", time_t300))
 export_ggplot_multi_format(
   plot_obj = p_t_300,
   base_filename = file.path(output_dir, "t_copula_grid300"),
-  width = 10, height = 8,
+  width = 10,
+  height = 8,
   formats = EXPORT_FORMATS,
   dpi = EXPORT_DPI,
   verbose = FALSE
@@ -221,7 +235,8 @@ export_ggplot_multi_format(
 
 pdf_size_t300 <- file.size(file.path(output_dir, "t_copula_grid300.pdf")) / 1024
 svg_size_t300 <- file.size(file.path(output_dir, "t_copula_grid300.svg")) / 1024
-png_size_t300 <- file.size(file.path(output_dir, "t_copula_grid300@2x.png")) / 1024
+png_size_t300 <- file.size(file.path(output_dir, "t_copula_grid300@2x.png")) /
+  1024
 
 cat(sprintf("  PDF size: %.1f KB\n", pdf_size_t300))
 cat(sprintf("  SVG size: %.1f KB\n", svg_size_t300))
@@ -236,32 +251,64 @@ cat("PERFORMANCE SUMMARY\n")
 cat("=================================================================\n\n")
 
 cat("COMONOTONIC COPULA:\n")
-cat(sprintf("  Time (100 -> 300): %.3fs -> %.3fs (%.1fx slower)\n", 
-            time_100, time_300, time_300/time_100))
-cat(sprintf("  PDF size: %.1f KB -> %.1f KB (+%.1f%%)\n", 
-            pdf_size_100, pdf_size_300, (pdf_size_300/pdf_size_100 - 1)*100))
-cat(sprintf("  SVG size: %.1f KB -> %.1f KB (+%.1f%%)\n", 
-            svg_size_100, svg_size_300, (svg_size_300/svg_size_100 - 1)*100))
-cat(sprintf("  PNG size: %.1f KB -> %.1f KB (+%.1f%%)\n\n", 
-            png_size_100, png_size_300, (png_size_300/png_size_100 - 1)*100))
+cat(sprintf(
+  "  Time (100 -> 300): %.3fs -> %.3fs (%.1fx slower)\n",
+  time_100,
+  time_300,
+  time_300 / time_100
+))
+cat(sprintf(
+  "  PDF size: %.1f KB -> %.1f KB (+%.1f%%)\n",
+  pdf_size_100,
+  pdf_size_300,
+  (pdf_size_300 / pdf_size_100 - 1) * 100
+))
+cat(sprintf(
+  "  SVG size: %.1f KB -> %.1f KB (+%.1f%%)\n",
+  svg_size_100,
+  svg_size_300,
+  (svg_size_300 / svg_size_100 - 1) * 100
+))
+cat(sprintf(
+  "  PNG size: %.1f KB -> %.1f KB (+%.1f%%)\n\n",
+  png_size_100,
+  png_size_300,
+  (png_size_300 / png_size_100 - 1) * 100
+))
 
 cat("T-COPULA (representative of fitted copulas):\n")
-cat(sprintf("  Time (100 -> 300): %.3fs -> %.3fs (%.1fx slower)\n", 
-            time_t100, time_t300, time_t300/time_t100))
-cat(sprintf("  PDF size: %.1f KB -> %.1f KB (+%.1f%%)\n", 
-            pdf_size_t100, pdf_size_t300, (pdf_size_t300/pdf_size_t100 - 1)*100))
-cat(sprintf("  SVG size: %.1f KB -> %.1f KB (+%.1f%%)\n", 
-            svg_size_t100, svg_size_t300, (svg_size_t300/svg_size_t100 - 1)*100))
-cat(sprintf("  PNG size: %.1f KB -> %.1f KB (+%.1f%%)\n\n", 
-            png_size_t100, png_size_t300, (png_size_t300/png_size_t100 - 1)*100))
+cat(sprintf(
+  "  Time (100 -> 300): %.3fs -> %.3fs (%.1fx slower)\n",
+  time_t100,
+  time_t300,
+  time_t300 / time_t100
+))
+cat(sprintf(
+  "  PDF size: %.1f KB -> %.1f KB (+%.1f%%)\n",
+  pdf_size_t100,
+  pdf_size_t300,
+  (pdf_size_t300 / pdf_size_t100 - 1) * 100
+))
+cat(sprintf(
+  "  SVG size: %.1f KB -> %.1f KB (+%.1f%%)\n",
+  svg_size_t100,
+  svg_size_t300,
+  (svg_size_t300 / svg_size_t100 - 1) * 100
+))
+cat(sprintf(
+  "  PNG size: %.1f KB -> %.1f KB (+%.1f%%)\n\n",
+  png_size_t100,
+  png_size_t300,
+  (png_size_t300 / png_size_t100 - 1) * 100
+))
 
 # Recommendation
-avg_time_increase <- mean(c(time_300/time_100, time_t300/time_t100))
+avg_time_increase <- mean(c(time_300 / time_100, time_t300 / time_t100))
 avg_size_increase <- mean(c(
-  pdf_size_300/pdf_size_100,
-  svg_size_300/svg_size_100,
-  pdf_size_t300/pdf_size_t100,
-  svg_size_t300/svg_size_t100
+  pdf_size_300 / pdf_size_100,
+  svg_size_300 / svg_size_100,
+  pdf_size_t300 / pdf_size_t100,
+  svg_size_t300 / svg_size_t100
 ))
 
 cat("RECOMMENDATION:\n")
@@ -278,4 +325,3 @@ if (avg_time_increase < 1.5 && avg_size_increase < 1.3) {
 cat("\n=================================================================\n")
 cat("Test files saved to: quick_test_output/grid_size_test/\n")
 cat("=================================================================\n\n")
-

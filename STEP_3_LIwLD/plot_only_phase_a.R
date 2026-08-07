@@ -35,13 +35,19 @@ PHASE_A_PAYLOAD <- file.path(RESULTS_DIR, "phase_a_analytic_payload.rds")
 VIZ_DIR <- file.path(RESULTS_DIR, "visualizations", "phase_a")
 
 if (!file.exists(PHASE_A_RDS)) {
-  stop("Phase A results file not found: ", PHASE_A_RDS,
-       "\nRun Phase A first with run_step3.R, then rerun this script.")
+  stop(
+    "Phase A results file not found: ",
+    PHASE_A_RDS,
+    "\nRun Phase A first with run_step3.R, then rerun this script."
+  )
 }
 
 if (!file.exists(PHASE_A_PAYLOAD)) {
-  stop("Phase A analytic payload not found: ", PHASE_A_PAYLOAD,
-       "\nRun Phase A first with run_step3.R to generate export payloads.")
+  stop(
+    "Phase A analytic payload not found: ",
+    PHASE_A_PAYLOAD,
+    "\nRun Phase A first with run_step3.R to generate export payloads."
+  )
 }
 
 # Plot dependencies
@@ -63,14 +69,22 @@ phase_a <- readRDS(PHASE_A_RDS)
 payload <- readRDS(PHASE_A_PAYLOAD)
 
 if (is.null(phase_a$best_estimate) || is.null(phase_a$true_sgpc)) {
-  stop("phase_a_deep_dive.rds is missing required objects ",
-       "(best_estimate and/or true_sgpc).")
+  stop(
+    "phase_a_deep_dive.rds is missing required objects ",
+    "(best_estimate and/or true_sgpc)."
+  )
 }
 
 best_est <- phase_a$best_estimate
-if (!is.null(payload$F_uniform)) best_est$F_uniform <- payload$F_uniform
-if (!is.null(payload$F_tamp)) best_est$F_tamp <- payload$F_tamp
-if (!is.null(payload$fit_metrics$w1_uniform)) best_est$w1_uniform <- payload$fit_metrics$w1_uniform[1]
+if (!is.null(payload$F_uniform)) {
+  best_est$F_uniform <- payload$F_uniform
+}
+if (!is.null(payload$F_tamp)) {
+  best_est$F_tamp <- payload$F_tamp
+}
+if (!is.null(payload$fit_metrics$w1_uniform)) {
+  best_est$w1_uniform <- payload$fit_metrics$w1_uniform[1]
+}
 true_sgpc <- phase_a$true_sgpc
 condition_id <- phase_a$condition_id
 subgroup_id <- phase_a$subgroup_id
@@ -95,7 +109,12 @@ plot_marginal_uv_density(
 # 02b. CDF comparison
 plot_observed_vs_predicted_cdf(
   best_est,
-  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "B2."),
+  title = format_step3_condition_label(
+    condition_id,
+    sg_col,
+    subgroup_id,
+    "B2."
+  ),
   output_dir = VIZ_DIR,
   filename = phasea_fig$forward_cdf_check
 )
@@ -103,7 +122,12 @@ plot_observed_vs_predicted_cdf(
 # 02a. Objective surface
 plot_objective_surface(
   best_est,
-  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "B1."),
+  title = format_step3_condition_label(
+    condition_id,
+    sg_col,
+    subgroup_id,
+    "B1."
+  ),
   output_dir = VIZ_DIR,
   filename = phasea_fig$objective_surface
 )
@@ -122,7 +146,12 @@ plot_regime_shape(
 plot_recovery_summary(
   best_est,
   true_sgpc = true_sgpc,
-  title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Growth Regime Recovery Summary —"),
+  title = format_step3_condition_label(
+    condition_id,
+    sg_col,
+    subgroup_id,
+    "Growth Regime Recovery Summary —"
+  ),
   output_dir = VIZ_DIR,
   filename = phasea_fig$recovery_summary
 )
@@ -143,7 +172,12 @@ if (!is.null(phase_a$bootstrap)) {
     phase_a$bootstrap,
     measure = "median",
     true_sgpc = true_sgpc,
-    title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Bootstrap Median SGPc —"),
+    title = format_step3_condition_label(
+      condition_id,
+      sg_col,
+      subgroup_id,
+      "Bootstrap Median SGPc —"
+    ),
     output_dir = VIZ_DIR,
     filename = phasea_fig$bootstrap_median
   )
@@ -153,7 +187,12 @@ if (!is.null(phase_a$bootstrap)) {
     phase_a$bootstrap,
     measure = "mean",
     true_sgpc = true_sgpc,
-    title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Bootstrap Mean SGPc —"),
+    title = format_step3_condition_label(
+      condition_id,
+      sg_col,
+      subgroup_id,
+      "Bootstrap Mean SGPc —"
+    ),
     output_dir = VIZ_DIR,
     filename = phasea_fig$bootstrap_mean
   )
@@ -162,7 +201,12 @@ if (!is.null(phase_a$bootstrap)) {
   plot_bootstrap_sgpc_combined(
     phase_a$bootstrap,
     true_sgpc = true_sgpc,
-    title = format_step3_condition_label(condition_id, sg_col, subgroup_id, "Bootstrap Uncertainty —"),
+    title = format_step3_condition_label(
+      condition_id,
+      sg_col,
+      subgroup_id,
+      "Bootstrap Uncertainty —"
+    ),
     output_dir = VIZ_DIR,
     filename = phasea_fig$bootstrap_combined
   )
@@ -170,11 +214,15 @@ if (!is.null(phase_a$bootstrap)) {
   if (!is.null(phase_a$bootstrap_paired)) {
     plot_linkage_decomposition(
       boot_independent = phase_a$bootstrap,
-      boot_paired      = phase_a$bootstrap_paired,
-      true_sgpc        = true_sgpc,
-      linkage_premium  = phase_a$linkage_premium,
-      title = format_step3_condition_label(condition_id, sg_col, subgroup_id,
-                                            "Linkage Premium —"),
+      boot_paired = phase_a$bootstrap_paired,
+      true_sgpc = true_sgpc,
+      linkage_premium = phase_a$linkage_premium,
+      title = format_step3_condition_label(
+        condition_id,
+        sg_col,
+        subgroup_id,
+        "Linkage Premium —"
+      ),
       output_dir = VIZ_DIR,
       filename = phasea_fig$linkage_decomposition
     )

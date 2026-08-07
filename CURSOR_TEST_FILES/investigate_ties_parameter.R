@@ -68,19 +68,25 @@ pvals_subset <- list()
 
 for (fname in names(families_to_test)) {
   fit <- fitCopula(families_to_test[[fname]], pseudo_obs_subset, method = "ml")
-  
-  gof <- gofCopula(fit@copula, 
-                   x = pseudo_obs_subset,
-                   method = "Sn",
-                   simulation = "pb",
-                   N = 10,
-                   verbose = FALSE)
-  
+
+  gof <- gofCopula(
+    fit@copula,
+    x = pseudo_obs_subset,
+    method = "Sn",
+    simulation = "pb",
+    N = 10,
+    verbose = FALSE
+  )
+
   pvals_subset[[fname]] <- gof$p.value
   cat("  ", fname, "p-value:", gof$p.value, "\n")
 }
 
-cat("\nAre p-values identical with n=1000?:", length(unique(unlist(pvals_subset))) == 1, "\n\n")
+cat(
+  "\nAre p-values identical with n=1000?:",
+  length(unique(unlist(pvals_subset))) == 1,
+  "\n\n"
+)
 
 cat("====================================================================\n")
 cat("TEST 2: Try with full dataset but N=100 bootstraps\n")
@@ -92,19 +98,25 @@ pvals_n100 <- list()
 
 for (fname in names(families_to_test)) {
   fit <- fitCopula(families_to_test[[fname]], pseudo_obs, method = "ml")
-  
-  gof <- gofCopula(fit@copula, 
-                   x = pseudo_obs,
-                   method = "Sn",
-                   simulation = "pb",
-                   N = 100,
-                   verbose = FALSE)
-  
+
+  gof <- gofCopula(
+    fit@copula,
+    x = pseudo_obs,
+    method = "Sn",
+    simulation = "pb",
+    N = 100,
+    verbose = FALSE
+  )
+
   pvals_n100[[fname]] <- gof$p.value
   cat("  ", fname, "p-value:", gof$p.value, "\n")
 }
 
-cat("\nAre p-values identical with N=100?:", length(unique(unlist(pvals_n100))) == 1, "\n\n")
+cat(
+  "\nAre p-values identical with N=100?:",
+  length(unique(unlist(pvals_n100))) == 1,
+  "\n\n"
+)
 
 cat("====================================================================\n")
 cat("TEST 3: Check if sample size causes the issue\n")
@@ -117,19 +129,39 @@ cat("Testing different sample sizes with N=10 bootstraps...\n\n")
 for (ss in sample_sizes) {
   idx <- sample(1:n, ss)
   pseudo_ss <- pseudo_obs[idx, ]
-  
+
   # Fit gaussian only (for speed)
   fit_g <- fitCopula(normalCopula(dim = 2), pseudo_ss, method = "ml")
   fit_c <- fitCopula(claytonCopula(dim = 2), pseudo_ss, method = "ml")
-  
-  gof_g <- gofCopula(fit_g@copula, x = pseudo_ss, method = "Sn", 
-                     simulation = "pb", N = 10, verbose = FALSE)
-  gof_c <- gofCopula(fit_c@copula, x = pseudo_ss, method = "Sn", 
-                     simulation = "pb", N = 10, verbose = FALSE)
-  
-  cat("  n =", sprintf("%5d", ss), "| Gaussian:", sprintf("%.4f", gof_g$p.value), 
-      "| Clayton:", sprintf("%.4f", gof_c$p.value), 
-      "| Same?:", gof_g$p.value == gof_c$p.value, "\n")
+
+  gof_g <- gofCopula(
+    fit_g@copula,
+    x = pseudo_ss,
+    method = "Sn",
+    simulation = "pb",
+    N = 10,
+    verbose = FALSE
+  )
+  gof_c <- gofCopula(
+    fit_c@copula,
+    x = pseudo_ss,
+    method = "Sn",
+    simulation = "pb",
+    N = 10,
+    verbose = FALSE
+  )
+
+  cat(
+    "  n =",
+    sprintf("%5d", ss),
+    "| Gaussian:",
+    sprintf("%.4f", gof_g$p.value),
+    "| Clayton:",
+    sprintf("%.4f", gof_c$p.value),
+    "| Same?:",
+    gof_g$p.value == gof_c$p.value,
+    "\n"
+  )
 }
 
 cat("\n====================================================================\n")
@@ -141,4 +173,3 @@ cat("then there's a bug in copula::gofCopula() with large sample sizes.\n\n")
 
 cat("If they vary for ALL sample sizes in these tests, then the issue\n")
 cat("is specific to our pipeline (how pseudo_obs are created/passed).\n\n")
-

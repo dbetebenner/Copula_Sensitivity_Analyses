@@ -17,9 +17,15 @@ gofCopula_version <- packageVersion("gofCopula")
 required_version <- "0.4.4"
 
 if (gofCopula_version < required_version) {
-  stop("\n\nERROR: gofCopula version too old!\n",
-       "  Found: ", as.character(gofCopula_version), "\n",
-       "  Required: >= ", required_version, "\n\n")
+  stop(
+    "\n\nERROR: gofCopula version too old!\n",
+    "  Found: ",
+    as.character(gofCopula_version),
+    "\n",
+    "  Required: >= ",
+    required_version,
+    "\n\n"
+  )
 }
 
 cat("Package version: gofCopula", as.character(gofCopula_version), "✓\n\n")
@@ -35,7 +41,7 @@ require(gofCopula)
 
 # Configuration
 N_BOOTSTRAP_GOF <- 10
-COPULA_FAMILIES <- c("t")  # Just t-copula for quick test
+COPULA_FAMILIES <- c("t") # Just t-copula for quick test
 
 cat("\n====================================================================\n")
 cat("TEST CONFIGURATION\n")
@@ -92,7 +98,13 @@ elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
 cat("\n====================================================================\n")
 cat("RESULTS\n")
 cat("====================================================================\n")
-cat("Total time:", round(elapsed, 1), "seconds (", round(elapsed/60, 2), "minutes)\n\n")
+cat(
+  "Total time:",
+  round(elapsed, 1),
+  "seconds (",
+  round(elapsed / 60, 2),
+  "minutes)\n\n"
+)
 
 # Extract t-copula results
 t_result <- fit_results$results$t
@@ -108,7 +120,11 @@ cat("GoF Test Results:\n")
 cat("  Method:", t_result$gof_method, "\n")
 cat("  Test statistic:", round(t_result$gof_statistic, 6), "\n")
 cat("  P-value:", round(t_result$gof_pvalue, 4), "\n")
-cat("  Pass (α=0.05)?", ifelse(t_result$gof_pvalue > 0.05, "YES ✓", "NO ✗"), "\n\n")
+cat(
+  "  Pass (α=0.05)?",
+  ifelse(t_result$gof_pvalue > 0.05, "YES ✓", "NO ✗"),
+  "\n\n"
+)
 
 cat("====================================================================\n")
 cat("VERIFICATION CHECKS\n")
@@ -142,25 +158,26 @@ if (method_ok && no_error) {
   cat("  - T-copula completed without errors\n")
   cat("  - Uses unified gofKendallCvM approach\n")
   cat("  - No special handling required\n")
-  
+
   if (pval_ok) {
     cat("  - P-value > 0 (", round(t_result$gof_pvalue, 4), ")\n\n")
   } else {
-    cat("  - P-value = 0 (expected with M=10, need M=100 for meaningful p-values)\n\n")
+    cat(
+      "  - P-value = 0 (expected with M=10, need M=100 for meaningful p-values)\n\n"
+    )
   }
-  
+
   cat("CONCLUSION:\n")
   cat("  The unified approach works correctly for t-copula!\n")
   cat("  No special handling needed after gofCopula package fixes.\n\n")
   cat("NEXT STEP:\n")
   cat("  Run full test with M=100 and all 5 families:\n")
   cat("  Rscript test_clean_implementation.R\n\n")
-  
 } else {
   cat("✗ ISSUES DETECTED\n\n")
   cat("The t-copula is not working correctly with unified approach.\n")
   cat("Review the verification checks above.\n\n")
-  
+
   if (!no_error) {
     cat("ERROR MESSAGE:", t_result$gof_method, "\n\n")
   }
@@ -169,4 +186,3 @@ if (method_ok && no_error) {
 cat("====================================================================\n")
 cat("Test completed:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n")
 cat("====================================================================\n\n")
-

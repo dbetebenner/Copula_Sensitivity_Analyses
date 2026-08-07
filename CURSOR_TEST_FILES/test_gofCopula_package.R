@@ -13,17 +13,20 @@ if (!requireNamespace("devtools", quietly = TRUE)) {
 }
 
 cat("Installing gofCopula package from GitHub...\n")
-tryCatch({
-  devtools::install_github("SimonTrimborn/gofCopula", quiet = TRUE)
-  cat("✓ Installation successful\n\n")
-}, error = function(e) {
-  cat("✗ Installation failed:", e$message, "\n\n")
-  quit(save = "no", status = 1)
-})
+tryCatch(
+  {
+    devtools::install_github("SimonTrimborn/gofCopula", quiet = TRUE)
+    cat("✓ Installation successful\n\n")
+  },
+  error = function(e) {
+    cat("✗ Installation failed:", e$message, "\n\n")
+    quit(save = "no", status = 1)
+  }
+)
 
 # Load packages
-library(gofCopula)  # The GitHub package
-library(copula)     # For data generation
+library(gofCopula) # The GitHub package
+library(copula) # For data generation
 library(data.table)
 
 cat("====================================================================\n")
@@ -73,61 +76,62 @@ results <- list()
 
 for (our_fam in names(families_to_test)) {
   cat("Testing:", our_fam, "\n")
-  
+
   worked <- FALSE
   for (test_name in families_to_test[[our_fam]]) {
     cat("  Trying name:", test_name, "... ")
-    
-    result <- tryCatch({
-      
-      # SPECIAL HANDLING: T-copula has 2 parameters (rho, df)
-      # param.est = TRUE causes issues, so pre-fit and pass parameters
-      if (test_name == "t") {
-        cat("(pre-fitting t-copula) ")
-        t_cop <- tCopula(dim = 2)
-        t_fit <- fitCopula(t_cop, test_data, method = "ml")
-        
-        gof_result <- gofKendallCvM(
-          copula = "t",
-          x = test_data,
-          M = 10,
-          param = coef(t_fit),      # Pass fitted params: c(rho, df)
-          param.est = FALSE,         # Don't re-estimate
-          margins = "ranks"
+
+    result <- tryCatch(
+      {
+        # SPECIAL HANDLING: T-copula has 2 parameters (rho, df)
+        # param.est = TRUE causes issues, so pre-fit and pass parameters
+        if (test_name == "t") {
+          cat("(pre-fitting t-copula) ")
+          t_cop <- tCopula(dim = 2)
+          t_fit <- fitCopula(t_cop, test_data, method = "ml")
+
+          gof_result <- gofKendallCvM(
+            copula = "t",
+            x = test_data,
+            M = 10,
+            param = coef(t_fit), # Pass fitted params: c(rho, df)
+            param.est = FALSE, # Don't re-estimate
+            margins = "ranks"
+          )
+        } else {
+          # Standard approach for other families
+          gof_result <- gofKendallCvM(
+            copula = test_name,
+            x = test_data,
+            M = 10,
+            param.est = TRUE,
+            margins = "ranks"
+          )
+        }
+
+        cat("✓ WORKS\n")
+
+        results[[our_fam]] <- list(
+          tested_name = test_name,
+          works = TRUE,
+          error = NA,
+          stat = gof_result$statistic,
+          pval = gof_result$p.value
         )
-      } else {
-        # Standard approach for other families
-        gof_result <- gofKendallCvM(
-          copula = test_name,
-          x = test_data,
-          M = 10,
-          param.est = TRUE,
-          margins = "ranks"
-        )
+
+        worked <- TRUE
+        TRUE # Return TRUE to break loop
+      },
+      error = function(e) {
+        cat("✗ FAILED:", e$message, "\n")
+        FALSE
       }
-      
-      cat("✓ WORKS\n")
-      
-      results[[our_fam]] <- list(
-        tested_name = test_name,
-        works = TRUE,
-        error = NA,
-        stat = gof_result$statistic,
-        pval = gof_result$p.value
-      )
-      
-      worked <- TRUE
-      TRUE  # Return TRUE to break loop
-      
-    }, error = function(e) {
-      cat("✗ FAILED:", e$message, "\n")
-      FALSE
-    })
-    
+    )
+
     # If one name works, no need to test others
     if (worked) break
   }
-  
+
   # If no name worked, record the failure
   if (!worked) {
     results[[our_fam]] <- list(
@@ -138,7 +142,7 @@ for (our_fam in names(families_to_test)) {
       pval = NA
     )
   }
-  
+
   cat("\n")
 }
 
@@ -154,7 +158,7 @@ if (length(working_families) > 0) {
   for (fam in working_families) {
     r <- results[[fam]]
     cat("  ✓", fam, "- use name:", r$tested_name, "\n")
-    
+
     # Safe printing with checks for numeric values
     cat("     Statistic: ")
     if (is.numeric(r$stat) && !is.na(r$stat)) {
@@ -162,7 +166,7 @@ if (length(working_families) > 0) {
     } else {
       cat("<not available>")
     }
-    
+
     cat(" | p-value: ")
     if (is.numeric(r$pval) && !is.na(r$pval)) {
       cat(round(r$pval, 4), "\n")
@@ -199,10 +203,16 @@ if (length(working_families) >= 5) {
     cat("  ", fam, "->", r$tested_name, "\n")
   }
   cat("\n")
-  cat("Use gofKendallCvM() as the primary GoF test for all supported families.\n")
+  cat(
+    "Use gofKendallCvM() as the primary GoF test for all supported families.\n"
+  )
 } else if (length(working_families) > 0) {
   cat("⚠️  PARTIAL: Some families work, others need fallback\n\n")
-  cat("Use gofCopula package for:", paste(working_families, collapse = ", "), "\n")
+  cat(
+    "Use gofCopula package for:",
+    paste(working_families, collapse = ", "),
+    "\n"
+  )
   cat("Need fallback for:", paste(failed_families, collapse = ", "), "\n")
 } else {
   cat("✗ FAILED: gofCopula package doesn't work with our data\n\n")
@@ -210,4 +220,3 @@ if (length(working_families) >= 5) {
 }
 
 cat("\n")
-

@@ -21,7 +21,9 @@ cat("\n")
 
 # Check if visualization functions exist
 if (!file.exists("functions/copula_contour_plots.R")) {
-  stop("Visualization functions not found. Please ensure copula_contour_plots.R exists.")
+  stop(
+    "Visualization functions not found. Please ensure copula_contour_plots.R exists."
+  )
 }
 
 # Optional: Set number of conditions to process (for testing)
@@ -29,7 +31,7 @@ if (!file.exists("functions/copula_contour_plots.R")) {
 # MAX_CONDITIONS <- 5  # Process only first 5 conditions
 
 # Optional: Set GoF bootstrap samples (reduce for faster testing with plots)
-N_BOOTSTRAP_GOF <- 100  # Reduce from default for faster processing with plots
+N_BOOTSTRAP_GOF <- 100 # Reduce from default for faster processing with plots
 
 cat("SETTINGS:\n")
 cat("  GoF bootstrap samples:", N_BOOTSTRAP_GOF, "\n")
@@ -51,30 +53,34 @@ if (dir.exists(plot_dir)) {
   cat("====================================================================\n")
   cat("CONTOUR PLOT GENERATION COMPLETE\n")
   cat("====================================================================\n")
-  
+
   # Count generated plots
   all_pdfs <- list.files(plot_dir, pattern = "\\.pdf$", recursive = TRUE)
   n_plots <- length(all_pdfs)
-  
+
   cat("\n")
   cat("Generated", n_plots, "PDF files\n")
-  
+
   # List datasets with plots
   dataset_dirs <- list.dirs(plot_dir, recursive = FALSE, full.names = FALSE)
   dataset_dirs <- dataset_dirs[!grepl("dataset_all|test", dataset_dirs)]
-  
+
   if (length(dataset_dirs) > 0) {
     cat("\nDatasets with plots:\n")
     for (ds in dataset_dirs) {
-      ds_pdfs <- list.files(file.path(plot_dir, ds), pattern = "\\.pdf$", recursive = TRUE)
+      ds_pdfs <- list.files(
+        file.path(plot_dir, ds),
+        pattern = "\\.pdf$",
+        recursive = TRUE
+      )
       cat("  -", ds, ":", length(ds_pdfs), "plots\n")
     }
   }
-  
+
   cat("\n")
   cat("To view plots, navigate to:", plot_dir, "\n")
   cat("\n")
-  
+
   # Suggest next steps
   cat("NEXT STEPS:\n")
   cat("-----------\n")
@@ -83,7 +89,6 @@ if (dir.exists(plot_dir)) {
   cat("   source('STEP_1_Family_Selection/create_contour_plot_summary.R')\n")
   cat("3. Select representative plots for paper\n")
   cat("\n")
-  
 } else {
   cat("\n")
   cat("WARNING: No plots were generated.\n")
